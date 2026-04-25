@@ -261,27 +261,16 @@ export async function getWorkspaceDetail(tenant: string, project: string, worksp
 	return { ...(status ?? statuses[0]), history, files: tree };
 }
 
-export async function listMergeRequests(tenant: string, project: string): Promise<MergeRequest[]> {
+export async function listReadyWorkspaces(tenant: string, project: string): Promise<WorkspaceStatus[]> {
 	const workspaces = await listWorkspaceStatuses(tenant, project);
-	return workspaces
-		.filter((w) => w.is_ready)
-		.map((w) => ({
-			workspace: w.name,
-			author: 'unknown',
-			status: 'open' as const,
-			created_at: new Date().toISOString(),
-			head: w.head,
-			base_workspace: w.parent_workspace ?? 'main',
-			checks_passing: w.ci_status === 'passing',
-			description: ''
-		}));
+	return workspaces.filter((w) => w.is_ready && w.name !== 'main');
 }
 
-export async function getMergeRequestDetail(tenant: string, project: string, workspace: string): Promise<MergeRequest & { comments: Comment[]; diff_stats: { additions: number; deletions: number } }> {
-	const mrs = await listMergeRequests(tenant, project);
-	const mr = mrs.find((m) => m.workspace === workspace);
-	if (!mr) throw new Error('Merge request not found');
-	return { ...mr, comments: [], diff_stats: { additions: 0, deletions: 0 } };
+export async function getReadyWorkspaceDetail(tenant: string, project: string, workspace: string): Promise<WorkspaceStatus & { comments: Comment[] }> {
+	const workspaces = await listReadyWorkspaces(tenant, project);
+	const ws = workspaces.find((w) => w.name === workspace);
+	if (!ws) throw new Error('Workspace not found');
+	return { ...ws, comments: [] };
 }
 
 export async function mergeWorkspace(tenant: string, project: string, workspace: string) {
@@ -309,16 +298,10 @@ export async function getProjectHistory(tenant: string, project: string): Promis
 }
 
 export async function getHistoryEntryDetail(tenant: string, project: string, entryId: string): Promise<HistoryEntryDetail> {
-	await new Promise((r) => setTimeout(r, 200));
-	return {
-		id: entryId,
-		kind: 'save',
-		message: 'Stub history entry',
-		author: 'unknown',
-		timestamp: new Date().toISOString(),
-		workspace: 'main',
-		files_changed: []
-	};
+	const entries = await getProjectHistory(tenant, project);
+	const entry = entries.find((e) => e.id === entryId);
+	if (!entry) throw new Error('History entry not found');
+	return { ...entry, files_changed: [] };
 }
 
 export async function getProjectReadme(tenant: string, project: string): Promise<string | null> {

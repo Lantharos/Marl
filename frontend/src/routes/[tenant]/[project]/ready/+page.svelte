@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { listMergeRequests, mergeWorkspace, type MergeRequest } from '$lib/api';
+	import { listReadyWorkspaces, mergeWorkspace, type WorkspaceStatus } from '$lib/api';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
 
-	let requests = $state<MergeRequest[]>([]);
+	let workspaces = $state<WorkspaceStatus[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
@@ -14,7 +14,7 @@
 		loading = true;
 		error = '';
 		try {
-			requests = await listMergeRequests(tenant, project);
+			workspaces = await listReadyWorkspaces(tenant, project);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -26,9 +26,9 @@
 		if (tenant && project) load();
 	});
 
-	async function handleMerge(workspace: string) {
+	async function handleMerge(name: string) {
 		try {
-			await mergeWorkspace(tenant, project, workspace);
+			await mergeWorkspace(tenant, project, name);
 			await load();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Merge failed';
@@ -38,7 +38,7 @@
 
 <div class="mx-auto max-w-3xl">
 	<div class="mb-4">
-		<h3 class="text-sm font-semibold text-[#f0eee4]">Ready to merge <span class="ml-1 text-[#6f6b5f]">({requests.length})</span></h3>
+		<h3 class="text-sm font-semibold text-[#f0eee4]">Ready to merge <span class="ml-1 text-[#6f6b5f]">({workspaces.length})</span></h3>
 		<p class="mt-1 text-xs text-[#6f6b5f]">Workspaces marked ready by their authors.</p>
 	</div>
 
@@ -48,33 +48,30 @@
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else}
 		<div class="grid gap-2">
-			{#each requests as mr}
+			{#each workspaces as ws}
 				<div class="flex items-center justify-between rounded border border-[#2a2a28] bg-[#141412] px-4 py-3">
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-3">
 							<button
 								class="truncate text-left text-sm font-medium text-[#eae9e4] hover:underline"
-								onclick={() => goto(`/${tenant}/${project}/ready/${mr.workspace}`)}
+								onclick={() => goto(`/${tenant}/${project}/ready/${ws.name}`)}
 							>
-								{mr.workspace}
+								{ws.name}
 							</button>
-							<span class="rounded bg-[#2a2a28] px-1.5 py-0.5 text-[10px] text-[#a09d94]">{mr.status}</span>
+							<span class="rounded bg-[#2a2a28] px-1.5 py-0.5 text-[10px] text-[#a09d94]">ready</span>
 						</div>
 						<div class="mt-1 flex items-center gap-2 text-xs text-[#6f6b5f]">
-							<span>by {mr.author}</span>
-							<span>{new Date(mr.created_at).toLocaleDateString()}</span>
-							{#if mr.head}
-								<span class="font-mono">{mr.head.slice(0, 12)}</span>
+							{#if ws.parent_workspace}
+								<span>into {ws.parent_workspace}</span>
 							{/if}
-						</div>
-						<div class="mt-1.5 flex items-center gap-1.5">
-							<span class="h-2 w-2 rounded-full {mr.checks_passing ? 'bg-[#7cb97c]' : 'bg-[#d96c5a]'}"></span>
-							<span class="text-xs text-[#6f6b5f]">{mr.checks_passing ? 'Checks passing' : 'Checks failing'}</span>
+							{#if ws.head}
+								<span class="font-mono">{ws.head.slice(0, 12)}</span>
+							{/if}
 						</div>
 					</div>
 					<button
 						class="ml-3 shrink-0 rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]"
-						onclick={() => handleMerge(mr.workspace)}
+						onclick={() => handleMerge(ws.name)}
 					>
 						Merge
 					</button>
