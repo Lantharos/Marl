@@ -16,6 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 sty-protocol.workspace = true
+sty-store = { path = "../../crates/sty-store", features = ["sqlite"] }
 tokio.workspace = true
 tower-http = { version = "0.6.8", features = ["cors"] }
 uuid = { version = "1.23.1", features = ["v4"] }

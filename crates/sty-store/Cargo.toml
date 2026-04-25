@@ -1,0 +1,22 @@
+[package]
+name = "sty-store"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chrono = { version = "0.4.40", features = ["serde"] }
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sty-protocol = { path = "../sty-protocol" }
+uuid = { version = "1.23.1", features = ["v4"] }
+
+# SQLite backend
+rusqlite = { version = "0.37.0", features = ["bundled"], optional = true }
+
+[features]
+default = ["sqlite"]
+sqlite = ["dep:rusqlite"]

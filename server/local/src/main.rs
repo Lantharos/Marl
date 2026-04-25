@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
-use sty_local_server::store::Store;
+use sty_local_server::store::{ObjectStore, Store};
 
 #[derive(Parser)]
 #[command(name = "sty-local-server")]
@@ -20,7 +20,8 @@ struct Cli {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let store = Store::new(cli.data.clone())?;
+    let objects = ObjectStore::new(cli.data.clone());
     println!("sty local server listening on http://{}", cli.bind);
     println!("data: {}", cli.data.display());
-    sty_local_server::server::run(cli.bind, store).await
+    sty_local_server::server::run(cli.bind, store, objects).await
 }

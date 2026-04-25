@@ -13,28 +13,31 @@ use tower_http::cors::CorsLayer;
 
 use crate::auth::verify_ave_id_token;
 use crate::catalog::Catalog;
-use crate::store::Store;
+use crate::store::{ObjectStore, Store};
+use sty_store::Store as _;
 use sty_protocol::{
     ChunkCompleteRequest, CompareRequest, CompareResponse, CreateIssueRequest, CreateOrgRequest,
     DevTokenRequest, DownloadRequest, DownloadResponse, HeadResponse, HeadUpdateRequest,
     HistoryResponse, IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
     OkResponse, ProjectDetailResponse, ProjectSummary, SessionExchangeRequest, StarResponse,
     TokenPrincipal, TokenResponse, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse,
+    WorkspaceSummary,
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<Store>,
+    pub objects: Arc<ObjectStore>,
 }
 
-pub async fn run(bind: SocketAddr, store: Store) -> Result<()> {
-    let app = router(Arc::new(store));
+pub async fn run(bind: SocketAddr, store: Store, objects: ObjectStore) -> Result<()> {
+    let app = router(Arc::new(store), Arc::new(objects));
     let listener = tokio::net::TcpListener::bind(bind).await?;
     axum::serve(listener, app).await?;
     Ok(())
 }
 
-pub fn router(store: Arc<Store>) -> Router {
+pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
     Router::new()
         .route("/v1/auth/check", post(auth_check))
         .route("/v1/dev/tokens", post(create_dev_token))
@@ -111,7 +114,7 @@ pub fn router(store: Arc<Store>) -> Router {
             post(download),
         )
         .layer(cors_layer())
-        .with_state(AppState { store })
+        .with_state(AppState { store, objects })
 }
 
 fn cors_layer() -> CorsLayer {
@@ -220,14 +223,22 @@ async fn project_detail(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        let catalog = Catalog::new(state.store.root());
-        map_result(catalog.workspaces(&tenant, &project)).map(|workspaces| ProjectDetailResponse {
-            project: ProjectSummary {
-                tenant: tenant.clone(),
-                project: project.clone(),
-                owner: principal.user,
-            },
-            workspaces,
+        map_result(state.store.workspace_states(&tenant, &project)).map(|states| {
+            let workspaces: Vec<WorkspaceSummary> = states
+                .into_iter()
+                .map(|s| WorkspaceSummary {
+                    name: s.name,
+                    head: s.head,
+                })
+                .collect();
+            ProjectDetailResponse {
+                project: ProjectSummary {
+                    tenant: tenant.clone(),
+                    project: project.clone(),
+                    owner: principal.user,
+                },
+                workspaces,
+            }
         })
     }) {
         Ok(body) => Json(body).into_response(),
@@ -244,7 +255,8 @@ async fn project_tree(
     let workspace = query.get("workspace").map_or("main", String::as_str);
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(Catalog::new(state.store.root()).tree(&tenant, &project, workspace))
+        let head = map_result(state.store.head(&tenant, &project, workspace))?;
+        map_result(Catalog::new(state.store.root()).tree(&tenant, &project, workspace, head))
     }) {
         Ok(tree) => Json(tree).into_response(),
         Err(response) => response,
@@ -260,7 +272,8 @@ async fn project_file(
     let workspace = query.get("workspace").map_or("main", String::as_str);
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(Catalog::new(state.store.root()).file(&tenant, &project, workspace, &path))
+        let head = map_result(state.store.head(&tenant, &project, workspace))?;
+        map_result(Catalog::new(state.store.root()).file(&tenant, &project, &path, head))
     }) {
         Ok(file) => Json(file).into_response(),
         Err(response) => response,
@@ -396,7 +409,9 @@ async fn update_settings(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.update_project_settings(&tenant, &project, body.visibility, body.default_workspace))
+        let visibility = body.visibility.as_deref().unwrap_or("private");
+        let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
+        map_result(state.store.update_project_settings(&tenant, &project, visibility, default_workspace))
     }) {
         Ok(settings) => Json(settings).into_response(),
         Err(response) => response,
@@ -476,7 +491,7 @@ async fn missing(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.missing(&tenant, &project, &body.ids))
+        map_result(state.objects.missing(&tenant, &project, &body.ids))
     }) {
         Ok(missing) => Json(MissingResponse { missing }).into_response(),
         Err(response) => response,
@@ -491,7 +506,7 @@ async fn upload(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.upload(&tenant, &project, &body.objects))
+        map_result(state.objects.upload(&tenant, &project, &body.objects))
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
         Err(response) => response,
@@ -509,7 +524,7 @@ async fn upload_chunk(
         let kind = required_header(&headers, "x-pig-object-kind")?;
         let chunk_count = required_usize_header(&headers, "x-pig-chunk-count")?;
         let total_size = required_usize_header(&headers, "x-pig-total-size")?;
-        map_result(state.store.upload_chunk(
+        map_result(state.objects.upload_chunk(
             &tenant,
             &project,
             &object,
@@ -533,7 +548,7 @@ async fn complete_chunked_upload(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.complete_chunked_upload(
+        map_result(state.objects.complete_chunked_upload(
             &tenant,
             &project,
             &object,
@@ -555,7 +570,7 @@ async fn download(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.download(&tenant, &project, &body.ids))
+        map_result(state.objects.download(&tenant, &project, &body.ids))
     }) {
         Ok(objects) => Json(DownloadResponse { objects }).into_response(),
         Err(response) => response,

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use serde::Deserialize;
 use sty_protocol::{
-    ObjectFileResponse, ProjectTreeResponse, TreeEntryInfo, WorkspaceSummary, validate_segment,
+    ObjectFileResponse, ProjectTreeResponse, TreeEntryInfo, validate_segment,
 };
 
 #[derive(Deserialize)]
@@ -35,38 +35,13 @@ impl Catalog {
         }
     }
 
-    pub fn workspaces(&self, tenant: &str, project: &str) -> Result<Vec<WorkspaceSummary>> {
-        let heads = self.project_path(tenant, project)?.join("heads");
-        if !heads.exists() {
-            return Ok(Vec::new());
-        }
-        let mut workspaces = Vec::new();
-        for entry in fs::read_dir(heads)? {
-            let entry = entry?;
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-            let name = entry.file_name().to_string_lossy().to_string();
-            let Some(workspace) = name.strip_suffix(".head") else {
-                continue;
-            };
-            let head = fs::read_to_string(entry.path())?.trim().to_string();
-            workspaces.push(WorkspaceSummary {
-                name: workspace.to_string(),
-                head: (!head.is_empty()).then_some(head),
-            });
-        }
-        workspaces.sort_by(|left, right| left.name.cmp(&right.name));
-        Ok(workspaces)
-    }
-
     pub fn tree(
         &self,
         tenant: &str,
         project: &str,
         workspace: &str,
+        head: Option<String>,
     ) -> Result<ProjectTreeResponse> {
-        let head = self.head(tenant, project, workspace)?;
         let Some(head_id) = head.clone() else {
             return Ok(ProjectTreeResponse {
                 workspace: workspace.to_string(),
@@ -91,10 +66,10 @@ impl Catalog {
         &self,
         tenant: &str,
         project: &str,
-        workspace: &str,
         path: &str,
+        head: Option<String>,
     ) -> Result<ObjectFileResponse> {
-        let tree = self.tree(tenant, project, workspace)?;
+        let tree = self.tree(tenant, project, "", head)?;
         let Some(entry) = tree.entries.iter().find(|entry| entry.path == path) else {
             bail!("file not found");
         };
@@ -138,19 +113,6 @@ impl Catalog {
             }
         }
         Ok(())
-    }
-
-    fn head(&self, tenant: &str, project: &str, workspace: &str) -> Result<Option<String>> {
-        validate_segment(workspace)?;
-        let path = self
-            .project_path(tenant, project)?
-            .join("heads")
-            .join(format!("{workspace}.head"));
-        if !path.exists() {
-            return Ok(None);
-        }
-        let head = fs::read_to_string(path)?.trim().to_string();
-        Ok((!head.is_empty()).then_some(head))
     }
 
     fn object_path(&self, tenant: &str, project: &str, id: &str) -> Result<PathBuf> {
