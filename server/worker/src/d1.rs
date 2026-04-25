@@ -327,7 +327,7 @@ pub async fn mark_workspace_ready(
         .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
         .run()
         .await?;
-    log_history(db, tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace)).await?;
+    log_history(db, tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace), None).await?;
     Ok(())
 }
 
@@ -342,7 +342,7 @@ pub async fn merge_workspace(
         .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
         .run()
         .await?;
-    log_history(db, tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace)).await?;
+    log_history(db, tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace), None).await?;
     Ok(())
 }
 
@@ -362,10 +362,11 @@ pub async fn workspace_history(
         author: String,
         timestamp: String,
         workspace: String,
+        snapshot_id: Option<String>,
     }
     let result = db
         .prepare(
-            "SELECT id, kind, message, author, timestamp, workspace FROM history \
+            "SELECT id, kind, message, author, timestamp, workspace, snapshot_id FROM history \
              WHERE tenant = ?1 AND project = ?2 AND workspace = ?3 \
              ORDER BY timestamp DESC"
         )
@@ -382,6 +383,7 @@ pub async fn workspace_history(
             author: r.author,
             timestamp: r.timestamp,
             workspace: r.workspace,
+            snapshot_id: r.snapshot_id,
         })
         .collect())
 }
@@ -394,12 +396,13 @@ pub async fn log_history(
     principal: &TokenPrincipal,
     kind: &str,
     message: &str,
+    snapshot_id: Option<&str>,
 ) -> Result<()> {
     let id = format!("{}-{}", kind, Uuid::new_v4().simple());
     let timestamp = now_rfc3339();
     db.prepare(
-        "INSERT INTO history (id, tenant, project, workspace, kind, message, author, timestamp) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+        "INSERT INTO history (id, tenant, project, workspace, kind, message, author, timestamp, snapshot_id) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
     )
     .bind(&[
         js_str(&id),
@@ -410,10 +413,46 @@ pub async fn log_history(
         js_str(message),
         js_str(&principal.user),
         js_str(&timestamp),
+        js_opt(snapshot_id),
     ])?
     .run()
     .await?;
     Ok(())
+}
+
+pub async fn get_history_entry(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    entry_id: &str,
+) -> Result<Option<HistoryEntry>> {
+    #[derive(Deserialize)]
+    struct Row {
+        id: String,
+        kind: String,
+        message: String,
+        author: String,
+        timestamp: String,
+        workspace: String,
+        snapshot_id: Option<String>,
+    }
+    let row: Option<Row> = db
+        .prepare(
+            "SELECT id, kind, message, author, timestamp, workspace, snapshot_id FROM history \
+             WHERE tenant = ?1 AND project = ?2 AND id = ?3"
+        )
+        .bind(&[js_str(tenant), js_str(project), js_str(entry_id)])?
+        .first(None)
+        .await?;
+    Ok(row.map(|r| HistoryEntry {
+        id: r.id,
+        kind: r.kind,
+        message: r.message,
+        author: r.author,
+        timestamp: r.timestamp,
+        workspace: r.workspace,
+        snapshot_id: r.snapshot_id,
+    }))
 }
 
 // ── Issues ───────────────────────────────────────────────
@@ -509,7 +548,7 @@ pub async fn create_issue(
 
 // ── Settings / Stars ─────────────────────────────────────
 
-pub async fn project_settings(db: &D1Database, tenant: &str, project: &str) -> Result<ProjectSettings> {
+pub async fn project_settings(db: &D1Database, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings> {
     #[derive(Deserialize)]
     struct Row {
         settings_json: String,
@@ -544,6 +583,7 @@ pub async fn project_settings(db: &D1Database, tenant: &str, project: &str) -> R
         .first(None)
         .await?;
     settings.starred_count = count_row.map(|r| r.count as u64).unwrap_or(0);
+    settings.is_starred = is_starred(db, tenant, project, principal).await?;
 
     Ok(settings)
 }
@@ -552,10 +592,11 @@ pub async fn update_project_settings(
     db: &D1Database,
     tenant: &str,
     project: &str,
+    principal: &TokenPrincipal,
     visibility: &str,
     default_workspace: &str,
 ) -> Result<ProjectSettings> {
-    let mut settings = project_settings(db, tenant, project).await?;
+    let mut settings = project_settings(db, tenant, project, principal).await?;
     settings.visibility = visibility.to_string();
     settings.default_workspace = default_workspace.to_string();
     let json = serde_json::to_string(&settings).map_err(|e| err(e.to_string()))?;

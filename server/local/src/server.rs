@@ -74,6 +74,10 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
             get(workspace_history).post(log_history),
         )
         .route(
+            "/v1/tenants/{tenant}/projects/{project}/history/{entry_id}",
+            get(history_entry),
+        )
+        .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/ready",
             post(mark_ready),
         )
@@ -259,7 +263,11 @@ async fn project_tree(
     let workspace = query.get("workspace").map_or("main", String::as_str);
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        let head = map_result(state.store.head(&tenant, &project, workspace))?;
+        let head = if let Some(snapshot) = query.get("snapshot") {
+            Some(snapshot.clone())
+        } else {
+            map_result(state.store.head(&tenant, &project, workspace))?
+        };
         map_result(Catalog::new(state.store.root()).tree(&tenant, &project, workspace, head))
     }) {
         Ok(tree) => Json(tree).into_response(),
@@ -276,7 +284,11 @@ async fn project_file(
     let workspace = query.get("workspace").map_or("main", String::as_str);
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        let head = map_result(state.store.head(&tenant, &project, workspace))?;
+        let head = if let Some(snapshot) = query.get("snapshot") {
+            Some(snapshot.clone())
+        } else {
+            map_result(state.store.head(&tenant, &project, workspace))?
+        };
         map_result(Catalog::new(state.store.root()).file(&tenant, &project, &path, head))
     }) {
         Ok(file) => Json(file).into_response(),
@@ -341,6 +353,21 @@ async fn workspace_history(
     }
 }
 
+async fn history_entry(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, entry_id)): Path<(String, String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.get_history_entry(&tenant, &project, &entry_id))
+    }) {
+        Ok(Some(entry)) => Json(entry).into_response(),
+        Ok(None) => error(StatusCode::NOT_FOUND, "history entry not found"),
+        Err(response) => response,
+    }
+}
+
 async fn log_history(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -356,6 +383,7 @@ async fn log_history(
             &principal,
             &body.kind,
             &body.message,
+            body.snapshot_id.as_deref(),
         ))
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
@@ -414,7 +442,7 @@ async fn get_settings(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.project_settings(&tenant, &project))
+        map_result(state.store.project_settings(&tenant, &project, &principal))
     }) {
         Ok(settings) => Json(settings).into_response(),
         Err(response) => response,
@@ -431,7 +459,7 @@ async fn update_settings(
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         let visibility = body.visibility.as_deref().unwrap_or("private");
         let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
-        map_result(state.store.update_project_settings(&tenant, &project, visibility, default_workspace))
+        map_result(state.store.update_project_settings(&tenant, &project, &principal, visibility, default_workspace))
     }) {
         Ok(settings) => Json(settings).into_response(),
         Err(response) => response,

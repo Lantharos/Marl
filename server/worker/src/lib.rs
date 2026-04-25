@@ -6,9 +6,9 @@ use sty_protocol::{
     ChunkCompleteRequest, CompareRequest, CompareResponse, CreateIssueRequest, DevTokenRequest,
     DownloadRequest, DownloadResponse, HeadResponse, HeadUpdateRequest, HistoryResponse,
     IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse, OkResponse,
-    ObjectFileResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse,
-    RemoteObject, SessionExchangeRequest, StarResponse, TokenResponse, TreeEntryInfo,
-    UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
+    ObjectFileResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse, RemoteObject,
+    SessionExchangeRequest, StarResponse, TokenResponse, TreeEntryInfo, UpdateSettingsRequest,
+    UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
 use worker::*;
 
@@ -47,6 +47,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .put_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", update_head)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", workspace_history)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", log_history)
+        .get_async("/v1/tenants/:tenant/projects/:project/history/:entry_id", history_entry)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready", mark_ready)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge", merge_workspace)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/parent", set_parent)
@@ -168,14 +169,24 @@ async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let workspace = req.url()?.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
-    let head = d1::head(&database, &tenant, &project, &workspace).await?;
-    let Some(head_id) = head.clone() else {
-        return Response::from_json(&ProjectTreeResponse {
-            workspace: workspace.clone(),
-            head,
-            root_tree: None,
-            entries: Vec::new(),
-        });
+    let snapshot_param = req.url()?.query_pairs().find_map(|(k, v)| {
+        (k == "snapshot").then(|| v.to_string())
+    });
+    let head_id = if let Some(snapshot) = snapshot_param {
+        snapshot
+    } else {
+        let head = d1::head(&database, &tenant, &project, &workspace).await?;
+        match head {
+            Some(h) => h,
+            None => {
+                return Response::from_json(&ProjectTreeResponse {
+                    workspace: workspace.clone(),
+                    head: None,
+                    root_tree: None,
+                    entries: Vec::new(),
+                });
+            }
+        }
     };
     let store = bucket(&ctx.env)?;
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
@@ -185,7 +196,7 @@ async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
     Response::from_json(&ProjectTreeResponse {
         workspace: workspace.clone(),
-        head,
+        head: Some(head_id.clone()),
         root_tree: Some(root_tree),
         entries,
     })
@@ -200,9 +211,17 @@ async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let workspace = req.url()?.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
-    let head = d1::head(&database, &tenant, &project, &workspace).await?;
-    let Some(head_id) = head else {
-        return json_error(404, "workspace has no head");
+    let snapshot_param = req.url()?.query_pairs().find_map(|(k, v)| {
+        (k == "snapshot").then(|| v.to_string())
+    });
+    let head_id = if let Some(snapshot) = snapshot_param {
+        snapshot
+    } else {
+        let head = d1::head(&database, &tenant, &project, &workspace).await?;
+        match head {
+            Some(h) => h,
+            None => return json_error(404, "workspace has no head"),
+        }
     };
     let store = bucket(&ctx.env)?;
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
@@ -280,6 +299,19 @@ async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Result<Respon
     Response::from_json(&HistoryResponse { entries })
 }
 
+async fn history_entry(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let entry_id = param(&ctx, "entry_id")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let entry = d1::get_history_entry(&database, &tenant, &project, &entry_id).await?;
+    match entry {
+        Some(e) => Response::from_json(&e),
+        None => json_error(404, "history entry not found"),
+    }
+}
+
 async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
@@ -287,7 +319,7 @@ async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Result<Response
     let body: LogHistoryRequest = req.json().await?;
     let database = db(&ctx.env)?;
     d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
-    d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message).await?;
+    d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message, body.snapshot_id.as_deref()).await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -339,8 +371,9 @@ async fn get_settings(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
-    let settings = d1::project_settings(&database, &tenant, &project).await?;
+    let principal = sty_protocol::TokenPrincipal { user: user.clone() };
+    d1::ensure_project(&database, &tenant, &project, &principal).await?;
+    let settings = d1::project_settings(&database, &tenant, &project, &principal).await?;
     Response::from_json(&settings)
 }
 
@@ -349,10 +382,11 @@ async fn update_settings(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
     let (tenant, project) = project_params(&ctx)?;
     let body: UpdateSettingsRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let principal = sty_protocol::TokenPrincipal { user: user.clone() };
+    d1::ensure_project(&database, &tenant, &project, &principal).await?;
     let visibility = body.visibility.as_deref().unwrap_or("private");
     let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
-    let settings = d1::update_project_settings(&database, &tenant, &project, visibility, default_workspace).await?;
+    let settings = d1::update_project_settings(&database, &tenant, &project, &principal, visibility, default_workspace).await?;
     Response::from_json(&settings)
 }
 

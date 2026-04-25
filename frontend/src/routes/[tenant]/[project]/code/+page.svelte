@@ -17,10 +17,6 @@
 		error = '';
 		try {
 			tree = await getProjectTree(tenant, project, 'main');
-			const firstFile = tree.entries.find((e) => e.entry_type === 'blob');
-			if (firstFile) {
-				file = await getProjectFile(tenant, project, firstFile.path, 'main');
-			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {

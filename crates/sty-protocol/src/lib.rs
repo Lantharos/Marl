@@ -229,6 +229,7 @@ pub struct HistoryEntry {
     pub author: String,
     pub timestamp: String,
     pub workspace: String,
+    pub snapshot_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -241,6 +242,28 @@ pub struct LogHistoryRequest {
     pub kind: String,
     pub message: String,
     pub workspace: String,
+    pub snapshot_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ChangedFile {
+    pub path: String,
+    pub change_type: String,
+    pub old_id: Option<String>,
+    pub new_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct HistoryEntryDetail {
+    pub id: String,
+    pub kind: String,
+    pub message: String,
+    pub author: String,
+    pub timestamp: String,
+    pub workspace: String,
+    pub snapshot_id: Option<String>,
+    pub parent_id: Option<String>,
+    pub files: Vec<ChangedFile>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -65,13 +65,10 @@ export interface WorkspaceStatus {
 	name: string;
 	head: string | null;
 	status: 'draft' | 'ready' | 'merged' | string;
-	ci_status: 'passing' | 'failing' | 'running' | 'unknown';
 	parent_workspace: string | null;
 	child_workspaces: string[];
 	is_ready: boolean;
 	mergeable: boolean;
-	behind_count: number;
-	ahead_count: number;
 }
 
 export interface MergeRequest {
@@ -92,6 +89,7 @@ export interface HistoryEntry {
 	author: string;
 	timestamp: string;
 	workspace: string;
+	snapshot_id: string | null;
 	agent?: string;
 	model?: string;
 	tool?: string;
@@ -99,14 +97,9 @@ export interface HistoryEntry {
 
 export interface ChangedFile {
 	path: string;
-	additions: number;
-	deletions: number;
-	old_text: string | null;
-	new_text: string | null;
-}
-
-export interface HistoryEntryDetail extends HistoryEntry {
-	files_changed: ChangedFile[];
+	change_type: string;
+	old_id: string | null;
+	new_id: string | null;
 }
 
 export interface ProjectSettings {
@@ -116,15 +109,9 @@ export interface ProjectSettings {
 	default_workspace: string;
 }
 
-export interface CiStatus {
-	status: 'passing' | 'failing' | 'running' | 'unknown';
-	url: string | null;
-	stages: { name: string; status: string }[];
-}
-
 export interface Activity {
 	id: string;
-	kind: 'save' | 'ship' | 'issue' | 'ready' | 'merge' | 'star';
+	kind: 'save' | 'ship' | 'cram' | 'issue' | 'ready' | 'merge' | 'star';
 	actor: string;
 	message: string;
 	timestamp: string;
@@ -205,18 +192,33 @@ export async function getProject(tenant: string, project: string) {
 	return (await response.json()) as ProjectDetail;
 }
 
-export async function getProjectTree(tenant: string, project: string, workspace = 'main') {
-	const response = await authedFetch(
-		`/v1/tenants/${tenant}/projects/${project}/tree?workspace=${encodeURIComponent(workspace)}`
-	);
+export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string) {
+	let url = `/v1/tenants/${tenant}/projects/${project}/tree?workspace=${encodeURIComponent(workspace)}`;
+	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
+	const response = await authedFetch(url);
 	return (await response.json()) as ProjectTree;
 }
 
-export async function getProjectFile(tenant: string, project: string, path: string, workspace = 'main') {
-	const response = await authedFetch(
-		`/v1/tenants/${tenant}/projects/${project}/files/${encodeURIComponent(path)}?workspace=${encodeURIComponent(workspace)}`
-	);
+export async function getProjectFile(tenant: string, project: string, path: string, workspace = 'main', snapshot?: string) {
+	let url = `/v1/tenants/${tenant}/projects/${project}/files/${encodeURIComponent(path)}?workspace=${encodeURIComponent(workspace)}`;
+	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
+	const response = await authedFetch(url);
 	return (await response.json()) as ProjectFile;
+}
+
+export async function getHistoryEntry(tenant: string, project: string, entryId: string): Promise<HistoryEntry> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`);
+	return (await response.json()) as HistoryEntry;
+}
+
+export async function downloadObjects(tenant: string, project: string, ids: string[]): Promise<{ id: string; kind: string; bytes_base64: string }[]> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/objects/download`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ ids })
+	});
+	const data = (await response.json()) as { objects: { id: string; kind: string; bytes_base64: string }[] };
+	return data.objects;
 }
 
 export async function listIssues(tenant: string, project: string) {
@@ -297,11 +299,45 @@ export async function getProjectHistory(tenant: string, project: string): Promis
 	return all.flat().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
-export async function getHistoryEntryDetail(tenant: string, project: string, entryId: string): Promise<HistoryEntryDetail> {
-	const entries = await getProjectHistory(tenant, project);
-	const entry = entries.find((e) => e.id === entryId);
-	if (!entry) throw new Error('History entry not found');
-	return { ...entry, files_changed: [] };
+export async function getHistoryEntryDetail(tenant: string, project: string, entryId: string): Promise<HistoryEntry & { parent_id: string | null; files: { path: string; change_type: string; old_id: string | null; new_id: string | null }[] }> {
+	const entry = await getHistoryEntry(tenant, project, entryId);
+	if (!entry.snapshot_id) {
+		return { ...entry, parent_id: null, files: [] };
+	}
+	// Fetch snapshot to get parent
+	const objects = await downloadObjects(tenant, project, [entry.snapshot_id]);
+	if (objects.length === 0) {
+		return { ...entry, parent_id: null, files: [] };
+	}
+	const snapshot = JSON.parse(atob(objects[0].bytes_base64)) as { parents?: string[]; root_tree?: string };
+	const parentId = snapshot.parents?.[0] ?? null;
+
+	const [currentTree, parentTree] = await Promise.all([
+		getProjectTree(tenant, project, entry.workspace, entry.snapshot_id),
+		parentId ? getProjectTree(tenant, project, entry.workspace, parentId).catch(() => null) : null
+	]);
+
+	const currentMap = new Map(currentTree.entries.filter((e) => e.entry_type === 'blob').map((e) => [e.path, e.id]));
+	const parentMap = parentId && parentTree
+		? new Map(parentTree.entries.filter((e) => e.entry_type === 'blob').map((e) => [e.path, e.id]))
+		: new Map<string, string>();
+
+	const files: { path: string; change_type: string; old_id: string | null; new_id: string | null }[] = [];
+	for (const [path, id] of currentMap) {
+		if (!parentMap.has(path)) {
+			files.push({ path, change_type: 'added', old_id: null, new_id: id });
+		} else if (parentMap.get(path) !== id) {
+			files.push({ path, change_type: 'modified', old_id: parentMap.get(path) ?? null, new_id: id });
+		}
+	}
+	for (const [path, id] of parentMap) {
+		if (!currentMap.has(path)) {
+			files.push({ path, change_type: 'deleted', old_id: id, new_id: null });
+		}
+	}
+	files.sort((a, b) => a.path.localeCompare(b.path));
+
+	return { ...entry, parent_id: parentId, files };
 }
 
 export async function getProjectReadme(tenant: string, project: string): Promise<string | null> {
@@ -377,6 +413,4 @@ export async function setParentWorkspace(tenant: string, project: string, worksp
 	});
 }
 
-export async function getCiStatus(tenant: string, project: string, workspace: string): Promise<CiStatus> {
-	return { status: 'unknown', url: null, stages: [] };
-}
+

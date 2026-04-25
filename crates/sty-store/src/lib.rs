@@ -43,6 +43,13 @@ pub trait Store {
 
     // ── Workspace state ────────────────────────────────────
     fn workspace_states(&self, tenant: &str, project: &str) -> Result<Vec<WorkspaceState>>;
+    fn create_workspace(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        parent: Option<&str>,
+    ) -> Result<()>;
     fn set_parent_workspace(
         &self,
         tenant: &str,
@@ -80,7 +87,14 @@ pub trait Store {
         principal: &TokenPrincipal,
         kind: &str,
         message: &str,
+        snapshot_id: Option<&str>,
     ) -> Result<()>;
+    fn get_history_entry(
+        &self,
+        tenant: &str,
+        project: &str,
+        entry_id: &str,
+    ) -> Result<Option<HistoryEntry>>;
 
     // ── Issues ─────────────────────────────────────────────
     fn list_issues(&self, tenant: &str, project: &str) -> Result<Vec<Issue>>;
@@ -94,11 +108,12 @@ pub trait Store {
     ) -> Result<Issue>;
 
     // ── Settings / Stars ───────────────────────────────────
-    fn project_settings(&self, tenant: &str, project: &str) -> Result<ProjectSettings>;
+    fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings>;
     fn update_project_settings(
         &self,
         tenant: &str,
         project: &str,
+        principal: &TokenPrincipal,
         visibility: &str,
         default_workspace: &str,
     ) -> Result<ProjectSettings>;

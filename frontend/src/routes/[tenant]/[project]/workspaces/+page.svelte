@@ -44,15 +44,6 @@
 		}
 	}
 
-	function ciColor(status: WorkspaceStatus['ci_status']) {
-		switch (status) {
-			case 'passing': return 'bg-[#7cb97c]';
-			case 'failing': return 'bg-[#d96c5a]';
-			case 'running': return 'bg-[#d9a66c]';
-			default: return 'bg-[#5c5c5a]';
-		}
-	}
-
 	// Build tree: group children by parent
 	const tree = $derived(() => {
 		const byParent = new Map<string, WorkspaceStatus[]>();
@@ -133,8 +124,6 @@
 							{/if}
 						</div>
 						<div class="mt-1 flex items-center gap-2">
-							<span class="h-2 w-2 rounded-full {ciColor(ws.ci_status)}"></span>
-							<span class="text-xs text-[#6f6b5f]">{ws.ci_status}</span>
 							{#if ws.head}
 								<span class="font-mono text-xs text-[#6f6b5f]">{ws.head.slice(0, 12)}</span>
 							{/if}

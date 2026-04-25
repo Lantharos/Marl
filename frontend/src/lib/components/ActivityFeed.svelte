@@ -7,6 +7,7 @@
 		switch (kind) {
 			case 'save': return 'S';
 			case 'ship': return 'SHIP';
+			case 'cram': return 'C';
 			case 'issue': return 'I';
 			case 'ready': return 'R';
 			case 'merge': return 'M';
@@ -19,6 +20,7 @@
 		switch (kind) {
 			case 'save': return 'bg-[#2a2a28] text-[#a09d94]';
 			case 'ship': return 'bg-[#3a3a36] text-[#7cb97c]';
+			case 'cram': return 'bg-[#3a3a36] text-[#d9a66c]';
 			case 'issue': return 'bg-[#3a3a36] text-[#d9a66c]';
 			case 'ready': return 'bg-[#3a3a36] text-[#6ba4c7]';
 			case 'merge': return 'bg-[#3a3a36] text-[#d96c5a]';

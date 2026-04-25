@@ -6,11 +6,13 @@
 	let {
 		entries,
 		selectedPath,
-		onSelect
+		onSelect,
+		gitStatus
 	}: {
 		entries: TreeEntryInfo[];
 		selectedPath: string;
 		onSelect: (path: string) => void;
+		gitStatus?: { path: string; status: 'added' | 'deleted' | 'modified' | 'renamed' | 'untracked' }[];
 	} = $props();
 
 	let host: HTMLDivElement;
@@ -33,6 +35,7 @@
 				flattenEmptyDirectories: false,
 				search: paths.length > 8,
 				stickyFolders: true,
+				gitStatus,
 				onSelectionChange(paths) {
 					const path = paths[0];
 					if (path) {

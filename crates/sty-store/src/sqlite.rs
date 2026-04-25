@@ -81,7 +81,8 @@ impl SqliteStore {
                 kind text not null,
                 message text not null,
                 author text not null,
-                timestamp text not null
+                timestamp text not null,
+                snapshot_id text
             );
             create table if not exists issues (
                 id text primary key,
@@ -105,6 +106,15 @@ impl SqliteStore {
             create index if not exists idx_issues_project on issues(tenant, project);
             "
         )?;
+        // Migration: add snapshot_id to existing history tables
+        let has_snapshot_id: bool = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name = 'snapshot_id'",
+            [],
+            |row| row.get(0),
+        ).unwrap_or(0) > 0;
+        if !has_snapshot_id {
+            conn.execute("ALTER TABLE history ADD COLUMN snapshot_id text", [])?;
+        }
         Ok(())
     }
 
@@ -422,6 +432,30 @@ impl Store for SqliteStore {
         Ok(states)
     }
 
+    fn create_workspace(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        parent: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn()?;
+        let parent_head: Option<String> = conn.query_row(
+            "select head from workspace_heads where tenant = ?1 and project = ?2 and workspace = ?3",
+            rusqlite::params![tenant, project, parent.unwrap_or("main")],
+            |row| row.get(0),
+        ).optional()?;
+        conn.execute(
+            "insert into workspace_heads (tenant, project, workspace, head) values (?1, ?2, ?3, ?4)",
+            rusqlite::params![tenant, project, workspace, parent_head],
+        )?;
+        conn.execute(
+            "insert into workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable) values (?1, ?2, ?3, 'draft', 0, ?4, 0)",
+            rusqlite::params![tenant, project, workspace, parent],
+        )?;
+        Ok(())
+    }
+
     fn set_parent_workspace(
         &self,
         tenant: &str,
@@ -451,7 +485,7 @@ impl Store for SqliteStore {
              where tenant = ?1 and project = ?2 and workspace = ?3",
             rusqlite::params![tenant, project, workspace],
         )?;
-        self.log_history(tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace))?;
+        self.log_history(tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace), None)?;
         Ok(())
     }
 
@@ -468,7 +502,7 @@ impl Store for SqliteStore {
              where tenant = ?1 and project = ?2 and workspace = ?3",
             rusqlite::params![tenant, project, workspace],
         )?;
-        self.log_history(tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace))?;
+        self.log_history(tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace), None)?;
         Ok(())
     }
 
@@ -480,7 +514,7 @@ impl Store for SqliteStore {
     ) -> Result<Vec<HistoryEntry>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "select id, kind, message, author, timestamp, workspace from history
+            "select id, kind, message, author, timestamp, workspace, snapshot_id from history
              where tenant = ?1 and project = ?2 and workspace = ?3
              order by timestamp desc"
         )?;
@@ -492,6 +526,7 @@ impl Store for SqliteStore {
                 author: row.get(3)?,
                 timestamp: row.get(4)?,
                 workspace: row.get(5)?,
+                snapshot_id: row.get(6)?,
             })
         })?;
         let mut entries = Vec::new();
@@ -509,16 +544,42 @@ impl Store for SqliteStore {
         principal: &TokenPrincipal,
         kind: &str,
         message: &str,
+        snapshot_id: Option<&str>,
     ) -> Result<()> {
         let id = format!("{}-{}", kind, Uuid::new_v4().simple());
         let timestamp = chrono::Utc::now().to_rfc3339();
         let conn = self.conn()?;
         conn.execute(
-            "insert into history (id, tenant, project, workspace, kind, message, author, timestamp)
-             values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rusqlite::params![id, tenant, project, workspace, kind, message, principal.user, timestamp],
+            "insert into history (id, tenant, project, workspace, kind, message, author, timestamp, snapshot_id)
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![id, tenant, project, workspace, kind, message, principal.user, timestamp, snapshot_id],
         )?;
         Ok(())
+    }
+
+    fn get_history_entry(
+        &self,
+        tenant: &str,
+        project: &str,
+        entry_id: &str,
+    ) -> Result<Option<HistoryEntry>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select id, kind, message, author, timestamp, workspace, snapshot_id from history
+             where tenant = ?1 and project = ?2 and id = ?3"
+        )?;
+        let row = stmt.query_row(rusqlite::params![tenant, project, entry_id], |row| {
+            Ok(HistoryEntry {
+                id: row.get(0)?,
+                kind: row.get(1)?,
+                message: row.get(2)?,
+                author: row.get(3)?,
+                timestamp: row.get(4)?,
+                workspace: row.get(5)?,
+                snapshot_id: row.get(6)?,
+            })
+        }).optional()?;
+        Ok(row)
     }
 
     fn list_issues(&self, tenant: &str, project: &str) -> Result<Vec<Issue>> {
@@ -582,7 +643,7 @@ impl Store for SqliteStore {
         })
     }
 
-    fn project_settings(&self, tenant: &str, project: &str) -> Result<ProjectSettings> {
+    fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "select settings_json from projects where tenant = ?1 and project = ?2"
@@ -593,6 +654,7 @@ impl Store for SqliteStore {
         )?;
         let mut settings: ProjectSettings = serde_json::from_str(&settings_json)?;
         settings.starred_count = self.star_count(tenant, project)?;
+        settings.is_starred = self.is_starred(tenant, project, principal)?;
         Ok(settings)
     }
 
@@ -600,10 +662,11 @@ impl Store for SqliteStore {
         &self,
         tenant: &str,
         project: &str,
+        principal: &TokenPrincipal,
         visibility: &str,
         default_workspace: &str,
     ) -> Result<ProjectSettings> {
-        let mut settings = self.project_settings(tenant, project)?;
+        let mut settings = self.project_settings(tenant, project, principal)?;
         settings.visibility = visibility.to_string();
         settings.default_workspace = default_workspace.to_string();
         let json = serde_json::to_string(&settings)?;

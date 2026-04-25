@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS history (
     kind TEXT NOT NULL,
     message TEXT NOT NULL,
     author TEXT NOT NULL,
-    timestamp TEXT NOT NULL
+    timestamp TEXT NOT NULL,
+    snapshot_id TEXT
 );
 CREATE TABLE IF NOT EXISTS issues (
     id TEXT PRIMARY KEY,
