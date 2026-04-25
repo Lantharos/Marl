@@ -3,23 +3,24 @@ use base64::Engine;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    ChunkCompleteRequest, CompareRequest, CompareResponse, DevTokenRequest, DownloadRequest,
-    DownloadResponse, HeadResponse, HeadUpdateRequest, MissingRequest, MissingResponse,
-    OkResponse, ProjectSummary, RemoteObject, SessionExchangeRequest, SnapshotObject,
-    TenantMetadata, TenantSummary, TokenResponse, TreeEntryInfo, UploadRequest, WorkspaceSummary,
-    validate_segment,
+    ChunkCompleteRequest, CompareRequest, CompareResponse, CreateIssueRequest, DevTokenRequest,
+    DownloadRequest, DownloadResponse, HeadResponse, HeadUpdateRequest, HistoryResponse,
+    IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse, OkResponse,
+    ObjectFileResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse,
+    RemoteObject, SessionExchangeRequest, StarResponse, TokenResponse, TreeEntryInfo,
+    UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
 use worker::*;
 
 mod auth;
+mod d1;
 mod support;
 
 use auth::{dev_tokens_enabled, verify_ave_id_token};
 use support::{
-    apply_cors, bucket, coordinator, decode_base64, ensure_project_access, head_key, json_error,
-    mint_token, object_chunk_key, object_key, param, preflight_response, project_owner,
-    project_params, put_bytes, put_text, required_header, required_usize_header, snapshot_key,
-    tenant_access, tenant_key, tenant_metadata, token_key, validate_object, validate_object_metadata,
+    apply_cors, bucket, db, decode_base64, json_error, object_chunk_key, object_key,
+    param, preflight_response, project_params, put_bytes, put_text, required_header,
+    required_usize_header, r2_bytes, validate_object, validate_object_metadata,
 };
 
 #[event(fetch)]
@@ -37,51 +38,27 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/projects", list_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
-        .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces",
-            list_workspaces,
-        )
+        .get_async("/v1/tenants/:tenant/projects/:project/workspaces", list_workspaces)
         .get_async("/v1/tenants/:tenant/projects/:project/tree", project_tree)
-        .get_async(
-            "/v1/tenants/:tenant/projects/:project/files/:path",
-            project_file,
-        )
-        .get_async(
-            "/v1/tenants/:tenant/projects/:project/issues",
-            project_issues,
-        )
-        .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head",
-            get_head,
-        )
-        .put_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head",
-            update_head,
-        )
-        .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare",
-            compare,
-        )
-        .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/missing",
-            missing,
-        )
-        .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/upload",
-            upload,
-        )
-        .put_async(
-            "/v1/tenants/:tenant/projects/:project/objects/:object/chunks/:chunk",
-            upload_chunk,
-        )
-        .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/:object/complete",
-            complete_chunked_upload,
-        )
-        .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/download",
-            download,
-        )
+        .get_async("/v1/tenants/:tenant/projects/:project/files/:path", project_file)
+        .get_async("/v1/tenants/:tenant/projects/:project/issues", project_issues)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues", create_issue)
+        .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", get_head)
+        .put_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", update_head)
+        .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", workspace_history)
+        .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", log_history)
+        .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready", mark_ready)
+        .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge", merge_workspace)
+        .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare", compare)
+        .get_async("/v1/tenants/:tenant/projects/:project/settings", get_settings)
+        .patch_async("/v1/tenants/:tenant/projects/:project/settings", update_settings)
+        .post_async("/v1/tenants/:tenant/projects/:project/star", star_project)
+        .delete_async("/v1/tenants/:tenant/projects/:project/star", unstar_project)
+        .post_async("/v1/tenants/:tenant/projects/:project/objects/missing", missing)
+        .post_async("/v1/tenants/:tenant/projects/:project/objects/upload", upload)
+        .put_async("/v1/tenants/:tenant/projects/:project/objects/:object/chunks/:chunk", upload_chunk)
+        .post_async("/v1/tenants/:tenant/projects/:project/objects/:object/complete", complete_chunked_upload)
+        .post_async("/v1/tenants/:tenant/projects/:project/objects/download", download)
         .run(req, env)
         .await?;
     apply_cors(&request, &mut response)?;
@@ -98,9 +75,9 @@ async fn dev_token(mut req: Request, ctx: RouteContext<()>) -> Result<Response> 
         return json_error(404, "not found");
     }
     let body: DevTokenRequest = req.json().await?;
-    validate_segment(&body.user).map_err(|error| Error::RustError(error.to_string()))?;
-    let token = mint_token("dev");
-    put_text(&bucket(&ctx.env)?, &token_key(&token), &body.user).await?;
+    sty_protocol::validate_segment(&body.user).map_err(|e| Error::RustError(e.to_string()))?;
+    let db = db(&ctx.env)?;
+    let token = d1::add_token(&db, &body.user).await?;
     Response::from_json(&TokenResponse { token })
 }
 
@@ -111,221 +88,284 @@ async fn exchange_session(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     }
     let user = match verify_ave_id_token(&ctx.env, &body.id_token).await {
         Ok(user) => user,
-        Err(error) => return json_error(401, &error.to_string()),
+        Err(e) => return json_error(401, &e.to_string()),
     };
-    let token = mint_token("ave");
-    put_text(&bucket(&ctx.env)?, &token_key(&token), &user).await?;
+    let database = db(&ctx.env)?;
+    let token = d1::add_token(&database, &user).await?;
     Response::from_json(&TokenResponse { token })
 }
 
 async fn me(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
-    let store = bucket(&ctx.env)?;
-    support::ensure_user_tenant(&store, &user).await?;
-    let objects = store.list().prefix("tenants/").execute().await?;
-    let mut tenants = Vec::new();
-    for object in objects.objects() {
-        let key = object.key();
-        if !key.ends_with("/tenant.json") {
-            continue;
-        }
-        let parts = key.split('/').collect::<Vec<_>>();
-        if parts.len() != 3 {
-            continue;
-        }
-        if let Some(metadata) = tenant_metadata(&store, parts[1]).await? {
-            if metadata.members.iter().any(|member| member == &user) {
-                tenants.push(tenant_summary(metadata));
-            }
-        }
-    }
-    Response::from_json(&json!({ "user": user, "tenants": tenants }))
+    let database = db(&ctx.env)?;
+    let tenants = d1::tenants(&database, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    Response::from_json(&MeResponse { user, tenants })
 }
 
 async fn create_org(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let body: serde_json::Value = req.json().await?;
     let name = body["name"].as_str().unwrap_or_default();
-    validate_segment(name).map_err(|error| Error::RustError(error.to_string()))?;
-    let store = bucket(&ctx.env)?;
-    if store.head(tenant_key(name)).await?.is_some() {
-        let Some(metadata) = tenant_metadata(&store, name).await? else {
-            return json_error(409, "tenant already exists");
-        };
-        if metadata.members.iter().any(|member| member == &user) {
-            return Response::from_json(&tenant_summary(metadata));
-        }
-        return json_error(409, "tenant already exists");
-    }
-    let metadata = TenantMetadata {
-        name: name.to_string(),
-        kind: "org".to_string(),
-        owner: user.clone(),
-        members: vec![user],
-    };
-    put_text(&store, &tenant_key(name), &serde_json::to_string(&metadata)?).await?;
-    Response::from_json(&tenant_summary(metadata))
+    sty_protocol::validate_segment(name).map_err(|e| Error::RustError(e.to_string()))?;
+    let database = db(&ctx.env)?;
+    let tenant = d1::create_org(&database, name, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&tenant)
 }
 
 async fn list_projects(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
-    let objects = bucket(&ctx.env)?
-        .list()
-        .prefix("projects/")
-        .execute()
-        .await?;
-    let mut projects = Vec::new();
-    for object in objects.objects() {
-        let key = object.key();
-        if !key.ends_with("/project.json") {
-            continue;
-        }
-        let parts = key.split('/').collect::<Vec<_>>();
-        if parts.len() != 4 {
-            continue;
-        }
-        let owner = project_owner(&bucket(&ctx.env)?, &key)
-            .await?
-            .unwrap_or_else(|| parts[1].to_string());
-        if owner != user && !tenant_access(&bucket(&ctx.env)?, parts[1], &user).await? {
-            continue;
-        }
-        projects.push(ProjectSummary {
-            tenant: parts[1].to_string(),
-            project: parts[2].to_string(),
-            owner,
-        });
-    }
+    let database = db(&ctx.env)?;
+    let projects = d1::projects(&database, &sty_protocol::TokenPrincipal { user }).await?;
     Response::from_json(&json!({ "projects": projects }))
 }
 
 async fn create_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
 async fn project_detail(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let workspaces = current_workspaces(&ctx.env, &tenant, &project).await?;
-    Response::from_json(&json!({
-        "project": { "tenant": tenant, "project": project, "owner": user },
-        "workspaces": workspaces
-    }))
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let states = d1::workspace_states(&database, &tenant, &project).await?;
+    let workspaces: Vec<WorkspaceSummary> = states
+        .into_iter()
+        .map(|s| WorkspaceSummary {
+            name: s.name,
+            head: s.head,
+        })
+        .collect();
+    Response::from_json(&ProjectDetailResponse {
+        project: ProjectSummary {
+            tenant: tenant.clone(),
+            project: project.clone(),
+            owner: user,
+        },
+        workspaces,
+    })
 }
 
 async fn list_workspaces(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let workspaces = current_workspaces(&ctx.env, &tenant, &project).await?;
-    Response::from_json(&json!({ "workspaces": workspaces }))
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
+    Response::from_json(&WorkspaceStateResponse { workspaces })
 }
 
 async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let workspace = req.url()?.query_pairs().find_map(|(key, value)| {
-        (key == "workspace").then(|| value.to_string())
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let workspace = req.url()?.query_pairs().find_map(|(k, v)| {
+        (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
-    let head = workspace_head(&ctx.env, &tenant, &project, &workspace).await?;
+    let head = d1::head(&database, &tenant, &project, &workspace).await?;
     let Some(head_id) = head.clone() else {
-        let entries: Vec<TreeEntryInfo> = Vec::new();
-        return Response::from_json(&json!({ "workspace": workspace, "head": head, "root_tree": null, "entries": entries }));
+        return Response::from_json(&ProjectTreeResponse {
+            workspace: workspace.clone(),
+            head,
+            root_tree: None,
+            entries: Vec::new(),
+        });
     };
     let store = bucket(&ctx.env)?;
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
-    let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)?;
+    let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
     let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();
     let mut entries = Vec::new();
     walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
-    Response::from_json(&json!({ "workspace": workspace, "head": head, "root_tree": root_tree, "entries": entries }))
+    Response::from_json(&ProjectTreeResponse {
+        workspace: workspace.clone(),
+        head,
+        root_tree: Some(root_tree),
+        entries,
+    })
 }
 
 async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let path = param(&ctx, "path")?;
-    Response::from_json(&json!({ "path": path, "id": "", "text": null, "binary": true }))
+    let workspace = req.url()?.query_pairs().find_map(|(k, v)| {
+        (k == "workspace").then(|| v.to_string())
+    }).unwrap_or_else(|| "main".to_string());
+    let head = d1::head(&database, &tenant, &project, &workspace).await?;
+    let Some(head_id) = head else {
+        return json_error(404, "workspace has no head");
+    };
+    let store = bucket(&ctx.env)?;
+    let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
+    let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
+    let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();
+    let mut entries = Vec::new();
+    walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
+    let Some(entry) = entries.iter().find(|e| e.path == path) else {
+        return json_error(404, "file not found");
+    };
+    if entry.entry_type != "blob" {
+        return json_error(400, "path is not a file");
+    }
+    let bytes = r2_bytes(&store, &object_key(&tenant, &project, &entry.id)).await?;
+    let text = String::from_utf8(bytes).ok();
+    Response::from_json(&ObjectFileResponse {
+        path: path.clone(),
+        id: entry.id.clone(),
+        binary: text.is_none(),
+        text,
+    })
 }
 
 async fn project_issues(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let issues: Vec<serde_json::Value> = Vec::new();
-    Response::from_json(&json!({ "issues": issues }))
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let issues = d1::list_issues(&database, &tenant, &project).await?;
+    Response::from_json(&IssuesResponse { issues })
+}
+
+async fn create_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let body: CreateIssueRequest = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }, &body.title, &body.body).await?;
+    Response::from_json(&issue)
 }
 
 async fn get_head(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let workspace = param(&ctx, "workspace")?;
-    let coordinator = coordinator(&ctx.env, &tenant, &project)?;
-    let response = coordinator
-        .fetch_with_str(&format!("https://sty.local/head/{workspace}"))
-        .await?;
-    Ok(response)
+    let head = d1::head(&database, &tenant, &project, &workspace).await?;
+    Response::from_json(&HeadResponse { head })
 }
 
 async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let workspace = param(&ctx, "workspace")?;
     let body: HeadUpdateRequest = req.json().await?;
-    let coordinator = coordinator(&ctx.env, &tenant, &project)?;
-    let mut init = RequestInit::new();
-    init.with_method(Method::Put)
-        .with_body(Some(serde_json::to_string(&body)?.into()));
-    let request = Request::new_with_init(&format!("https://sty.local/head/{workspace}"), &init)?;
-    coordinator.fetch_with_request(request).await
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let workspace = param(&ctx, "workspace")?;
+    let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
+    if ok {
+        Response::from_json(&OkResponse { ok: true })
+    } else {
+        json_error(409, "workspace head changed")
+    }
+}
+
+async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let entries = d1::workspace_history(&database, &tenant, &project, &workspace).await?;
+    Response::from_json(&HistoryResponse { entries })
+}
+
+async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let body: LogHistoryRequest = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message).await?;
+    Response::from_json(&OkResponse { ok: true })
+}
+
+async fn mark_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&OkResponse { ok: true })
+}
+
+async fn merge_workspace(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    d1::merge_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&OkResponse { ok: true })
 }
 
 async fn compare(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
     let workspace = param(&ctx, "workspace")?;
     let body: CompareRequest = req.json().await?;
-    let coordinator = coordinator(&ctx.env, &tenant, &project)?;
-    let mut init = RequestInit::new();
-    init.with_method(Method::Post)
-        .with_body(Some(serde_json::to_string(&body)?.into()));
-    let request = Request::new_with_init(&format!("https://sty.local/compare/{workspace}"), &init)?;
-    coordinator.fetch_with_request(request).await
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let remote_head = d1::head(&database, &tenant, &project, &workspace).await?;
+    let relation = compare_relation(&ctx.env, &tenant, &project, body.local_head.as_deref(), remote_head.as_deref()).await?;
+    Response::from_json(&CompareResponse { remote_head, relation })
+}
+
+async fn get_settings(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let settings = d1::project_settings(&database, &tenant, &project).await?;
+    Response::from_json(&settings)
+}
+
+async fn update_settings(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let body: UpdateSettingsRequest = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let visibility = body.visibility.as_deref().unwrap_or("private");
+    let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
+    let settings = d1::update_project_settings(&database, &tenant, &project, visibility, default_workspace).await?;
+    Response::from_json(&settings)
+}
+
+async fn star_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let (is_starred, starred_count) = d1::star_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&StarResponse { is_starred, starred_count })
+}
+
+async fn unstar_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let (is_starred, starred_count) = d1::unstar_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&StarResponse { is_starred, starred_count })
 }
 
 async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let body: MissingRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
     let mut missing = Vec::new();
@@ -341,24 +381,15 @@ async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
 async fn upload(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let body: UploadRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
     for object in body.objects {
         validate_object(&object)?;
         let bytes = decode_base64(&object.bytes_base64)?;
         put_bytes(&store, &object_key(&tenant, &project, &object.id), bytes).await?;
-        put_text(
-            &store,
-            &format!("{}.kind", object_key(&tenant, &project, &object.id)),
-            &object.kind,
-        )
-        .await?;
-        if object.kind == "snapshot" {
-            index_snapshot(&ctx.env, &tenant, &project, object).await?;
-        }
+        put_text(&store, &format!("{}.kind", object_key(&tenant, &project, &object.id)), &object.kind).await?;
     }
     Response::from_json(&OkResponse { ok: true })
 }
@@ -366,9 +397,8 @@ async fn upload(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
 async fn upload_chunk(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let id = param(&ctx, "object")?;
     let chunk_index = param(&ctx, "chunk")?
         .parse::<usize>()
@@ -385,21 +415,15 @@ async fn upload_chunk(mut req: Request, ctx: RouteContext<()>) -> Result<Respons
         return Response::from_json(&OkResponse { ok: true });
     }
     let bytes = req.bytes().await?;
-    put_bytes(
-        &store,
-        &object_chunk_key(&tenant, &project, &id, chunk_index),
-        bytes,
-    )
-    .await?;
+    put_bytes(&store, &object_chunk_key(&tenant, &project, &id, chunk_index), bytes).await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
 async fn complete_chunked_upload(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let id = param(&ctx, "object")?;
     let body: ChunkCompleteRequest = req.json().await?;
     validate_object_metadata(&id, &body.kind)?;
@@ -429,26 +453,10 @@ async fn complete_chunked_upload(mut req: Request, ctx: RouteContext<()>) -> Res
     if digest != id {
         return json_error(400, "object id does not match SHA-256 digest");
     }
-    let snapshot = if body.kind == "snapshot" {
-        Some(serde_json::from_slice::<SnapshotObject>(&bytes)?)
-    } else {
-        None
-    };
     put_bytes(&store, &key, bytes).await?;
     put_text(&store, &format!("{key}.kind"), &body.kind).await?;
-    if let Some(snapshot) = snapshot {
-        let coordinator = coordinator(&ctx.env, &tenant, &project)?;
-        let body = json!({ "id": id, "parents": snapshot.parents });
-        let mut init = RequestInit::new();
-        init.with_method(Method::Post)
-            .with_body(Some(body.to_string().into()));
-        let request = Request::new_with_init("https://sty.local/snapshots", &init)?;
-        let _ = coordinator.fetch_with_request(request).await?;
-    }
     for chunk_index in 0..body.chunk_count {
-        store
-            .delete(object_chunk_key(&tenant, &project, &id, chunk_index))
-            .await?;
+        store.delete(object_chunk_key(&tenant, &project, &id, chunk_index)).await?;
     }
     Response::from_json(&OkResponse { ok: true })
 }
@@ -456,9 +464,8 @@ async fn complete_chunked_upload(mut req: Request, ctx: RouteContext<()>) -> Res
 async fn download(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let body: DownloadRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
     let mut objects = Vec::new();
@@ -486,57 +493,74 @@ async fn download(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     Response::from_json(&DownloadResponse { objects })
 }
 
-async fn index_snapshot(
+// ── Helpers ──────────────────────────────────────────────
+
+async fn require_auth(req: &Request, env: &Env) -> Result<String> {
+    let Some(value) = req.headers().get("authorization")? else {
+        return Err(Error::RustError("missing bearer token".to_string()));
+    };
+    let Some(token) = value.strip_prefix("Bearer ") else {
+        return Err(Error::RustError("missing bearer token".to_string()));
+    };
+    let database = db(env)?;
+    match d1::principal_for_token(&database, token).await? {
+        Some(principal) => Ok(principal.user),
+        None => Err(Error::RustError("invalid bearer token".to_string())),
+    }
+}
+
+async fn compare_relation(
     env: &Env,
     tenant: &str,
     project: &str,
-    object: RemoteObject,
-) -> Result<()> {
-    let bytes = decode_base64(&object.bytes_base64)?;
-    let snapshot: SnapshotObject = serde_json::from_slice(&bytes)?;
-    let coordinator = coordinator(env, tenant, project)?;
-    let body = json!({ "id": object.id, "parents": snapshot.parents });
-    let mut init = RequestInit::new();
-    init.with_method(Method::Post)
-        .with_body(Some(body.to_string().into()));
-    let request = Request::new_with_init("https://sty.local/snapshots", &init)?;
-    let _ = coordinator.fetch_with_request(request).await?;
-    Ok(())
-}
-
-async fn current_workspaces(env: &Env, tenant: &str, project: &str) -> Result<Vec<WorkspaceSummary>> {
-    let head = workspace_head(env, tenant, project, "main").await?;
-    let workspaces = head
-        .map(|head| vec![WorkspaceSummary {
-            name: "main".to_string(),
-            head: Some(head),
-        }])
-        .unwrap_or_default();
-    Ok(workspaces)
-}
-
-async fn workspace_head(
-    env: &Env,
-    tenant: &str,
-    project: &str,
-    workspace: &str,
-) -> Result<Option<String>> {
-    let coordinator = coordinator(env, tenant, project)?;
-    let mut response = coordinator
-        .fetch_with_str(&format!("https://sty.local/head/{workspace}"))
-        .await?;
-    let body: HeadResponse = response.json().await?;
-    Ok(body.head)
-}
-
-async fn r2_bytes(store: &Bucket, key: &str) -> Result<Vec<u8>> {
-    let Some(object) = store.get(key).execute().await? else {
-        return Err(Error::RustError(format!("missing object {key}")));
+    local_head: Option<&str>,
+    remote_head: Option<&str>,
+) -> Result<String> {
+    let relation = match (local_head, remote_head) {
+        (_, None) => "remote_missing",
+        (Some(local), Some(remote)) if local == remote => "same",
+        (None, Some(_)) => "remote_ahead",
+        (Some(local), Some(remote)) if is_ancestor(env, tenant, project, remote, local).await? => "local_ahead",
+        (Some(local), Some(remote)) if is_ancestor(env, tenant, project, local, remote).await? => "remote_ahead",
+        (Some(local), Some(_)) if !object_exists(env, tenant, project, local).await => "local_ahead",
+        _ => "diverged",
     };
-    let Some(body) = object.body() else {
-        return Err(Error::RustError(format!("missing object body {key}")));
+    Ok(relation.to_string())
+}
+
+async fn is_ancestor(env: &Env, tenant: &str, project: &str, ancestor: &str, head: &str) -> Result<bool> {
+    let mut seen = Vec::new();
+    let mut stack = vec![head.to_string()];
+    let store = bucket(env)?;
+    while let Some(id) = stack.pop() {
+        if id == ancestor {
+            return Ok(true);
+        }
+        if seen.contains(&id) {
+            continue;
+        }
+        seen.push(id.clone());
+        let key = object_key(tenant, project, &id);
+        let Ok(bytes) = r2_bytes(&store, &key).await else {
+            continue;
+        };
+        let snapshot: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| Error::RustError(e.to_string()))?;
+        if let Some(parents) = snapshot["parents"].as_array() {
+            for parent in parents {
+                if let Some(pid) = parent.as_str() {
+                    stack.push(pid.to_string());
+                }
+            }
+        }
+    }
+    Ok(false)
+}
+
+async fn object_exists(env: &Env, tenant: &str, project: &str, id: &str) -> bool {
+    let Ok(store) = bucket(env) else {
+        return false;
     };
-    body.bytes().await
+    store.head(object_key(tenant, project, id)).await.map(|h| h.is_some()).unwrap_or(false)
 }
 
 async fn walk_tree(
@@ -550,7 +574,7 @@ async fn walk_tree(
     let mut stack = vec![(prefix.to_string(), root_tree.to_string())];
     while let Some((prefix, tree_id)) = stack.pop() {
         let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
-        let tree: serde_json::Value = serde_json::from_slice(&bytes)?;
+        let tree: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| Error::RustError(e.to_string()))?;
         let Some(entries) = tree["entries"].as_array() else {
             continue;
         };
@@ -574,136 +598,6 @@ async fn walk_tree(
             }
         }
     }
-    output.sort_by(|left, right| left.path.cmp(&right.path));
+    output.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(())
-}
-
-fn tenant_summary(metadata: TenantMetadata) -> TenantSummary {
-    TenantSummary {
-        name: metadata.name,
-        kind: metadata.kind,
-        owner: metadata.owner,
-    }
-}
-
-#[durable_object]
-pub struct ProjectCoordinator {
-    state: State,
-}
-
-impl DurableObject for ProjectCoordinator {
-    fn new(state: State, _env: Env) -> Self {
-        Self { state }
-    }
-
-    async fn fetch(&self, mut req: Request) -> Result<Response> {
-        let url = req.url()?;
-        let path = url.path();
-        if let Some(workspace) = path.strip_prefix("/head/") {
-            if req.method() == Method::Get {
-                let head: Option<String> = self.state.storage().get(&head_key(workspace)).await?;
-                return Response::from_json(&HeadResponse { head });
-            }
-            let body: HeadUpdateRequest = req.json().await?;
-            let key = head_key(workspace);
-            let current: Option<String> = self.state.storage().get(&key).await?;
-            if current.as_deref() != body.expected_head.as_deref() {
-                return json_error(409, "workspace head changed");
-            }
-            self.state.storage().put(&key, body.new_head).await?;
-            return Response::from_json(&OkResponse { ok: true });
-        }
-        if let Some(workspace) = path.strip_prefix("/compare/") {
-            let body: CompareRequest = req.json().await?;
-            let remote_head: Option<String> =
-                self.state.storage().get(&head_key(workspace)).await?;
-            let relation = compare_relation(
-                &self.state,
-                body.local_head.as_deref(),
-                remote_head.as_deref(),
-            )
-            .await?;
-            return Response::from_json(&CompareResponse {
-                remote_head,
-                relation,
-            });
-        }
-        if path == "/snapshots" {
-            let body: serde_json::Value = req.json().await?;
-            let id = body["id"].as_str().unwrap_or_default();
-            let parents = body["parents"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|value| value.as_str().map(ToOwned::to_owned))
-                .collect::<Vec<_>>();
-            self.state.storage().put(&snapshot_key(id), parents).await?;
-            return Response::from_json(&OkResponse { ok: true });
-        }
-        json_error(404, "not found")
-    }
-}
-
-async fn compare_relation(
-    state: &State,
-    local_head: Option<&str>,
-    remote_head: Option<&str>,
-) -> Result<String> {
-    let relation = match (local_head, remote_head) {
-        (_, None) => "remote_missing",
-        (Some(local), Some(remote)) if local == remote => "same",
-        (None, Some(_)) => "remote_ahead",
-        (Some(local), Some(remote)) if is_ancestor(state, remote, local).await? => "local_ahead",
-        (Some(local), Some(remote)) if is_ancestor(state, local, remote).await? => "remote_ahead",
-        (Some(local), Some(_))
-            if state
-                .storage()
-                .get::<Vec<String>>(&snapshot_key(local))
-                .await?
-                .is_none() =>
-        {
-            "local_ahead"
-        }
-        _ => "diverged",
-    };
-    Ok(relation.to_string())
-}
-
-async fn is_ancestor(state: &State, ancestor: &str, head: &str) -> Result<bool> {
-    let mut seen = Vec::<String>::new();
-    let mut stack = vec![head.to_string()];
-    while let Some(id) = stack.pop() {
-        if id == ancestor {
-            return Ok(true);
-        }
-        if seen.contains(&id) {
-            continue;
-        }
-        seen.push(id.clone());
-        if let Some(parents) = state
-            .storage()
-            .get::<Vec<String>>(&snapshot_key(&id))
-            .await?
-        {
-            stack.extend(parents);
-        }
-    }
-    Ok(false)
-}
-
-async fn require_auth(req: &Request, env: &Env) -> Result<String> {
-    let Some(value) = req.headers().get("authorization")? else {
-        return Err(Error::RustError("missing bearer token".to_string()));
-    };
-    let Some(token) = value.strip_prefix("Bearer ") else {
-        return Err(Error::RustError("missing bearer token".to_string()));
-    };
-    let Some(object) = bucket(env)?.get(token_key(token)).execute().await? else {
-        return Err(Error::RustError("invalid bearer token".to_string()));
-    };
-    let Some(body) = object.body() else {
-        return Err(Error::RustError("invalid bearer token".to_string()));
-    };
-    body.text().await
 }

@@ -21,18 +21,11 @@
       "bucket_name": "sty-objects"
     }
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "PROJECT_COORDINATOR",
-        "class_name": "ProjectCoordinator"
-      }
-    ]
-  },
-  "migrations": [
+  "d1_databases": [
     {
-      "tag": "v1",
-      "new_sqlite_classes": ["ProjectCoordinator"]
+      "binding": "STY_DB",
+      "database_name": "sty-db",
+      "database_id": "local-sty-db"
     }
   ]
 }

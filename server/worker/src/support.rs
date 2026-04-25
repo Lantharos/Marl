@@ -2,84 +2,22 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sty_protocol::{RemoteObject, TenantMetadata, validate_segment};
-use uuid::Uuid;
+use sty_protocol::{RemoteObject, validate_segment};
 use worker::*;
-
-pub async fn ensure_project_access(
-    env: &Env,
-    tenant: &str,
-    project: &str,
-    user: &str,
-) -> Result<bool> {
-    let key = project_key(tenant, project);
-    let store = bucket(env)?;
-    let owner = project_owner(&store, &key).await?;
-    match owner {
-        Some(owner) if owner == user || tenant_access(&store, tenant, user).await? => Ok(true),
-        Some(_) => Ok(false),
-        None if tenant_access(&store, tenant, user).await? => {
-            put_text(
-                &store,
-                &key,
-                &json!({ "tenant": tenant, "project": project, "owner": user }).to_string(),
-            )
-            .await?;
-            Ok(true)
-        }
-        None => Ok(false),
-    }
-}
-
-pub async fn tenant_access(bucket: &Bucket, tenant: &str, user: &str) -> Result<bool> {
-    if tenant == user {
-        ensure_user_tenant(bucket, user).await?;
-        return Ok(true);
-    }
-    let Some(metadata) = tenant_metadata(bucket, tenant).await? else {
-        return Ok(false);
-    };
-    Ok(metadata.members.iter().any(|member| member == user))
-}
-
-pub async fn ensure_user_tenant(bucket: &Bucket, user: &str) -> Result<()> {
-    let key = tenant_key(user);
-    if bucket.head(key.clone()).await?.is_some() {
-        return Ok(());
-    }
-    let metadata = TenantMetadata {
-        name: user.to_string(),
-        kind: "user".to_string(),
-        owner: user.to_string(),
-        members: vec![user.to_string()],
-    };
-    put_text(bucket, &key, &serde_json::to_string(&metadata)?).await
-}
-
-pub async fn tenant_metadata(bucket: &Bucket, tenant: &str) -> Result<Option<TenantMetadata>> {
-    let Some(object) = bucket.get(tenant_key(tenant)).execute().await? else {
-        return Ok(None);
-    };
-    let Some(body) = object.body() else {
-        return Ok(None);
-    };
-    Ok(Some(serde_json::from_str(&body.text().await?)?))
-}
 
 pub fn bucket(env: &Env) -> Result<Bucket> {
     env.bucket("STY_OBJECTS")
 }
 
-pub fn coordinator(env: &Env, tenant: &str, project: &str) -> Result<Stub> {
-    env.durable_object("PROJECT_COORDINATOR")?
-        .get_by_name(&format!("{tenant}/{project}"))
+pub fn db(env: &Env) -> Result<D1Database> {
+    env.d1("STY_DB")
 }
 
 pub fn project_params(ctx: &RouteContext<()>) -> Result<(String, String)> {
     let tenant = param(ctx, "tenant")?;
     let project = param(ctx, "project")?;
-    validate_segment(&tenant).map_err(|error| Error::RustError(error.to_string()))?;
-    validate_segment(&project).map_err(|error| Error::RustError(error.to_string()))?;
+    validate_segment(&tenant).map_err(|e| Error::RustError(e.to_string()))?;
+    validate_segment(&project).map_err(|e| Error::RustError(e.to_string()))?;
     Ok((tenant, project))
 }
 
@@ -95,41 +33,6 @@ pub fn object_key(tenant: &str, project: &str, id: &str) -> String {
 
 pub fn object_chunk_key(tenant: &str, project: &str, id: &str, chunk_index: usize) -> String {
     format!("projects/{tenant}/{project}/objects/.uploads/{id}/{chunk_index}.chunk")
-}
-
-pub fn project_key(tenant: &str, project: &str) -> String {
-    format!("projects/{tenant}/{project}/project.json")
-}
-
-pub fn tenant_key(tenant: &str) -> String {
-    format!("tenants/{tenant}/tenant.json")
-}
-
-pub fn head_key(workspace: &str) -> String {
-    format!("heads/{workspace}")
-}
-
-pub fn snapshot_key(id: &str) -> String {
-    format!("snapshots/{id}/parents")
-}
-
-pub fn token_key(token: &str) -> String {
-    format!("tokens/{}", hex::encode(Sha256::digest(token.as_bytes())))
-}
-
-pub fn mint_token(prefix: &str) -> String {
-    format!("sty_{prefix}_{}", Uuid::new_v4().simple())
-}
-
-pub async fn project_owner(bucket: &Bucket, key: &str) -> Result<Option<String>> {
-    let Some(object) = bucket.get(key).execute().await? else {
-        return Ok(None);
-    };
-    let Some(body) = object.body() else {
-        return Ok(None);
-    };
-    let value: serde_json::Value = serde_json::from_str(&body.text().await?)?;
-    Ok(value["owner"].as_str().map(ToOwned::to_owned))
 }
 
 pub fn validate_object(object: &RemoteObject) -> Result<()> {
@@ -183,7 +86,7 @@ pub fn json_error(status: u16, message: &str) -> Result<Response> {
 pub fn decode_base64(value: &str) -> Result<Vec<u8>> {
     BASE64
         .decode(value)
-        .map_err(|error| Error::RustError(error.to_string()))
+        .map_err(|e| Error::RustError(e.to_string()))
 }
 
 pub fn preflight_response(req: &Request) -> Result<Response> {
@@ -210,7 +113,7 @@ pub fn apply_cors(req: &Request, response: &mut Response) -> Result<()> {
 fn set_cors_headers(headers: &mut Headers) -> Result<()> {
     headers.set(
         "access-control-allow-methods",
-        "GET,POST,PUT,OPTIONS",
+        "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     )?;
     headers.set(
         "access-control-allow-headers",
@@ -228,4 +131,14 @@ fn allowed_origin(origin: Option<&str>) -> bool {
             | Some("http://localhost:4173")
             | Some("http://127.0.0.1:4173")
     )
+}
+
+pub async fn r2_bytes(store: &Bucket, key: &str) -> Result<Vec<u8>> {
+    let Some(object) = store.get(key).execute().await? else {
+        return Err(Error::RustError(format!("missing object {key}")));
+    };
+    let Some(body) = object.body() else {
+        return Err(Error::RustError(format!("missing object body {key}")));
+    };
+    body.bytes().await
 }
