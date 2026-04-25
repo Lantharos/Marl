@@ -1,0 +1,22 @@
+[package]
+name = "sty-local-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+base64.workspace = true
+clap.workspace = true
+hex.workspace = true
+jsonwebtoken = "10.3.0"
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sty-protocol.workspace = true
+tokio.workspace = true
+uuid = { version = "1.23.1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile.workspace = true

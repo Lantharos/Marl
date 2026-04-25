@@ -1,0 +1,9 @@
+/target
+.sty-data
+server/worker/target
+server/worker/build
+server/worker/.wrangler
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+frontend/.wrangler
