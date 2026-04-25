@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/sty-protocol",
+  "crates/sty-store",
   "server/local",
   "client",
 ]

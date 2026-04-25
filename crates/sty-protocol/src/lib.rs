@@ -69,7 +69,7 @@ pub struct AuthCheckResponse {
     pub user: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct HeadResponse {
     pub head: Option<String>,
 }
@@ -102,6 +102,32 @@ pub struct ProjectMetadata {
     pub owner: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TenantMetadata {
+    pub name: String,
+    pub kind: String,
+    pub owner: String,
+    pub members: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TenantSummary {
+    pub name: String,
+    pub kind: String,
+    pub owner: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MeResponse {
+    pub user: String,
+    pub tenants: Vec<TenantSummary>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateOrgRequest {
+    pub name: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct StyConfig {
     pub remote_url: String,
@@ -132,8 +158,124 @@ pub struct ProjectSummary {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct WorkspaceSummary {
+    pub name: String,
+    pub head: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProjectDetailResponse {
+    pub project: ProjectSummary,
+    pub workspaces: Vec<WorkspaceSummary>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TreeEntryInfo {
+    pub path: String,
+    pub name: String,
+    pub id: String,
+    pub entry_type: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProjectTreeResponse {
+    pub workspace: String,
+    pub head: Option<String>,
+    pub root_tree: Option<String>,
+    pub entries: Vec<TreeEntryInfo>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ObjectFileResponse {
+    pub path: String,
+    pub id: String,
+    pub text: Option<String>,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Issue {
+    pub id: String,
+    pub number: u64,
+    pub title: String,
+    pub body: String,
+    pub status: String,
+    pub author: String,
+    pub created_at: String,
+    pub labels: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateIssueRequest {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct IssuesResponse {
+    pub issues: Vec<Issue>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProjectsResponse {
     pub projects: Vec<ProjectSummary>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct HistoryEntry {
+    pub id: String,
+    pub kind: String,
+    pub message: String,
+    pub author: String,
+    pub timestamp: String,
+    pub workspace: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct HistoryResponse {
+    pub entries: Vec<HistoryEntry>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct LogHistoryRequest {
+    pub kind: String,
+    pub message: String,
+    pub workspace: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WorkspaceState {
+    pub name: String,
+    pub status: String,
+    pub head: Option<String>,
+    pub parent_workspace: Option<String>,
+    pub is_ready: bool,
+    pub mergeable: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WorkspaceStateResponse {
+    pub workspaces: Vec<WorkspaceState>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProjectSettings {
+    pub visibility: String,
+    pub starred_count: u64,
+    pub is_starred: bool,
+    pub default_workspace: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateSettingsRequest {
+    pub visibility: Option<String>,
+    pub default_workspace: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct StarResponse {
+    pub is_starred: bool,
+    pub starred_count: u64,
 }
 
 pub fn validate_target(target: &str) -> anyhow::Result<(&str, &str)> {

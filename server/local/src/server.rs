@@ -4,19 +4,22 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde_json::json;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::auth::verify_ave_id_token;
+use crate::catalog::Catalog;
 use crate::store::Store;
 use sty_protocol::{
-    ChunkCompleteRequest, CompareRequest, CompareResponse, DevTokenRequest, DownloadRequest,
-    DownloadResponse, HeadResponse, HeadUpdateRequest, MissingRequest, MissingResponse, OkResponse,
-    SessionExchangeRequest, TokenPrincipal, TokenResponse, UploadRequest,
+    ChunkCompleteRequest, CompareRequest, CompareResponse, CreateIssueRequest, CreateOrgRequest,
+    DevTokenRequest, DownloadRequest, DownloadResponse, HeadResponse, HeadUpdateRequest,
+    HistoryResponse, IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
+    OkResponse, ProjectDetailResponse, ProjectSummary, SessionExchangeRequest, StarResponse,
+    TokenPrincipal, TokenResponse, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse,
 };
 
 #[derive(Clone)]
@@ -36,18 +39,56 @@ pub fn router(store: Arc<Store>) -> Router {
         .route("/v1/auth/check", post(auth_check))
         .route("/v1/dev/tokens", post(create_dev_token))
         .route("/v1/session/exchange", post(exchange_session))
+        .route("/v1/me", get(me))
+        .route("/v1/orgs", post(create_org))
         .route("/v1/projects", get(list_projects))
         .route(
             "/v1/tenants/{tenant}/projects/{project}",
-            post(create_project),
+            get(project_detail).post(create_project),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces",
+            get(list_workspace_states),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/tree",
+            get(project_tree),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/files/{*path}",
+            get(project_file),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues",
+            get(project_issues).post(create_issue),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/head",
             get(get_head).put(update_head),
         )
         .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/history",
+            get(workspace_history).post(log_history),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/ready",
+            post(mark_ready),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/merge",
+            post(merge_workspace_handler),
+        )
+        .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/compare",
             post(compare),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/settings",
+            get(get_settings).patch(update_settings),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/star",
+            post(star_project_handler).delete(unstar_project_handler),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/objects/missing",
@@ -82,7 +123,13 @@ fn cors_layer() -> CorsLayer {
             HeaderValue::from_static("http://127.0.0.1:4173"),
         ])
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
-        .allow_headers(Any)
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            HeaderName::from_static("x-pig-object-kind"),
+            HeaderName::from_static("x-pig-chunk-count"),
+            HeaderName::from_static("x-pig-total-size"),
+        ])
 }
 
 async fn create_dev_token(
@@ -98,6 +145,31 @@ async fn create_dev_token(
 async fn auth_check(State(state): State<AppState>, headers: HeaderMap) -> Response {
     match require_auth(&state, &headers) {
         Ok(principal) => Json(json!({ "ok": true, "user": principal.user })).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn me(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_result(state.store.tenants(&principal)).map(|tenants| MeResponse {
+            user: principal.user,
+            tenants,
+        })
+    }) {
+        Ok(body) => Json(body).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn create_org(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateOrgRequest>,
+) -> Response {
+    match require_auth(&state, &headers)
+        .and_then(|principal| map_store_result(state.store.create_org(&body.name, &principal)))
+    {
+        Ok(tenant) => Json(tenant).into_response(),
         Err(response) => response,
     }
 }
@@ -137,6 +209,224 @@ async fn create_project(
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn project_detail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        let catalog = Catalog::new(state.store.root());
+        map_result(catalog.workspaces(&tenant, &project)).map(|workspaces| ProjectDetailResponse {
+            project: ProjectSummary {
+                tenant: tenant.clone(),
+                project: project.clone(),
+                owner: principal.user,
+            },
+            workspaces,
+        })
+    }) {
+        Ok(body) => Json(body).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn project_tree(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+    axum::extract::Query(query): axum::extract::Query<std::collections::BTreeMap<String, String>>,
+) -> Response {
+    let workspace = query.get("workspace").map_or("main", String::as_str);
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(Catalog::new(state.store.root()).tree(&tenant, &project, workspace))
+    }) {
+        Ok(tree) => Json(tree).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn project_file(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, path)): Path<(String, String, String)>,
+    axum::extract::Query(query): axum::extract::Query<std::collections::BTreeMap<String, String>>,
+) -> Response {
+    let workspace = query.get("workspace").map_or("main", String::as_str);
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(Catalog::new(state.store.root()).file(&tenant, &project, workspace, &path))
+    }) {
+        Ok(file) => Json(file).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn project_issues(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.list_issues(&tenant, &project))
+    }) {
+        Ok(issues) => Json(IssuesResponse { issues }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn create_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+    Json(body): Json<CreateIssueRequest>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.create_issue(&tenant, &project, &principal, &body.title, &body.body))
+    }) {
+        Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn list_workspace_states(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.workspace_states(&tenant, &project))
+    }) {
+        Ok(workspaces) => Json(WorkspaceStateResponse { workspaces }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn workspace_history(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, workspace)): Path<(String, String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.workspace_history(&tenant, &project, &workspace))
+    }) {
+        Ok(entries) => Json(HistoryResponse { entries }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn log_history(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, workspace)): Path<(String, String, String)>,
+    Json(body): Json<LogHistoryRequest>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.log_history(
+            &tenant,
+            &project,
+            &workspace,
+            &principal,
+            &body.kind,
+            &body.message,
+        ))
+    }) {
+        Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn mark_ready(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, workspace)): Path<(String, String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.mark_workspace_ready(&tenant, &project, &workspace, &principal))
+    }) {
+        Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn merge_workspace_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, workspace)): Path<(String, String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.merge_workspace(&tenant, &project, &workspace, &principal))
+    }) {
+        Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn get_settings(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.project_settings(&tenant, &project))
+    }) {
+        Ok(settings) => Json(settings).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn update_settings(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+    Json(body): Json<UpdateSettingsRequest>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.update_project_settings(&tenant, &project, body.visibility, body.default_workspace))
+    }) {
+        Ok(settings) => Json(settings).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn star_project_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.star_project(&tenant, &project, &principal))
+    }) {
+        Ok((is_starred, starred_count)) => Json(StarResponse { is_starred, starred_count }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn unstar_project_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.unstar_project(&tenant, &project, &principal))
+    }) {
+        Ok((is_starred, starred_count)) => Json(StarResponse { is_starred, starred_count }).into_response(),
         Err(response) => response,
     }
 }

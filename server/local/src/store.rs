@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
+
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -10,9 +12,11 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use sty_protocol::{
-    ProjectMetadata, ProjectSummary, RemoteObject, SnapshotObject, TokenEntry, TokenFile,
-    TokenPrincipal, is_hex_id, validate_segment,
+    HistoryEntry, Issue, ProjectMetadata, ProjectSettings, ProjectSummary, RemoteObject,
+    SnapshotObject, TokenEntry, TokenFile, TokenPrincipal, WorkspaceState, is_hex_id, validate_segment,
 };
+
+mod tenants;
 
 pub struct Store {
     root: PathBuf,
@@ -31,6 +35,7 @@ impl Store {
 
     pub fn add_token(&self, user: &str) -> Result<String> {
         validate_segment(user)?;
+        self.ensure_user_tenant(user)?;
         let token = format!("sty_dev_{}", Uuid::new_v4().simple());
         let mut file = self.tokens()?;
         file.tokens.push(TokenEntry {
@@ -64,7 +69,7 @@ impl Store {
             self.require_project_access(&metadata, principal)?;
             return Ok(());
         }
-        if tenant != principal.user {
+        if !self.tenant_is_accessible(tenant, principal)? {
             bail!(
                 "user `{}` cannot create projects in tenant `{tenant}`",
                 principal.user
@@ -102,7 +107,7 @@ impl Store {
                 }
                 let project_name = project.file_name().to_string_lossy().to_string();
                 let metadata = self.project_metadata(&tenant_name, &project_name)?;
-                if self.project_is_accessible(&metadata, principal) {
+                if self.project_is_accessible(&metadata, principal)? {
                     projects.push(ProjectSummary {
                         tenant: tenant_name.clone(),
                         project: project_name,
@@ -307,6 +312,10 @@ impl Store {
         Ok(true)
     }
 
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn is_ancestor(&self, tenant: &str, project: &str, ancestor: &str, head: &str) -> Result<bool> {
         let mut seen = BTreeSet::new();
         let mut stack = vec![head.to_string()];
@@ -398,7 +407,7 @@ impl Store {
         metadata: &ProjectMetadata,
         principal: &TokenPrincipal,
     ) -> Result<()> {
-        if self.project_is_accessible(metadata, principal) {
+        if self.project_is_accessible(metadata, principal)? {
             return Ok(());
         }
         bail!(
@@ -413,8 +422,9 @@ impl Store {
         &self,
         metadata: &ProjectMetadata,
         principal: &TokenPrincipal,
-    ) -> bool {
-        metadata.owner == principal.user || metadata.tenant == principal.user
+    ) -> Result<bool> {
+        Ok(metadata.owner == principal.user
+            || self.tenant_is_accessible(&metadata.tenant, principal)?)
     }
 
     fn project_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
@@ -475,6 +485,14 @@ impl Store {
         self.root.join("tokens").join("tokens.json")
     }
 
+    fn tenant_metadata_path(&self, tenant: &str) -> Result<PathBuf> {
+        Ok(self
+            .root
+            .join("tenants")
+            .join(validate_segment_for_path(tenant)?)
+            .join("tenant.json"))
+    }
+
     fn project_metadata_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
         Ok(self.project_path(tenant, project)?.join("project.json"))
     }
@@ -482,6 +500,341 @@ impl Store {
     fn token_hash(&self, token: &str) -> String {
         hex::encode(Sha256::digest(token.as_bytes()))
     }
+
+    // ── Issues ───────────────────────────────────────────────
+
+    pub fn list_issues(&self, tenant: &str, project: &str) -> Result<Vec<Issue>> {
+        let path = self.issues_path(tenant, project)?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        #[derive(Deserialize)]
+        struct IssueStore {
+            issues: Vec<Issue>,
+        }
+        let store: IssueStore = serde_json::from_slice(&fs::read(path)?)?;
+        Ok(store.issues)
+    }
+
+    pub fn create_issue(
+        &self,
+        tenant: &str,
+        project: &str,
+        principal: &TokenPrincipal,
+        title: &str,
+        body: &str,
+    ) -> Result<Issue> {
+        self.ensure_project_storage(tenant, project)?;
+        let path = self.issues_path(tenant, project)?;
+        #[derive(Serialize, Deserialize)]
+        struct IssueStore {
+            next_number: u64,
+            issues: Vec<Issue>,
+        }
+        let mut store: IssueStore = if path.exists() {
+            serde_json::from_slice(&fs::read(&path)?)?
+        } else {
+            IssueStore {
+                next_number: 1,
+                issues: Vec::new(),
+            }
+        };
+        let issue = Issue {
+            id: format!("issue-{}", store.next_number),
+            number: store.next_number,
+            title: title.to_string(),
+            body: body.to_string(),
+            status: "open".to_string(),
+            author: principal.user.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            labels: Vec::new(),
+        };
+        store.issues.push(issue.clone());
+        store.next_number += 1;
+        self.write_json(&path, &store)?;
+        Ok(issue)
+    }
+
+    // ── Workspace state ──────────────────────────────────────
+
+    pub fn workspace_states(&self, tenant: &str, project: &str) -> Result<Vec<WorkspaceState>> {
+        self.ensure_project_storage(tenant, project)?;
+        let heads_dir = self.project_path(tenant, project)?.join("heads");
+        if !heads_dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut states = Vec::new();
+        for entry in fs::read_dir(&heads_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Some(workspace) = name.strip_suffix(".head") else {
+                continue;
+            };
+            let head = fs::read_to_string(entry.path())?.trim().to_string();
+            let state = self.workspace_state_file(tenant, project, workspace)?;
+            states.push(WorkspaceState {
+                name: workspace.to_string(),
+                status: state.status,
+                head: (!head.is_empty()).then_some(head),
+                parent_workspace: state.parent_workspace,
+                is_ready: state.is_ready,
+                mergeable: state.mergeable,
+            });
+        }
+        states.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(states)
+    }
+
+    pub fn workspace_history(&self, tenant: &str, project: &str, workspace: &str) -> Result<Vec<HistoryEntry>> {
+        self.ensure_project_storage(tenant, project)?;
+        let path = self.history_path(tenant, project)?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        #[derive(Deserialize)]
+        struct HistoryStore {
+            entries: Vec<HistoryEntry>,
+        }
+        let store: HistoryStore = serde_json::from_slice(&fs::read(path)?)?;
+        Ok(store
+            .entries
+            .into_iter()
+            .filter(|e| e.workspace == workspace)
+            .collect())
+    }
+
+    pub fn mark_workspace_ready(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<()> {
+        self.ensure_project_storage(tenant, project)?;
+        let mut state = self.workspace_state_file(tenant, project, workspace)?;
+        state.status = "ready".to_string();
+        state.is_ready = true;
+        self.write_workspace_state(tenant, project, workspace, &state)?;
+        self.log_history(tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace))?;
+        Ok(())
+    }
+
+    pub fn merge_workspace(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<()> {
+        self.ensure_project_storage(tenant, project)?;
+        let mut state = self.workspace_state_file(tenant, project, workspace)?;
+        state.status = "merged".to_string();
+        state.is_ready = false;
+        state.mergeable = false;
+        self.write_workspace_state(tenant, project, workspace, &state)?;
+        self.log_history(tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace))?;
+        Ok(())
+    }
+
+    fn workspace_state_file(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+    ) -> Result<WorkspaceStateFile> {
+        let path = self.workspace_state_path(tenant, project, workspace)?;
+        if !path.exists() {
+            return Ok(WorkspaceStateFile {
+                status: "draft".to_string(),
+                parent_workspace: None,
+                is_ready: false,
+                mergeable: true,
+            });
+        }
+        Ok(serde_json::from_slice(&fs::read(path)?)?)
+    }
+
+    fn write_workspace_state(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        state: &WorkspaceStateFile,
+    ) -> Result<()> {
+        let path = self.workspace_state_path(tenant, project, workspace)?;
+        self.write_json(&path, state)
+    }
+
+    pub fn log_history(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        principal: &TokenPrincipal,
+        kind: &str,
+        message: &str,
+    ) -> Result<()> {
+        let path = self.history_path(tenant, project)?;
+        #[derive(Serialize, Deserialize)]
+        struct HistoryStore {
+            entries: Vec<HistoryEntry>,
+        }
+        let mut store: HistoryStore = if path.exists() {
+            serde_json::from_slice(&fs::read(&path)?)?
+        } else {
+            HistoryStore {
+                entries: Vec::new(),
+            }
+        };
+        store.entries.push(HistoryEntry {
+            id: format!("{}-{}", workspace, store.entries.len()),
+            kind: kind.to_string(),
+            message: message.to_string(),
+            author: principal.user.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            workspace: workspace.to_string(),
+        });
+        self.write_json(&path, &store)?;
+        Ok(())
+    }
+
+    // ── Project settings ─────────────────────────────────────
+
+    pub fn project_settings(&self, tenant: &str, project: &str) -> Result<ProjectSettings> {
+        let path = self.settings_path(tenant, project)?;
+        if !path.exists() {
+            return Ok(ProjectSettings {
+                visibility: "private".to_string(),
+                starred_count: 0,
+                is_starred: false,
+                default_workspace: "main".to_string(),
+            });
+        }
+        Ok(serde_json::from_slice(&fs::read(path)?)?)
+    }
+
+    pub fn update_project_settings(
+        &self,
+        tenant: &str,
+        project: &str,
+        visibility: Option<String>,
+        default_workspace: Option<String>,
+    ) -> Result<ProjectSettings> {
+        self.ensure_project_storage(tenant, project)?;
+        let mut settings = self.project_settings(tenant, project)?;
+        if let Some(v) = visibility {
+            settings.visibility = v;
+        }
+        if let Some(w) = default_workspace {
+            settings.default_workspace = w;
+        }
+        self.write_json(&self.settings_path(tenant, project)?, &settings)?;
+        Ok(settings)
+    }
+
+    // ── Stars ────────────────────────────────────────────────
+
+    pub fn star_project(
+        &self,
+        tenant: &str,
+        project: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<(bool, u64)> {
+        let path = self.stars_path(tenant, project)?;
+        #[derive(Serialize, Deserialize, Default)]
+        struct StarStore {
+            stars: Vec<String>,
+        }
+        let mut store: StarStore = if path.exists() {
+            serde_json::from_slice(&fs::read(&path)?)?
+        } else {
+            StarStore::default()
+        };
+        if !store.stars.contains(&principal.user) {
+            store.stars.push(principal.user.clone());
+        }
+        self.write_json(&path, &store)?;
+        Ok((true, store.stars.len() as u64))
+    }
+
+    pub fn unstar_project(
+        &self,
+        tenant: &str,
+        project: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<(bool, u64)> {
+        let path = self.stars_path(tenant, project)?;
+        #[derive(Serialize, Deserialize, Default)]
+        struct StarStore {
+            stars: Vec<String>,
+        }
+        let mut store: StarStore = if path.exists() {
+            serde_json::from_slice(&fs::read(&path)?)?
+        } else {
+            StarStore::default()
+        };
+        store.stars.retain(|u| u != &principal.user);
+        self.write_json(&path, &store)?;
+        Ok((false, store.stars.len() as u64))
+    }
+
+    pub fn is_starred(
+        &self,
+        tenant: &str,
+        project: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<(bool, u64)> {
+        let path = self.stars_path(tenant, project)?;
+        #[derive(Deserialize)]
+        struct StarStore {
+            stars: Vec<String>,
+        }
+        let store: StarStore = if path.exists() {
+            serde_json::from_slice(&fs::read(path)?)?
+        } else {
+            StarStore { stars: Vec::new() }
+        };
+        Ok((
+            store.stars.contains(&principal.user),
+            store.stars.len() as u64,
+        ))
+    }
+
+    // ── Paths ────────────────────────────────────────────────
+
+    fn issues_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
+        Ok(self.project_path(tenant, project)?.join("issues.json"))
+    }
+
+    fn history_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
+        Ok(self.project_path(tenant, project)?.join("history.json"))
+    }
+
+    fn workspace_state_path(&self, tenant: &str, project: &str, workspace: &str) -> Result<PathBuf> {
+        Ok(self
+            .project_path(tenant, project)?
+            .join("workspaces")
+            .join(format!("{}.json", validate_segment_for_path(workspace)?)))
+    }
+
+    fn settings_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
+        Ok(self.project_path(tenant, project)?.join("settings.json"))
+    }
+
+    fn stars_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
+        Ok(self.project_path(tenant, project)?.join("stars.json"))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WorkspaceStateFile {
+    status: String,
+    parent_workspace: Option<String>,
+    is_ready: bool,
+    mergeable: bool,
 }
 
 fn validate_segment_for_path(value: &str) -> Result<&str> {

@@ -49,6 +49,19 @@ try {
     }
 
     & $StyBin login --dev --remote-url $RemoteUrl --pig $PigBin | Out-Host
+    $styConfig = Get-Content -LiteralPath $env:STY_CONFIG -Raw | ConvertFrom-Json
+    $authHeaders = @{ Authorization = "Bearer $($styConfig.token)" }
+    $me = Invoke-RestMethod -Uri "$RemoteUrl/v1/me" -Headers $authHeaders -UseBasicParsing
+    if ($me.tenants[0].name -ne "dev") {
+        throw "local server did not expose the dev user tenant"
+    }
+    Invoke-RestMethod `
+        -Uri "$RemoteUrl/v1/orgs" `
+        -Method Post `
+        -Headers $authHeaders `
+        -ContentType "application/json" `
+        -Body '{"name":"team"}' `
+        -UseBasicParsing | Out-Null
 
     Push-Location $repoA
     try {
@@ -61,6 +74,14 @@ try {
         & $PigBin save "initial" | Out-Host
         & $StyBin init dev/demo --remote-url $RemoteUrl --pig $PigBin | Out-Host
         & $PigBin sync --json | Out-Host
+        $tree = Invoke-RestMethod -Uri "$RemoteUrl/v1/tenants/dev/projects/demo/tree?workspace=main" -Headers $authHeaders -UseBasicParsing
+        if (!($tree.entries | Where-Object { $_.path -eq "hello.txt" -and $_.entry_type -eq "blob" })) {
+            throw "frontend tree API did not expose hello.txt"
+        }
+        $file = Invoke-RestMethod -Uri "$RemoteUrl/v1/tenants/dev/projects/demo/files/hello.txt?workspace=main" -Headers $authHeaders -UseBasicParsing
+        if ($file.text.Trim() -ne "hello from sty") {
+            throw "frontend file API did not expose hello.txt contents"
+        }
     } finally {
         Pop-Location
     }

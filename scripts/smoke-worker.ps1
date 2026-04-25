@@ -43,9 +43,6 @@ $oldUserProfile = $env:USERPROFILE
 $oldHome = $env:HOME
 $oldStyConfig = $env:STY_CONFIG
 $oldRustupToolchain = $env:RUSTUP_TOOLCHAIN
-$env:USERPROFILE = $homeDir
-$env:HOME = $homeDir
-$env:STY_CONFIG = Join-Path $homeDir ".sty\config.json"
 $env:RUSTUP_TOOLCHAIN = "stable-x86_64-pc-windows-msvc"
 
 Set-Content -LiteralPath $devVars -Value @"
@@ -85,6 +82,10 @@ try {
         throw "wrangler dev did not become ready; see $workerOut and $workerErr"
     }
 
+    $env:USERPROFILE = $homeDir
+    $env:HOME = $homeDir
+    $env:STY_CONFIG = Join-Path $homeDir ".sty\config.json"
+
     $preflight = Invoke-WebRequest `
         -Uri "$RemoteUrl/v1/dev/tokens" `
         -Method Options `
@@ -93,6 +94,7 @@ try {
             "Access-Control-Request-Method" = "POST"
             "Access-Control-Request-Headers" = "content-type"
         } `
+        -TimeoutSec 10 `
         -UseBasicParsing
     if ($preflight.Headers["Access-Control-Allow-Origin"] -ne "http://localhost:5173") {
         throw "worker CORS preflight did not allow localhost frontend"

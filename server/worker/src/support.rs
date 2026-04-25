@@ -2,7 +2,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sty_protocol::{RemoteObject, validate_segment};
+use sty_protocol::{RemoteObject, TenantMetadata, validate_segment};
 use uuid::Uuid;
 use worker::*;
 
@@ -16,9 +16,9 @@ pub async fn ensure_project_access(
     let store = bucket(env)?;
     let owner = project_owner(&store, &key).await?;
     match owner {
-        Some(owner) if owner == user || tenant == user => Ok(true),
+        Some(owner) if owner == user || tenant_access(&store, tenant, user).await? => Ok(true),
         Some(_) => Ok(false),
-        None if tenant == user => {
+        None if tenant_access(&store, tenant, user).await? => {
             put_text(
                 &store,
                 &key,
@@ -29,6 +29,41 @@ pub async fn ensure_project_access(
         }
         None => Ok(false),
     }
+}
+
+pub async fn tenant_access(bucket: &Bucket, tenant: &str, user: &str) -> Result<bool> {
+    if tenant == user {
+        ensure_user_tenant(bucket, user).await?;
+        return Ok(true);
+    }
+    let Some(metadata) = tenant_metadata(bucket, tenant).await? else {
+        return Ok(false);
+    };
+    Ok(metadata.members.iter().any(|member| member == user))
+}
+
+pub async fn ensure_user_tenant(bucket: &Bucket, user: &str) -> Result<()> {
+    let key = tenant_key(user);
+    if bucket.head(key.clone()).await?.is_some() {
+        return Ok(());
+    }
+    let metadata = TenantMetadata {
+        name: user.to_string(),
+        kind: "user".to_string(),
+        owner: user.to_string(),
+        members: vec![user.to_string()],
+    };
+    put_text(bucket, &key, &serde_json::to_string(&metadata)?).await
+}
+
+pub async fn tenant_metadata(bucket: &Bucket, tenant: &str) -> Result<Option<TenantMetadata>> {
+    let Some(object) = bucket.get(tenant_key(tenant)).execute().await? else {
+        return Ok(None);
+    };
+    let Some(body) = object.body() else {
+        return Ok(None);
+    };
+    Ok(Some(serde_json::from_str(&body.text().await?)?))
 }
 
 pub fn bucket(env: &Env) -> Result<Bucket> {
@@ -64,6 +99,10 @@ pub fn object_chunk_key(tenant: &str, project: &str, id: &str, chunk_index: usiz
 
 pub fn project_key(tenant: &str, project: &str) -> String {
     format!("projects/{tenant}/{project}/project.json")
+}
+
+pub fn tenant_key(tenant: &str) -> String {
+    format!("tenants/{tenant}/tenant.json")
 }
 
 pub fn head_key(workspace: &str) -> String {

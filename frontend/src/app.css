@@ -3,15 +3,15 @@
 :root {
 	font-family:
 		"IBM Plex Sans", "Aptos", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-	color: #171714;
-	background: #f6f5ef;
+	color: #eae9e4;
+	background: #0f0f0d;
 }
 
 body {
 	margin: 0;
 	min-width: 320px;
 	min-height: 100vh;
-	background: #f6f5ef;
+	background: #0f0f0d;
 }
 
 button,
@@ -21,6 +21,6 @@ input {
 
 button:focus-visible,
 input:focus-visible {
-	outline: 2px solid #171714;
+	outline: 2px solid #eae9e4;
 	outline-offset: 3px;
 }

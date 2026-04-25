@@ -57,7 +57,7 @@ bun run dev
 
 Set `PUBLIC_STY_API_BASE` when the frontend should talk to a non-default sty server. The Ave OAuth client id is public and defaults to `app_813ac5533bb87d939f328d76b5a1dca8`; `PUBLIC_AVE_CLIENT_ID` is only needed for testing a different Ave app.
 
-In Svelte dev mode the dashboard also shows a dev-server sign-in. It calls `/v1/dev/tokens`, stores the returned sty bearer token locally, and can create/list projects against the configured API base. For a production-style frontend build that still targets a local dev backend, set:
+In Svelte dev mode the dashboard also shows a dev-server sign-in. It calls `/v1/dev/tokens`, stores the returned sty bearer token locally, and can create orgs, create projects, list workspaces, browse the latest workspace tree, and render file contents against the configured API base. For a production-style frontend build that still targets a local dev backend, set:
 
 ```powershell
 $env:PUBLIC_STY_DEV_AUTH="true"
@@ -81,6 +81,13 @@ The frontend uses AveSession:
 - The CLI imports the sty bearer token into PIG with `pig auth import <remote-url> --token-stdin`.
 
 Local dev also supports `sty login --dev`, which requests a random dev token from `server/local` and imports it into PIG. Tokens are stored server-side by hash. A dev token can create projects only in its own tenant, so `sty login --dev --user dev` can create `dev/demo` but not `other/demo`.
+
+Tenants are GitHub-style namespaces. Every user gets a personal tenant automatically, and the dashboard can create org tenants that the current user owns. Projects are still addressed as `tenant/project`, so the PIG setup flow remains:
+
+```powershell
+sty init tenant/project
+pig sync
+```
 
 Useful CLI checks:
 
