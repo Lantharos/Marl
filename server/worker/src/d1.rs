@@ -278,17 +278,42 @@ pub async fn workspace_states(db: &D1Database, tenant: &str, project: &str) -> R
         .all()
         .await?;
     let rows: Vec<Row> = result.results()?;
-    Ok(rows
+    let mut states: Vec<WorkspaceState> = rows
         .into_iter()
         .map(|r| WorkspaceState {
-            name: r.workspace,
+            name: r.workspace.clone(),
             status: r.status,
             head: r.head,
-            parent_workspace: r.parent_workspace,
+            parent_workspace: r.parent_workspace.clone(),
+            child_workspaces: Vec::new(),
             is_ready: r.is_ready != 0,
             mergeable: r.mergeable != 0,
         })
-        .collect())
+        .collect();
+    let mut parents = std::collections::HashMap::new();
+    for ws in &states {
+        if let Some(ref p) = ws.parent_workspace {
+            parents.entry(p.clone()).or_insert_with(Vec::new).push(ws.name.clone());
+        }
+    }
+    for ws in &mut states {
+        ws.child_workspaces = parents.get(&ws.name).cloned().unwrap_or_default();
+    }
+    Ok(states)
+}
+
+pub async fn set_parent_workspace(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    parent: Option<&str>,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET parent_workspace = ?1 WHERE tenant = ?2 AND project = ?3 AND workspace = ?4")
+        .bind(&[js_opt(parent), js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    Ok(())
 }
 
 pub async fn mark_workspace_ready(

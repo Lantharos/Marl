@@ -82,6 +82,10 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
             post(merge_workspace_handler),
         )
         .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/parent",
+            post(set_parent),
+        )
+        .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/compare",
             post(compare),
         )
@@ -381,6 +385,22 @@ async fn merge_workspace_handler(
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         map_result(state.store.merge_workspace(&tenant, &project, &workspace, &principal))
+    }) {
+        Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn set_parent(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, workspace)): Path<(String, String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        let parent = body["parent_workspace"].as_str();
+        map_result(state.store.set_parent_workspace(&tenant, &project, &workspace, parent))
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
         Err(response) => response,

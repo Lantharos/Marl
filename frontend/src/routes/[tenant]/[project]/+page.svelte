@@ -14,6 +14,12 @@
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
 
+	function wsDotColor(ws: WorkspaceStatus) {
+		if (ws.is_ready) return 'bg-[#7cb97c]';
+		if (ws.status === 'merged') return 'bg-[#a09d94]';
+		return 'bg-[#d9a66c]';
+	}
+
 	onMount(async () => {
 		loading = true;
 		try {
@@ -77,7 +83,7 @@
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 				<h3 class="text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Workspaces</h3>
 				<div class="mt-2 grid gap-1">
-					{#each workspaces as ws}
+					{#each workspaces.filter((w) => w.name !== 'main') as ws}
 						<button
 							class="flex items-center justify-between rounded bg-[#0f0f0d] px-2.5 py-1.5 text-left text-sm hover:bg-[#1a1a18]"
 							onclick={() => goto(`/${tenant}/${project}/workspaces/${ws.name}`)}
@@ -85,7 +91,7 @@
 							<span class="text-[#eae9e4]">{ws.name}</span>
 							<span class="flex items-center gap-2">
 								<span class="text-xs text-[#6f6b5f]">{ws.head?.slice(0, 8) ?? 'empty'}</span>
-								<span class="h-1.5 w-1.5 rounded-full {ws.is_ready ? 'bg-[#7cb97c]' : ws.status === 'merged' ? 'bg-[#a09d94]' : 'bg-[#d9a66c]'}" title={ws.status}></span>
+								<span class="h-1.5 w-1.5 rounded-full {wsDotColor(ws)}" title={ws.status}></span>
 							</span>
 						</button>
 					{:else}

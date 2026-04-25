@@ -391,21 +391,51 @@ impl Store for SqliteStore {
              where ws.tenant = ?1 and ws.project = ?2
              order by ws.workspace"
         )?;
+        let mut states: Vec<WorkspaceState> = Vec::new();
         let rows = stmt.query_map(rusqlite::params![tenant, project], |row| {
             Ok(WorkspaceState {
                 name: row.get(0)?,
                 status: row.get(1)?,
                 head: row.get(2)?,
                 parent_workspace: row.get(3)?,
+                child_workspaces: Vec::new(),
                 is_ready: row.get::<_, i64>(4)? != 0,
                 mergeable: row.get::<_, i64>(5)? != 0,
             })
         })?;
-        let mut states = Vec::new();
         for row in rows {
             states.push(row?);
         }
+        // Compute child_workspaces
+        let parents: std::collections::HashMap<String, Vec<String>> = states.iter().fold(
+            std::collections::HashMap::new(),
+            |mut map, ws| {
+                if let Some(ref parent) = ws.parent_workspace {
+                    map.entry(parent.clone()).or_default().push(ws.name.clone());
+                }
+                map
+            }
+        );
+        for ws in &mut states {
+            ws.child_workspaces = parents.get(&ws.name).cloned().unwrap_or_default();
+        }
         Ok(states)
+    }
+
+    fn set_parent_workspace(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        parent: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn()?;
+        conn.execute(
+            "update workspace_states set parent_workspace = ?1
+             where tenant = ?2 and project = ?3 and workspace = ?4",
+            rusqlite::params![parent, tenant, project, workspace],
+        )?;
+        Ok(())
     }
 
     fn mark_workspace_ready(

@@ -249,6 +249,7 @@ pub struct WorkspaceState {
     pub status: String,
     pub head: Option<String>,
     pub parent_workspace: Option<String>,
+    pub child_workspaces: Vec<String>,
     pub is_ready: bool,
     pub mergeable: bool,
 }

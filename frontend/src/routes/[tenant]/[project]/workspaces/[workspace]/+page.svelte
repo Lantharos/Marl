@@ -145,6 +145,22 @@
 			</div>
 
 			<div class="grid gap-5">
+				{#if detail.child_workspaces.length}
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
+						<h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Child workspaces</h4>
+						<div class="grid gap-1">
+							{#each detail.child_workspaces as child}
+								<button
+									class="rounded bg-[#0f0f0d] px-2.5 py-1.5 text-left text-sm text-[#eae9e4] hover:bg-[#1a1a18]"
+									onclick={() => goto(`/${tenant}/${project}/workspaces/${child}`)}
+								>
+									{child}
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
 				<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 					<h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">History</h4>
 					<div class="relative grid gap-0">

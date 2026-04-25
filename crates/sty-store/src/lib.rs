@@ -43,6 +43,13 @@ pub trait Store {
 
     // ── Workspace state ────────────────────────────────────
     fn workspace_states(&self, tenant: &str, project: &str) -> Result<Vec<WorkspaceState>>;
+    fn set_parent_workspace(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        parent: Option<&str>,
+    ) -> Result<()>;
     fn mark_workspace_ready(
         &self,
         tenant: &str,

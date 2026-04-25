@@ -49,6 +49,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", log_history)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready", mark_ready)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge", merge_workspace)
+        .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/parent", set_parent)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare", compare)
         .get_async("/v1/tenants/:tenant/projects/:project/settings", get_settings)
         .patch_async("/v1/tenants/:tenant/projects/:project/settings", update_settings)
@@ -307,6 +308,18 @@ async fn merge_workspace(req: Request, ctx: RouteContext<()>) -> Result<Response
     let database = db(&ctx.env)?;
     d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     d1::merge_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&OkResponse { ok: true })
+}
+
+async fn set_parent(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let body: serde_json::Value = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let parent = body["parent_workspace"].as_str();
+    d1::set_parent_workspace(&database, &tenant, &project, &workspace, parent).await?;
     Response::from_json(&OkResponse { ok: true })
 }
 

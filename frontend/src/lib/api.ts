@@ -64,7 +64,7 @@ export interface Comment {
 export interface WorkspaceStatus {
 	name: string;
 	head: string | null;
-	status: 'draft' | 'ready' | 'merged';
+	status: 'draft' | 'ready' | 'merged' | string;
 	ci_status: 'passing' | 'failing' | 'running' | 'unknown';
 	parent_workspace: string | null;
 	child_workspaces: string[];
@@ -336,19 +336,31 @@ export async function getProjectReadme(tenant: string, project: string): Promise
 }
 
 export async function getProjectOverview(tenant: string, project: string): Promise<ProjectOverview> {
-	const detail = await getProject(tenant, project);
-	const issues = await listIssues(tenant, project);
-	const workspaces = await listWorkspaceStatuses(tenant, project);
+	const [detail, issues, workspaces, settings, history] = await Promise.all([
+		getProject(tenant, project),
+		listIssues(tenant, project),
+		listWorkspaceStatuses(tenant, project),
+		getProjectSettings(tenant, project).catch(() => null),
+		getProjectHistory(tenant, project).catch(() => [])
+	]);
+	const recentActivity: Activity[] = history.slice(0, 20).map((h) => ({
+		id: h.id,
+		kind: h.kind as Activity['kind'],
+		actor: h.author,
+		message: h.message,
+		timestamp: h.timestamp,
+		workspace: h.workspace
+	}));
 	return {
 		project: detail.project,
 		stats: {
 			workspace_count: detail.workspaces.length,
 			issue_count: issues.issues.length,
 			open_ready_count: workspaces.filter((w) => w.is_ready).length,
-			star_count: 0
+			star_count: settings?.starred_count ?? 0
 		},
-		recent_activity: [],
-		default_workspace: 'main'
+		recent_activity: recentActivity,
+		default_workspace: settings?.default_workspace ?? 'main'
 	};
 }
 
@@ -372,6 +384,14 @@ export async function starProject(tenant: string, project: string) {
 
 export async function unstarProject(tenant: string, project: string) {
 	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/star`, { method: 'DELETE' });
+}
+
+export async function setParentWorkspace(tenant: string, project: string, workspace: string, parent_workspace: string | null) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/parent`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ parent_workspace })
+	});
 }
 
 export async function getCiStatus(tenant: string, project: string, workspace: string): Promise<CiStatus> {

@@ -52,6 +52,49 @@
 			default: return 'bg-[#5c5c5a]';
 		}
 	}
+
+	// Build tree: group children by parent
+	const tree = $derived(() => {
+		const byParent = new Map<string, WorkspaceStatus[]>();
+		const roots: WorkspaceStatus[] = [];
+		for (const ws of workspaces) {
+			const parent = ws.parent_workspace ?? 'main';
+			if (parent === 'main') {
+				roots.push(ws);
+			} else {
+				if (!byParent.has(parent)) byParent.set(parent, []);
+				byParent.get(parent)!.push(ws);
+			}
+		}
+		return { roots, byParent };
+	});
+
+	function renderTree(ws: WorkspaceStatus, depth: number): {
+		ws: WorkspaceStatus;
+		depth: number;
+	}[] {
+		const result = [{ ws, depth }];
+		const children = tree().byParent.get(ws.name) ?? [];
+		for (const child of children) {
+			result.push(...renderTree(child, depth + 1));
+		}
+		return result;
+	}
+
+	const flatTree = $derived(() => {
+		const result: { ws: WorkspaceStatus; depth: number }[] = [];
+		for (const root of tree().roots) {
+			result.push(...renderTree(root, 0));
+		}
+		// Also include any orphaned workspaces (parent set to non-existent workspace)
+		for (const ws of workspaces) {
+			const parent = ws.parent_workspace ?? 'main';
+			if (parent !== 'main' && !workspaces.find((w) => w.name === parent)) {
+				result.push({ ws, depth: 0 });
+			}
+		}
+		return result;
+	});
 </script>
 
 <div class="mx-auto max-w-4xl">
@@ -71,10 +114,13 @@
 		</div>
 	{:else}
 		<div class="grid gap-2">
-			{#each workspaces as ws}
-				<div class="flex items-center justify-between rounded border border-[#2a2a28] bg-[#141412] px-4 py-3">
+			{#each flatTree() as { ws, depth }}
+				<div class="flex items-center justify-between rounded border border-[#2a2a28] bg-[#141412] px-4 py-3" style="padding-left: {16 + depth * 24}px">
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-3">
+							{#if depth > 0}
+								<span class="text-xs text-[#5c5c5a]">└</span>
+							{/if}
 							<button
 								class="truncate text-left text-sm font-medium text-[#eae9e4] hover:underline"
 								onclick={() => goto(`/${tenant}/${project}/workspaces/${ws.name}`)}
@@ -92,6 +138,9 @@
 							{#if ws.head}
 								<span class="font-mono text-xs text-[#6f6b5f]">{ws.head.slice(0, 12)}</span>
 							{/if}
+							{#if ws.child_workspaces.length}
+								<span class="text-xs text-[#5c5c5a]">{ws.child_workspaces.length} child{ws.child_workspaces.length > 1 ? 'ren' : ''}</span>
+							{/if}
 						</div>
 					</div>
 					{#if ws.is_ready && ws.mergeable}
@@ -103,6 +152,8 @@
 						</button>
 					{/if}
 				</div>
+			{:else}
+				<p class="py-8 text-center text-sm text-[#6f6b5f]">No derived workspaces yet.</p>
 			{/each}
 		</div>
 	{/if}
