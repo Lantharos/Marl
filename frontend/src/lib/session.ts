@@ -27,7 +27,17 @@ export const session = new AveSession({
 export const sessionStore = aveSessionToStore(session);
 
 export function apiBase() {
-	return env.PUBLIC_STY_API_BASE || 'http://127.0.0.1:7379';
+	if (env.PUBLIC_STY_API_BASE) {
+		return env.PUBLIC_STY_API_BASE;
+	}
+	if (env.PUBLIC_STY_DEV_AUTH === 'worker') {
+		return 'http://127.0.0.1:8787';
+	}
+	return 'http://127.0.0.1:7379';
+}
+
+export function devAuthEnabled() {
+	return import.meta.env.DEV || env.PUBLIC_STY_DEV_AUTH === 'true' || env.PUBLIC_STY_DEV_AUTH === 'worker';
 }
 
 export function aveClientId() {
@@ -57,7 +67,34 @@ export async function signOut() {
 	await session.signOut();
 	if (browser) {
 		localStorage.removeItem('sty_token');
+		localStorage.removeItem('sty_dev_user');
 	}
+}
+
+export function hasStyToken() {
+	return browser && Boolean(localStorage.getItem('sty_token'));
+}
+
+export function currentDevUser() {
+	return browser ? localStorage.getItem('sty_dev_user') : null;
+}
+
+export async function startDevLogin(user: string) {
+	if (!browser) {
+		return null;
+	}
+	const response = await fetch(`${apiBase()}/v1/dev/tokens`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ user })
+	});
+	if (!response.ok) {
+		throw new Error(await response.text());
+	}
+	const body = (await response.json()) as { token: string };
+	localStorage.setItem('sty_token', body.token);
+	localStorage.setItem('sty_dev_user', user);
+	return body.token;
 }
 
 export async function getStyToken() {

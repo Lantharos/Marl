@@ -1,17 +1,27 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createProject, listProjects, type ProjectSummary } from '$lib/api';
-	import { hydrateSession, sessionStore, signOut, startLogin } from '$lib/session';
+	import {
+		currentDevUser,
+		devAuthEnabled,
+		hasStyToken,
+		hydrateSession,
+		sessionStore,
+		signOut,
+		startDevLogin,
+		startLogin
+	} from '$lib/session';
 
 	let status = $state<'loading' | 'signedOut' | 'signedIn'>('loading');
 	let projects = $state<ProjectSummary[]>([]);
 	let slug = $state('');
 	let message = $state('');
+	let devUser = $state('dev');
 	let busy = $state(false);
 
 	onMount(() => {
 		const unsubscribe = sessionStore.subscribe((state) => {
-			status = state.status;
+			status = hasStyToken() ? 'signedIn' : state.status;
 		});
 		hydrateSession()
 			.then(refreshProjects)
@@ -22,6 +32,9 @@
 	});
 
 	async function refreshProjects() {
+		if (hasStyToken()) {
+			status = 'signedIn';
+		}
 		if (status === 'signedOut') {
 			projects = [];
 			return;
@@ -50,6 +63,21 @@
 	async function handleSignOut() {
 		await signOut();
 		projects = [];
+		status = 'signedOut';
+	}
+
+	async function handleDevLogin() {
+		busy = true;
+		message = '';
+		try {
+			await startDevLogin(devUser.trim() || 'dev');
+			status = 'signedIn';
+			await refreshProjects();
+		} catch (error) {
+			message = error instanceof Error ? error.message : 'Dev sign in failed';
+		} finally {
+			busy = false;
+		}
 	}
 </script>
 
@@ -87,6 +115,32 @@
 					>
 						Sign in with Ave
 					</button>
+					{#if devAuthEnabled()}
+						<div class="mt-10 bg-[#eceadf] p-5">
+							<h3 class="text-base font-semibold">Dev server</h3>
+							<p class="mt-2 text-sm leading-6 text-[#6f6b5f]">
+								Use this when the local sty server has dev tokens enabled.
+							</p>
+							<div class="mt-5 flex gap-3">
+								<input
+									class="min-w-0 flex-1 bg-[#f8f7f1] px-3 py-3 text-sm text-[#171714] outline-none placeholder:text-[#918c7f]"
+									placeholder={currentDevUser() || 'dev'}
+									bind:value={devUser}
+									disabled={busy}
+								/>
+								<button
+									class="bg-[#171714] px-4 py-3 text-sm font-medium text-[#f6f5ef] transition hover:bg-[#353226] disabled:opacity-50"
+									disabled={busy}
+									onclick={handleDevLogin}
+								>
+									Connect
+								</button>
+							</div>
+							{#if message}
+								<p class="mt-4 text-sm leading-6 text-[#8c3e2f]">{message}</p>
+							{/if}
+						</div>
+					{/if}
 				</div>
 			</div>
 		{:else}

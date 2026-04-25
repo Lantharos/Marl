@@ -4,6 +4,7 @@
 server/worker/target
 server/worker/build
 server/worker/.wrangler
+server/worker/.dev.vars
 frontend/node_modules
 frontend/.svelte-kit
 frontend/build

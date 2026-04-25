@@ -4,11 +4,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde_json::json;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::auth::verify_ave_id_token;
 use crate::store::Store;
@@ -68,7 +69,20 @@ pub fn router(store: Arc<Store>) -> Router {
             "/v1/tenants/{tenant}/projects/{project}/objects/download",
             post(download),
         )
+        .layer(cors_layer())
         .with_state(AppState { store })
+}
+
+fn cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin([
+            HeaderValue::from_static("http://localhost:5173"),
+            HeaderValue::from_static("http://127.0.0.1:5173"),
+            HeaderValue::from_static("http://localhost:4173"),
+            HeaderValue::from_static("http://127.0.0.1:4173"),
+        ])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
+        .allow_headers(Any)
 }
 
 async fn create_dev_token(

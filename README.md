@@ -57,6 +57,18 @@ bun run dev
 
 Set `PUBLIC_STY_API_BASE` when the frontend should talk to a non-default sty server. The Ave OAuth client id is public and defaults to `app_813ac5533bb87d939f328d76b5a1dca8`; `PUBLIC_AVE_CLIENT_ID` is only needed for testing a different Ave app.
 
+In Svelte dev mode the dashboard also shows a dev-server sign-in. It calls `/v1/dev/tokens`, stores the returned sty bearer token locally, and can create/list projects against the configured API base. For a production-style frontend build that still targets a local dev backend, set:
+
+```powershell
+$env:PUBLIC_STY_DEV_AUTH="true"
+```
+
+To point that dev sign-in at Wrangler's local Worker on port `8787`, use:
+
+```powershell
+$env:PUBLIC_STY_DEV_AUTH="worker"
+```
+
 ## Auth
 
 The frontend uses AveSession:
@@ -101,6 +113,12 @@ Run the real PIG smoke test:
 
 ```powershell
 .\scripts\smoke-pig.ps1
+```
+
+Run the same PIG smoke through Wrangler's local Worker, R2, and Durable Object simulation:
+
+```powershell
+.\scripts\smoke-worker.ps1
 ```
 
 The smoke test saves, syncs, and pulls both a small text file and a large binary file so the normal JSON upload path and chunked object upload path are both exercised.

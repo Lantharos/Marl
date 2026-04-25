@@ -8,16 +8,26 @@ use sty_protocol::{
     OkResponse, ProjectSummary, RemoteObject, SessionExchangeRequest, SnapshotObject,
     TokenResponse, UploadRequest, validate_segment,
 };
-use uuid::Uuid;
 use worker::*;
 
 mod auth;
+mod support;
 
 use auth::{dev_tokens_enabled, verify_ave_id_token};
+use support::{
+    apply_cors, bucket, coordinator, decode_base64, ensure_project_access, head_key, json_error,
+    mint_token, object_chunk_key, object_key, param, preflight_response, project_owner,
+    project_params, put_bytes, put_text, required_header, required_usize_header, snapshot_key,
+    token_key, validate_object, validate_object_metadata,
+};
 
 #[event(fetch)]
 pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    Router::new()
+    if req.method() == Method::Options {
+        return preflight_response(&req);
+    }
+    let request = req.clone()?;
+    let mut response = Router::new()
         .post_async("/v1/auth/check", auth_check)
         .post_async("/v1/dev/tokens", dev_token)
         .post_async("/v1/session/exchange", exchange_session)
@@ -56,7 +66,9 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             download,
         )
         .run(req, env)
-        .await
+        .await?;
+    apply_cors(&request, &mut response)?;
+    Ok(response)
 }
 
 async fn auth_check(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -480,140 +492,4 @@ async fn require_auth(req: &Request, env: &Env) -> Result<String> {
         return Err(Error::RustError("invalid bearer token".to_string()));
     };
     body.text().await
-}
-
-async fn ensure_project_access(env: &Env, tenant: &str, project: &str, user: &str) -> Result<bool> {
-    let key = project_key(tenant, project);
-    let store = bucket(env)?;
-    let owner = project_owner(&store, &key).await?;
-    match owner {
-        Some(owner) if owner == user || tenant == user => Ok(true),
-        Some(_) => Ok(false),
-        None if tenant == user => {
-            put_text(
-                &store,
-                &key,
-                &json!({ "tenant": tenant, "project": project, "owner": user }).to_string(),
-            )
-            .await?;
-            Ok(true)
-        }
-        None => Ok(false),
-    }
-}
-
-fn bucket(env: &Env) -> Result<Bucket> {
-    env.bucket("STY_OBJECTS")
-}
-
-fn coordinator(env: &Env, tenant: &str, project: &str) -> Result<Stub> {
-    env.durable_object("PROJECT_COORDINATOR")?
-        .get_by_name(&format!("{tenant}/{project}"))
-}
-
-fn project_params(ctx: &RouteContext<()>) -> Result<(String, String)> {
-    let tenant = param(ctx, "tenant")?;
-    let project = param(ctx, "project")?;
-    validate_segment(&tenant).map_err(|error| Error::RustError(error.to_string()))?;
-    validate_segment(&project).map_err(|error| Error::RustError(error.to_string()))?;
-    Ok((tenant, project))
-}
-
-fn param(ctx: &RouteContext<()>, name: &str) -> Result<String> {
-    ctx.param(name)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| Error::RustError(format!("missing route param {name}")))
-}
-
-fn object_key(tenant: &str, project: &str, id: &str) -> String {
-    format!("projects/{tenant}/{project}/objects/{id}")
-}
-
-fn object_chunk_key(tenant: &str, project: &str, id: &str, chunk_index: usize) -> String {
-    format!("projects/{tenant}/{project}/objects/.uploads/{id}/{chunk_index}.chunk")
-}
-
-fn project_key(tenant: &str, project: &str) -> String {
-    format!("projects/{tenant}/{project}/project.json")
-}
-
-fn head_key(workspace: &str) -> String {
-    format!("heads/{workspace}")
-}
-
-fn snapshot_key(id: &str) -> String {
-    format!("snapshots/{id}/parents")
-}
-
-fn token_key(token: &str) -> String {
-    format!("tokens/{}", hex::encode(Sha256::digest(token.as_bytes())))
-}
-
-fn mint_token(prefix: &str) -> String {
-    format!("sty_{prefix}_{}", Uuid::new_v4().simple())
-}
-
-async fn project_owner(bucket: &Bucket, key: &str) -> Result<Option<String>> {
-    let Some(object) = bucket.get(key).execute().await? else {
-        return Ok(None);
-    };
-    let Some(body) = object.body() else {
-        return Ok(None);
-    };
-    let value: serde_json::Value = serde_json::from_str(&body.text().await?)?;
-    Ok(value["owner"].as_str().map(ToOwned::to_owned))
-}
-
-fn validate_object(object: &RemoteObject) -> Result<()> {
-    validate_object_metadata(&object.id, &object.kind)?;
-    let bytes = decode_base64(&object.bytes_base64)?;
-    let digest = hex::encode(Sha256::digest(&bytes));
-    if digest != object.id {
-        return Err(Error::RustError(
-            "object id does not match SHA-256 digest".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_object_metadata(id: &str, kind: &str) -> Result<()> {
-    if !matches!(kind, "blob" | "tree" | "snapshot") {
-        return Err(Error::RustError("unknown object kind".to_string()));
-    }
-    if id.len() != 64 || !id.chars().all(|ch| ch.is_ascii_hexdigit()) {
-        return Err(Error::RustError("invalid object id".to_string()));
-    }
-    Ok(())
-}
-
-fn required_header(req: &Request, name: &str) -> Result<String> {
-    req.headers()
-        .get(name)?
-        .ok_or_else(|| Error::RustError(format!("missing {name} header")))
-}
-
-fn required_usize_header(req: &Request, name: &str) -> Result<usize> {
-    required_header(req, name)?
-        .parse()
-        .map_err(|_| Error::RustError(format!("invalid {name} header")))
-}
-
-async fn put_text(bucket: &Bucket, key: &str, value: &str) -> Result<()> {
-    bucket.put(key, value.to_string()).execute().await?;
-    Ok(())
-}
-
-async fn put_bytes(bucket: &Bucket, key: &str, value: Vec<u8>) -> Result<()> {
-    bucket.put(key, value).execute().await?;
-    Ok(())
-}
-
-fn json_error(status: u16, message: &str) -> Result<Response> {
-    Ok(Response::from_json(&json!({ "error": message }))?.with_status(status))
-}
-
-fn decode_base64(value: &str) -> Result<Vec<u8>> {
-    BASE64
-        .decode(value)
-        .map_err(|error| Error::RustError(error.to_string()))
 }

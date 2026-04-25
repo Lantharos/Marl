@@ -35,6 +35,19 @@ $server = Start-Process -FilePath $ServerBin -ArgumentList @("--data", $data, "-
 
 try {
     Start-Sleep -Milliseconds 500
+    $preflight = Invoke-WebRequest `
+        -Uri "$RemoteUrl/v1/dev/tokens" `
+        -Method Options `
+        -Headers @{
+            Origin = "http://localhost:5173"
+            "Access-Control-Request-Method" = "POST"
+            "Access-Control-Request-Headers" = "content-type"
+        } `
+        -UseBasicParsing
+    if ($preflight.Headers["Access-Control-Allow-Origin"] -ne "http://localhost:5173") {
+        throw "local server CORS preflight did not allow localhost frontend"
+    }
+
     & $StyBin login --dev --remote-url $RemoteUrl --pig $PigBin | Out-Host
 
     Push-Location $repoA
