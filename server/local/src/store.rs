@@ -181,6 +181,80 @@ impl Store {
         Ok(())
     }
 
+    pub fn upload_chunk(
+        &self,
+        tenant: &str,
+        project: &str,
+        id: &str,
+        kind: &str,
+        chunk_index: usize,
+        chunk_count: usize,
+        total_size: usize,
+        bytes: &[u8],
+    ) -> Result<()> {
+        self.ensure_project_storage(tenant, project)?;
+        self.validate_object_metadata(id, kind)?;
+        if chunk_count == 0 {
+            bail!("chunk_count must be greater than zero");
+        }
+        if chunk_index >= chunk_count {
+            bail!("chunk index is out of range");
+        }
+        if total_size == 0 {
+            bail!("total_size must be greater than zero");
+        }
+        if self.object_exists(tenant, project, id)? {
+            return Ok(());
+        }
+        let chunk_path = self.object_chunk_path(tenant, project, id, chunk_index)?;
+        if let Some(parent) = chunk_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(chunk_path, bytes)?;
+        Ok(())
+    }
+
+    pub fn complete_chunked_upload(
+        &self,
+        tenant: &str,
+        project: &str,
+        id: &str,
+        kind: &str,
+        total_size: usize,
+        chunk_count: usize,
+    ) -> Result<()> {
+        self.ensure_project_storage(tenant, project)?;
+        self.validate_object_metadata(id, kind)?;
+        if chunk_count == 0 {
+            bail!("chunk_count must be greater than zero");
+        }
+        let bytes_path = self.object_bytes_path(tenant, project, id)?;
+        let kind_path = self.object_kind_path(tenant, project, id)?;
+        if bytes_path.exists() {
+            self.remove_object_chunks(tenant, project, id).ok();
+            return Ok(());
+        }
+        let mut bytes = Vec::with_capacity(total_size);
+        for chunk_index in 0..chunk_count {
+            let chunk_path = self.object_chunk_path(tenant, project, id, chunk_index)?;
+            if !chunk_path.exists() {
+                bail!("missing chunk {chunk_index} for object {id}");
+            }
+            bytes.extend(fs::read(chunk_path)?);
+        }
+        if bytes.len() != total_size {
+            bail!("chunked object size does not match declared total size");
+        }
+        let digest = hex::encode(Sha256::digest(&bytes));
+        if digest != id {
+            bail!("object id does not match SHA-256 digest");
+        }
+        fs::write(bytes_path, bytes)?;
+        fs::write(kind_path, kind.as_bytes())?;
+        self.remove_object_chunks(tenant, project, id).ok();
+        Ok(())
+    }
+
     pub fn download(
         &self,
         tenant: &str,
@@ -258,18 +332,23 @@ impl Store {
     }
 
     fn validate_object(&self, object: &RemoteObject) -> Result<()> {
-        if !matches!(object.kind.as_str(), "blob" | "tree" | "snapshot") {
-            bail!("unknown object kind `{}`", object.kind);
-        }
-        if !is_hex_id(&object.id) {
-            bail!("invalid object id `{}`", object.id);
-        }
+        self.validate_object_metadata(&object.id, &object.kind)?;
         let bytes = BASE64
             .decode(&object.bytes_base64)
             .with_context(|| format!("invalid base64 payload for object {}", object.id))?;
         let digest = hex::encode(Sha256::digest(&bytes));
         if digest != object.id {
             bail!("object id does not match SHA-256 digest");
+        }
+        Ok(())
+    }
+
+    fn validate_object_metadata(&self, id: &str, kind: &str) -> Result<()> {
+        if !matches!(kind, "blob" | "tree" | "snapshot") {
+            bail!("unknown object kind `{kind}`");
+        }
+        if !is_hex_id(id) {
+            bail!("invalid object id `{id}`");
         }
         Ok(())
     }
@@ -363,6 +442,33 @@ impl Store {
             .project_path(tenant, project)?
             .join("objects")
             .join(format!("{id}.kind")))
+    }
+
+    fn object_chunk_path(
+        &self,
+        tenant: &str,
+        project: &str,
+        id: &str,
+        chunk_index: usize,
+    ) -> Result<PathBuf> {
+        Ok(self
+            .project_path(tenant, project)?
+            .join("objects")
+            .join(".uploads")
+            .join(validate_segment_for_path(id)?)
+            .join(format!("{chunk_index}.chunk")))
+    }
+
+    fn remove_object_chunks(&self, tenant: &str, project: &str, id: &str) -> Result<()> {
+        let upload_dir = self
+            .project_path(tenant, project)?
+            .join("objects")
+            .join(".uploads")
+            .join(validate_segment_for_path(id)?);
+        if upload_dir.exists() {
+            fs::remove_dir_all(upload_dir)?;
+        }
+        Ok(())
     }
 
     fn tokens_path(&self) -> PathBuf {

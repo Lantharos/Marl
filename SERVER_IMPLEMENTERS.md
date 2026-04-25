@@ -347,14 +347,59 @@ Rules:
 - if an object already exists, accept it without error
 - the server should store both the object kind and raw bytes
 - the server does not need to trust the client blindly forever, but the current client assumes successful uploads are stored exactly as sent
+- clients may split missing objects across multiple upload requests; servers should not require every object for a sync to arrive in one request
 
 Recommended validation:
 
 - verify `id` matches SHA-256 of decoded bytes
 - reject malformed base64
 - reject unknown `kind`
+- enforce request-size limits per upload request instead of per sync operation
 
-### 6. Object download
+### 6. Chunked object upload
+
+Large objects may be uploaded without JSON/base64 by sending raw byte chunks under the final content id.
+
+```http
+PUT /v1/tenants/{tenant}/projects/{project}/objects/{object-id}/chunks/{chunk-index}
+```
+
+Request headers:
+
+- `Authorization: Bearer <token>`
+- `x-pig-object-kind: blob | tree | snapshot`
+- `x-pig-chunk-count: <number-of-chunks>`
+- `x-pig-total-size: <raw-byte-size>`
+
+Request body:
+
+- raw bytes for this chunk
+
+Then finalize:
+
+```http
+POST /v1/tenants/{tenant}/projects/{project}/objects/{object-id}/complete
+```
+
+Request body:
+
+```json
+{
+  "kind": "blob | tree | snapshot",
+  "total_size": 123,
+  "chunk_count": 4
+}
+```
+
+Rules:
+
+- chunks are zero-indexed
+- finalization must assemble chunks in index order
+- finalization must verify the assembled raw bytes hash to `{object-id}`
+- if the object already exists, chunk upload and finalization should be idempotent no-ops
+- once finalization succeeds, the object must be visible to `objects/missing`, `objects/download`, and head updates just like JSON-uploaded objects
+
+### 7. Object download
 
 ```http
 POST /v1/tenants/{tenant}/projects/{project}/objects/download
@@ -388,7 +433,7 @@ Rules:
 - the current client may request one id at a time while traversing a missing closure
 - returning fewer objects than requested is treated as an error if the requested object is absent from the response
 
-### 7. Compare-and-set head update
+### 8. Compare-and-set head update
 
 ```http
 PUT /v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/head
@@ -429,8 +474,8 @@ Rules:
 When compare returns `local_ahead` or `remote_missing`, the client will:
 
 1. enumerate all objects reachable from the local head
-2. call `objects/missing`
-3. upload only the missing object ids
+2. call `objects/missing` in bounded id batches
+3. upload only the missing object ids in bounded object batches, using chunked upload for large objects
 4. call CAS head update with:
    - `expected_head = current remote head`
    - `new_head = local head`
@@ -542,6 +587,8 @@ The current CLI already implements:
 - `pig remote add`
 - `pig sync`
 - object upload/download
+- batched object upload
+- chunked upload for large objects
 - compare handling
 - local auto-merge on divergence
 - local conflict resolution for sync conflicts

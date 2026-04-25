@@ -3,10 +3,10 @@ use base64::Engine;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    CompareRequest, CompareResponse, DevTokenRequest, DownloadRequest, DownloadResponse,
-    HeadResponse, HeadUpdateRequest, MissingRequest, MissingResponse, OkResponse, ProjectSummary,
-    RemoteObject, SessionExchangeRequest, SnapshotObject, TokenResponse, UploadRequest,
-    validate_segment,
+    ChunkCompleteRequest, CompareRequest, CompareResponse, DevTokenRequest, DownloadRequest,
+    DownloadResponse, HeadResponse, HeadUpdateRequest, MissingRequest, MissingResponse,
+    OkResponse, ProjectSummary, RemoteObject, SessionExchangeRequest, SnapshotObject,
+    TokenResponse, UploadRequest, validate_segment,
 };
 use uuid::Uuid;
 use worker::*;
@@ -42,6 +42,14 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async(
             "/v1/tenants/:tenant/projects/:project/objects/upload",
             upload,
+        )
+        .put_async(
+            "/v1/tenants/:tenant/projects/:project/objects/:object/chunks/:chunk",
+            upload_chunk,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/objects/:object/complete",
+            complete_chunked_upload,
         )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/objects/download",
@@ -207,6 +215,96 @@ async fn upload(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
         if object.kind == "snapshot" {
             index_snapshot(&ctx.env, &tenant, &project, object).await?;
         }
+    }
+    Response::from_json(&OkResponse { ok: true })
+}
+
+async fn upload_chunk(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
+    let id = param(&ctx, "object")?;
+    let chunk_index = param(&ctx, "chunk")?
+        .parse::<usize>()
+        .map_err(|_| Error::RustError("invalid chunk index".to_string()))?;
+    let kind = required_header(&req, "x-pig-object-kind")?;
+    let chunk_count = required_usize_header(&req, "x-pig-chunk-count")?;
+    let total_size = required_usize_header(&req, "x-pig-total-size")?;
+    validate_object_metadata(&id, &kind)?;
+    if chunk_count == 0 || chunk_index >= chunk_count || total_size == 0 {
+        return json_error(400, "invalid chunk metadata");
+    }
+    let store = bucket(&ctx.env)?;
+    if store.head(object_key(&tenant, &project, &id)).await?.is_some() {
+        return Response::from_json(&OkResponse { ok: true });
+    }
+    let bytes = req.bytes().await?;
+    put_bytes(
+        &store,
+        &object_chunk_key(&tenant, &project, &id, chunk_index),
+        bytes,
+    )
+    .await?;
+    Response::from_json(&OkResponse { ok: true })
+}
+
+async fn complete_chunked_upload(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    if !ensure_project_access(&ctx.env, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
+    let id = param(&ctx, "object")?;
+    let body: ChunkCompleteRequest = req.json().await?;
+    validate_object_metadata(&id, &body.kind)?;
+    if body.chunk_count == 0 {
+        return json_error(400, "chunk_count must be greater than zero");
+    }
+    let store = bucket(&ctx.env)?;
+    let key = object_key(&tenant, &project, &id);
+    if store.head(key.clone()).await?.is_some() {
+        return Response::from_json(&OkResponse { ok: true });
+    }
+    let mut bytes = Vec::with_capacity(body.total_size);
+    for chunk_index in 0..body.chunk_count {
+        let chunk_key = object_chunk_key(&tenant, &project, &id, chunk_index);
+        let Some(object) = store.get(chunk_key).execute().await? else {
+            return json_error(400, &format!("missing chunk {chunk_index} for object {id}"));
+        };
+        let Some(chunk_body) = object.body() else {
+            return json_error(400, &format!("missing chunk body {chunk_index} for object {id}"));
+        };
+        bytes.extend(chunk_body.bytes().await?);
+    }
+    if bytes.len() != body.total_size {
+        return json_error(400, "chunked object size does not match declared total size");
+    }
+    let digest = hex::encode(Sha256::digest(&bytes));
+    if digest != id {
+        return json_error(400, "object id does not match SHA-256 digest");
+    }
+    let snapshot = if body.kind == "snapshot" {
+        Some(serde_json::from_slice::<SnapshotObject>(&bytes)?)
+    } else {
+        None
+    };
+    put_bytes(&store, &key, bytes).await?;
+    put_text(&store, &format!("{key}.kind"), &body.kind).await?;
+    if let Some(snapshot) = snapshot {
+        let coordinator = coordinator(&ctx.env, &tenant, &project)?;
+        let body = json!({ "id": id, "parents": snapshot.parents });
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_body(Some(body.to_string().into()));
+        let request = Request::new_with_init("https://sty.local/snapshots", &init)?;
+        let _ = coordinator.fetch_with_request(request).await?;
+    }
+    for chunk_index in 0..body.chunk_count {
+        store
+            .delete(object_chunk_key(&tenant, &project, &id, chunk_index))
+            .await?;
     }
     Response::from_json(&OkResponse { ok: true })
 }
@@ -381,7 +479,7 @@ async fn require_auth(req: &Request, env: &Env) -> Result<String> {
     let Some(body) = object.body() else {
         return Err(Error::RustError("invalid bearer token".to_string()));
     };
-    Ok(body.text().await?)
+    body.text().await
 }
 
 async fn ensure_project_access(env: &Env, tenant: &str, project: &str, user: &str) -> Result<bool> {
@@ -431,6 +529,10 @@ fn object_key(tenant: &str, project: &str, id: &str) -> String {
     format!("projects/{tenant}/{project}/objects/{id}")
 }
 
+fn object_chunk_key(tenant: &str, project: &str, id: &str, chunk_index: usize) -> String {
+    format!("projects/{tenant}/{project}/objects/.uploads/{id}/{chunk_index}.chunk")
+}
+
 fn project_key(tenant: &str, project: &str) -> String {
     format!("projects/{tenant}/{project}/project.json")
 }
@@ -463,9 +565,7 @@ async fn project_owner(bucket: &Bucket, key: &str) -> Result<Option<String>> {
 }
 
 fn validate_object(object: &RemoteObject) -> Result<()> {
-    if !matches!(object.kind.as_str(), "blob" | "tree" | "snapshot") {
-        return Err(Error::RustError("unknown object kind".to_string()));
-    }
+    validate_object_metadata(&object.id, &object.kind)?;
     let bytes = decode_base64(&object.bytes_base64)?;
     let digest = hex::encode(Sha256::digest(&bytes));
     if digest != object.id {
@@ -474,6 +574,28 @@ fn validate_object(object: &RemoteObject) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+fn validate_object_metadata(id: &str, kind: &str) -> Result<()> {
+    if !matches!(kind, "blob" | "tree" | "snapshot") {
+        return Err(Error::RustError("unknown object kind".to_string()));
+    }
+    if id.len() != 64 || !id.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(Error::RustError("invalid object id".to_string()));
+    }
+    Ok(())
+}
+
+fn required_header(req: &Request, name: &str) -> Result<String> {
+    req.headers()
+        .get(name)?
+        .ok_or_else(|| Error::RustError(format!("missing {name} header")))
+}
+
+fn required_usize_header(req: &Request, name: &str) -> Result<usize> {
+    required_header(req, name)?
+        .parse()
+        .map_err(|_| Error::RustError(format!("invalid {name} header")))
 }
 
 async fn put_text(bucket: &Bucket, key: &str, value: &str) -> Result<()> {

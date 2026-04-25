@@ -46,6 +46,13 @@ pub struct RemoteObject {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct ChunkCompleteRequest {
+    pub kind: String,
+    pub total_size: usize,
+    pub chunk_count: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct HeadUpdateRequest {
     pub expected_head: Option<String>,
     pub new_head: String,

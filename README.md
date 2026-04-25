@@ -103,6 +103,8 @@ Run the real PIG smoke test:
 .\scripts\smoke-pig.ps1
 ```
 
+The smoke test saves, syncs, and pulls both a small text file and a large binary file so the normal JSON upload path and chunked object upload path are both exercised.
+
 Check the frontend:
 
 ```powershell

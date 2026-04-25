@@ -2,18 +2,19 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Result;
+use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde_json::json;
 
 use crate::auth::verify_ave_id_token;
 use crate::store::Store;
 use sty_protocol::{
-    CompareRequest, CompareResponse, DevTokenRequest, DownloadRequest, DownloadResponse,
-    HeadResponse, HeadUpdateRequest, MissingRequest, MissingResponse, OkResponse,
+    ChunkCompleteRequest, CompareRequest, CompareResponse, DevTokenRequest, DownloadRequest,
+    DownloadResponse, HeadResponse, HeadUpdateRequest, MissingRequest, MissingResponse, OkResponse,
     SessionExchangeRequest, TokenPrincipal, TokenResponse, UploadRequest,
 };
 
@@ -54,6 +55,14 @@ pub fn router(store: Arc<Store>) -> Router {
         .route(
             "/v1/tenants/{tenant}/projects/{project}/objects/upload",
             post(upload),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/objects/{object}/chunks/{chunk}",
+            put(upload_chunk),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/objects/{object}/complete",
+            post(complete_chunked_upload),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/objects/download",
@@ -185,6 +194,55 @@ async fn upload(
     }
 }
 
+async fn upload_chunk(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, object, chunk)): Path<(String, String, String, usize)>,
+    body: Bytes,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        let kind = required_header(&headers, "x-pig-object-kind")?;
+        let chunk_count = required_usize_header(&headers, "x-pig-chunk-count")?;
+        let total_size = required_usize_header(&headers, "x-pig-total-size")?;
+        map_result(state.store.upload_chunk(
+            &tenant,
+            &project,
+            &object,
+            &kind,
+            chunk,
+            chunk_count,
+            total_size,
+            body.as_ref(),
+        ))
+    }) {
+        Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn complete_chunked_upload(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, object)): Path<(String, String, String)>,
+    Json(body): Json<ChunkCompleteRequest>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.complete_chunked_upload(
+            &tenant,
+            &project,
+            &object,
+            &body.kind,
+            body.total_size,
+            body.chunk_count,
+        ))
+    }) {
+        Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
 async fn download(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -264,6 +322,25 @@ fn map_store_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
         };
         error(status, message)
     })
+}
+
+fn required_header(headers: &HeaderMap, name: &str) -> std::result::Result<String, Response> {
+    let Some(value) = headers.get(name) else {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            format!("missing {name} header"),
+        ));
+    };
+    value
+        .to_str()
+        .map(|value| value.to_string())
+        .map_err(|_| error(StatusCode::BAD_REQUEST, format!("invalid {name} header")))
+}
+
+fn required_usize_header(headers: &HeaderMap, name: &str) -> std::result::Result<usize, Response> {
+    required_header(headers, name)?
+        .parse()
+        .map_err(|_| error(StatusCode::BAD_REQUEST, format!("invalid {name} header")))
 }
 
 fn error(status: StatusCode, message: impl Into<String>) -> Response {

@@ -40,6 +40,11 @@ try {
     Push-Location $repoA
     try {
         Set-Content -LiteralPath (Join-Path $repoA "hello.txt") -Value "hello from sty"
+        $large = New-Object byte[] (3 * 1024 * 1024)
+        for ($i = 0; $i -lt $large.Length; $i++) {
+            $large[$i] = [byte]($i % 251)
+        }
+        [System.IO.File]::WriteAllBytes((Join-Path $repoA "large.bin"), $large)
         & $PigBin save "initial" | Out-Host
         & $StyBin init dev/demo --remote-url $RemoteUrl --pig $PigBin | Out-Host
         & $PigBin sync --json | Out-Host
@@ -54,6 +59,9 @@ try {
         $pull | Out-Host
         if (!(Test-Path -LiteralPath (Join-Path $repoB "hello.txt"))) {
             throw "second repo did not pull hello.txt"
+        }
+        if ((Get-Item -LiteralPath (Join-Path $repoB "large.bin")).Length -ne (3 * 1024 * 1024)) {
+            throw "second repo did not pull large.bin"
         }
     } finally {
         Pop-Location
