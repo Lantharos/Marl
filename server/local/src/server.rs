@@ -16,12 +16,12 @@ use crate::catalog::Catalog;
 use crate::store::{ObjectStore, Store};
 use sty_store::Store as _;
 use sty_protocol::{
-    ChunkCompleteRequest, CompareRequest, CompareResponse, CreateIssueRequest, CreateOrgRequest,
-    DevTokenRequest, DownloadRequest, DownloadResponse, HeadResponse, HeadUpdateRequest,
-    HistoryResponse, IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
-    OkResponse, ProjectDetailResponse, ProjectSummary, SessionExchangeRequest, StarResponse,
-    TokenPrincipal, TokenResponse, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse,
-    WorkspaceSummary,
+    ChunkCompleteRequest, CommentsResponse, CompareRequest, CompareResponse,
+    CreateCommentRequest, CreateIssueRequest, CreateOrgRequest, DevTokenRequest, DownloadRequest,
+    DownloadResponse, HeadResponse, HeadUpdateRequest, HistoryResponse, IssuesResponse,
+    LogHistoryRequest, MeResponse, MissingRequest, MissingResponse, OkResponse, ProjectDetailResponse,
+    ProjectSummary, SessionExchangeRequest, StarResponse, TokenPrincipal, TokenResponse,
+    UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
 
 #[derive(Clone)]
@@ -64,6 +64,10 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
         .route(
             "/v1/tenants/{tenant}/projects/{project}/issues",
             get(project_issues).post(create_issue),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/comments",
+            get(issue_comments).post(create_comment_handler),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/head",
@@ -321,6 +325,35 @@ async fn create_issue(
         map_result(state.store.create_issue(&tenant, &project, &principal, &body.title, &body.body))
     }) {
         Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn issue_comments(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.list_comments(&tenant, &project, &issue_id))
+    }) {
+        Ok(comments) => Json(CommentsResponse { comments }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn create_comment_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+    Json(body): Json<CreateCommentRequest>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.create_comment(&tenant, &project, &issue_id, &principal, &body.body))
+    }) {
+        Ok(comment) => Json(comment).into_response(),
         Err(response) => response,
     }
 }

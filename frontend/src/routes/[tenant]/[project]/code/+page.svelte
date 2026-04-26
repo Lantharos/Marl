@@ -40,9 +40,11 @@
 {:else if error}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
 {:else}
-	<div class="flex gap-0 rounded border border-[#2a2a28] bg-[#141412]" style="height: calc(100vh - 140px);">
-		<div class="w-[280px] shrink-0 border-r border-[#2a2a28] p-3">
-			<FileTreePane entries={tree?.entries ?? []} selectedPath={file?.path ?? ''} onSelect={openFile} />
+	<div class="flex gap-0 rounded border border-[#2a2a28] bg-[#141412] overflow-hidden" style="height: calc(100vh - 180px);">
+		<div class="w-[280px] shrink-0 flex flex-col border-r border-[#2a2a28]">
+			<div class="flex-1 overflow-auto min-h-0 p-3">
+				<FileTreePane entries={tree?.entries ?? []} selectedPath={file?.path ?? ''} onSelect={openFile} />
+			</div>
 		</div>
 		<div class="min-w-0 flex-1 overflow-auto p-4">
 			<CodePane {file} />

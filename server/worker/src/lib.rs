@@ -3,12 +3,12 @@ use base64::Engine;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    ChunkCompleteRequest, CompareRequest, CompareResponse, CreateIssueRequest, DevTokenRequest,
-    DownloadRequest, DownloadResponse, HeadResponse, HeadUpdateRequest, HistoryResponse,
-    IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse, OkResponse,
-    ObjectFileResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse, RemoteObject,
-    SessionExchangeRequest, StarResponse, TokenResponse, TreeEntryInfo, UpdateSettingsRequest,
-    UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
+    ChunkCompleteRequest, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
+    CreateIssueRequest, DevTokenRequest, DownloadRequest, DownloadResponse, HeadResponse,
+    HeadUpdateRequest, HistoryResponse, IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest,
+    MissingResponse, OkResponse, ObjectFileResponse, ProjectDetailResponse, ProjectSummary,
+    ProjectTreeResponse, RemoteObject, SessionExchangeRequest, StarResponse, TokenResponse,
+    TreeEntryInfo, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
 use worker::*;
 
@@ -43,6 +43,8 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/tenants/:tenant/projects/:project/files/:path", project_file)
         .get_async("/v1/tenants/:tenant/projects/:project/issues", project_issues)
         .post_async("/v1/tenants/:tenant/projects/:project/issues", create_issue)
+        .get_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", issue_comments)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", create_comment)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", get_head)
         .put_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", update_head)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", workspace_history)
@@ -262,6 +264,27 @@ async fn create_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Respons
     d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }, &body.title, &body.body).await?;
     Response::from_json(&issue)
+}
+
+async fn issue_comments(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let comments = d1::list_comments(&database, &tenant, &project, &issue_id).await?;
+    Response::from_json(&CommentsResponse { comments })
+}
+
+async fn create_comment(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let body: CreateCommentRequest = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let comment = d1::create_comment(&database, &tenant, &project, &issue_id, &sty_protocol::TokenPrincipal { user }, &body.body).await?;
+    Response::from_json(&comment)
 }
 
 async fn get_head(req: Request, ctx: RouteContext<()>) -> Result<Response> {

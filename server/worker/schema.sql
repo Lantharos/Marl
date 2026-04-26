@@ -61,5 +61,15 @@ CREATE TABLE IF NOT EXISTS stars (
     user TEXT NOT NULL,
     PRIMARY KEY (tenant, project, user)
 );
+CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    tenant TEXT NOT NULL,
+    project TEXT NOT NULL,
+    issue_id TEXT NOT NULL,
+    author TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
+CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);

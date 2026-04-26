@@ -12,8 +12,9 @@
 	let loading = $state(true);
 	let error = $state('');
 	let selectedPath = $state('');
-	let oldTexts = $state<Map<string, string | null>>(new Map());
-	let newTexts = $state<Map<string, string | null>>(new Map());
+	let selectedOldText = $state<string | null>(null);
+	let selectedNewText = $state<string | null>(null);
+	let fileLoading = $state(false);
 
 	async function load() {
 		loading = true;
@@ -22,7 +23,6 @@
 			detail = await getHistoryEntryDetail(tenant, project, entryId);
 			if (detail.files.length > 0) {
 				selectedPath = detail.files[0].path;
-				await loadFileContents();
 			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -31,32 +31,46 @@
 		}
 	}
 
-	async function loadFileContents() {
+	async function loadSelectedFile(path: string) {
 		if (!detail) return;
-		for (const file of detail.files) {
+		fileLoading = true;
+		selectedOldText = null;
+		selectedNewText = null;
+		const file = detail.files.find((f) => f.path === path);
+		if (!file) {
+			fileLoading = false;
+			return;
+		}
+		try {
 			if (file.change_type !== 'added' && detail.parent_id) {
 				try {
-					const f = await getProjectFile(tenant, project, file.path, detail.workspace, detail.parent_id);
-					oldTexts.set(file.path, f.text);
+					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.parent_id);
+					selectedOldText = f.text;
 				} catch {
-					oldTexts.set(file.path, null);
+					selectedOldText = null;
 				}
 			}
 			if (file.change_type !== 'deleted' && detail.snapshot_id) {
 				try {
-					const f = await getProjectFile(tenant, project, file.path, detail.workspace, detail.snapshot_id);
-					newTexts.set(file.path, f.text);
+					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.snapshot_id);
+					selectedNewText = f.text;
 				} catch {
-					newTexts.set(file.path, null);
+					selectedNewText = null;
 				}
 			}
+		} finally {
+			fileLoading = false;
 		}
-		oldTexts = oldTexts;
-		newTexts = newTexts;
 	}
 
 	$effect(() => {
 		if (tenant && project && entryId) load();
+	});
+
+	$effect(() => {
+		if (selectedPath && detail) {
+			loadSelectedFile(selectedPath);
+		}
 	});
 
 	const treeEntries = $derived(detail?.files.map((f) => ({ path: f.path, name: f.path.split('/').pop() ?? f.path, id: f.new_id ?? f.old_id ?? '', entry_type: 'blob' as const })) ?? []);
@@ -86,7 +100,7 @@
 	}
 </script>
 
-<div class="flex h-[calc(100vh-120px)] flex-col gap-4">
+<div class="flex flex-col gap-4 overflow-hidden" style="height: calc(100vh - 180px);">
 	{#if loading}
 		<div class="text-sm text-[#6f6b5f]">Loading...</div>
 	{:else if error}
@@ -116,25 +130,25 @@
 				<p class="text-sm text-[#8c887e]">No file changes for this entry.</p>
 			</div>
 		{:else}
-			<div class="flex flex-1 gap-4 overflow-hidden">
-				<div class="w-64 shrink-0 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
-					<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#6f6b5f]">
+			<div class="flex flex-1 gap-4 overflow-hidden min-h-0">
+				<div class="w-64 shrink-0 flex flex-col rounded border border-[#2a2a28] bg-[#141412]">
+					<div class="shrink-0 border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#6f6b5f]">
 						{detail.files.length} changed {detail.files.length === 1 ? 'file' : 'files'}
 					</div>
-					<div class="h-[calc(100%-36px)] p-2">
-						<FileTreePane entries={treeEntries} {selectedPath} {gitStatus} onSelect={(p) => { selectedPath = p; }} />
+					<div class="flex-1 overflow-auto min-h-0 p-2">
+						<FileTreePane entries={treeEntries} {selectedPath} {gitStatus} initialExpansion="open" flattenEmptyDirectories={true} onSelect={(p) => { selectedPath = p; }} />
 					</div>
 				</div>
-				<div class="flex-1 overflow-y-auto rounded border border-[#2a2a28] bg-[#0f0f0d] p-4">
-					{#each detail.files as file}
-						{#if !selectedPath || selectedPath === file.path}
-							<FileDiffCard
-								path={file.path}
-								oldText={oldTexts.get(file.path) ?? null}
-								newText={newTexts.get(file.path) ?? null}
-							/>
-						{/if}
-					{/each}
+				<div class="flex-1 overflow-y-auto rounded border border-[#2a2a28]">
+					{#if fileLoading}
+						<div class="text-sm text-[#6f6b5f]">Loading diff...</div>
+					{:else if selectedPath}
+						<FileDiffCard
+							path={selectedPath}
+							oldText={selectedOldText}
+							newText={selectedNewText}
+						/>
+					{/if}
 				</div>
 			</div>
 		{/if}

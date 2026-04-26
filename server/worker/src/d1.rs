@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
+    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
     WorkspaceState,
 };
 use uuid::Uuid;
@@ -543,6 +543,73 @@ pub async fn create_issue(
         author: principal.user.clone(),
         created_at,
         labels: Vec::new(),
+    })
+}
+
+// ── Comments ─────────────────────────────────────────────
+
+pub async fn list_comments(db: &D1Database, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>> {
+    #[derive(Deserialize)]
+    struct Row {
+        id: String,
+        issue_id: String,
+        author: String,
+        body: String,
+        created_at: String,
+    }
+    let result = db
+        .prepare(
+            "SELECT id, issue_id, author, body, created_at FROM comments \
+             WHERE tenant = ?1 AND project = ?2 AND issue_id = ?3 \
+             ORDER BY created_at"
+        )
+        .bind(&[js_str(tenant), js_str(project), js_str(issue_id)])?
+        .all()
+        .await?;
+    let rows: Vec<Row> = result.results()?;
+    Ok(rows
+        .into_iter()
+        .map(|r| Comment {
+            id: r.id,
+            issue_id: r.issue_id,
+            author: r.author,
+            body: r.body,
+            created_at: r.created_at,
+        })
+        .collect())
+}
+
+pub async fn create_comment(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    issue_id: &str,
+    principal: &TokenPrincipal,
+    body: &str,
+) -> Result<Comment> {
+    let id = format!("comment-{}", Uuid::new_v4().simple());
+    let created_at = now_rfc3339();
+    db.prepare(
+        "INSERT INTO comments (id, tenant, project, issue_id, author, body, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+    )
+    .bind(&[
+        js_str(&id),
+        js_str(tenant),
+        js_str(project),
+        js_str(issue_id),
+        js_str(&principal.user),
+        js_str(body),
+        js_str(&created_at),
+    ])?
+    .run()
+    .await?;
+    Ok(Comment {
+        id,
+        issue_id: issue_id.to_string(),
+        author: principal.user.clone(),
+        body: body.to_string(),
+        created_at,
     })
 }
 

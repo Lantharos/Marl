@@ -230,7 +230,23 @@ export async function getIssue(tenant: string, project: string, issueId: string)
 	const issues = await listIssues(tenant, project);
 	const issue = issues.issues.find((i) => i.id === issueId || String(i.number) === issueId);
 	if (!issue) throw new Error('Issue not found');
-	return { ...issue, comments: [] };
+	const comments = await listIssueComments(tenant, project, issue.id);
+	return { ...issue, comments };
+}
+
+export async function listIssueComments(tenant: string, project: string, issueId: string): Promise<Comment[]> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`);
+	const data = (await response.json()) as { comments: Comment[] };
+	return data.comments;
+}
+
+export async function createIssueComment(tenant: string, project: string, issueId: string, body: string): Promise<Comment> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ body })
+	});
+	return (await response.json()) as Comment;
 }
 
 export async function createIssue(tenant: string, project: string, issue: { title: string; body: string }) {
@@ -240,11 +256,6 @@ export async function createIssue(tenant: string, project: string, issue: { titl
 		body: JSON.stringify(issue)
 	});
 	return (await response.json()) as Issue;
-}
-
-export async function createIssueComment(tenant: string, project: string, issueId: string, body: string) {
-	await new Promise((r) => setTimeout(r, 300));
-	return { id: crypto.randomUUID(), author: 'you', body, created_at: new Date().toISOString() } as Comment;
 }
 
 export async function listWorkspaceStatuses(tenant: string, project: string): Promise<WorkspaceStatus[]> {

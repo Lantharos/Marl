@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use sty_protocol::{
-    HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary,
+    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary,
     TokenPrincipal, WorkspaceState,
 };
 
@@ -106,6 +106,17 @@ pub trait Store {
         title: &str,
         body: &str,
     ) -> Result<Issue>;
+
+    // ── Comments ────────────────────────────────────────────
+    fn list_comments(&self, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>>;
+    fn create_comment(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        principal: &TokenPrincipal,
+        body: &str,
+    ) -> Result<Comment>;
 
     // ── Settings / Stars ───────────────────────────────────
     fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings>;

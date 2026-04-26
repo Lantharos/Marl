@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use sty_protocol::{
-    HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary,
+    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary,
     TokenPrincipal, WorkspaceState, validate_segment,
 };
 
@@ -102,8 +102,18 @@ impl SqliteStore {
                 user text not null,
                 primary key (tenant, project, user)
             );
+            create table if not exists comments (
+                id text primary key,
+                tenant text not null,
+                project text not null,
+                issue_id text not null,
+                author text not null,
+                body text not null,
+                created_at text not null
+            );
             create index if not exists idx_history_workspace on history(tenant, project, workspace);
             create index if not exists idx_issues_project on issues(tenant, project);
+            create index if not exists idx_comments_issue on comments(tenant, project, issue_id);
             "
         )?;
         // Migration: add snapshot_id to existing history tables
@@ -114,6 +124,27 @@ impl SqliteStore {
         ).unwrap_or(0) > 0;
         if !has_snapshot_id {
             conn.execute("ALTER TABLE history ADD COLUMN snapshot_id text", [])?;
+        }
+        // Migration: add comments table
+        let has_comments: bool = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'comments'",
+            [],
+            |row| row.get(0),
+        ).unwrap_or(0) > 0;
+        if !has_comments {
+            conn.execute(
+                "create table comments (
+                    id text primary key,
+                    tenant text not null,
+                    project text not null,
+                    issue_id text not null,
+                    author text not null,
+                    body text not null,
+                    created_at text not null
+                )",
+                [],
+            )?;
+            conn.execute("create index idx_comments_issue on comments(tenant, project, issue_id)", [])?;
         }
         Ok(())
     }
@@ -640,6 +671,54 @@ impl Store for SqliteStore {
             author: principal.user.clone(),
             created_at,
             labels: Vec::new(),
+        })
+    }
+
+    fn list_comments(&self, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select id, issue_id, author, body, created_at from comments
+             where tenant = ?1 and project = ?2 and issue_id = ?3
+             order by created_at"
+        )?;
+        let rows = stmt.query_map(rusqlite::params![tenant, project, issue_id], |row| {
+            Ok(Comment {
+                id: row.get(0)?,
+                issue_id: row.get(1)?,
+                author: row.get(2)?,
+                body: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?;
+        let mut comments = Vec::new();
+        for row in rows {
+            comments.push(row?);
+        }
+        Ok(comments)
+    }
+
+    fn create_comment(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        principal: &TokenPrincipal,
+        body: &str,
+    ) -> Result<Comment> {
+        let conn = self.conn()?;
+        let id = format!("comment-{}", Uuid::new_v4().simple());
+        let created_at = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "insert into comments (id, tenant, project, issue_id, author, body, created_at)
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![id, tenant, project, issue_id, principal.user, body, created_at],
+        )?;
+        Ok(Comment {
+            id,
+            issue_id: issue_id.to_string(),
+            author: principal.user.clone(),
+            body: body.to_string(),
+            created_at,
         })
     }
 

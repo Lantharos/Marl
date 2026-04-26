@@ -7,12 +7,16 @@
 		entries,
 		selectedPath,
 		onSelect,
-		gitStatus
+		gitStatus,
+		initialExpansion = 0,
+		flattenEmptyDirectories = false
 	}: {
 		entries: TreeEntryInfo[];
 		selectedPath: string;
 		onSelect: (path: string) => void;
 		gitStatus?: { path: string; status: 'added' | 'deleted' | 'modified' | 'renamed' | 'untracked' }[];
+		initialExpansion?: 'closed' | 'open' | number;
+		flattenEmptyDirectories?: boolean;
 	} = $props();
 
 	let host: HTMLDivElement;
@@ -30,15 +34,15 @@
 			tree?.cleanUp();
 			tree = new FileTree({
 				paths,
-				initialExpansion: 0,
+				initialExpansion,
 				initialSelectedPaths: selectedPath ? [selectedPath] : [],
-				flattenEmptyDirectories: false,
+				flattenEmptyDirectories,
 				search: paths.length > 8,
 				stickyFolders: true,
 				gitStatus,
 				onSelectionChange(paths) {
 					const path = paths[0];
-					if (path) {
+					if (path && !path.endsWith('/')) {
 						onSelect(path);
 					}
 				},
@@ -90,4 +94,4 @@
 	});
 </script>
 
-<div bind:this={host} class="h-full min-h-[200px] overflow-hidden"></div>
+<div bind:this={host} class="h-full"></div>

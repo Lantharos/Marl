@@ -211,6 +211,25 @@ pub struct CreateIssueRequest {
     pub body: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Comment {
+    pub id: String,
+    pub issue_id: String,
+    pub author: String,
+    pub body: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateCommentRequest {
+    pub body: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CommentsResponse {
+    pub comments: Vec<Comment>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct IssuesResponse {
     pub issues: Vec<Issue>,
