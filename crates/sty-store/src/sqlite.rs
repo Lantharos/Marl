@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
     WorkspaceState, validate_segment,
 };
 
@@ -294,6 +294,8 @@ impl Store for SqliteStore {
                 starred_count: 0,
                 is_starred: false,
                 default_workspace: "main".to_string(),
+                navbar_items: vec![],
+                panels: vec![],
             })?;
             tx.execute(
                 "insert into projects (tenant, project, owner, settings_json) values (?1, ?2, ?3, ?4)",
@@ -893,10 +895,18 @@ impl Store for SqliteStore {
         principal: &TokenPrincipal,
         visibility: &str,
         default_workspace: &str,
+        navbar_items: Option<Vec<NavbarItem>>,
+        panels: Option<Vec<PanelItem>>,
     ) -> Result<ProjectSettings> {
         let mut settings = self.project_settings(tenant, project, principal)?;
         settings.visibility = visibility.to_string();
         settings.default_workspace = default_workspace.to_string();
+        if let Some(items) = navbar_items {
+            settings.navbar_items = items;
+        }
+        if let Some(p) = panels {
+            settings.panels = p;
+        }
         let json = serde_json::to_string(&settings)?;
         let conn = self.conn()?;
         conn.execute(

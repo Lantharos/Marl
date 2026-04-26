@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { listWorkspaceStatuses, mergeWorkspace, isAbortError, type WorkspaceStatus } from '$lib/api';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -98,7 +99,7 @@
 	</div>
 
 	{#if loading}
-		<div class="text-sm text-[#6f6b5f]">Loading...</div>
+		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if workspaces.length === 0}

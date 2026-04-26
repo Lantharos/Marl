@@ -102,11 +102,33 @@ export interface ChangedFile {
 	new_id: string | null;
 }
 
+export interface NavbarItem {
+	id: string;
+	label: string;
+	type: 'tab' | 'link';
+	url?: string;
+	enabled: boolean;
+	order: number;
+}
+
+export interface PanelItem {
+	id: string;
+	title: string;
+	type: 'text' | 'button' | 'link' | 'info' | 'stats' | 'workspaces' | 'activity';
+	content?: string;
+	url?: string;
+	button_label?: string;
+	enabled: boolean;
+	order: number;
+}
+
 export interface ProjectSettings {
 	visibility: 'public' | 'private';
 	starred_count: number;
 	is_starred: boolean;
 	default_workspace: string;
+	navbar_items: NavbarItem[];
+	panels: PanelItem[];
 }
 
 export interface Activity {

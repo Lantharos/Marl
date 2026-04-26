@@ -6,8 +6,12 @@
 		unstarProject,
 		type ProjectSummary,
 		type TenantSummary,
-		type ProjectSettings
+		type ProjectSettings,
+		type NavbarItem
 	} from '$lib/api';
+	import Star from 'lucide-svelte/icons/star';
+	import ExternalLink from 'lucide-svelte/icons/external-link';
+	import Plus from 'lucide-svelte/icons/plus';
 
 	let {
 		user,
@@ -55,21 +59,27 @@
 	const currentProject = $derived(pathParts[1] ?? null);
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === currentTenant));
 
-	const tabs = [
-		{ id: '', label: 'Overview' },
-		{ id: 'code', label: 'Code' },
-		{ id: 'workspaces', label: 'Workspaces' },
-		{ id: 'issues', label: 'Issues' },
-		{ id: 'ready', label: 'Ready' },
-		{ id: 'history', label: 'History' },
-		{ id: 'settings', label: 'Settings' }
-	] as const;
+	const DEFAULT_TABS: NavbarItem[] = [
+		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
+		{ id: 'code', label: 'Code', type: 'tab', enabled: true, order: 1 },
+		{ id: 'workspaces', label: 'Workspaces', type: 'tab', enabled: true, order: 2 },
+		{ id: 'issues', label: 'Issues', type: 'tab', enabled: true, order: 3 },
+		{ id: 'ready', label: 'Ready', type: 'tab', enabled: true, order: 4 },
+		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 5 },
+		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 6 }
+	];
+
+	const visibleTabs = $derived(() => {
+		const items = settings?.navbar_items?.length ? settings.navbar_items : DEFAULT_TABS;
+		return items.filter((t) => t.enabled).sort((a, b) => a.order - b.order);
+	});
 
 	const currentTab = $derived(() => {
 		if (!currentProject) return null;
 		const parts = currentPath.split('/').filter(Boolean);
 		if (parts.length < 3) return '';
 		const tab = parts[2];
+		const tabs = settings?.navbar_items?.length ? settings.navbar_items : DEFAULT_TABS;
 		return tabs.find((t) => t.id === tab)?.id ?? '';
 	});
 
@@ -135,10 +145,10 @@
 							</a>
 						{/each}
 						<button
-							class="block w-full px-3 py-1.5 text-left text-xs text-[#6f6b5f] hover:bg-[#1e1e1c] hover:text-[#a09d94]"
+							class="flex items-center gap-1 w-full px-3 py-1.5 text-left text-xs text-[#6f6b5f] hover:bg-[#1e1e1c] hover:text-[#a09d94]"
 							onclick={() => { showTenantMenu = false; showCreateOrg = true; }}
 						>
-							+ New org
+							<Plus class="h-3.5 w-3.5" /> New org
 						</button>
 					</div>
 				{/if}
@@ -193,7 +203,7 @@
 					class="ml-1 flex items-center gap-1 rounded border border-[#2a2a28] px-2 py-0.5 text-xs text-[#a09d94] hover:border-[#d9a66c] hover:text-[#d9a66c]"
 					onclick={handleToggleStar}
 				>
-					<span>{settings.is_starred ? '★' : '☆'}</span>
+					<Star class="h-3.5 w-3.5" fill={settings.is_starred ? 'currentColor' : 'none'} />
 					<span>{settings.starred_count}</span>
 				</button>
 				<span class="ml-1.5 rounded border border-[#2a2a28] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#6f6b5f]">
@@ -236,14 +246,29 @@
 
 	{#if currentProject}
 		<nav class="flex gap-1 px-32 md:px-48 lg:px-64 xl:px-80">
-			{#each tabs as tab}
-				{@const href = tab.id ? `/${currentTenant}/${currentProject}/${tab.id}` : `/${currentTenant}/${currentProject}`}
-				<a
-					{href}
-					class="border-b-2 px-3 py-2 text-sm font-medium {currentTab() === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"
-				>
-					{tab.label}
-				</a>
+			{#each visibleTabs() as tab}
+				{#if tab.type === 'link'}
+					{@const href = tab.url ?? '#'}
+					{@const isExternal = href.startsWith('http')}
+					<a
+						href={href}
+						class="inline-flex items-center gap-0.5 border-b-2 px-3 py-2 text-sm font-medium border-transparent text-[#8c887e] hover:text-[#d9a66c]"
+						{...isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}}
+					>
+						{tab.label}
+						{#if isExternal}
+							<ExternalLink class="h-3 w-3" />
+						{/if}
+					</a>
+				{:else}
+					{@const href = tab.id ? `/${currentTenant}/${currentProject}/${tab.id}` : `/${currentTenant}/${currentProject}`}
+					<a
+						{href}
+						class="border-b-2 px-3 py-2 text-sm font-medium {currentTab() === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"
+					>
+						{tab.label}
+					</a>
+				{/if}
 			{/each}
 		</nav>
 	{/if}

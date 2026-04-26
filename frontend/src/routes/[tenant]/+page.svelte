@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { listTenantProjects, type ProjectSummary } from '$lib/api';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 
@@ -23,7 +24,7 @@
 
 <div class="p-8">
 	{#if loading}
-		<div class="text-sm text-[#6f6b5f]">Loading...</div>
+		<Spinner />
 	{:else}
 		<div class="mb-6">
 			<h2 class="text-2xl font-semibold text-[#f0eee4]">{tenant}</h2>

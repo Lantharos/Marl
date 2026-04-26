@@ -3,6 +3,7 @@
 	import { getHistoryEntryDetail, getProjectFile, isAbortError, type HistoryEntry } from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -121,7 +122,7 @@
 
 <div class="flex flex-col gap-4 overflow-hidden" style="height: calc(100vh - 180px);">
 	{#if loading}
-		<div class="text-sm text-[#6f6b5f]">Loading...</div>
+		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if detail}

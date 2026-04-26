@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { isAbortError, listProjects, getProjectOverview, type ProjectSummary, type ProjectOverview } from '$lib/api';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	let projects = $state<ProjectSummary[]>([]);
 	let overviews = $state<Record<string, ProjectOverview>>({});
@@ -41,7 +42,7 @@
 		<p class="mt-1 text-sm text-[#8c887e]">Recent projects and activity.</p>
 
 		{#if loading}
-			<div class="mt-8 text-sm text-[#6f6b5f]">Loading...</div>
+			<Spinner />
 		{:else if projects.length === 0}
 			<div class="mt-8 rounded border border-[#2a2a28] p-8 text-center">
 				<p class="text-sm text-[#8c887e]">No projects yet.</p>

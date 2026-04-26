@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
     WorkspaceState,
 };
 use uuid::Uuid;
@@ -757,6 +757,8 @@ pub async fn project_settings(db: &D1Database, tenant: &str, project: &str, prin
                 starred_count: 0,
                 is_starred: false,
                 default_workspace: "main".to_string(),
+                navbar_items: vec![],
+                panels: vec![],
             })
         }
     };
@@ -785,10 +787,18 @@ pub async fn update_project_settings(
     principal: &TokenPrincipal,
     visibility: &str,
     default_workspace: &str,
+    navbar_items: Option<Vec<NavbarItem>>,
+    panels: Option<Vec<PanelItem>>,
 ) -> Result<ProjectSettings> {
     let mut settings = project_settings(db, tenant, project, principal).await?;
     settings.visibility = visibility.to_string();
     settings.default_workspace = default_workspace.to_string();
+    if let Some(items) = navbar_items {
+        settings.navbar_items = items;
+    }
+    if let Some(p) = panels {
+        settings.panels = p;
+    }
     let json = serde_json::to_string(&settings).map_err(|e| err(e.to_string()))?;
     db.prepare("UPDATE projects SET settings_json = ?1 WHERE tenant = ?2 AND project = ?3")
         .bind(&[js_str(&json), js_str(tenant), js_str(project)])?

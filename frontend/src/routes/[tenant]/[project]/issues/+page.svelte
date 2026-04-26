@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { listIssues, createIssue, isAbortError, type Issue } from '$lib/api';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -77,7 +78,7 @@
 	{/if}
 
 	{#if loading}
-		<div class="text-sm text-[#6f6b5f]">Loading...</div>
+		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else}

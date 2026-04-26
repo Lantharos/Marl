@@ -149,7 +149,7 @@ fn cors_layer() -> CorsLayer {
             HeaderValue::from_static("http://localhost:4173"),
             HeaderValue::from_static("http://127.0.0.1:4173"),
         ])
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS])
         .allow_headers([
             header::AUTHORIZATION,
             header::CONTENT_TYPE,
@@ -642,6 +642,8 @@ async fn update_settings(
             &principal,
             visibility,
             default_workspace,
+            body.navbar_items,
+            body.panels,
         ))
     }) {
         Ok(settings) => Json(settings).into_response(),

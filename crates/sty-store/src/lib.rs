@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
     WorkspaceState,
 };
 
@@ -138,6 +138,8 @@ pub trait Store {
         principal: &TokenPrincipal,
         visibility: &str,
         default_workspace: &str,
+        navbar_items: Option<Vec<NavbarItem>>,
+        panels: Option<Vec<PanelItem>>,
     ) -> Result<ProjectSettings>;
     fn star_project(
         &self,

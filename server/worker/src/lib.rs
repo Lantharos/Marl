@@ -479,7 +479,7 @@ async fn update_settings(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
     d1::ensure_project(&database, &tenant, &project, &principal).await?;
     let visibility = body.visibility.as_deref().unwrap_or("private");
     let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
-    let settings = d1::update_project_settings(&database, &tenant, &project, &principal, visibility, default_workspace).await?;
+    let settings = d1::update_project_settings(&database, &tenant, &project, &principal, visibility, default_workspace, body.navbar_items, body.panels).await?;
     Response::from_json(&settings)
 }
 

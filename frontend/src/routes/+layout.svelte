@@ -19,6 +19,7 @@
 		startDevLogin
 	} from '$lib/session';
 	import TopNav from '$lib/components/TopNav.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	let { children } = $props();
 
@@ -237,6 +238,6 @@
 	</div>
 {:else}
 	<div class="grid min-h-screen place-items-center bg-[#0f0f0d]">
-		<div class="text-sm text-[#6f6b5f]">Loading...</div>
+		<Spinner />
 	</div>
 {/if}
