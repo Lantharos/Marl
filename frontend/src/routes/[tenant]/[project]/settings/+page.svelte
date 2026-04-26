@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getProjectSettings, updateProjectSettings, type ProjectSettings } from '$lib/api';
+	import { getProjectSettings, updateProjectSettings, isAbortError, type ProjectSettings } from '$lib/api';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -10,20 +10,24 @@
 	let error = $state('');
 	let busy = $state(false);
 
-	async function load() {
+	async function load(signal: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			settings = await getProjectSettings(tenant, project);
+			settings = await getProjectSettings(tenant, project, { signal });
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project) load();
+		if (!tenant || !project) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => controller.abort();
 	});
 
 	async function handleVisibilityChange(next: 'public' | 'private') {

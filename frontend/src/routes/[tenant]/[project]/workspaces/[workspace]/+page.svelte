@@ -4,6 +4,7 @@
 	import {
 		getWorkspaceDetail,
 		getProjectFile,
+		isAbortError,
 		mergeWorkspace,
 		markWorkspaceReady,
 		type ProjectFile
@@ -20,27 +21,44 @@
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
+	let fileController: AbortController | null = null;
 
-	async function load() {
+	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			detail = await getWorkspaceDetail(tenant, project, workspaceName);
+			detail = await getWorkspaceDetail(tenant, project, workspaceName, signal ? { signal } : {});
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal?.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project && workspaceName) load();
+		if (!tenant || !project || !workspaceName) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => {
+			controller.abort();
+			fileController?.abort();
+		};
 	});
 
 	async function openFile(path: string) {
 		const entry = detail?.files.entries.find((e) => e.path === path);
 		if (entry?.entry_type !== 'blob') return;
-		file = await getProjectFile(tenant, project, path, workspaceName);
+		fileController?.abort();
+		const controller = new AbortController();
+		fileController = controller;
+		try {
+			file = await getProjectFile(tenant, project, path, workspaceName, undefined, { signal: controller.signal });
+		} catch (e) {
+			if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			if (fileController === controller) fileController = null;
+		}
 	}
 
 	async function handleReady() {

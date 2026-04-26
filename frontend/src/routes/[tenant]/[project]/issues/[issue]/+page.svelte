@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getIssue, createIssueComment, updateIssueStatus, type Issue, type Comment } from '$lib/api';
+	import { getIssue, createIssueComment, updateIssueStatus, isAbortError, type Issue, type Comment } from '$lib/api';
 	import CommentThread from '$lib/components/CommentThread.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
@@ -11,20 +11,24 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	async function load() {
+	async function load(signal: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			issue = await getIssue(tenant, project, issueId);
+			issue = await getIssue(tenant, project, issueId, { signal });
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project && issueId) load();
+		if (!tenant || !project || !issueId) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => controller.abort();
 	});
 
 	async function handleComment(body: string) {

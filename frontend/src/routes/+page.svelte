@@ -1,29 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { listProjects, getProjectOverview, type ProjectSummary, type ProjectOverview } from '$lib/api';
+	import { isAbortError, listProjects, getProjectOverview, type ProjectSummary, type ProjectOverview } from '$lib/api';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 
 	let projects = $state<ProjectSummary[]>([]);
 	let overviews = $state<Record<string, ProjectOverview>>({});
 	let loading = $state(true);
 
-	onMount(async () => {
-		projects = await listProjects();
-		const results = await Promise.all(
-			projects.slice(0, 5).map(async (p) => {
-				try {
-					const ov = await getProjectOverview(p.tenant, p.project);
-					return [`${p.tenant}/${p.project}`, ov] as const;
-				} catch {
-					return null;
-				}
-			})
-		);
-		for (const r of results) {
-			if (r) overviews[r[0]] = r[1];
-		}
-		loading = false;
+	onMount(() => {
+		const controller = new AbortController();
+		(async () => {
+			try {
+				const projectList = await listProjects({ signal: controller.signal });
+				projects = projectList;
+				const results = await Promise.all(
+					projectList.slice(0, 5).map(async (p) => {
+						try {
+							const ov = await getProjectOverview(p.tenant, p.project, { signal: controller.signal });
+							return [`${p.tenant}/${p.project}`, ov] as const;
+						} catch (error) {
+							if (isAbortError(error)) throw error;
+							return null;
+						}
+					})
+				);
+				overviews = Object.fromEntries(results.filter((r) => r !== null));
+				loading = false;
+			} catch (error) {
+				if (!isAbortError(error)) loading = false;
+			}
+		})();
+		return () => controller.abort();
 	});
 </script>
 

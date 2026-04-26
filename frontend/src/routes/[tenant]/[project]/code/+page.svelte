@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getProjectTree, getProjectFile, type ProjectTree, type ProjectFile } from '$lib/api';
+	import { getProjectTree, getProjectFile, isAbortError, type ProjectTree, type ProjectFile } from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
 
@@ -11,27 +11,44 @@
 	let file = $state<ProjectFile | null>(null);
 	let loading = $state(true);
 	let error = $state('');
+	let fileController: AbortController | null = null;
 
-	async function load() {
+	async function load(signal: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			tree = await getProjectTree(tenant, project, 'main');
+			tree = await getProjectTree(tenant, project, 'main', undefined, { signal });
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {
-			loading = false;
+			if (!signal.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project) load();
+		if (!tenant || !project) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => {
+			controller.abort();
+			fileController?.abort();
+		};
 	});
 
 	async function openFile(path: string) {
 		const entry = tree?.entries.find((e) => e.path === path);
 		if (entry?.entry_type !== 'blob') return;
-		file = await getProjectFile(tenant, project, path, 'main');
+		fileController?.abort();
+		const controller = new AbortController();
+		fileController = controller;
+		try {
+			file = await getProjectFile(tenant, project, path, 'main', undefined, { signal: controller.signal });
+		} catch (e) {
+			if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed to load file';
+		} finally {
+			if (fileController === controller) fileController = null;
+		}
 	}
 </script>
 

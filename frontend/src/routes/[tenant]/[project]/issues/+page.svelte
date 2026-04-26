@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { listIssues, createIssue, type Issue } from '$lib/api';
+	import { listIssues, createIssue, isAbortError, type Issue } from '$lib/api';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -14,21 +14,25 @@
 	let body = $state('');
 	let busy = $state(false);
 
-	async function load() {
+	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			const data = await listIssues(tenant, project);
+			const data = await listIssues(tenant, project, signal ? { signal } : {});
 			issues = data.issues;
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal?.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project) load();
+		if (!tenant || !project) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => controller.abort();
 	});
 
 	async function handleCreate() {

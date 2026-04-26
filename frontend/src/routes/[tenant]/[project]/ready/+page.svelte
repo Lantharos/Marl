@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { listReadyWorkspaces, mergeWorkspace, type WorkspaceStatus } from '$lib/api';
+	import { listReadyWorkspaces, mergeWorkspace, isAbortError, type WorkspaceStatus } from '$lib/api';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -10,20 +10,24 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	async function load() {
+	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			workspaces = await listReadyWorkspaces(tenant, project);
+			workspaces = await listReadyWorkspaces(tenant, project, signal ? { signal } : {});
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal?.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project) load();
+		if (!tenant || !project) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => controller.abort();
 	});
 
 	async function handleMerge(name: string) {

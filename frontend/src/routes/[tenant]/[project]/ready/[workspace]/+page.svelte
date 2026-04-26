@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getReadyWorkspaceDetail, mergeWorkspace, createIssueComment, getMergePreview, type Comment } from '$lib/api';
+	import { getReadyWorkspaceDetail, mergeWorkspace, createIssueComment, getMergePreview, isAbortError, type Comment } from '$lib/api';
 	import CommentThread from '$lib/components/CommentThread.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
@@ -13,25 +13,30 @@
 	let error = $state('');
 	let busy = $state(false);
 
-	async function load() {
+	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
+			const options = signal ? { signal } : {};
 			const [detail, files] = await Promise.all([
-				getReadyWorkspaceDetail(tenant, project, workspaceName),
-				getMergePreview(tenant, project, workspaceName)
+				getReadyWorkspaceDetail(tenant, project, workspaceName, options),
+				getMergePreview(tenant, project, workspaceName, options)
 			]);
 			ws = detail;
 			preview = files;
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal?.aborted) loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project && workspaceName) load();
+		if (!tenant || !project || !workspaceName) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => controller.abort();
 	});
 
 	async function handleMerge() {

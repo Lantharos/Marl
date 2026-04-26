@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getProjectOverview, listWorkspaceStatuses, getProjectReadme, type ProjectOverview, type WorkspaceStatus } from '$lib/api';
+	import { getProjectOverview, isAbortError, listWorkspaceStatuses, getProjectReadme, type ProjectOverview, type WorkspaceStatus } from '$lib/api';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 
@@ -20,20 +20,26 @@
 		return 'bg-[#d9a66c]';
 	}
 
-	onMount(async () => {
-		loading = true;
-		try {
-			const [ov, ws, rd] = await Promise.all([
-				getProjectOverview(tenant, project),
-				listWorkspaceStatuses(tenant, project),
-				getProjectReadme(tenant, project)
-			]);
-			overview = ov;
-			workspaces = ws;
-			readme = rd;
-		} finally {
-			loading = false;
-		}
+	onMount(() => {
+		const controller = new AbortController();
+		(async () => {
+			loading = true;
+			try {
+				const options = { signal: controller.signal };
+				const [ov, ws, rd] = await Promise.all([
+					getProjectOverview(tenant, project, options),
+					listWorkspaceStatuses(tenant, project, options),
+					getProjectReadme(tenant, project, options)
+				]);
+				overview = ov;
+				workspaces = ws;
+				readme = rd;
+				loading = false;
+			} catch (error) {
+				if (!isAbortError(error)) loading = false;
+			}
+		})();
+		return () => controller.abort();
 	});
 </script>
 

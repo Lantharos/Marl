@@ -130,6 +130,14 @@ export interface ProjectOverview {
 	default_workspace: string;
 }
 
+export interface ApiOptions {
+	signal?: AbortSignal;
+}
+
+export function isAbortError(error: unknown) {
+	return error instanceof Error && error.name === 'AbortError';
+}
+
 async function authedFetch(path: string, init: RequestInit = {}) {
 	const token = await getStyToken();
 	if (!token) {
@@ -162,13 +170,14 @@ export async function getMe() {
 	return (await response.json()) as { user: string; tenants: TenantSummary[] };
 }
 
-export async function listProjects() {
+export async function listProjects(options: ApiOptions = {}) {
 	const token = await getStyToken();
 	if (!token) {
 		return [];
 	}
 	const response = await fetch(`${apiBase()}/v1/projects`, {
-		headers: { authorization: `Bearer ${token}` }
+		headers: { authorization: `Bearer ${token}` },
+		signal: options.signal
 	});
 	if (!response.ok) {
 		throw new Error(await response.text());
@@ -177,8 +186,8 @@ export async function listProjects() {
 	return body.projects;
 }
 
-export async function listTenantProjects(tenant: string): Promise<ProjectSummary[]> {
-	const all = await listProjects();
+export async function listTenantProjects(tenant: string, options: ApiOptions = {}): Promise<ProjectSummary[]> {
+	const all = await listProjects(options);
 	return all.filter((p) => p.tenant === tenant);
 }
 
@@ -200,55 +209,56 @@ export async function createProject(slug: string) {
 	});
 }
 
-export async function getProject(tenant: string, project: string) {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}`);
+export async function getProject(tenant: string, project: string, options: ApiOptions = {}) {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}`, { signal: options.signal });
 	return (await response.json()) as ProjectDetail;
 }
 
-export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string) {
+export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string, options: ApiOptions = {}) {
 	let url = `/v1/tenants/${tenant}/projects/${project}/tree?workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
-	const response = await publicFetch(url);
+	const response = await publicFetch(url, { signal: options.signal });
 	return (await response.json()) as ProjectTree;
 }
 
-export async function getProjectFile(tenant: string, project: string, path: string, workspace = 'main', snapshot?: string) {
+export async function getProjectFile(tenant: string, project: string, path: string, workspace = 'main', snapshot?: string, options: ApiOptions = {}) {
 	let url = `/v1/tenants/${tenant}/projects/${project}/files/${encodeURIComponent(path)}?workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
-	const response = await publicFetch(url);
+	const response = await publicFetch(url, { signal: options.signal });
 	return (await response.json()) as ProjectFile;
 }
 
-export async function getHistoryEntry(tenant: string, project: string, entryId: string): Promise<HistoryEntry> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`);
+export async function getHistoryEntry(tenant: string, project: string, entryId: string, options: ApiOptions = {}): Promise<HistoryEntry> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`, { signal: options.signal });
 	return (await response.json()) as HistoryEntry;
 }
 
-export async function downloadObjects(tenant: string, project: string, ids: string[]): Promise<{ id: string; kind: string; bytes_base64: string }[]> {
+export async function downloadObjects(tenant: string, project: string, ids: string[], options: ApiOptions = {}): Promise<{ id: string; kind: string; bytes_base64: string }[]> {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/objects/download`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ ids })
+		body: JSON.stringify({ ids }),
+		signal: options.signal
 	});
 	const data = (await response.json()) as { objects: { id: string; kind: string; bytes_base64: string }[] };
 	return data.objects;
 }
 
-export async function listIssues(tenant: string, project: string) {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues`);
+export async function listIssues(tenant: string, project: string, options: ApiOptions = {}) {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues`, { signal: options.signal });
 	return (await response.json()) as { issues: Issue[] };
 }
 
-export async function getIssue(tenant: string, project: string, issueId: string): Promise<Issue & { comments: Comment[] }> {
-	const issues = await listIssues(tenant, project);
+export async function getIssue(tenant: string, project: string, issueId: string, options: ApiOptions = {}): Promise<Issue & { comments: Comment[] }> {
+	const issues = await listIssues(tenant, project, options);
 	const issue = issues.issues.find((i) => i.id === issueId || String(i.number) === issueId);
 	if (!issue) throw new Error('Issue not found');
-	const comments = await listIssueComments(tenant, project, issue.id);
+	const comments = await listIssueComments(tenant, project, issue.id, options);
 	return { ...issue, comments };
 }
 
-export async function listIssueComments(tenant: string, project: string, issueId: string): Promise<Comment[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`);
+export async function listIssueComments(tenant: string, project: string, issueId: string, options: ApiOptions = {}): Promise<Comment[]> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`, { signal: options.signal });
 	const data = (await response.json()) as { comments: Comment[] };
 	return data.comments;
 }
@@ -280,29 +290,29 @@ export async function updateIssueStatus(tenant: string, project: string, issueId
 	return (await response.json()) as Issue;
 }
 
-export async function listWorkspaceStatuses(tenant: string, project: string): Promise<WorkspaceStatus[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces`);
+export async function listWorkspaceStatuses(tenant: string, project: string, options: ApiOptions = {}): Promise<WorkspaceStatus[]> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces`, { signal: options.signal });
 	const data = (await response.json()) as { workspaces: WorkspaceStatus[] };
 	return data.workspaces;
 }
 
-export async function getWorkspaceDetail(tenant: string, project: string, workspace: string): Promise<WorkspaceStatus & { history: HistoryEntry[]; files: ProjectTree }> {
+export async function getWorkspaceDetail(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<WorkspaceStatus & { history: HistoryEntry[]; files: ProjectTree }> {
 	const [statuses, tree, history] = await Promise.all([
-		listWorkspaceStatuses(tenant, project),
-		getProjectTree(tenant, project, workspace),
-		getWorkspaceHistory(tenant, project, workspace)
+		listWorkspaceStatuses(tenant, project, options),
+		getProjectTree(tenant, project, workspace, undefined, options),
+		getWorkspaceHistory(tenant, project, workspace, options)
 	]);
 	const status = statuses.find((s) => s.name === workspace);
 	return { ...(status ?? statuses[0]), history, files: tree };
 }
 
-export async function listReadyWorkspaces(tenant: string, project: string): Promise<WorkspaceStatus[]> {
-	const workspaces = await listWorkspaceStatuses(tenant, project);
+export async function listReadyWorkspaces(tenant: string, project: string, options: ApiOptions = {}): Promise<WorkspaceStatus[]> {
+	const workspaces = await listWorkspaceStatuses(tenant, project, options);
 	return workspaces.filter((w) => w.is_ready && w.name !== 'main');
 }
 
-export async function getReadyWorkspaceDetail(tenant: string, project: string, workspace: string): Promise<WorkspaceStatus & { comments: Comment[] }> {
-	const workspaces = await listReadyWorkspaces(tenant, project);
+export async function getReadyWorkspaceDetail(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<WorkspaceStatus & { comments: Comment[] }> {
+	const workspaces = await listReadyWorkspaces(tenant, project, options);
 	const ws = workspaces.find((w) => w.name === workspace);
 	if (!ws) throw new Error('Workspace not found');
 	return { ...ws, comments: [] };
@@ -314,8 +324,8 @@ export async function mergeWorkspace(tenant: string, project: string, workspace:
 	});
 }
 
-export async function getMergePreview(tenant: string, project: string, workspace: string): Promise<{ path: string; change_type: string }[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/merge-preview`);
+export async function getMergePreview(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<{ path: string; change_type: string }[]> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/merge-preview`, { signal: options.signal });
 	const data = (await response.json()) as { files: { path: string; change_type: string }[] };
 	return data.files;
 }
@@ -326,25 +336,24 @@ export async function markWorkspaceReady(tenant: string, project: string, worksp
 	});
 }
 
-export async function getWorkspaceHistory(tenant: string, project: string, workspace: string): Promise<HistoryEntry[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/history`);
+export async function getWorkspaceHistory(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<HistoryEntry[]> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/history`, { signal: options.signal });
 	const data = (await response.json()) as { entries: HistoryEntry[] };
 	return data.entries;
 }
 
-export async function getProjectHistory(tenant: string, project: string): Promise<HistoryEntry[]> {
-	const workspaces = await listWorkspaceStatuses(tenant, project);
-	const all = await Promise.all(workspaces.map((w) => getWorkspaceHistory(tenant, project, w.name)));
+export async function getProjectHistory(tenant: string, project: string, options: ApiOptions = {}): Promise<HistoryEntry[]> {
+	const workspaces = await listWorkspaceStatuses(tenant, project, options);
+	const all = await Promise.all(workspaces.map((w) => getWorkspaceHistory(tenant, project, w.name, options)));
 	return all.flat().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
-export async function getHistoryEntryDetail(tenant: string, project: string, entryId: string): Promise<HistoryEntry & { parent_id: string | null; files: { path: string; change_type: string; old_id: string | null; new_id: string | null }[] }> {
-	const entry = await getHistoryEntry(tenant, project, entryId);
+export async function getHistoryEntryDetail(tenant: string, project: string, entryId: string, options: ApiOptions = {}): Promise<HistoryEntry & { parent_id: string | null; files: { path: string; change_type: string; old_id: string | null; new_id: string | null }[] }> {
+	const entry = await getHistoryEntry(tenant, project, entryId, options);
 	if (!entry.snapshot_id) {
 		return { ...entry, parent_id: null, files: [] };
 	}
-	// Fetch snapshot to get parent
-	const objects = await downloadObjects(tenant, project, [entry.snapshot_id]);
+	const objects = await downloadObjects(tenant, project, [entry.snapshot_id], options);
 	if (objects.length === 0) {
 		return { ...entry, parent_id: null, files: [] };
 	}
@@ -352,8 +361,11 @@ export async function getHistoryEntryDetail(tenant: string, project: string, ent
 	const parentId = snapshot.parents?.[0] ?? null;
 
 	const [currentTree, parentTree] = await Promise.all([
-		getProjectTree(tenant, project, entry.workspace, entry.snapshot_id),
-		parentId ? getProjectTree(tenant, project, entry.workspace, parentId).catch(() => null) : null
+		getProjectTree(tenant, project, entry.workspace, entry.snapshot_id, options),
+		parentId ? getProjectTree(tenant, project, entry.workspace, parentId, options).catch((error) => {
+			if (isAbortError(error)) throw error;
+			return null;
+		}) : null
 	]);
 
 	const currentMap = new Map(currentTree.entries.filter((e) => e.entry_type === 'blob').map((e) => [e.path, e.id]));
@@ -379,27 +391,34 @@ export async function getHistoryEntryDetail(tenant: string, project: string, ent
 	return { ...entry, parent_id: parentId, files };
 }
 
-export async function getProjectReadme(tenant: string, project: string): Promise<string | null> {
+export async function getProjectReadme(tenant: string, project: string, options: ApiOptions = {}): Promise<string | null> {
 	try {
-		const tree = await getProjectTree(tenant, project, 'main');
+		const tree = await getProjectTree(tenant, project, 'main', undefined, options);
 		const readmeEntry = tree.entries.find(
 			(e) => e.entry_type === 'blob' && e.name.toLowerCase() === 'readme.md'
 		);
 		if (!readmeEntry) return null;
-		const file = await getProjectFile(tenant, project, readmeEntry.path, 'main');
+		const file = await getProjectFile(tenant, project, readmeEntry.path, 'main', undefined, options);
 		return file.text;
-	} catch {
+	} catch (error) {
+		if (isAbortError(error)) throw error;
 		return null;
 	}
 }
 
-export async function getProjectOverview(tenant: string, project: string): Promise<ProjectOverview> {
+export async function getProjectOverview(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectOverview> {
 	const [detail, issues, workspaces, settings, history] = await Promise.all([
-		getProject(tenant, project),
-		listIssues(tenant, project),
-		listWorkspaceStatuses(tenant, project),
-		getProjectSettings(tenant, project).catch(() => null),
-		getProjectHistory(tenant, project).catch(() => [])
+		getProject(tenant, project, options),
+		listIssues(tenant, project, options),
+		listWorkspaceStatuses(tenant, project, options),
+		getProjectSettings(tenant, project, options).catch((error) => {
+			if (isAbortError(error)) throw error;
+			return null;
+		}),
+		getProjectHistory(tenant, project, options).catch((error) => {
+			if (isAbortError(error)) throw error;
+			return [];
+		})
 	]);
 	const recentActivity: Activity[] = history.slice(0, 20).map((h) => ({
 		id: h.id,
@@ -422,8 +441,8 @@ export async function getProjectOverview(tenant: string, project: string): Promi
 	};
 }
 
-export async function getProjectSettings(tenant: string, project: string): Promise<ProjectSettings> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/settings`);
+export async function getProjectSettings(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectSettings> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/settings`, { signal: options.signal });
 	return (await response.json()) as ProjectSettings;
 }
 
@@ -451,5 +470,3 @@ export async function setParentWorkspace(tenant: string, project: string, worksp
 		body: JSON.stringify({ parent_workspace })
 	});
 }
-
-

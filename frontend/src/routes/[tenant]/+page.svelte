@@ -2,17 +2,25 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { listTenantProjects, type ProjectSummary } from '$lib/api';
+	import { isAbortError, listTenantProjects, type ProjectSummary } from '$lib/api';
 
 	const tenant = $derived($page.params.tenant as string);
 
 	let projects = $state<ProjectSummary[]>([]);
 	let loading = $state(true);
 
-	onMount(async () => {
-		loading = true;
-		projects = await listTenantProjects(tenant);
-		loading = false;
+	onMount(() => {
+		const controller = new AbortController();
+		(async () => {
+			loading = true;
+			try {
+				projects = await listTenantProjects(tenant, { signal: controller.signal });
+				loading = false;
+			} catch (error) {
+				if (!isAbortError(error)) loading = false;
+			}
+		})();
+		return () => controller.abort();
 	});
 </script>
 

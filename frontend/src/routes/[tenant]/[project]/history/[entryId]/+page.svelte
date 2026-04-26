@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getHistoryEntryDetail, getProjectFile, type HistoryEntry } from '$lib/api';
+	import { getHistoryEntryDetail, getProjectFile, isAbortError, type HistoryEntry } from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
 
@@ -15,23 +15,25 @@
 	let selectedOldText = $state<string | null>(null);
 	let selectedNewText = $state<string | null>(null);
 	let fileLoading = $state(false);
+	let fileController: AbortController | null = null;
 
-	async function load() {
+	async function load(signal: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			detail = await getHistoryEntryDetail(tenant, project, entryId);
+			detail = await getHistoryEntryDetail(tenant, project, entryId, { signal });
 			if (detail.files.length > 0) {
 				selectedPath = detail.files[0].path;
 			}
 		} catch (e) {
+			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			loading = false;
+			if (!signal.aborted) loading = false;
 		}
 	}
 
-	async function loadSelectedFile(path: string) {
+	async function loadSelectedFile(path: string, signal: AbortSignal) {
 		if (!detail) return;
 		fileLoading = true;
 		selectedOldText = null;
@@ -44,33 +46,50 @@
 		try {
 			if (file.change_type !== 'added' && detail.parent_id) {
 				try {
-					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.parent_id);
+					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.parent_id, { signal });
 					selectedOldText = f.text;
-				} catch {
+				} catch (error) {
+					if (isAbortError(error)) throw error;
 					selectedOldText = null;
 				}
 			}
 			if (file.change_type !== 'deleted' && detail.snapshot_id) {
 				try {
-					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.snapshot_id);
+					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.snapshot_id, { signal });
 					selectedNewText = f.text;
-				} catch {
+				} catch (error) {
+					if (isAbortError(error)) throw error;
 					selectedNewText = null;
 				}
 			}
 		} finally {
-			fileLoading = false;
+			if (!signal.aborted) fileLoading = false;
 		}
 	}
 
 	$effect(() => {
-		if (tenant && project && entryId) load();
+		if (!tenant || !project || !entryId) return;
+		const controller = new AbortController();
+		load(controller.signal);
+		return () => {
+			controller.abort();
+			fileController?.abort();
+		};
 	});
 
 	$effect(() => {
-		if (selectedPath && detail) {
-			loadSelectedFile(selectedPath);
-		}
+		if (!selectedPath || !detail) return;
+		fileController?.abort();
+		const controller = new AbortController();
+		fileController = controller;
+		loadSelectedFile(selectedPath, controller.signal)
+			.catch((e) => {
+				if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed';
+			})
+			.finally(() => {
+				if (fileController === controller) fileController = null;
+			});
+		return () => controller.abort();
 	});
 
 	const treeEntries = $derived(detail?.files.map((f) => ({ path: f.path, name: f.path.split('/').pop() ?? f.path, id: f.new_id ?? f.old_id ?? '', entry_type: 'blob' as const })) ?? []);
