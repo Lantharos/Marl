@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getProjectOverview, isAbortError, listWorkspaceStatuses, getProjectReadme, type ProjectOverview, type WorkspaceStatus } from '$lib/api';
+	import { getProjectOverview, listWorkspaceStatuses, getProjectReadme, type ProjectOverview, type WorkspaceStatus } from '$lib/api';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 
@@ -20,26 +19,27 @@
 		return 'bg-[#d9a66c]';
 	}
 
-	onMount(() => {
-		const controller = new AbortController();
+	$effect(() => {
+		const _tenant = tenant;
+		const _project = project;
+		if (!_tenant || !_project) return;
+		loading = true;
 		(async () => {
-			loading = true;
 			try {
-				const options = { signal: controller.signal };
 				const [ov, ws, rd] = await Promise.all([
-					getProjectOverview(tenant, project, options),
-					listWorkspaceStatuses(tenant, project, options),
-					getProjectReadme(tenant, project, options)
+					getProjectOverview(_tenant, _project),
+					listWorkspaceStatuses(_tenant, _project),
+					getProjectReadme(_tenant, _project)
 				]);
 				overview = ov;
 				workspaces = ws;
 				readme = rd;
+			} catch (e) {
+				// ignore
+			} finally {
 				loading = false;
-			} catch (error) {
-				if (!isAbortError(error)) loading = false;
 			}
 		})();
-		return () => controller.abort();
 	});
 </script>
 
