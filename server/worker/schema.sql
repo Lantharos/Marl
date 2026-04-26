@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS comments (
     body TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS object_index (
+    tenant TEXT NOT NULL,
+    project TEXT NOT NULL,
+    id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (tenant, project, id)
+);
 CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
 CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);

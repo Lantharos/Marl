@@ -343,9 +343,9 @@ export async function getWorkspaceHistory(tenant: string, project: string, works
 }
 
 export async function getProjectHistory(tenant: string, project: string, options: ApiOptions = {}): Promise<HistoryEntry[]> {
-	const workspaces = await listWorkspaceStatuses(tenant, project, options);
-	const all = await Promise.all(workspaces.map((w) => getWorkspaceHistory(tenant, project, w.name, options)));
-	return all.flat().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history`, { signal: options.signal });
+	const data = (await response.json()) as { entries: HistoryEntry[] };
+	return data.entries;
 }
 
 export async function getHistoryEntryDetail(tenant: string, project: string, entryId: string, options: ApiOptions = {}): Promise<HistoryEntry & { parent_id: string | null; files: { path: string; change_type: string; old_id: string | null; new_id: string | null }[] }> {
@@ -393,13 +393,15 @@ export async function getHistoryEntryDetail(tenant: string, project: string, ent
 
 export async function getProjectReadme(tenant: string, project: string, options: ApiOptions = {}): Promise<string | null> {
 	try {
-		const tree = await getProjectTree(tenant, project, 'main', undefined, options);
-		const readmeEntry = tree.entries.find(
-			(e) => e.entry_type === 'blob' && e.name.toLowerCase() === 'readme.md'
-		);
-		if (!readmeEntry) return null;
-		const file = await getProjectFile(tenant, project, readmeEntry.path, 'main', undefined, options);
-		return file.text;
+		for (const path of ['README.md', 'Readme.md', 'readme.md']) {
+			try {
+				const file = await getProjectFile(tenant, project, path, 'main', undefined, options);
+				if (file.text !== null) return file.text;
+			} catch (error) {
+				if (isAbortError(error)) throw error;
+			}
+		}
+		return null;
 	} catch (error) {
 		if (isAbortError(error)) throw error;
 		return null;

@@ -2,8 +2,8 @@ use std::path::Path;
 
 use anyhow::Result;
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary,
-    TokenPrincipal, WorkspaceState,
+    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
+    WorkspaceState,
 };
 
 /// Shared store interface for both local (SQLite) and worker (D1) backends.
@@ -13,12 +13,8 @@ pub trait Store {
     fn principal_for_token(&self, token: &str) -> Result<Option<TokenPrincipal>>;
 
     // ── Tenants / Projects ─────────────────────────────────
-    fn ensure_project(
-        &self,
-        tenant: &str,
-        project: &str,
-        principal: &TokenPrincipal,
-    ) -> Result<()>;
+    fn ensure_project(&self, tenant: &str, project: &str, principal: &TokenPrincipal)
+    -> Result<()>;
     fn get_project(&self, tenant: &str, project: &str) -> Result<Option<ProjectSummary>>;
     fn projects(&self, principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>>;
     fn tenants(&self, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>>;
@@ -80,6 +76,7 @@ pub trait Store {
         project: &str,
         workspace: &str,
     ) -> Result<Vec<HistoryEntry>>;
+    fn project_history(&self, tenant: &str, project: &str) -> Result<Vec<HistoryEntry>>;
     fn log_history(
         &self,
         tenant: &str,
@@ -128,7 +125,12 @@ pub trait Store {
 
     // ── Settings / Stars ───────────────────────────────────
     fn project_visibility(&self, tenant: &str, project: &str) -> Result<Option<String>>;
-    fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings>;
+    fn project_settings(
+        &self,
+        tenant: &str,
+        project: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<ProjectSettings>;
     fn update_project_settings(
         &self,
         tenant: &str,
@@ -149,12 +151,7 @@ pub trait Store {
         project: &str,
         principal: &TokenPrincipal,
     ) -> Result<(bool, u64)>;
-    fn is_starred(
-        &self,
-        tenant: &str,
-        project: &str,
-        principal: &TokenPrincipal,
-    ) -> Result<bool>;
+    fn is_starred(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<bool>;
 
     // ── Paths ──────────────────────────────────────────────
     fn root(&self) -> &Path;

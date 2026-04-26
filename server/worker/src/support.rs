@@ -69,11 +69,6 @@ pub fn required_usize_header(req: &Request, name: &str) -> Result<usize> {
         .map_err(|_| Error::RustError(format!("invalid {name} header")))
 }
 
-pub async fn put_text(bucket: &Bucket, key: &str, value: &str) -> Result<()> {
-    bucket.put(key, value.to_string()).execute().await?;
-    Ok(())
-}
-
 pub async fn put_bytes(bucket: &Bucket, key: &str, value: Vec<u8>) -> Result<()> {
     bucket.put(key, value).execute().await?;
     Ok(())

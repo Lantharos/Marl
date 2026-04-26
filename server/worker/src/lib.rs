@@ -20,7 +20,7 @@ mod support;
 use auth::{dev_tokens_enabled, verify_ave_id_token};
 use support::{
     apply_cors, bucket, db, decode_base64, json_error, object_chunk_key, object_key,
-    param, preflight_response, project_params, put_bytes, put_text, required_header,
+    param, preflight_response, project_params, put_bytes, required_header,
     required_usize_header, r2_bytes, validate_object, validate_object_metadata,
 };
 
@@ -49,6 +49,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", create_comment)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", get_head)
         .put_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", update_head)
+        .get_async("/v1/tenants/:tenant/projects/:project/history", project_history)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", workspace_history)
         .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history", log_history)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge-preview", merge_preview)
@@ -234,9 +235,7 @@ async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
     let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();
-    let mut entries = Vec::new();
-    walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
-    let Some(entry) = entries.iter().find(|e| e.path == path) else {
+    let Some(entry) = resolve_tree_path(&store, &tenant, &project, &root_tree, &path).await? else {
         return json_error(404, "file not found");
     };
     if entry.entry_type != "blob" {
@@ -335,6 +334,15 @@ async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Result<Respon
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
     let entries = d1::workspace_history(&database, &tenant, &project, &workspace).await?;
+    Response::from_json(&HistoryResponse { entries })
+}
+
+async fn project_history(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = optional_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx.env)?;
+    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    let entries = d1::project_history(&database, &tenant, &project).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -502,6 +510,9 @@ async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let store = bucket(&ctx.env)?;
     let mut missing = Vec::new();
     for id in body.ids {
+        if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
+            continue;
+        }
         let key = object_key(&tenant, &project, &id);
         if store.head(key).await?.is_none() {
             missing.push(id);
@@ -519,9 +530,13 @@ async fn upload(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let store = bucket(&ctx.env)?;
     for object in body.objects {
         validate_object(&object)?;
+        if d1::object_kind(&database, &tenant, &project, &object.id).await?.is_some() {
+            continue;
+        }
         let bytes = decode_base64(&object.bytes_base64)?;
+        let size = bytes.len();
         put_bytes(&store, &object_key(&tenant, &project, &object.id), bytes).await?;
-        put_text(&store, &format!("{}.kind", object_key(&tenant, &project, &object.id)), &object.kind).await?;
+        d1::record_object(&database, &tenant, &project, &object.id, &object.kind, size).await?;
     }
     Response::from_json(&OkResponse { ok: true })
 }
@@ -543,7 +558,7 @@ async fn upload_chunk(mut req: Request, ctx: RouteContext<()>) -> Result<Respons
         return json_error(400, "invalid chunk metadata");
     }
     let store = bucket(&ctx.env)?;
-    if store.head(object_key(&tenant, &project, &id)).await?.is_some() {
+    if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
     }
     let bytes = req.bytes().await?;
@@ -564,7 +579,7 @@ async fn complete_chunked_upload(mut req: Request, ctx: RouteContext<()>) -> Res
     }
     let store = bucket(&ctx.env)?;
     let key = object_key(&tenant, &project, &id);
-    if store.head(key.clone()).await?.is_some() {
+    if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
     }
     let mut bytes = Vec::with_capacity(body.total_size);
@@ -586,7 +601,7 @@ async fn complete_chunked_upload(mut req: Request, ctx: RouteContext<()>) -> Res
         return json_error(400, "object id does not match SHA-256 digest");
     }
     put_bytes(&store, &key, bytes).await?;
-    put_text(&store, &format!("{key}.kind"), &body.kind).await?;
+    d1::record_object(&database, &tenant, &project, &id, &body.kind, body.total_size).await?;
     for chunk_index in 0..body.chunk_count {
         store.delete(object_chunk_key(&tenant, &project, &id, chunk_index)).await?;
     }
@@ -610,15 +625,23 @@ async fn download(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
             continue;
         };
         let bytes = body.bytes().await?;
-        let Some(kind_object) = store.get(format!("{key}.kind")).execute().await? else {
-            continue;
-        };
-        let Some(kind_body) = kind_object.body() else {
-            continue;
+        let kind = match d1::object_kind(&database, &tenant, &project, &id).await? {
+            Some(kind) => kind,
+            None => {
+                let Some(kind_object) = store.get(format!("{key}.kind")).execute().await? else {
+                    continue;
+                };
+                let Some(kind_body) = kind_object.body() else {
+                    continue;
+                };
+                let kind = kind_body.text().await?;
+                d1::record_object(&database, &tenant, &project, &id, &kind, bytes.len()).await?;
+                kind
+            }
         };
         objects.push(RemoteObject {
             id,
-            kind: kind_body.text().await?,
+            kind,
             bytes_base64: BASE64.encode(bytes),
         });
     }
@@ -756,4 +779,53 @@ async fn walk_tree(
     }
     output.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(())
+}
+
+async fn resolve_tree_path(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    root_tree: &str,
+    path: &str,
+) -> Result<Option<TreeEntryInfo>> {
+    let parts = path
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
+        return Ok(None);
+    }
+    let mut tree_id = root_tree.to_string();
+    let mut prefix = String::new();
+    for (index, part) in parts.iter().enumerate() {
+        let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
+        let tree: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| Error::RustError(e.to_string()))?;
+        let Some(entries) = tree["entries"].as_array() else {
+            return Ok(None);
+        };
+        let Some(entry) = entries.iter().find(|entry| entry["name"].as_str() == Some(*part)) else {
+            return Ok(None);
+        };
+        let id = entry["id"].as_str().unwrap_or_default().to_string();
+        let entry_type = entry["entry_type"].as_str().unwrap_or_default().to_string();
+        let current_path = if prefix.is_empty() {
+            (*part).to_string()
+        } else {
+            format!("{prefix}/{part}")
+        };
+        if index == parts.len() - 1 {
+            return Ok(Some(TreeEntryInfo {
+                path: current_path,
+                name: (*part).to_string(),
+                id,
+                entry_type,
+            }));
+        }
+        if entry_type != "tree" {
+            return Ok(None);
+        }
+        prefix = current_path;
+        tree_id = id;
+    }
+    Ok(None)
 }

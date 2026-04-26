@@ -8,8 +8,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary,
-    TokenPrincipal, WorkspaceState, validate_segment,
+    Comment, HistoryEntry, Issue, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
+    WorkspaceState, validate_segment,
 };
 
 use crate::Store;
@@ -24,7 +24,11 @@ impl SqliteStore {
     pub fn new(root: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&root)?;
         let db_path = root.join("sty.db");
-        let store = Self { db_path: db_path.clone(), root, head_lock: Mutex::new(()) };
+        let store = Self {
+            db_path: db_path.clone(),
+            root,
+            head_lock: Mutex::new(()),
+        };
         let conn = rusqlite::Connection::open(&db_path)?;
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         store.init_schema(&conn)?;
@@ -114,23 +118,29 @@ impl SqliteStore {
             create index if not exists idx_history_workspace on history(tenant, project, workspace);
             create index if not exists idx_issues_project on issues(tenant, project);
             create index if not exists idx_comments_issue on comments(tenant, project, issue_id);
-            "
+            ",
         )?;
         // Migration: add snapshot_id to existing history tables
-        let has_snapshot_id: bool = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name = 'snapshot_id'",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0) > 0;
+        let has_snapshot_id: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name = 'snapshot_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0)
+            > 0;
         if !has_snapshot_id {
             conn.execute("ALTER TABLE history ADD COLUMN snapshot_id text", [])?;
         }
         // Migration: add comments table
-        let has_comments: bool = conn.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'comments'",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0) > 0;
+        let has_comments: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'comments'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0)
+            > 0;
         if !has_comments {
             conn.execute(
                 "create table comments (
@@ -144,7 +154,10 @@ impl SqliteStore {
                 )",
                 [],
             )?;
-            conn.execute("create index idx_comments_issue on comments(tenant, project, issue_id)", [])?;
+            conn.execute(
+                "create index idx_comments_issue on comments(tenant, project, issue_id)",
+                [],
+            )?;
         }
         Ok(())
     }
@@ -166,7 +179,12 @@ impl SqliteStore {
     fn project_path(&self, tenant: &str, project: &str) -> Result<PathBuf> {
         validate_segment(tenant)?;
         validate_segment(project)?;
-        let path = self.root.join("tenants").join(tenant).join("projects").join(project);
+        let path = self
+            .root
+            .join("tenants")
+            .join(tenant)
+            .join("projects")
+            .join(project);
         std::fs::create_dir_all(&path)?;
         Ok(path)
     }
@@ -204,11 +222,13 @@ impl SqliteStore {
 
     fn star_count(&self, tenant: &str, project: &str) -> Result<u64> {
         let conn = self.conn()?;
-        let count: i64 = conn.query_row(
-            "select count(*) from stars where tenant = ?1 and project = ?2",
-            rusqlite::params![tenant, project],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let count: i64 = conn
+            .query_row(
+                "select count(*) from stars where tenant = ?1 and project = ?2",
+                rusqlite::params![tenant, project],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
         Ok(count as u64)
     }
 }
@@ -230,11 +250,13 @@ impl Store for SqliteStore {
     fn principal_for_token(&self, token: &str) -> Result<Option<TokenPrincipal>> {
         let hash = self.token_hash(token);
         let conn = self.conn()?;
-        let user: Option<String> = conn.query_row(
-            "select user from tokens where token_hash = ?1",
-            rusqlite::params![hash],
-            |row| row.get(0),
-        ).optional()?;
+        let user: Option<String> = conn
+            .query_row(
+                "select user from tokens where token_hash = ?1",
+                rusqlite::params![hash],
+                |row| row.get(0),
+            )
+            .optional()?;
         Ok(user.map(|u| TokenPrincipal { user: u }))
     }
 
@@ -258,11 +280,13 @@ impl Store for SqliteStore {
             rusqlite::params![tenant, principal.user, members],
         )?;
 
-        let existing_owner: Option<String> = tx.query_row(
-            "select owner from projects where tenant = ?1 and project = ?2",
-            rusqlite::params![tenant, project],
-            |row| row.get(0),
-        ).optional()?;
+        let existing_owner: Option<String> = tx
+            .query_row(
+                "select owner from projects where tenant = ?1 and project = ?2",
+                rusqlite::params![tenant, project],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         if existing_owner.is_none() {
             let settings = serde_json::to_string(&ProjectSettings {
@@ -284,26 +308,24 @@ impl Store for SqliteStore {
     fn get_project(&self, tenant: &str, project: &str) -> Result<Option<ProjectSummary>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "select tenant, project, owner from projects where tenant = ?1 and project = ?2"
+            "select tenant, project, owner from projects where tenant = ?1 and project = ?2",
         )?;
-        let row = stmt.query_row(
-            rusqlite::params![tenant, project],
-            |row| {
+        let row = stmt
+            .query_row(rusqlite::params![tenant, project], |row| {
                 Ok(ProjectSummary {
                     tenant: row.get(0)?,
                     project: row.get(1)?,
                     owner: row.get(2)?,
                 })
-            },
-        ).optional()?;
+            })
+            .optional()?;
         Ok(row)
     }
 
     fn projects(&self, _principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            "select tenant, project, owner from projects order by tenant, project"
-        )?;
+        let mut stmt =
+            conn.prepare("select tenant, project, owner from projects order by tenant, project")?;
         let rows = stmt.query_map([], |row| {
             Ok(ProjectSummary {
                 tenant: row.get(0)?,
@@ -331,7 +353,7 @@ impl Store for SqliteStore {
                     kind: row.get(1)?,
                     owner: row.get(2)?,
                 })
-            }
+            },
         )?;
         let mut tenants = Vec::new();
         for row in rows {
@@ -361,10 +383,11 @@ impl Store for SqliteStore {
         let mut stmt = conn.prepare(
             "select head from workspace_heads where tenant = ?1 and project = ?2 and workspace = ?3"
         )?;
-        let head: Option<Option<String>> = stmt.query_row(
-            rusqlite::params![tenant, project, workspace],
-            |row| row.get(0),
-        ).optional()?;
+        let head: Option<Option<String>> = stmt
+            .query_row(rusqlite::params![tenant, project, workspace], |row| {
+                row.get(0)
+            })
+            .optional()?;
         Ok(head.flatten())
     }
 
@@ -380,8 +403,12 @@ impl Store for SqliteStore {
             (_, None) => "remote_missing",
             (Some(local), Some(remote)) if local == remote => "same",
             (None, Some(_)) => "remote_ahead",
-            (Some(local), Some(remote)) if self.is_ancestor(tenant, project, remote, local)? => "local_ahead",
-            (Some(local), Some(remote)) if self.is_ancestor(tenant, project, local, remote)? => "remote_ahead",
+            (Some(local), Some(remote)) if self.is_ancestor(tenant, project, remote, local)? => {
+                "local_ahead"
+            }
+            (Some(local), Some(remote)) if self.is_ancestor(tenant, project, local, remote)? => {
+                "remote_ahead"
+            }
             _ => "diverged",
         };
         Ok((remote_head, relation.to_string()))
@@ -395,8 +422,17 @@ impl Store for SqliteStore {
         expected_head: Option<&str>,
         new_head: &str,
     ) -> Result<bool> {
-        let _guard = self.head_lock.lock().map_err(|_| anyhow!("head lock poisoned"))?;
-        self.ensure_project(tenant, project, &TokenPrincipal { user: "system".to_string() })?;
+        let _guard = self
+            .head_lock
+            .lock()
+            .map_err(|_| anyhow!("head lock poisoned"))?;
+        self.ensure_project(
+            tenant,
+            project,
+            &TokenPrincipal {
+                user: "system".to_string(),
+            },
+        )?;
 
         let path = self.project_path(tenant, project)?;
         let objects_dir = path.join("objects");
@@ -460,15 +496,15 @@ impl Store for SqliteStore {
             states.push(row?);
         }
         // Compute child_workspaces
-        let parents: std::collections::HashMap<String, Vec<String>> = states.iter().fold(
-            std::collections::HashMap::new(),
-            |mut map, ws| {
-                if let Some(ref parent) = ws.parent_workspace {
-                    map.entry(parent.clone()).or_default().push(ws.name.clone());
-                }
-                map
-            }
-        );
+        let parents: std::collections::HashMap<String, Vec<String>> =
+            states
+                .iter()
+                .fold(std::collections::HashMap::new(), |mut map, ws| {
+                    if let Some(ref parent) = ws.parent_workspace {
+                        map.entry(parent.clone()).or_default().push(ws.name.clone());
+                    }
+                    map
+                });
         for ws in &mut states {
             ws.child_workspaces = parents.get(&ws.name).cloned().unwrap_or_default();
         }
@@ -528,7 +564,15 @@ impl Store for SqliteStore {
              where tenant = ?1 and project = ?2 and workspace = ?3",
             rusqlite::params![tenant, project, workspace],
         )?;
-        self.log_history(tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace), None)?;
+        self.log_history(
+            tenant,
+            project,
+            workspace,
+            principal,
+            "ready",
+            &format!("{} marked workspace {} as ready", principal.user, workspace),
+            None,
+        )?;
         Ok(())
     }
 
@@ -545,7 +589,15 @@ impl Store for SqliteStore {
              where tenant = ?1 and project = ?2 and workspace = ?3",
             rusqlite::params![tenant, project, workspace],
         )?;
-        self.log_history(tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace), None)?;
+        self.log_history(
+            tenant,
+            project,
+            workspace,
+            principal,
+            "merge",
+            &format!("{} merged workspace {}", principal.user, workspace),
+            None,
+        )?;
         Ok(())
     }
 
@@ -559,9 +611,34 @@ impl Store for SqliteStore {
         let mut stmt = conn.prepare(
             "select id, kind, message, author, timestamp, workspace, snapshot_id from history
              where tenant = ?1 and project = ?2 and workspace = ?3
-             order by timestamp desc"
+             order by timestamp desc",
         )?;
         let rows = stmt.query_map(rusqlite::params![tenant, project, workspace], |row| {
+            Ok(HistoryEntry {
+                id: row.get(0)?,
+                kind: row.get(1)?,
+                message: row.get(2)?,
+                author: row.get(3)?,
+                timestamp: row.get(4)?,
+                workspace: row.get(5)?,
+                snapshot_id: row.get(6)?,
+            })
+        })?;
+        let mut entries = Vec::new();
+        for row in rows {
+            entries.push(row?);
+        }
+        Ok(entries)
+    }
+
+    fn project_history(&self, tenant: &str, project: &str) -> Result<Vec<HistoryEntry>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select id, kind, message, author, timestamp, workspace, snapshot_id from history
+             where tenant = ?1 and project = ?2
+             order by timestamp desc",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![tenant, project], |row| {
             Ok(HistoryEntry {
                 id: row.get(0)?,
                 kind: row.get(1)?,
@@ -609,19 +686,21 @@ impl Store for SqliteStore {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "select id, kind, message, author, timestamp, workspace, snapshot_id from history
-             where tenant = ?1 and project = ?2 and id = ?3"
+             where tenant = ?1 and project = ?2 and id = ?3",
         )?;
-        let row = stmt.query_row(rusqlite::params![tenant, project, entry_id], |row| {
-            Ok(HistoryEntry {
-                id: row.get(0)?,
-                kind: row.get(1)?,
-                message: row.get(2)?,
-                author: row.get(3)?,
-                timestamp: row.get(4)?,
-                workspace: row.get(5)?,
-                snapshot_id: row.get(6)?,
+        let row = stmt
+            .query_row(rusqlite::params![tenant, project, entry_id], |row| {
+                Ok(HistoryEntry {
+                    id: row.get(0)?,
+                    kind: row.get(1)?,
+                    message: row.get(2)?,
+                    author: row.get(3)?,
+                    timestamp: row.get(4)?,
+                    workspace: row.get(5)?,
+                    snapshot_id: row.get(6)?,
+                })
             })
-        }).optional()?;
+            .optional()?;
         Ok(row)
     }
 
@@ -629,7 +708,7 @@ impl Store for SqliteStore {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "select id, number, title, body, status, author, created_at, labels_json from issues
-             where tenant = ?1 and project = ?2 order by number desc"
+             where tenant = ?1 and project = ?2 order by number desc",
         )?;
         let rows = stmt.query_map(rusqlite::params![tenant, project], |row| {
             let labels_json: String = row.get(7)?;
@@ -700,7 +779,7 @@ impl Store for SqliteStore {
         )?;
         let mut stmt = conn.prepare(
             "select id, number, title, body, status, author, created_at, labels_json from issues
-             where tenant = ?1 and project = ?2 and id = ?3"
+             where tenant = ?1 and project = ?2 and id = ?3",
         )?;
         let issue = stmt.query_row(rusqlite::params![tenant, project, issue_id], |row| {
             let labels_json: String = row.get(7)?;
@@ -724,7 +803,7 @@ impl Store for SqliteStore {
         let mut stmt = conn.prepare(
             "select id, issue_id, author, body, created_at from comments
              where tenant = ?1 and project = ?2 and issue_id = ?3
-             order by created_at"
+             order by created_at",
         )?;
         let rows = stmt.query_map(rusqlite::params![tenant, project, issue_id], |row| {
             Ok(Comment {
@@ -756,7 +835,15 @@ impl Store for SqliteStore {
         conn.execute(
             "insert into comments (id, tenant, project, issue_id, author, body, created_at)
              values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![id, tenant, project, issue_id, principal.user, body, created_at],
+            rusqlite::params![
+                id,
+                tenant,
+                project,
+                issue_id,
+                principal.user,
+                body,
+                created_at
+            ],
         )?;
         Ok(Comment {
             id,
@@ -769,13 +856,11 @@ impl Store for SqliteStore {
 
     fn project_visibility(&self, tenant: &str, project: &str) -> Result<Option<String>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            "select settings_json from projects where tenant = ?1 and project = ?2"
-        )?;
-        let settings_json: Option<String> = stmt.query_row(
-            rusqlite::params![tenant, project],
-            |row| row.get(0),
-        ).optional()?;
+        let mut stmt =
+            conn.prepare("select settings_json from projects where tenant = ?1 and project = ?2")?;
+        let settings_json: Option<String> = stmt
+            .query_row(rusqlite::params![tenant, project], |row| row.get(0))
+            .optional()?;
         let visibility = settings_json.map(|s| {
             serde_json::from_str::<ProjectSettings>(&s)
                 .map(|settings| settings.visibility)
@@ -784,15 +869,17 @@ impl Store for SqliteStore {
         Ok(visibility)
     }
 
-    fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings> {
+    fn project_settings(
+        &self,
+        tenant: &str,
+        project: &str,
+        principal: &TokenPrincipal,
+    ) -> Result<ProjectSettings> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            "select settings_json from projects where tenant = ?1 and project = ?2"
-        )?;
-        let settings_json: String = stmt.query_row(
-            rusqlite::params![tenant, project],
-            |row| row.get(0),
-        )?;
+        let mut stmt =
+            conn.prepare("select settings_json from projects where tenant = ?1 and project = ?2")?;
+        let settings_json: String =
+            stmt.query_row(rusqlite::params![tenant, project], |row| row.get(0))?;
         let mut settings: ProjectSettings = serde_json::from_str(&settings_json)?;
         settings.starred_count = self.star_count(tenant, project)?;
         settings.is_starred = self.is_starred(tenant, project, principal)?;
@@ -847,18 +934,15 @@ impl Store for SqliteStore {
         Ok((false, self.star_count(tenant, project)?))
     }
 
-    fn is_starred(
-        &self,
-        tenant: &str,
-        project: &str,
-        principal: &TokenPrincipal,
-    ) -> Result<bool> {
+    fn is_starred(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<bool> {
         let conn = self.conn()?;
-        let count: i64 = conn.query_row(
-            "select count(*) from stars where tenant = ?1 and project = ?2 and user = ?3",
-            rusqlite::params![tenant, project, principal.user],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let count: i64 = conn
+            .query_row(
+                "select count(*) from stars where tenant = ?1 and project = ?2 and user = ?3",
+                rusqlite::params![tenant, project, principal.user],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
         Ok(count > 0)
     }
 

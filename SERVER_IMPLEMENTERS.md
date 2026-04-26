@@ -287,7 +287,7 @@ The client assumes:
 - a snapshot can have multiple parents
 - ancestry walk is over snapshot parents only
 - trees and blobs do not participate in ancestry
-- when `local_head` is not null, the client has already offered the reachable local object closure to the remote before compare, so a missing local head should not be treated as `local_ahead`
+- when `local_head` is not null, the client has already offered the reachable local objects it does not know the remote has before compare, so a missing local head should not be treated as `local_ahead`
 
 ### 4. Missing object negotiation
 
@@ -431,7 +431,7 @@ Success response:
 Rules:
 
 - return the requested objects
-- the current client may request one id at a time while traversing a missing closure
+- the current client requests missing closures in bounded batches while traversing snapshots, trees, and blobs
 - returning fewer objects than requested is treated as an error if the requested object is absent from the response
 
 ### 8. Compare-and-set head update
@@ -474,8 +474,8 @@ Rules:
 
 Before compare, when the local workspace has a head, the client will:
 
-1. enumerate all objects reachable from the local head
-2. call `objects/missing` in bounded id batches
+1. enumerate objects reachable from the local head that are not already confirmed for this remote
+2. call `objects/missing` for those unknown ids in bounded batches
 3. upload only the missing object ids in bounded object batches, using chunked upload for large objects
 
 Then, when compare returns `local_ahead` or `remote_missing`, the client will:
@@ -491,7 +491,7 @@ If CAS fails once, the client re-runs compare and retries the sync flow once.
 When compare returns `remote_ahead`, the client will:
 
 1. traverse from the remote head snapshot id
-2. download any missing snapshots, trees, and blobs
+2. download any missing snapshots, trees, and blobs in bounded batches
 3. update the local workspace head
 4. restore the local working tree
 
@@ -554,7 +554,7 @@ One practical layout:
 
 Where:
 
-- `objects` stores `id`, `kind`, and bytes
+- `objects` stores `id`, `kind`, and bytes; hosted sty keeps object bytes in R2 and object metadata in D1
 - `snapshot_edges` stores parent relationships extracted from snapshot bytes to support compare efficiently
 
 You can also compute ancestry lazily from stored snapshot bytes, but indexing parents will make compare much cheaper.

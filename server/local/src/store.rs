@@ -125,7 +125,12 @@ impl ObjectStore {
         Ok(())
     }
 
-    pub fn download(&self, tenant: &str, project: &str, ids: &[String]) -> Result<Vec<RemoteObject>> {
+    pub fn download(
+        &self,
+        tenant: &str,
+        project: &str,
+        ids: &[String],
+    ) -> Result<Vec<RemoteObject>> {
         self.ensure_project_storage(tenant, project)?;
         let mut objects = Vec::new();
         for id in ids {

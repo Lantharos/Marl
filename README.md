@@ -6,7 +6,7 @@
 
 - `client` is the `sty` CLI. It handles login, project setup, and PIG handoff.
 - `server/local` is the local Axum remote server used for development and smoke tests.
-- `server/worker` is the Cloudflare Worker backend. It uses R2 for immutable object bytes and a Durable Object per `tenant/project` for workspace heads, snapshot ancestry, compare, and CAS.
+- `server/worker` is the Cloudflare Worker backend. It uses R2 for immutable object bytes and D1 for object metadata, workspace heads, project state, history, and compare/CAS metadata.
 - `frontend` is the SvelteKit project dashboard. It uses AveSession from `@ave-id/sdk`.
 - `crates/sty-protocol` contains the shared PIG remote request/response types.
 
@@ -138,4 +138,6 @@ bun run check
 bun run build
 ```
 
-PIG uploads the local snapshot closure before comparing ancestry, so sty can classify `same`, `local_ahead`, `remote_ahead`, and `diverged` from stored snapshot parents. A compare request for a local head the server still cannot read is treated as divergence instead of a push shortcut.
+PIG uploads local snapshot objects that are not already confirmed for the remote before comparing ancestry, so sty can classify `same`, `local_ahead`, `remote_ahead`, and `diverged` from stored snapshot parents without re-checking old history on every sync. A compare request for a local head the server still cannot read is treated as divergence instead of a push shortcut.
+
+Sty keeps immutable object bytes in R2 and indexes object id, kind, and size in D1. New uploads use the index for `objects/missing` and download kind lookup, while older objects with legacy kind sidecars are indexed the first time they are downloaded.

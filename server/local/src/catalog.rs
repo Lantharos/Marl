@@ -3,9 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use serde::Deserialize;
-use sty_protocol::{
-    ObjectFileResponse, ProjectTreeResponse, TreeEntryInfo, validate_segment,
-};
+use sty_protocol::{ObjectFileResponse, ProjectTreeResponse, TreeEntryInfo, validate_segment};
 
 #[derive(Deserialize)]
 struct SnapshotView {
@@ -69,8 +67,12 @@ impl Catalog {
         path: &str,
         head: Option<String>,
     ) -> Result<ObjectFileResponse> {
-        let tree = self.tree(tenant, project, "", head)?;
-        let Some(entry) = tree.entries.iter().find(|entry| entry.path == path) else {
+        let Some(head_id) = head else {
+            bail!("workspace has no head");
+        };
+        let snapshot: SnapshotView =
+            serde_json::from_slice(&fs::read(self.object_path(tenant, project, &head_id)?)?)?;
+        let Some(entry) = self.resolve_path(tenant, project, &snapshot.root_tree, path)? else {
             bail!("file not found");
         };
         if entry.entry_type != "blob" {
@@ -113,6 +115,50 @@ impl Catalog {
             }
         }
         Ok(())
+    }
+
+    fn resolve_path(
+        &self,
+        tenant: &str,
+        project: &str,
+        root_tree: &str,
+        path: &str,
+    ) -> Result<Option<TreeEntryInfo>> {
+        let parts = path
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>();
+        if parts.is_empty() {
+            return Ok(None);
+        }
+        let mut tree_id = root_tree.to_string();
+        let mut prefix = String::new();
+        for (index, part) in parts.iter().enumerate() {
+            let tree: TreeObjectView =
+                serde_json::from_slice(&fs::read(self.object_path(tenant, project, &tree_id)?)?)?;
+            let Some(entry) = tree.entries.into_iter().find(|entry| entry.name == **part) else {
+                return Ok(None);
+            };
+            let current_path = if prefix.is_empty() {
+                (*part).to_string()
+            } else {
+                format!("{prefix}/{part}")
+            };
+            if index == parts.len() - 1 {
+                return Ok(Some(TreeEntryInfo {
+                    path: current_path,
+                    name: entry.name,
+                    id: entry.id,
+                    entry_type: entry.entry_type,
+                }));
+            }
+            if entry.entry_type != "tree" {
+                return Ok(None);
+            }
+            prefix = current_path;
+            tree_id = entry.id;
+        }
+        Ok(None)
     }
 
     fn object_path(&self, tenant: &str, project: &str, id: &str) -> Result<PathBuf> {

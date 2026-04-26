@@ -14,15 +14,15 @@ use tower_http::cors::CorsLayer;
 use crate::auth::verify_ave_id_token;
 use crate::catalog::Catalog;
 use crate::store::{ObjectStore, Store};
-use sty_store::Store as _;
 use sty_protocol::{
-    ChunkCompleteRequest, CommentsResponse, CompareRequest, CompareResponse,
-    CreateCommentRequest, CreateIssueRequest, CreateOrgRequest, DevTokenRequest, DownloadRequest,
-    DownloadResponse, HeadResponse, HeadUpdateRequest, HistoryResponse, IssuesResponse,
-    LogHistoryRequest, MeResponse, MissingRequest, MissingResponse, OkResponse, ProjectDetailResponse,
-    ProjectSummary, SessionExchangeRequest, StarResponse, TokenPrincipal, TokenResponse,
-    UpdateIssueRequest, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
+    ChunkCompleteRequest, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
+    CreateIssueRequest, CreateOrgRequest, DevTokenRequest, DownloadRequest, DownloadResponse,
+    HeadResponse, HeadUpdateRequest, HistoryResponse, IssuesResponse, LogHistoryRequest,
+    MeResponse, MissingRequest, MissingResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
+    SessionExchangeRequest, StarResponse, TokenPrincipal, TokenResponse, UpdateIssueRequest,
+    UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
+use sty_store::Store as _;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -80,6 +80,10 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/history",
             get(workspace_history).post(log_history),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/history",
+            get(project_history),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/history/{entry_id}",
@@ -335,7 +339,11 @@ async fn create_issue(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.create_issue(&tenant, &project, &principal, &body.title, &body.body))
+        map_result(
+            state
+                .store
+                .create_issue(&tenant, &project, &principal, &body.title, &body.body),
+        )
     }) {
         Ok(issue) => Json(issue).into_response(),
         Err(response) => response,
@@ -350,7 +358,11 @@ async fn update_issue(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.update_issue_status(&tenant, &project, &issue_id, &body.status))
+        map_result(
+            state
+                .store
+                .update_issue_status(&tenant, &project, &issue_id, &body.status),
+        )
     }) {
         Ok(issue) => Json(issue).into_response(),
         Err(response) => response,
@@ -379,7 +391,11 @@ async fn create_comment_handler(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.create_comment(&tenant, &project, &issue_id, &principal, &body.body))
+        map_result(
+            state
+                .store
+                .create_comment(&tenant, &project, &issue_id, &principal, &body.body),
+        )
     }) {
         Ok(comment) => Json(comment).into_response(),
         Err(response) => response,
@@ -408,6 +424,20 @@ async fn workspace_history(
     match optional_auth(&state, &headers).and_then(|principal| {
         check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.workspace_history(&tenant, &project, &workspace))
+    }) {
+        Ok(entries) => Json(HistoryResponse { entries }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn project_history(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project)): Path<(String, String)>,
+) -> Response {
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
+        map_result(state.store.project_history(&tenant, &project))
     }) {
         Ok(entries) => Json(HistoryResponse { entries }).into_response(),
         Err(response) => response,
@@ -459,7 +489,11 @@ async fn mark_ready(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.mark_workspace_ready(&tenant, &project, &workspace, &principal))
+        map_result(
+            state
+                .store
+                .mark_workspace_ready(&tenant, &project, &workspace, &principal),
+        )
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
         Err(response) => response,
@@ -473,7 +507,11 @@ async fn merge_workspace_handler(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(state.store.merge_workspace(&tenant, &project, &workspace, &principal))
+        map_result(
+            state
+                .store
+                .merge_workspace(&tenant, &project, &workspace, &principal),
+        )
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
         Err(response) => response,
@@ -488,32 +526,63 @@ async fn merge_preview(
     match optional_auth(&state, &headers).and_then(|principal| {
         check_project_access(&state, &tenant, &project, principal.as_ref())?;
         let states = map_result(state.store.workspace_states(&tenant, &project))?;
-        let ws = states.into_iter().find(|s| s.name == workspace)
+        let ws = states
+            .into_iter()
+            .find(|s| s.name == workspace)
             .ok_or_else(|| error(StatusCode::NOT_FOUND, "workspace not found"))?;
-        let parent = ws.parent_workspace.as_ref()
+        let parent = ws
+            .parent_workspace
+            .as_ref()
             .ok_or_else(|| error(StatusCode::BAD_REQUEST, "workspace has no parent"))?;
         let head = map_result(state.store.head(&tenant, &project, &workspace))?;
         let parent_head = map_result(state.store.head(&tenant, &project, parent))?;
         let catalog = Catalog::new(state.store.root());
         let current_tree = catalog.tree(&tenant, &project, &workspace, head).ok();
         let parent_tree = catalog.tree(&tenant, &project, parent, parent_head).ok();
-        let current_map: std::collections::HashMap<String, String> = current_tree.map(|t| {
-            t.entries.into_iter().filter(|e| e.entry_type == "blob").map(|e| (e.path, e.id)).collect()
-        }).unwrap_or_default();
-        let parent_map: std::collections::HashMap<String, String> = parent_tree.map(|t| {
-            t.entries.into_iter().filter(|e| e.entry_type == "blob").map(|e| (e.path, e.id)).collect()
-        }).unwrap_or_default();
+        let current_map: std::collections::HashMap<String, String> = current_tree
+            .map(|t| {
+                t.entries
+                    .into_iter()
+                    .filter(|e| e.entry_type == "blob")
+                    .map(|e| (e.path, e.id))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let parent_map: std::collections::HashMap<String, String> = parent_tree
+            .map(|t| {
+                t.entries
+                    .into_iter()
+                    .filter(|e| e.entry_type == "blob")
+                    .map(|e| (e.path, e.id))
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut files = Vec::new();
         for (path, id) in &current_map {
             if !parent_map.contains_key(path) {
-                files.push(sty_protocol::ChangedFile { path: path.clone(), change_type: "added".to_string(), old_id: None, new_id: Some(id.clone()) });
+                files.push(sty_protocol::ChangedFile {
+                    path: path.clone(),
+                    change_type: "added".to_string(),
+                    old_id: None,
+                    new_id: Some(id.clone()),
+                });
             } else if parent_map.get(path) != Some(id) {
-                files.push(sty_protocol::ChangedFile { path: path.clone(), change_type: "modified".to_string(), old_id: parent_map.get(path).cloned(), new_id: Some(id.clone()) });
+                files.push(sty_protocol::ChangedFile {
+                    path: path.clone(),
+                    change_type: "modified".to_string(),
+                    old_id: parent_map.get(path).cloned(),
+                    new_id: Some(id.clone()),
+                });
             }
         }
         for (path, id) in &parent_map {
             if !current_map.contains_key(path) {
-                files.push(sty_protocol::ChangedFile { path: path.clone(), change_type: "deleted".to_string(), old_id: Some(id.clone()), new_id: None });
+                files.push(sty_protocol::ChangedFile {
+                    path: path.clone(),
+                    change_type: "deleted".to_string(),
+                    old_id: Some(id.clone()),
+                    new_id: None,
+                });
             }
         }
         Ok(sty_protocol::MergePreviewResponse { files })
@@ -532,7 +601,11 @@ async fn set_parent(
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         let parent = body["parent_workspace"].as_str();
-        map_result(state.store.set_parent_workspace(&tenant, &project, &workspace, parent))
+        map_result(
+            state
+                .store
+                .set_parent_workspace(&tenant, &project, &workspace, parent),
+        )
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
         Err(response) => response,
@@ -563,7 +636,13 @@ async fn update_settings(
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         let visibility = body.visibility.as_deref().unwrap_or("private");
         let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
-        map_result(state.store.update_project_settings(&tenant, &project, &principal, visibility, default_workspace))
+        map_result(state.store.update_project_settings(
+            &tenant,
+            &project,
+            &principal,
+            visibility,
+            default_workspace,
+        ))
     }) {
         Ok(settings) => Json(settings).into_response(),
         Err(response) => response,
@@ -579,7 +658,11 @@ async fn star_project_handler(
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         map_result(state.store.star_project(&tenant, &project, &principal))
     }) {
-        Ok((is_starred, starred_count)) => Json(StarResponse { is_starred, starred_count }).into_response(),
+        Ok((is_starred, starred_count)) => Json(StarResponse {
+            is_starred,
+            starred_count,
+        })
+        .into_response(),
         Err(response) => response,
     }
 }
@@ -593,7 +676,11 @@ async fn unstar_project_handler(
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         map_result(state.store.unstar_project(&tenant, &project, &principal))
     }) {
-        Ok((is_starred, starred_count)) => Json(StarResponse { is_starred, starred_count }).into_response(),
+        Ok((is_starred, starred_count)) => Json(StarResponse {
+            is_starred,
+            starred_count,
+        })
+        .into_response(),
         Err(response) => response,
     }
 }
