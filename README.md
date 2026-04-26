@@ -138,4 +138,4 @@ bun run check
 bun run build
 ```
 
-Known PIG v1 limitation: `pig sync` compares before uploading a new local snapshot, so the server cannot prove ancestry for local heads it has never seen. sty returns `local_ahead` for unknown local heads to preserve normal push behavior; uploaded snapshots use real parent ancestry for `same`, `local_ahead`, `remote_ahead`, and `diverged`.
+PIG uploads the local snapshot closure before comparing ancestry, so sty can classify `same`, `local_ahead`, `remote_ahead`, and `diverged` from stored snapshot parents. A compare request for a local head the server still cannot read is treated as divergence instead of a push shortcut.

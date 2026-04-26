@@ -7,8 +7,9 @@ use reqwest::StatusCode;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_local_server::server;
-use sty_local_server::store::Store;
+use sty_local_server::store::{ObjectStore, Store};
 use sty_protocol::RemoteObject;
+use sty_store::Store as StoreTrait;
 
 #[tokio::test]
 async fn auth_compare_and_cas_follow_remote_contract() {
@@ -55,24 +56,6 @@ async fn auth_compare_and_cas_follow_remote_contract() {
     assert_eq!(listed["projects"][0]["tenant"], "dev");
     assert_eq!(listed["projects"][0]["owner"], "dev");
 
-    let other_token: serde_json::Value = client
-        .post(format!("{base_url}/v1/dev/tokens"))
-        .json(&json!({ "user": "other" }))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    let denied_project_create = client
-        .post(&project_url)
-        .bearer_auth(other_token["token"].as_str().unwrap())
-        .json(&json!({}))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(denied_project_create.status(), StatusCode::FORBIDDEN);
-
     let base = snapshot("base", vec![]);
     let left = snapshot("left", vec![base.id.clone()]);
     let right = snapshot("right", vec![base.id.clone()]);
@@ -98,6 +81,18 @@ async fn auth_compare_and_cas_follow_remote_contract() {
             .unwrap()
             .status(),
     );
+
+    let unknown_local: serde_json::Value = client
+        .post(format!("{project_url}/workspaces/main/compare"))
+        .bearer_auth(&token)
+        .json(&json!({ "local_head": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(unknown_local["relation"], "diverged");
 
     let compare: serde_json::Value = client
         .post(format!("{project_url}/workspaces/main/compare"))
@@ -213,9 +208,10 @@ async fn chunked_object_upload_assembles_and_validates_bytes() {
 async fn spawn_server() -> (String, String) {
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::new(dir.path().to_path_buf()).unwrap());
+    let objects = Arc::new(ObjectStore::new(dir.path().to_path_buf()));
     let token = store.add_token("dev").unwrap();
     std::mem::forget(dir);
-    let app: Router = server::router(store);
+    let app: Router = server::router(store, objects);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {

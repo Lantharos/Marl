@@ -686,7 +686,6 @@ async fn compare_relation(
         (None, Some(_)) => "remote_ahead",
         (Some(local), Some(remote)) if is_ancestor(env, tenant, project, remote, local).await? => "local_ahead",
         (Some(local), Some(remote)) if is_ancestor(env, tenant, project, local, remote).await? => "remote_ahead",
-        (Some(local), Some(_)) if !object_exists(env, tenant, project, local).await => "local_ahead",
         _ => "diverged",
     };
     Ok(relation.to_string())
@@ -718,13 +717,6 @@ async fn is_ancestor(env: &Env, tenant: &str, project: &str, ancestor: &str, hea
         }
     }
     Ok(false)
-}
-
-async fn object_exists(env: &Env, tenant: &str, project: &str, id: &str) -> bool {
-    let Ok(store) = bucket(env) else {
-        return false;
-    };
-    store.head(object_key(tenant, project, id)).await.map(|h| h.is_some()).unwrap_or(false)
 }
 
 async fn walk_tree(

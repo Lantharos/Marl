@@ -287,6 +287,7 @@ The client assumes:
 - a snapshot can have multiple parents
 - ancestry walk is over snapshot parents only
 - trees and blobs do not participate in ancestry
+- when `local_head` is not null, the client has already offered the reachable local object closure to the remote before compare, so a missing local head should not be treated as `local_ahead`
 
 ### 4. Missing object negotiation
 
@@ -471,12 +472,15 @@ Rules:
 
 ### Push path
 
-When compare returns `local_ahead` or `remote_missing`, the client will:
+Before compare, when the local workspace has a head, the client will:
 
 1. enumerate all objects reachable from the local head
 2. call `objects/missing` in bounded id batches
 3. upload only the missing object ids in bounded object batches, using chunked upload for large objects
-4. call CAS head update with:
+
+Then, when compare returns `local_ahead` or `remote_missing`, the client will:
+
+1. call CAS head update with:
    - `expected_head = current remote head`
    - `new_head = local head`
 

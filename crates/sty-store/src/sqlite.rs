@@ -175,11 +175,6 @@ impl SqliteStore {
         Ok(self.project_path(tenant, project)?.join("objects").join(id))
     }
 
-    fn object_exists(&self, tenant: &str, project: &str, id: &str) -> Result<bool> {
-        let path = self.object_path(tenant, project, id)?;
-        Ok(path.exists())
-    }
-
     fn is_ancestor(&self, tenant: &str, project: &str, ancestor: &str, head: &str) -> Result<bool> {
         let mut seen = BTreeSet::new();
         let mut stack = vec![head.to_string()];
@@ -387,7 +382,6 @@ impl Store for SqliteStore {
             (None, Some(_)) => "remote_ahead",
             (Some(local), Some(remote)) if self.is_ancestor(tenant, project, remote, local)? => "local_ahead",
             (Some(local), Some(remote)) if self.is_ancestor(tenant, project, local, remote)? => "remote_ahead",
-            (Some(local), Some(_)) if !self.object_exists(tenant, project, local)? => "local_ahead",
             _ => "diverged",
         };
         Ok((remote_head, relation.to_string()))
