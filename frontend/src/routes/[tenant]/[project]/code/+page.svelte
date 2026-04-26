@@ -40,8 +40,8 @@
 {:else if error}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
 {:else}
-	<div class="flex gap-0 rounded border border-[#2a2a28] bg-[#141412] overflow-hidden" style="height: calc(100vh - 180px);">
-		<div class="w-[280px] shrink-0 flex flex-col border-r border-[#2a2a28]">
+	<div class="flex flex-col md:flex-row gap-0 rounded border border-[#2a2a28] bg-[#141412] overflow-hidden" style="height: calc(100vh - 180px);">
+		<div class="h-48 md:h-auto md:w-[280px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-[#2a2a28]">
 			<div class="flex-1 overflow-auto min-h-0 p-3">
 				<FileTreePane entries={tree?.entries ?? []} selectedPath={file?.path ?? ''} onSelect={openFile} />
 			</div>

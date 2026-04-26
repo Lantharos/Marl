@@ -546,6 +546,53 @@ pub async fn create_issue(
     })
 }
 
+pub async fn update_issue_status(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    issue_id: &str,
+    status: &str,
+) -> Result<Issue> {
+    db.prepare(
+        "UPDATE issues SET status = ?1 WHERE tenant = ?2 AND project = ?3 AND id = ?4"
+    )
+    .bind(&[js_str(status), js_str(tenant), js_str(project), js_str(issue_id)])?
+    .run()
+    .await?;
+
+    #[derive(Deserialize)]
+    struct Row {
+        id: String,
+        number: f64,
+        title: String,
+        body: String,
+        status: String,
+        author: String,
+        created_at: String,
+        labels_json: String,
+    }
+    let row: Option<Row> = db
+        .prepare(
+            "SELECT id, number, title, body, status, author, created_at, labels_json FROM issues \
+             WHERE tenant = ?1 AND project = ?2 AND id = ?3"
+        )
+        .bind(&[js_str(tenant), js_str(project), js_str(issue_id)])?
+        .first(None)
+        .await?;
+    let row = row.ok_or_else(|| err("issue not found"))?;
+    let labels = serde_json::from_str(&row.labels_json).unwrap_or_default();
+    Ok(Issue {
+        id: row.id,
+        number: row.number as u64,
+        title: row.title,
+        body: row.body,
+        status: row.status,
+        author: row.author,
+        created_at: row.created_at,
+        labels,
+    })
+}
+
 // ── Comments ─────────────────────────────────────────────
 
 pub async fn list_comments(db: &D1Database, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>> {

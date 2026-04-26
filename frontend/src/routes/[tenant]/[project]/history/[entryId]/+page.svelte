@@ -130,8 +130,8 @@
 				<p class="text-sm text-[#8c887e]">No file changes for this entry.</p>
 			</div>
 		{:else}
-			<div class="flex flex-1 gap-4 overflow-hidden min-h-0">
-				<div class="w-64 shrink-0 flex flex-col rounded border border-[#2a2a28] bg-[#141412]">
+			<div class="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden min-h-0">
+				<div class="h-48 md:h-auto md:w-64 shrink-0 flex flex-col rounded border border-[#2a2a28] bg-[#141412]">
 					<div class="shrink-0 border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#6f6b5f]">
 						{detail.files.length} changed {detail.files.length === 1 ? 'file' : 'files'}
 					</div>

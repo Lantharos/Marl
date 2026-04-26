@@ -6,7 +6,7 @@ use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use serde_json::json;
 use tower_http::cors::CorsLayer;
@@ -21,7 +21,7 @@ use sty_protocol::{
     DownloadResponse, HeadResponse, HeadUpdateRequest, HistoryResponse, IssuesResponse,
     LogHistoryRequest, MeResponse, MissingRequest, MissingResponse, OkResponse, ProjectDetailResponse,
     ProjectSummary, SessionExchangeRequest, StarResponse, TokenPrincipal, TokenResponse,
-    UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
+    UpdateIssueRequest, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
 
 #[derive(Clone)]
@@ -64,6 +64,10 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
         .route(
             "/v1/tenants/{tenant}/projects/{project}/issues",
             get(project_issues).post(create_issue),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}",
+            patch(update_issue),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/comments",
@@ -323,6 +327,21 @@ async fn create_issue(
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         map_result(state.store.create_issue(&tenant, &project, &principal, &body.title, &body.body))
+    }) {
+        Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn update_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+    Json(body): Json<UpdateIssueRequest>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(state.store.update_issue_status(&tenant, &project, &issue_id, &body.status))
     }) {
         Ok(issue) => Json(issue).into_response(),
         Err(response) => response,

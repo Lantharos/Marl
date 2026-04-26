@@ -211,6 +211,11 @@ pub struct CreateIssueRequest {
     pub body: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateIssueRequest {
+    pub status: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Comment {
     pub id: String,

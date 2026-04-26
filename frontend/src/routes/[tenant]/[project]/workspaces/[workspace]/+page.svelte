@@ -130,13 +130,13 @@
 		<div class="grid gap-5 xl:grid-cols-[1fr_300px]">
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 				<h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Files</h4>
-				<div class="flex gap-0 overflow-hidden" style="height: calc(100vh - 220px);">
-					<div class="w-[260px] shrink-0 flex flex-col border-r border-[#2a2a28]">
+				<div class="flex flex-col md:flex-row gap-0 overflow-hidden" style="height: calc(100vh - 220px);">
+					<div class="h-48 md:h-auto md:w-[260px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-[#2a2a28]">
 						<div class="flex-1 overflow-auto min-h-0 pr-3">
 							<FileTreePane entries={detail.files.entries} selectedPath={file?.path ?? ''} onSelect={openFile} />
 						</div>
 					</div>
-					<div class="min-w-0 flex-1 overflow-auto pl-4">
+					<div class="min-w-0 flex-1 overflow-auto pl-0 md:pl-4 pt-3 md:pt-0">
 						<CodePane {file} />
 					</div>
 				</div>

@@ -8,7 +8,8 @@ use sty_protocol::{
     HeadUpdateRequest, HistoryResponse, IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest,
     MissingResponse, OkResponse, ObjectFileResponse, ProjectDetailResponse, ProjectSummary,
     ProjectTreeResponse, RemoteObject, SessionExchangeRequest, StarResponse, TokenResponse,
-    TreeEntryInfo, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
+    TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse,
+    WorkspaceSummary,
 };
 use worker::*;
 
@@ -43,6 +44,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/tenants/:tenant/projects/:project/files/:path", project_file)
         .get_async("/v1/tenants/:tenant/projects/:project/issues", project_issues)
         .post_async("/v1/tenants/:tenant/projects/:project/issues", create_issue)
+        .patch_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id", update_issue)
         .get_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", issue_comments)
         .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", create_comment)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", get_head)
@@ -263,6 +265,17 @@ async fn create_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Respons
     let database = db(&ctx.env)?;
     d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
     let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }, &body.title, &body.body).await?;
+    Response::from_json(&issue)
+}
+
+async fn update_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let body: UpdateIssueRequest = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, &body.status).await?;
     Response::from_json(&issue)
 }
 

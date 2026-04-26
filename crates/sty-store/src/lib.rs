@@ -106,6 +106,13 @@ pub trait Store {
         title: &str,
         body: &str,
     ) -> Result<Issue>;
+    fn update_issue_status(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        status: &str,
+    ) -> Result<Issue>;
 
     // ── Comments ────────────────────────────────────────────
     fn list_comments(&self, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>>;

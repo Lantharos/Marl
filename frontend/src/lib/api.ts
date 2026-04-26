@@ -258,6 +258,15 @@ export async function createIssue(tenant: string, project: string, issue: { titl
 	return (await response.json()) as Issue;
 }
 
+export async function updateIssueStatus(tenant: string, project: string, issueId: string, status: 'open' | 'closed'): Promise<Issue> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ status })
+	});
+	return (await response.json()) as Issue;
+}
+
 export async function listWorkspaceStatuses(tenant: string, project: string): Promise<WorkspaceStatus[]> {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces`);
 	const data = (await response.json()) as { workspaces: WorkspaceStatus[] };

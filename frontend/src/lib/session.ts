@@ -37,7 +37,7 @@ export function apiBase() {
 }
 
 export function devAuthEnabled() {
-	return import.meta.env.DEV || env.PUBLIC_STY_DEV_AUTH === 'true' || env.PUBLIC_STY_DEV_AUTH === 'worker';
+	return env.PUBLIC_STY_DEV_AUTH === 'true' || env.PUBLIC_STY_DEV_AUTH === 'worker';
 }
 
 export function aveClientId() {

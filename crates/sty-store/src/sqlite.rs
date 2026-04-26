@@ -674,6 +674,39 @@ impl Store for SqliteStore {
         })
     }
 
+    fn update_issue_status(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        status: &str,
+    ) -> Result<Issue> {
+        let conn = self.conn()?;
+        conn.execute(
+            "update issues set status = ?1 where tenant = ?2 and project = ?3 and id = ?4",
+            rusqlite::params![status, tenant, project, issue_id],
+        )?;
+        let mut stmt = conn.prepare(
+            "select id, number, title, body, status, author, created_at, labels_json from issues
+             where tenant = ?1 and project = ?2 and id = ?3"
+        )?;
+        let issue = stmt.query_row(rusqlite::params![tenant, project, issue_id], |row| {
+            let labels_json: String = row.get(7)?;
+            let labels = serde_json::from_str(&labels_json).unwrap_or_default();
+            Ok(Issue {
+                id: row.get(0)?,
+                number: row.get(1)?,
+                title: row.get(2)?,
+                body: row.get(3)?,
+                status: row.get(4)?,
+                author: row.get(5)?,
+                created_at: row.get(6)?,
+                labels,
+            })
+        })?;
+        Ok(issue)
+    }
+
     fn list_comments(&self, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
