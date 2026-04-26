@@ -278,6 +278,11 @@ pub struct ChangedFile {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct MergePreviewResponse {
+    pub files: Vec<ChangedFile>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct HistoryEntryDetail {
     pub id: String,
     pub kind: String,

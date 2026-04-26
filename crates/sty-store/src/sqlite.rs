@@ -286,6 +286,24 @@ impl Store for SqliteStore {
         Ok(())
     }
 
+    fn get_project(&self, tenant: &str, project: &str) -> Result<Option<ProjectSummary>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select tenant, project, owner from projects where tenant = ?1 and project = ?2"
+        )?;
+        let row = stmt.query_row(
+            rusqlite::params![tenant, project],
+            |row| {
+                Ok(ProjectSummary {
+                    tenant: row.get(0)?,
+                    project: row.get(1)?,
+                    owner: row.get(2)?,
+                })
+            },
+        ).optional()?;
+        Ok(row)
+    }
+
     fn projects(&self, _principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
@@ -753,6 +771,23 @@ impl Store for SqliteStore {
             body: body.to_string(),
             created_at,
         })
+    }
+
+    fn project_visibility(&self, tenant: &str, project: &str) -> Result<Option<String>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select settings_json from projects where tenant = ?1 and project = ?2"
+        )?;
+        let settings_json: Option<String> = stmt.query_row(
+            rusqlite::params![tenant, project],
+            |row| row.get(0),
+        ).optional()?;
+        let visibility = settings_json.map(|s| {
+            serde_json::from_str::<ProjectSettings>(&s)
+                .map(|settings| settings.visibility)
+                .unwrap_or_else(|_| "private".to_string())
+        });
+        Ok(visibility)
     }
 
     fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings> {

@@ -98,6 +98,10 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
             post(set_parent),
         )
         .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/merge-preview",
+            get(merge_preview),
+        )
+        .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/compare",
             post(compare),
         )
@@ -237,8 +241,13 @@ async fn project_detail(
     headers: HeaderMap,
     Path((tenant, project)): Path<(String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
+        let owner = match map_result(state.store.get_project(&tenant, &project)) {
+            Ok(Some(p)) => p.owner,
+            Ok(None) => return Err(error(StatusCode::NOT_FOUND, "project not found")),
+            Err(response) => return Err(response),
+        };
         map_result(state.store.workspace_states(&tenant, &project)).map(|states| {
             let workspaces: Vec<WorkspaceSummary> = states
                 .into_iter()
@@ -251,7 +260,7 @@ async fn project_detail(
                 project: ProjectSummary {
                     tenant: tenant.clone(),
                     project: project.clone(),
-                    owner: principal.user,
+                    owner,
                 },
                 workspaces,
             }
@@ -269,8 +278,8 @@ async fn project_tree(
     axum::extract::Query(query): axum::extract::Query<std::collections::BTreeMap<String, String>>,
 ) -> Response {
     let workspace = query.get("workspace").map_or("main", String::as_str);
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         let head = if let Some(snapshot) = query.get("snapshot") {
             Some(snapshot.clone())
         } else {
@@ -290,8 +299,8 @@ async fn project_file(
     axum::extract::Query(query): axum::extract::Query<std::collections::BTreeMap<String, String>>,
 ) -> Response {
     let workspace = query.get("workspace").map_or("main", String::as_str);
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         let head = if let Some(snapshot) = query.get("snapshot") {
             Some(snapshot.clone())
         } else {
@@ -309,8 +318,8 @@ async fn project_issues(
     headers: HeaderMap,
     Path((tenant, project)): Path<(String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.list_issues(&tenant, &project))
     }) {
         Ok(issues) => Json(IssuesResponse { issues }).into_response(),
@@ -353,8 +362,8 @@ async fn issue_comments(
     headers: HeaderMap,
     Path((tenant, project, issue_id)): Path<(String, String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.list_comments(&tenant, &project, &issue_id))
     }) {
         Ok(comments) => Json(CommentsResponse { comments }).into_response(),
@@ -382,8 +391,8 @@ async fn list_workspace_states(
     headers: HeaderMap,
     Path((tenant, project)): Path<(String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.workspace_states(&tenant, &project))
     }) {
         Ok(workspaces) => Json(WorkspaceStateResponse { workspaces }).into_response(),
@@ -396,8 +405,8 @@ async fn workspace_history(
     headers: HeaderMap,
     Path((tenant, project, workspace)): Path<(String, String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.workspace_history(&tenant, &project, &workspace))
     }) {
         Ok(entries) => Json(HistoryResponse { entries }).into_response(),
@@ -410,8 +419,8 @@ async fn history_entry(
     headers: HeaderMap,
     Path((tenant, project, entry_id)): Path<(String, String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.get_history_entry(&tenant, &project, &entry_id))
     }) {
         Ok(Some(entry)) => Json(entry).into_response(),
@@ -467,6 +476,49 @@ async fn merge_workspace_handler(
         map_result(state.store.merge_workspace(&tenant, &project, &workspace, &principal))
     }) {
         Ok(()) => Json(OkResponse { ok: true }).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn merge_preview(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, workspace)): Path<(String, String, String)>,
+) -> Response {
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
+        let states = map_result(state.store.workspace_states(&tenant, &project))?;
+        let ws = states.into_iter().find(|s| s.name == workspace)
+            .ok_or_else(|| error(StatusCode::NOT_FOUND, "workspace not found"))?;
+        let parent = ws.parent_workspace.as_ref()
+            .ok_or_else(|| error(StatusCode::BAD_REQUEST, "workspace has no parent"))?;
+        let head = map_result(state.store.head(&tenant, &project, &workspace))?;
+        let parent_head = map_result(state.store.head(&tenant, &project, parent))?;
+        let catalog = Catalog::new(state.store.root());
+        let current_tree = catalog.tree(&tenant, &project, &workspace, head).ok();
+        let parent_tree = catalog.tree(&tenant, &project, parent, parent_head).ok();
+        let current_map: std::collections::HashMap<String, String> = current_tree.map(|t| {
+            t.entries.into_iter().filter(|e| e.entry_type == "blob").map(|e| (e.path, e.id)).collect()
+        }).unwrap_or_default();
+        let parent_map: std::collections::HashMap<String, String> = parent_tree.map(|t| {
+            t.entries.into_iter().filter(|e| e.entry_type == "blob").map(|e| (e.path, e.id)).collect()
+        }).unwrap_or_default();
+        let mut files = Vec::new();
+        for (path, id) in &current_map {
+            if !parent_map.contains_key(path) {
+                files.push(sty_protocol::ChangedFile { path: path.clone(), change_type: "added".to_string(), old_id: None, new_id: Some(id.clone()) });
+            } else if parent_map.get(path) != Some(id) {
+                files.push(sty_protocol::ChangedFile { path: path.clone(), change_type: "modified".to_string(), old_id: parent_map.get(path).cloned(), new_id: Some(id.clone()) });
+            }
+        }
+        for (path, id) in &parent_map {
+            if !current_map.contains_key(path) {
+                files.push(sty_protocol::ChangedFile { path: path.clone(), change_type: "deleted".to_string(), old_id: Some(id.clone()), new_id: None });
+            }
+        }
+        Ok(sty_protocol::MergePreviewResponse { files })
+    }) {
+        Ok(body) => Json(body).into_response(),
         Err(response) => response,
     }
 }
@@ -551,8 +603,8 @@ async fn get_head(
     headers: HeaderMap,
     Path((tenant, project, workspace)): Path<(String, String, String)>,
 ) -> Response {
-    match require_auth(&state, &headers).and_then(|principal| {
-        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
         map_result(state.store.head(&tenant, &project, &workspace))
     }) {
         Ok(head) => Json(HeadResponse { head }).into_response(),
@@ -727,6 +779,29 @@ fn require_auth(
     }
 }
 
+fn optional_auth(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> std::result::Result<Option<TokenPrincipal>, Response> {
+    let Some(value) = headers.get("authorization") else {
+        return Ok(None);
+    };
+    let Ok(value) = value.to_str() else {
+        return Err(error(
+            StatusCode::UNAUTHORIZED,
+            "invalid authorization header",
+        ));
+    };
+    let Some(token) = value.strip_prefix("Bearer ") else {
+        return Ok(None);
+    };
+    match state.store.principal_for_token(token) {
+        Ok(Some(principal)) => Ok(Some(principal)),
+        Ok(None) => Err(error(StatusCode::FORBIDDEN, "invalid bearer token")),
+        Err(err) => Err(error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())),
+    }
+}
+
 fn map_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
     value.map_err(|err| error(StatusCode::BAD_REQUEST, err.to_string()))
 }
@@ -741,6 +816,24 @@ fn map_store_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
         };
         error(status, message)
     })
+}
+
+fn check_project_access(
+    state: &AppState,
+    tenant: &str,
+    project: &str,
+    principal: Option<&TokenPrincipal>,
+) -> std::result::Result<(), Response> {
+    if let Some(p) = principal {
+        map_store_result(state.store.ensure_project(tenant, project, p))?;
+        Ok(())
+    } else {
+        match map_result(state.store.project_visibility(tenant, project)) {
+            Ok(Some(v)) if v == "public" => Ok(()),
+            Ok(_) => Err(error(StatusCode::UNAUTHORIZED, "sign in required")),
+            Err(response) => Err(response),
+        }
+    }
 }
 
 fn required_header(headers: &HeaderMap, name: &str) -> std::result::Result<String, Response> {

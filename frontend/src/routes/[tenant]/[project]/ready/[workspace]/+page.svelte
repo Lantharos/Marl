@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getReadyWorkspaceDetail, mergeWorkspace, createIssueComment, type Comment } from '$lib/api';
+	import { getReadyWorkspaceDetail, mergeWorkspace, createIssueComment, getMergePreview, type Comment } from '$lib/api';
 	import CommentThread from '$lib/components/CommentThread.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
@@ -8,6 +8,7 @@
 	const workspaceName = $derived($page.params.workspace as string);
 
 	let ws = $state<Awaited<ReturnType<typeof getReadyWorkspaceDetail>> | null>(null);
+	let preview = $state<{ path: string; change_type: string }[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
@@ -16,7 +17,12 @@
 		loading = true;
 		error = '';
 		try {
-			ws = await getReadyWorkspaceDetail(tenant, project, workspaceName);
+			const [detail, files] = await Promise.all([
+				getReadyWorkspaceDetail(tenant, project, workspaceName),
+				getMergePreview(tenant, project, workspaceName)
+			]);
+			ws = detail;
+			preview = files;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -45,6 +51,15 @@
 		const comment = await createIssueComment(tenant, project, 'ready-' + workspaceName, body);
 		ws = { ...ws, comments: [...ws.comments, comment] };
 	}
+
+	function changeTypeColor(type: string) {
+		switch (type) {
+			case 'added': return 'text-[#7cb97c]';
+			case 'deleted': return 'text-[#d96c5a]';
+			case 'modified': return 'text-[#d9a66c]';
+			default: return 'text-[#6f6b5f]';
+		}
+	}
 </script>
 
 <div class="mx-auto max-w-3xl">
@@ -64,6 +79,26 @@
 				</div>
 			{/if}
 		</div>
+
+		{#if preview.length > 0}
+			<div class="mb-4 rounded border border-[#2a2a28] bg-[#141412]">
+				<div class="border-b border-[#2a2a28] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">
+					Changes ({preview.length})
+				</div>
+				<div class="max-h-64 overflow-auto">
+					{#each preview as file}
+						<div class="flex items-center gap-2 border-b border-[#2a2a28] px-4 py-1.5 last:border-b-0">
+							<span class="w-14 shrink-0 text-xs font-medium {changeTypeColor(file.change_type)}">{file.change_type}</span>
+							<span class="truncate text-xs text-[#eae9e4]">{file.path}</span>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{:else}
+			<div class="mb-4 rounded border border-[#2a2a28] bg-[#141412] px-4 py-3 text-xs text-[#6f6b5f]">
+				No file changes to merge.
+			</div>
+		{/if}
 
 		<div class="mb-4 flex items-center gap-3">
 			<button

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { FileDiff } from '@pierre/diffs';
+	import { FileDiff, VirtualizedFileDiff, Virtualizer } from '@pierre/diffs';
 	import { renderFileDiff } from '$lib/diff';
 
 	let {
@@ -13,46 +13,84 @@
 		newText: string | null;
 	} = $props();
 
-	let host = $state<HTMLDivElement>();
-	let view: FileDiff | null = null;
+	let scrollHost = $state<HTMLDivElement>();
+	let contentHost = $state<HTMLDivElement>();
+	let view: FileDiff | VirtualizedFileDiff | null = null;
+	let virtualizer: Virtualizer | null = null;
 
 	$effect(() => {
-		const _host = host;
+		const _scroll = scrollHost;
+		const _content = contentHost;
 		const _path = path;
 		const _old = oldText;
 		const _new = newText;
-		if (!_host) return;
+		if (!_scroll || !_content) return;
 
 		view?.cleanUp();
-		_host.replaceChildren();
+		virtualizer?.cleanUp();
+		_content.replaceChildren();
 
 		const diff = renderFileDiff(_path, _old, _new, `${_path}-${Date.now()}`);
 		if (!diff) return;
 
-		const v = new FileDiff({
-			theme: 'pierre-dark',
-			diffStyle: 'unified',
-			diffIndicators: 'bars',
-			overflow: 'wrap',
-			unsafeCSS: `
-				:host {
-					--diffs-bg: #141412;
-					--diffs-bg-context: #141412;
-				}
-			`
-		});
-		v.render({
-			fileDiff: diff,
-			oldFile: { name: _path, contents: _old ?? '' },
-			newFile: { name: _path, contents: _new ?? '' },
-			containerWrapper: _host
-		});
-		view = v;
+		const lineCount = (_old ?? '').split('\n').length + (_new ?? '').split('\n').length;
+		const useVirtual = lineCount > 300;
+
+		if (useVirtual) {
+			virtualizer = new Virtualizer({ overscrollSize: 1000 });
+			virtualizer.setup(_scroll, _content);
+
+			const v = new VirtualizedFileDiff(
+				{
+					theme: 'pierre-dark',
+					diffStyle: 'unified',
+					diffIndicators: 'bars',
+					overflow: 'wrap',
+					unsafeCSS: `
+						:host {
+							--diffs-bg: #141412;
+							--diffs-bg-context: #141412;
+						}
+					`
+				},
+				virtualizer
+			);
+			v.render({
+				fileDiff: diff,
+				containerWrapper: _content,
+				oldFile: { name: _path, contents: _old ?? '' },
+				newFile: { name: _path, contents: _new ?? '' }
+			});
+			view = v;
+		} else {
+			const v = new FileDiff({
+				theme: 'pierre-dark',
+				diffStyle: 'unified',
+				diffIndicators: 'bars',
+				overflow: 'wrap',
+				unsafeCSS: `
+					:host {
+						--diffs-bg: #141412;
+						--diffs-bg-context: #141412;
+					}
+				`
+			});
+			v.render({
+				fileDiff: diff,
+				containerWrapper: _content,
+				oldFile: { name: _path, contents: _old ?? '' },
+				newFile: { name: _path, contents: _new ?? '' }
+			});
+			view = v;
+		}
 	});
 
 	onDestroy(() => {
 		view?.cleanUp();
+		virtualizer?.cleanUp();
 	});
 </script>
 
-<div bind:this={host} class="overflow-hidden"></div>
+<div bind:this={scrollHost} class="h-full overflow-auto">
+	<div bind:this={contentHost}></div>
+</div>

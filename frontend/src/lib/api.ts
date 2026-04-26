@@ -144,6 +144,19 @@ async function authedFetch(path: string, init: RequestInit = {}) {
 	return response;
 }
 
+async function publicFetch(path: string, init: RequestInit = {}) {
+	const token = await getStyToken();
+	const headers = new Headers(init.headers);
+	if (token) {
+		headers.set('authorization', `Bearer ${token}`);
+	}
+	const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
+	if (!response.ok) {
+		throw new Error(await response.text());
+	}
+	return response;
+}
+
 export async function getMe() {
 	const response = await authedFetch('/v1/me');
 	return (await response.json()) as { user: string; tenants: TenantSummary[] };
@@ -188,31 +201,31 @@ export async function createProject(slug: string) {
 }
 
 export async function getProject(tenant: string, project: string) {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}`);
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}`);
 	return (await response.json()) as ProjectDetail;
 }
 
 export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string) {
 	let url = `/v1/tenants/${tenant}/projects/${project}/tree?workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
-	const response = await authedFetch(url);
+	const response = await publicFetch(url);
 	return (await response.json()) as ProjectTree;
 }
 
 export async function getProjectFile(tenant: string, project: string, path: string, workspace = 'main', snapshot?: string) {
 	let url = `/v1/tenants/${tenant}/projects/${project}/files/${encodeURIComponent(path)}?workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
-	const response = await authedFetch(url);
+	const response = await publicFetch(url);
 	return (await response.json()) as ProjectFile;
 }
 
 export async function getHistoryEntry(tenant: string, project: string, entryId: string): Promise<HistoryEntry> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`);
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`);
 	return (await response.json()) as HistoryEntry;
 }
 
 export async function downloadObjects(tenant: string, project: string, ids: string[]): Promise<{ id: string; kind: string; bytes_base64: string }[]> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/objects/download`, {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/objects/download`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ ids })
@@ -222,7 +235,7 @@ export async function downloadObjects(tenant: string, project: string, ids: stri
 }
 
 export async function listIssues(tenant: string, project: string) {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues`);
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues`);
 	return (await response.json()) as { issues: Issue[] };
 }
 
@@ -235,7 +248,7 @@ export async function getIssue(tenant: string, project: string, issueId: string)
 }
 
 export async function listIssueComments(tenant: string, project: string, issueId: string): Promise<Comment[]> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`);
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`);
 	const data = (await response.json()) as { comments: Comment[] };
 	return data.comments;
 }
@@ -268,7 +281,7 @@ export async function updateIssueStatus(tenant: string, project: string, issueId
 }
 
 export async function listWorkspaceStatuses(tenant: string, project: string): Promise<WorkspaceStatus[]> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces`);
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces`);
 	const data = (await response.json()) as { workspaces: WorkspaceStatus[] };
 	return data.workspaces;
 }
@@ -301,6 +314,12 @@ export async function mergeWorkspace(tenant: string, project: string, workspace:
 	});
 }
 
+export async function getMergePreview(tenant: string, project: string, workspace: string): Promise<{ path: string; change_type: string }[]> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/merge-preview`);
+	const data = (await response.json()) as { files: { path: string; change_type: string }[] };
+	return data.files;
+}
+
 export async function markWorkspaceReady(tenant: string, project: string, workspace: string) {
 	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/ready`, {
 		method: 'POST'
@@ -308,7 +327,7 @@ export async function markWorkspaceReady(tenant: string, project: string, worksp
 }
 
 export async function getWorkspaceHistory(tenant: string, project: string, workspace: string): Promise<HistoryEntry[]> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/history`);
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/history`);
 	const data = (await response.json()) as { entries: HistoryEntry[] };
 	return data.entries;
 }

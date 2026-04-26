@@ -112,6 +112,25 @@ pub async fn ensure_project(
     Ok(())
 }
 
+pub async fn get_project(db: &D1Database, tenant: &str, project: &str) -> Result<Option<ProjectSummary>> {
+    #[derive(Deserialize)]
+    struct Row {
+        tenant: String,
+        project: String,
+        owner: String,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT tenant, project, owner FROM projects WHERE tenant = ?1 AND project = ?2")
+        .bind(&[js_str(tenant), js_str(project)])?
+        .first(None)
+        .await?;
+    Ok(row.map(|r| ProjectSummary {
+        tenant: r.tenant,
+        project: r.project,
+        owner: r.owner,
+    }))
+}
+
 pub async fn projects(db: &D1Database, _principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>> {
     #[derive(Deserialize)]
     struct Row {
@@ -661,6 +680,24 @@ pub async fn create_comment(
 }
 
 // ── Settings / Stars ─────────────────────────────────────
+
+pub async fn project_visibility(db: &D1Database, tenant: &str, project: &str) -> Result<Option<String>> {
+    #[derive(Deserialize)]
+    struct Row {
+        settings_json: String,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT settings_json FROM projects WHERE tenant = ?1 AND project = ?2")
+        .bind(&[js_str(tenant), js_str(project)])?
+        .first(None)
+        .await?;
+    let visibility = row.map(|r| {
+        serde_json::from_str::<ProjectSettings>(&r.settings_json)
+            .map(|s| s.visibility)
+            .unwrap_or_else(|_| "private".to_string())
+    });
+    Ok(visibility)
+}
 
 pub async fn project_settings(db: &D1Database, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings> {
     #[derive(Deserialize)]

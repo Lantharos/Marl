@@ -19,6 +19,7 @@ pub trait Store {
         project: &str,
         principal: &TokenPrincipal,
     ) -> Result<()>;
+    fn get_project(&self, tenant: &str, project: &str) -> Result<Option<ProjectSummary>>;
     fn projects(&self, principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>>;
     fn tenants(&self, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>>;
     fn create_org(&self, name: &str, principal: &TokenPrincipal) -> Result<TenantSummary>;
@@ -126,6 +127,7 @@ pub trait Store {
     ) -> Result<Comment>;
 
     // ── Settings / Stars ───────────────────────────────────
+    fn project_visibility(&self, tenant: &str, project: &str) -> Result<Option<String>>;
     fn project_settings(&self, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings>;
     fn update_project_settings(
         &self,
