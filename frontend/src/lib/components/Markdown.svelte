@@ -46,7 +46,13 @@
 	:global(.markdown-body a:hover) {
 		text-decoration: underline;
 	}
-	:global(.markdown-body ul, .markdown-body ol) {
+	:global(.markdown-body ul) {
+		list-style-type: disc;
+		margin: 0.5rem 0;
+		padding-left: 1.5rem;
+	}
+	:global(.markdown-body ol) {
+		list-style-type: decimal;
 		margin: 0.5rem 0;
 		padding-left: 1.5rem;
 	}

@@ -155,11 +155,11 @@
 					<div class="shrink-0 border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#6f6b5f]">
 						{detail.files.length} changed {detail.files.length === 1 ? 'file' : 'files'}
 					</div>
-					<div class="flex-1 overflow-auto min-h-0 p-2">
+					<div class="flex-1 overflow-auto min-h-0 py-1.5">
 						<FileTreePane entries={treeEntries} {selectedPath} {gitStatus} initialExpansion="open" flattenEmptyDirectories={true} onSelect={(p) => { selectedPath = p; }} />
 					</div>
 				</div>
-				<div class="flex-1 overflow-hidden rounded border border-[#2a2a28]">
+				<div class="flex-1 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
 					{#if fileLoading}
 						<div class="p-4 text-sm text-[#6f6b5f]">Loading diff...</div>
 					{:else if selectedPath}

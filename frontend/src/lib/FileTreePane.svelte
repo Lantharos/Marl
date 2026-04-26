@@ -71,6 +71,7 @@
 						}
 						[data-type='item'] {
 							cursor: pointer;
+							padding: 4px 6px;
 						}
 						[data-item-focused='true']::before {
 							outline: none !important;

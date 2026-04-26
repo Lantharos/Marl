@@ -112,6 +112,6 @@
 	});
 </script>
 
-<div bind:this={scrollHost} class="h-full overflow-auto">
+<div bind:this={scrollHost} class="h-full overflow-auto bg-[#141412]">
 	<div bind:this={contentHost}></div>
 </div>
