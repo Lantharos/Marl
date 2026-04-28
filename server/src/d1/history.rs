@@ -38,7 +38,7 @@ pub async fn workspace_history(
             id: r.id,
             kind: r.kind,
             message: r.message,
-            author_profile: profile_from_row(
+            author_profile: user_profile_from_parts(
                 &r.author,
                 r.display_name,
                 r.handle,
@@ -92,7 +92,7 @@ pub async fn project_history(
             id: r.id,
             kind: r.kind,
             message: r.message,
-            author_profile: profile_from_row(
+            author_profile: user_profile_from_parts(
                 &r.author,
                 r.display_name,
                 r.handle,
@@ -175,7 +175,7 @@ pub async fn get_history_entry(
         id: r.id,
         kind: r.kind,
         message: r.message,
-        author_profile: profile_from_row(
+        author_profile: user_profile_from_parts(
             &r.author,
             r.display_name,
             r.handle,
@@ -188,24 +188,6 @@ pub async fn get_history_entry(
         workspace: r.workspace,
         snapshot_id: r.snapshot_id,
     }))
-}
-
-fn profile_from_row(
-    user: &str,
-    display_name: Option<String>,
-    handle: Option<String>,
-    avatar_url: Option<String>,
-    email: Option<String>,
-    updated_at: Option<String>,
-) -> Option<UserProfile> {
-    display_name.map(|display_name| UserProfile {
-        user: user.to_string(),
-        display_name,
-        handle,
-        avatar_url,
-        email,
-        updated_at,
-    })
 }
 
 // -- Issues -----------------------------------------------

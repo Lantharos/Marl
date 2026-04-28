@@ -91,10 +91,16 @@ fn status_for_error(message: &str) -> u16 {
     {
         return 401;
     }
-    if lower.contains("access denied") || lower.contains("forbidden") {
+    if lower.contains("access denied")
+        || lower.contains("forbidden")
+        || lower.contains("control denied")
+    {
         return 403;
     }
-    if lower.contains("not found") || lower.contains("missing object") {
+    if lower.contains("not found")
+        || lower.contains("missing object")
+        || lower.contains("does not exist")
+    {
         return 404;
     }
     if lower.contains("invalid")

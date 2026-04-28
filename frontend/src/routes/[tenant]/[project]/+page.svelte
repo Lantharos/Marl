@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getProjectOverview, listWorkspaceStatuses, getProjectReadme, getProjectSettings, type ProjectOverview, type WorkspaceStatus, type ProjectSettings, type PanelItem } from '$lib/api';
+	import { getProjectOverview, type ProjectOverview, type WorkspaceStatus, type ProjectSettings, type PanelItem } from '$lib/api';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
@@ -40,16 +40,11 @@
 		loading = true;
 		(async () => {
 			try {
-				const [ov, ws, rd, st] = await Promise.all([
-					getProjectOverview(_tenant, _project),
-					listWorkspaceStatuses(_tenant, _project),
-					getProjectReadme(_tenant, _project),
-					getProjectSettings(_tenant, _project)
-				]);
+				const ov = await getProjectOverview(_tenant, _project);
 				overview = ov;
-				workspaces = ws;
-				readme = rd;
-				settings = st;
+				workspaces = ov.workspaces;
+				readme = ov.readme;
+				settings = ov.settings;
 			} catch (e) {
 				// ignore
 			} finally {

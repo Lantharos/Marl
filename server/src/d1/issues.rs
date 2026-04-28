@@ -15,11 +15,19 @@ pub async fn list_issues(db: &D1Database, tenant: &str, project: &str) -> Result
         milestone: Option<String>,
         workspace: Option<String>,
         labels_json: String,
+        display_name: Option<String>,
+        handle: Option<String>,
+        avatar_url: Option<String>,
+        email: Option<String>,
+        profile_updated_at: Option<String>,
     }
     let result = db
         .prepare(
-            "SELECT id, number, title, body, status, author, created_at, updated_at, closed_at, assignees_json, milestone, workspace, labels_json FROM issues \
-             WHERE tenant = ?1 AND project = ?2 ORDER BY number DESC"
+            "SELECT i.id, i.number, i.title, i.body, i.status, i.author, i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone, i.workspace, i.labels_json, \
+             u.display_name, u.handle, u.avatar_url, u.email, u.updated_at AS profile_updated_at \
+             FROM issues i \
+             LEFT JOIN user_profiles u ON u.user = i.author \
+             WHERE i.tenant = ?1 AND i.project = ?2 ORDER BY i.number DESC"
         )
         .bind(&[js_str(tenant), js_str(project)])?
         .all()
@@ -36,6 +44,14 @@ pub async fn list_issues(db: &D1Database, tenant: &str, project: &str) -> Result
                 body: r.body,
                 state: r.status.clone(),
                 status: r.status,
+                author_profile: user_profile_from_parts(
+                    &r.author,
+                    r.display_name,
+                    r.handle,
+                    r.avatar_url,
+                    r.email,
+                    r.profile_updated_at,
+                ),
                 author: r.author,
                 assignees: serde_json::from_str(r.assignees_json.as_deref().unwrap_or("[]"))
                     .unwrap_or_default(),
@@ -98,22 +114,11 @@ pub async fn create_issue(
     .run()
     .await?;
 
-    Ok(Issue {
-        id,
-        number: next_number,
-        title: title.to_string(),
-        body: body.to_string(),
-        state: "open".to_string(),
-        status: "open".to_string(),
-        author: principal.user.clone(),
-        assignees,
-        created_at,
-        updated_at: now_rfc3339(),
-        closed_at: None,
-        labels: labels.to_vec(),
-        milestone: None,
-        workspace: None,
-    })
+    list_issues(db, tenant, project)
+        .await?
+        .into_iter()
+        .find(|issue| issue.id == id)
+        .ok_or_else(|| err("issue not found"))
 }
 
 pub async fn update_issue_status(
@@ -136,50 +141,11 @@ pub async fn update_issue_status(
     .run()
     .await?;
 
-    #[derive(Deserialize)]
-    struct Row {
-        id: String,
-        number: f64,
-        title: String,
-        body: String,
-        status: String,
-        author: String,
-        created_at: String,
-        updated_at: Option<String>,
-        closed_at: Option<String>,
-        assignees_json: Option<String>,
-        milestone: Option<String>,
-        workspace: Option<String>,
-        labels_json: String,
-    }
-    let row: Option<Row> = db
-        .prepare(
-            "SELECT id, number, title, body, status, author, created_at, updated_at, closed_at, assignees_json, milestone, workspace, labels_json FROM issues \
-             WHERE tenant = ?1 AND project = ?2 AND id = ?3"
-        )
-        .bind(&[js_str(tenant), js_str(project), js_str(issue_id)])?
-        .first(None)
-        .await?;
-    let row = row.ok_or_else(|| err("issue not found"))?;
-    let labels = serde_json::from_str(&row.labels_json).unwrap_or_default();
-    let created_at = row.created_at;
-    Ok(Issue {
-        id: row.id,
-        number: row.number as u64,
-        title: row.title,
-        body: row.body,
-        state: row.status.clone(),
-        status: row.status,
-        author: row.author,
-        assignees: serde_json::from_str(row.assignees_json.as_deref().unwrap_or("[]"))
-            .unwrap_or_default(),
-        updated_at: row.updated_at.unwrap_or_else(|| created_at.clone()),
-        created_at,
-        closed_at: row.closed_at,
-        labels,
-        milestone: row.milestone,
-        workspace: row.workspace,
-    })
+    list_issues(db, tenant, project)
+        .await?
+        .into_iter()
+        .find(|issue| issue.id == issue_id)
+        .ok_or_else(|| err("issue not found"))
 }
 
 // -- Comments ---------------------------------------------
@@ -266,12 +232,20 @@ pub async fn list_comments(
         author: String,
         body: String,
         created_at: String,
+        display_name: Option<String>,
+        handle: Option<String>,
+        avatar_url: Option<String>,
+        email: Option<String>,
+        profile_updated_at: Option<String>,
     }
     let result = db
         .prepare(
-            "SELECT id, issue_id, author, body, created_at FROM comments \
-             WHERE tenant = ?1 AND project = ?2 AND issue_id = ?3 \
-             ORDER BY created_at",
+            "SELECT c.id, c.issue_id, c.author, c.body, c.created_at, \
+             u.display_name, u.handle, u.avatar_url, u.email, u.updated_at AS profile_updated_at \
+             FROM comments c \
+             LEFT JOIN user_profiles u ON u.user = c.author \
+             WHERE c.tenant = ?1 AND c.project = ?2 AND c.issue_id = ?3 \
+             ORDER BY c.created_at",
         )
         .bind(&[js_str(tenant), js_str(project), js_str(issue_id)])?
         .all()
@@ -282,6 +256,14 @@ pub async fn list_comments(
         .map(|r| Comment {
             id: r.id,
             issue_id: r.issue_id,
+            author_profile: user_profile_from_parts(
+                &r.author,
+                r.display_name,
+                r.handle,
+                r.avatar_url,
+                r.email,
+                r.profile_updated_at,
+            ),
             author: r.author,
             body: r.body,
             created_at: r.created_at,
@@ -318,6 +300,7 @@ pub async fn create_comment(
         id,
         issue_id: issue_id.to_string(),
         author: principal.user.clone(),
+        author_profile: user_profile(db, &principal.user).await?,
         body: body.to_string(),
         created_at,
     })

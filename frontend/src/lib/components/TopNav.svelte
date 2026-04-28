@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import {
 		getProjectSettings,
+		isAbortError,
 		starProject,
 		unstarProject,
 		type ProjectSummary,
@@ -17,7 +18,6 @@
 	import type { AveProfile } from '$lib/session';
 
 	let {
-		user,
 		profile,
 		tenants,
 		projects,
@@ -27,7 +27,6 @@
 		busy,
 		message
 	}: {
-		user: string;
 		profile: AveProfile | null;
 		tenants: TenantSummary[];
 		projects: ProjectSummary[];
@@ -44,6 +43,7 @@
 	let showCreateOrg = $state(false);
 	let settings = $state<ProjectSettings | null>(null);
 	let settingsLoading = $state(false);
+	let settingsKey = '';
 	let newProjectName = $state('');
 	let newOrgName = $state('');
 
@@ -53,11 +53,11 @@
 	const currentProject = $derived(pathParts[1] ?? null);
 	const selectedTenant = $derived(currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
-	const displayName = $derived(profile?.name || user);
+	const displayName = $derived(profile?.preferredUsername || profile?.name || 'Signed in');
 	const profileHandle = $derived(profile?.preferredUsername ? `@${profile.preferredUsername}` : profile?.email);
-	const profileDetail = $derived(profileHandle || profile?.sub || user);
+	const profileDetail = $derived(profileHandle || '');
 	const avatarUrl = $derived(profile?.picture);
-	const avatarInitials = $derived(initials(displayName || user));
+	const avatarInitials = $derived(initials(displayName));
 
 	const DEFAULT_TABS: NavbarItem[] = [
 		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
@@ -96,21 +96,28 @@
 	});
 
 	$effect(() => {
-		if (currentTenant && currentProject) {
-			loadSettings(currentTenant, currentProject);
-		} else {
+		const key = currentTenant && currentProject ? `${currentTenant}/${currentProject}` : '';
+		if (!key) {
+			settingsKey = '';
 			settings = null;
+			return;
 		}
+		if (key === settingsKey) return;
+		settingsKey = key;
+		const controller = new AbortController();
+		loadSettings(currentTenant, currentProject, controller.signal);
+		return () => controller.abort();
 	});
 
-	async function loadSettings(tenant: string, project: string) {
+	async function loadSettings(tenant: string, project: string, signal?: AbortSignal) {
 		settingsLoading = true;
 		try {
-			settings = await getProjectSettings(tenant, project);
-		} catch {
+			settings = await getProjectSettings(tenant, project, signal ? { signal } : {});
+		} catch (error) {
+			if (isAbortError(error)) return;
 			settings = null;
 		} finally {
-			settingsLoading = false;
+			if (!signal?.aborted) settingsLoading = false;
 		}
 	}
 

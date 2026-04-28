@@ -3,6 +3,7 @@
 	import { createRelease, createTag, isAbortError, listReleasesPage, listTags, type Paginated, type Release, type TagInfo } from '$lib/api';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { userName } from '$lib/identity';
 	import Plus from 'lucide-svelte/icons/plus';
 	import Tag from 'lucide-svelte/icons/tag';
 
@@ -141,7 +142,7 @@
 							<p class="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#c7c4ba]">{release.notes}</p>
 						{/if}
 						<div class="mt-2 flex flex-wrap gap-2 text-xs text-[#6f6b5f]">
-							{#if release.author}<span>{release.author}</span>{/if}
+							{#if release.author && userName(release.author) !== 'Unknown user'}<span>{userName(release.author)}</span>{/if}
 							{#if release.snapshot}<span class="font-mono">{release.snapshot.slice(0, 12)}</span>{/if}
 							{#if release.created_at}<span>{new Date(release.created_at).toLocaleDateString()}</span>{/if}
 						</div>

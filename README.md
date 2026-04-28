@@ -111,6 +111,13 @@ sty init tenant/project
 pig sync
 ```
 
+Your account tenant is created automatically from your Ave handle. To create an organization tenant first:
+
+```powershell
+sty tenant new tenant
+sty init tenant/project
+```
+
 `sty login` opens Ave, completes the OAuth callback locally, exchanges the Ave ID token with the sty Worker, and imports the returned sty bearer token into PIG. `sty init tenant/project` creates or connects the project and configures the PIG remote for the current repo.
 
 After that, use PIG normally:

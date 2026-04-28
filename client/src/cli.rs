@@ -14,10 +14,13 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     AuthCheckResponse, DEFAULT_AVE_CLIENT_ID, ProjectsResponse, StyConfig, TokenResponse,
-    UserProfile, validate_target,
+    UserProfile, validate_segment, validate_target,
 };
 use url::Url;
 use uuid::Uuid;
+
+use crate::http::{RequestBuilderExt, response_error};
+use crate::spinner;
 
 const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:8787";
 
@@ -33,19 +36,13 @@ pub struct Cli {
 enum Commands {
     Login {
         #[arg(long)]
-        dev: bool,
-        #[arg(long)]
         token: Option<String>,
         #[arg(long, default_value_t = 7390)]
         callback_port: u16,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
-        #[arg(long, default_value = "dev")]
-        user: String,
         #[arg(long, default_value = "pig")]
         pig: String,
-        #[arg(long)]
-        data: Option<PathBuf>,
     },
     Init {
         target: String,
@@ -58,6 +55,10 @@ enum Commands {
     Project {
         #[command(subcommand)]
         command: ProjectCommands,
+    },
+    Tenant {
+        #[command(subcommand)]
+        command: TenantCommands,
     },
 }
 
@@ -74,18 +75,24 @@ enum ProjectCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum TenantCommands {
+    New {
+        name: String,
+        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
+        remote_url: String,
+    },
+}
+
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Login {
-            dev,
             token,
             callback_port,
             remote_url,
-            user,
             pig,
-            data,
-        } => login(dev, token, callback_port, remote_url, user, pig, data),
+        } => login(token, callback_port, remote_url, pig),
         Commands::Init {
             target,
             remote_url,
@@ -96,30 +103,23 @@ pub fn run() -> Result<()> {
             ProjectCommands::Create { target, remote_url } => create_project(&target, &remote_url),
             ProjectCommands::List { remote_url } => list_projects(&remote_url),
         },
+        Commands::Tenant { command } => match command {
+            TenantCommands::New { name, remote_url } => create_tenant(&name, &remote_url),
+        },
     }
 }
 
-fn login(
-    dev: bool,
-    token: Option<String>,
-    callback_port: u16,
-    remote_url: String,
-    user: String,
-    pig: String,
-    data: Option<PathBuf>,
-) -> Result<()> {
-    let (token, user) = match (dev, token) {
-        (true, None) => {
-            let _ = data;
-            (create_dev_token(&remote_url, &user)?, user)
+fn login(token: Option<String>, callback_port: u16, remote_url: String, pig: String) -> Result<()> {
+    let (token, user) = match token {
+        Some(token) => {
+            let user = auth_user(&remote_url, &token)?;
+            (token, user)
         }
-        (false, Some(token)) => (token, user),
-        (false, None) => {
+        None => {
             let client_id =
                 env::var("STY_AVE_CLIENT_ID").unwrap_or_else(|_| DEFAULT_AVE_CLIENT_ID.to_string());
             browser_login(&remote_url, &client_id, callback_port)?
         }
-        (true, Some(_)) => bail!("use either --dev or --token, not both"),
     };
     import_pig_auth(&pig, &remote_url, &token)?;
     save_config(&StyConfig {
@@ -212,45 +212,51 @@ fn exchange_oauth_code(
     code: &str,
     verifier: &str,
 ) -> Result<OAuthTokenResponse> {
-    let response = Client::new()
-        .post("https://api.aveid.net/api/oauth/token")
-        .json(&serde_json::json!({
-            "grant_type": "authorization_code",
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "code": code,
-            "code_verifier": verifier,
-        }))
-        .send()?;
+    let response = spinner::run("Exchanging Ave token", || {
+        Client::new()
+            .post("https://api.aveid.net/api/oauth/token")
+            .json(&serde_json::json!({
+                "grant_type": "authorization_code",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "code": code,
+                "code_verifier": verifier,
+            }))
+            .send()
+    })?;
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("Ave token exchange failed with status {status}: {body}");
+        bail!(
+            "Ave token exchange failed with status {}",
+            response_error(response)
+        );
     }
     Ok(response.json()?)
 }
 
 fn exchange_sty_token(remote_url: &str, id_token: &str) -> Result<String> {
     let url = format!("{}/v1/session/exchange", remote_url.trim_end_matches('/'));
-    let response = Client::new()
-        .post(url)
-        .json(&serde_json::json!({ "id_token": id_token }))
-        .send()?;
+    let response = spinner::run("Creating sty session", || {
+        Client::new()
+            .post(url)
+            .json(&serde_json::json!({ "id_token": id_token }))
+            .send()
+    })?;
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("sty session exchange failed with status {status}: {body}");
+        bail!(
+            "sty session exchange failed with status {}",
+            response_error(response)
+        );
     }
     Ok(response.json::<TokenResponse>()?.token)
 }
 
 fn auth_user(remote_url: &str, token: &str) -> Result<String> {
     let url = format!("{}/v1/auth/check", remote_url.trim_end_matches('/'));
-    let response = Client::new().post(url).bearer_auth(token).send()?;
+    let response = spinner::run("Checking sty session", || {
+        Client::new().post(url).bearer_auth(token).send()
+    })?;
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("auth check failed with status {status}: {body}");
+        bail!("auth check failed with status {}", response_error(response));
     }
     let body = response.json::<AuthCheckResponse>()?;
     Ok(visible_user(&body.user, body.profile.as_ref()))
@@ -258,20 +264,6 @@ fn auth_user(remote_url: &str, token: &str) -> Result<String> {
 
 fn pkce_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
-}
-
-fn create_dev_token(remote_url: &str, user: &str) -> Result<String> {
-    let url = format!("{}/v1/dev/tokens", remote_url.trim_end_matches('/'));
-    let response = Client::new()
-        .post(url)
-        .json(&serde_json::json!({ "user": user }))
-        .send()?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("dev token request failed with status {status}: {body}");
-    }
-    Ok(response.json::<TokenResponse>()?.token)
 }
 
 fn init(target: String, remote_url: String, pig: String) -> Result<()> {
@@ -301,24 +293,48 @@ fn create_project(target: &str, remote_url: &str) -> Result<()> {
         .post(url)
         .bearer_auth(config.token)
         .json(&serde_json::json!({}))
-        .send()?;
+        .send_request("Creating project")?;
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("project create failed with status {status}: {body}");
+        bail!(
+            "project create failed with status {}",
+            response_error(response)
+        );
     }
     println!("Project ready: {target}");
+    Ok(())
+}
+
+fn create_tenant(name: &str, remote_url: &str) -> Result<()> {
+    validate_segment(name)?;
+    let config = load_config()?;
+    let url = format!("{}/v1/orgs", remote_url.trim_end_matches('/'));
+    let response = Client::new()
+        .post(url)
+        .bearer_auth(config.token)
+        .json(&serde_json::json!({ "name": name }))
+        .send_request("Creating tenant")?;
+    if !response.status().is_success() {
+        bail!(
+            "tenant create failed with status {}",
+            response_error(response)
+        );
+    }
+    println!("Tenant ready: {name}");
     Ok(())
 }
 
 fn list_projects(remote_url: &str) -> Result<()> {
     let config = load_config()?;
     let url = format!("{}/v1/projects", remote_url.trim_end_matches('/'));
-    let response = Client::new().get(url).bearer_auth(config.token).send()?;
+    let response = Client::new()
+        .get(url)
+        .bearer_auth(config.token)
+        .send_request("Fetching projects")?;
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("project list failed with status {status}: {body}");
+        bail!(
+            "project list failed with status {}",
+            response_error(response)
+        );
     }
     let body = response.json::<ProjectsResponse>()?;
     if body.projects.is_empty() {
@@ -326,10 +342,7 @@ fn list_projects(remote_url: &str) -> Result<()> {
         return Ok(());
     }
     for project in body.projects {
-        println!(
-            "{}/{}\towner {}",
-            project.tenant, project.project, project.owner
-        );
+        println!("{}/{}", project.tenant, project.project);
     }
     Ok(())
 }
@@ -337,11 +350,12 @@ fn list_projects(remote_url: &str) -> Result<()> {
 fn whoami() -> Result<()> {
     let config = load_config()?;
     let url = format!("{}/v1/auth/check", config.remote_url.trim_end_matches('/'));
-    let response = Client::new().post(url).bearer_auth(&config.token).send()?;
+    let response = Client::new()
+        .post(url)
+        .bearer_auth(&config.token)
+        .send_request("Checking sty session")?;
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("auth check failed with status {status}: {body}");
+        bail!("auth check failed with status {}", response_error(response));
     }
     let body = response.json::<AuthCheckResponse>()?;
     println!(
@@ -398,7 +412,7 @@ fn save_config(config: &StyConfig) -> Result<()> {
 fn load_config() -> Result<StyConfig> {
     let path = config_path()?;
     let bytes = std::fs::read(&path)
-        .with_context(|| format!("run `sty login --dev` first; missing {}", path.display()))?;
+        .with_context(|| format!("run `sty login` first; missing {}", path.display()))?;
     Ok(serde_json::from_slice(&bytes)?)
 }
 

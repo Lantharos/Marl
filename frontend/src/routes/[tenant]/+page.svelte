@@ -54,7 +54,6 @@
 						onclick={() => goto(`/${project.tenant}/${project.project}`)}
 					>
 						<div class="text-sm font-medium text-[#f0eee4]">{project.project}</div>
-						<div class="mt-1 text-xs text-[#6f6b5f]">Owner: {project.owner}</div>
 					</button>
 				{/each}
 			</div>

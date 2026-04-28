@@ -4,6 +4,7 @@
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { userName, withoutOpaqueUserIds } from '$lib/identity';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -118,6 +119,10 @@
 			default: return 'bg-[#2a2a28] text-[#a09d94]';
 		}
 	}
+
+	function displayMessage(entry: HistoryEntry) {
+		return withoutOpaqueUserIds(entry.message) || entry.kind;
+	}
 </script>
 
 <div class="flex flex-col gap-4 overflow-hidden" style="height: calc(100vh - 180px);">
@@ -132,11 +137,11 @@
 			</div>
 			<div class="min-w-0 flex-1">
 				<div class="flex flex-wrap items-center gap-2">
-					<span class="text-sm font-medium text-[#eae9e4]">{detail.message || detail.kind}</span>
+					<span class="text-sm font-medium text-[#eae9e4]">{displayMessage(detail)}</span>
 					<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">{detail.workspace}</span>
 				</div>
 				<div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#6f6b5f]">
-					<span>{detail.author}</span>
+					<span>{userName(detail.author, detail.author_profile)}</span>
 					<span>{new Date(detail.timestamp).toLocaleString()}</span>
 					{#if detail.snapshot_id}
 						<span class="font-mono text-[10px]">{detail.snapshot_id.slice(0, 12)}</span>

@@ -13,13 +13,11 @@ export type { CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem,
 export interface ProjectSummary {
 	tenant: string;
 	project: string;
-	owner: string;
 }
 
 export interface TenantSummary {
 	name: string;
 	kind: 'user' | 'org' | string;
-	owner: string;
 }
 
 export interface UserProfile {
@@ -145,6 +143,9 @@ export interface Activity {
 
 export interface ProjectOverview {
 	project: ProjectSummary;
+	workspaces: WorkspaceStatus[];
+	settings: ProjectSettings;
+	readme: string | null;
 	stats: {
 		workspace_count: number;
 		issue_count: number;
@@ -485,39 +486,8 @@ export async function getProjectReadme(tenant: string, project: string, options:
 }
 
 export async function getProjectOverview(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectOverview> {
-	const [detail, issues, workspaces, settings, history] = await Promise.all([
-		getProject(tenant, project, options),
-		listIssues(tenant, project, options),
-		listWorkspaceStatuses(tenant, project, options),
-		getProjectSettings(tenant, project, options).catch((error) => {
-			if (isAbortError(error)) throw error;
-			return null;
-		}),
-		getProjectHistory(tenant, project, options).catch((error) => {
-			if (isAbortError(error)) throw error;
-			return [];
-		})
-	]);
-	const recentActivity: Activity[] = history.slice(0, 20).map((h) => ({
-		id: h.id,
-		kind: h.kind as Activity['kind'],
-		actor: h.author,
-		actor_profile: h.author_profile,
-		message: h.message,
-		timestamp: h.timestamp,
-		workspace: h.workspace
-	}));
-	return {
-		project: detail.project,
-		stats: {
-			workspace_count: detail.workspaces.length,
-			issue_count: issues.issues.length,
-			open_ready_count: workspaces.filter((w) => w.is_ready).length,
-			star_count: settings?.starred_count ?? 0
-		},
-		recent_activity: recentActivity,
-		default_workspace: settings?.default_workspace ?? 'main'
-	};
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/overview`, { signal: options.signal });
+	return (await response.json()) as ProjectOverview;
 }
 
 export async function getProjectSettings(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectSettings> {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Activity } from '$lib/api';
+	import { userDisplayName, withoutOpaqueUserIds } from '$lib/identity';
 
 	let { activities }: { activities: Activity[] } = $props();
 
@@ -30,19 +31,43 @@
 	}
 
 	function initials(activity: Activity) {
-		const name = activity.actor_profile?.display_name || activity.actor;
+		const name = displayName(activity);
+		if (name === 'Unknown user') return '?';
 		const parts = name.trim().split(/\s+/).filter(Boolean);
 		if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 		return (parts[0] ?? name).slice(0, 2).toUpperCase();
 	}
 
 	function displayName(activity: Activity) {
-		return activity.actor_profile?.display_name || activity.actor_profile?.handle || activity.actor;
+		return userDisplayName(activity.actor, activity.actor_profile);
+	}
+
+	function displayMessage(activity: Activity) {
+		const message = withoutOpaqueUserIds(activity.message);
+		const normalized = message.toLowerCase();
+		if (!message || normalized === activity.kind) {
+			return actionLabel(activity.kind);
+		}
+		return actionLabel(normalized) ?? message;
+	}
+
+	function actionLabel(kind: string) {
+		switch (kind) {
+			case 'save': return 'saved';
+			case 'ship': return 'shipped';
+			case 'cram': return 'crammed';
+			case 'issue': return 'updated an issue';
+			case 'ready': return 'marked a workspace ready';
+			case 'merge': return 'merged';
+			case 'star': return 'starred';
+			default: return null;
+		}
 	}
 </script>
 
 <div class="grid gap-0">
 	{#each activities as activity}
+		{@const message = displayMessage(activity)}
 		<div class="flex items-start gap-3 border-b border-[#1e1e1c] py-3 last:border-0">
 			<div class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
 				{#if activity.actor_profile?.avatar_url}
@@ -54,7 +79,9 @@
 			<div class="min-w-0 flex-1">
 				<p class="text-sm text-[#eae9e4]">
 					<span class="font-medium">{displayName(activity)}</span>
-					{activity.message}
+					{#if message}
+						{' '}{message}
+					{/if}
 				</p>
 				<div class="mt-0.5 flex items-center gap-2 text-xs text-[#6f6b5f]">
 					{#if activity.workspace}

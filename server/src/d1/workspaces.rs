@@ -151,7 +151,7 @@ pub async fn mark_workspace_ready(
         workspace,
         principal,
         "ready",
-        &format!("{} marked workspace {} as ready", principal.user, workspace),
+        &format!("marked workspace {workspace} as ready"),
         None,
     )
     .await?;
@@ -176,7 +176,7 @@ pub async fn merge_workspace(
         workspace,
         principal,
         "merge",
-        &format!("{} merged workspace {}", principal.user, workspace),
+        &format!("merged workspace {workspace}"),
         None,
     )
     .await?;

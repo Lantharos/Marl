@@ -12,6 +12,7 @@
 		type Issue
 	} from '$lib/api';
 	import CommentThread from '$lib/components/CommentThread.svelte';
+	import { userName } from '$lib/identity';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
 
@@ -135,7 +136,7 @@
 						<h2 class="text-xl font-semibold text-[#f0eee4]">{issue.title}</h2>
 					{/if}
 					<div class="mt-1 text-xs text-[#6f6b5f]">
-						#{issue.number} opened by {issue.author} on {new Date(issue.created_at).toLocaleDateString()}
+						#{issue.number} opened by {userName(issue.author, issue.author_profile)} on {new Date(issue.created_at).toLocaleDateString()}
 					</div>
 				</div>
 				<button class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" onclick={handleStatusChange}>
@@ -149,7 +150,7 @@
 
 			<div class="rounded bg-[#141412]">
 				<div class="flex items-center justify-between border-b border-[#252522] px-4 py-2">
-					<div class="text-sm font-medium text-[#eae9e4]">{issue.author}</div>
+					<div class="text-sm font-medium text-[#eae9e4]">{userName(issue.author, issue.author_profile)}</div>
 					<button class="text-xs text-[#8c887e] hover:text-[#eae9e4]" onclick={() => (editing = !editing)}>{editing ? 'Cancel' : 'Edit'}</button>
 				</div>
 				{#if editing}
@@ -190,7 +191,7 @@
 				<div class="mb-2 text-sm font-medium text-[#eae9e4]">Assignees</div>
 				<div class="grid gap-1">
 					{#each issue.assignees ?? [] as user}
-						<div class="rounded bg-[#141412] px-3 py-2 text-xs text-[#eae9e4]">{user}</div>
+						<div class="rounded bg-[#141412] px-3 py-2 text-xs text-[#eae9e4]">{userName(user)}</div>
 					{:else}
 						<p class="text-xs text-[#6f6b5f]">No assignees.</p>
 					{/each}

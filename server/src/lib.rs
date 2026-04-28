@@ -29,6 +29,7 @@ include!("graph.rs");
 include!("identity.rs");
 include!("issues.rs");
 include!("objects.rs");
+include!("overview.rs");
 include!("settings.rs");
 include!("sync.rs");
 
@@ -48,6 +49,10 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/projects", list_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/overview",
+            project_overview,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/workspaces",
             list_workspaces,

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Comment } from '$lib/api';
+	import { userName } from '$lib/identity';
 
 	let {
 		comments,
@@ -29,7 +30,7 @@
 	{#each comments as comment}
 		<div class="rounded border border-[#2a2a28]">
 			<div class="flex items-center gap-2 rounded-t bg-[#1a1a18] px-3 py-2">
-				<span class="text-sm font-medium text-[#eae9e4]">{comment.author}</span>
+				<span class="text-sm font-medium text-[#eae9e4]">{userName(comment.author, comment.author_profile)}</span>
 				<span class="text-xs text-[#6f6b5f]">{new Date(comment.created_at).toLocaleString()}</span>
 			</div>
 			<div class="px-3 py-3 text-sm text-[#eae9e4] leading-relaxed whitespace-pre-wrap">{comment.body}</div>

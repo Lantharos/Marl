@@ -32,6 +32,24 @@ fn now_rfc3339() -> String {
     d.to_iso_string().into()
 }
 
+fn user_profile_from_parts(
+    user: &str,
+    display_name: Option<String>,
+    handle: Option<String>,
+    avatar_url: Option<String>,
+    email: Option<String>,
+    updated_at: Option<String>,
+) -> Option<UserProfile> {
+    display_name.map(|display_name| UserProfile {
+        user: user.to_string(),
+        display_name,
+        handle,
+        avatar_url,
+        email,
+        updated_at,
+    })
+}
+
 // -- Auth -------------------------------------------------
 
 mod auth;

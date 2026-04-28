@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { getProjectHistory, isAbortError, type HistoryEntry } from '$lib/api';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { userName, withoutOpaqueUserIds } from '$lib/identity';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -56,6 +57,10 @@
 	const workspaces = $derived(['__all__', ...new Set(entries.map((e) => e.workspace))]);
 	let filter = $state('__all__');
 	const filtered = $derived(filter === '__all__' ? entries : entries.filter((e) => e.workspace === filter));
+
+	function displayMessage(entry: HistoryEntry) {
+		return withoutOpaqueUserIds(entry.message) || entry.kind;
+	}
 </script>
 
 <div>
@@ -88,11 +93,11 @@
 					</div>
 					<div class="min-w-0 flex-1">
 						<div class="flex flex-wrap items-center gap-2">
-							<span class="text-sm font-medium text-[#eae9e4]">{entry.message || entry.kind}</span>
+							<span class="text-sm font-medium text-[#eae9e4]">{displayMessage(entry)}</span>
 							<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">{entry.workspace}</span>
 						</div>
 						<div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#6f6b5f]">
-							<span>{entry.author}</span>
+							<span>{userName(entry.author, entry.author_profile)}</span>
 							<span>{new Date(entry.timestamp).toLocaleString()}</span>
 							{#if entry.snapshot_id}
 								<span class="font-mono text-[10px]">{entry.snapshot_id.slice(0, 8)}</span>

@@ -17,6 +17,7 @@
 	} from '$lib/api';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { userName } from '$lib/identity';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
 	import Plus from 'lucide-svelte/icons/plus';
@@ -79,7 +80,7 @@
 	);
 	const filteredIssues = $derived(
 		issues.filter((issue) => {
-			const haystack = `${issue.title} ${issue.body} ${issue.labels.join(' ')} ${issue.author}`.toLowerCase();
+			const haystack = `${issue.title} ${issue.body} ${issue.labels.join(' ')} ${userName(issue.author, issue.author_profile)}`.toLowerCase();
 			return haystack.includes(query.trim().toLowerCase());
 		})
 	);
@@ -87,8 +88,12 @@
 		const names = new Set<string>();
 		if (currentUser) names.add(currentUser);
 		for (const issue of issues) {
-			if (issue.author) names.add(issue.author);
-			for (const person of issue.assignees ?? []) names.add(person);
+			const author = userName(issue.author, issue.author_profile);
+			if (author !== 'Unknown user') names.add(author);
+			for (const person of issue.assignees ?? []) {
+				const name = userName(person);
+				if (name !== 'Unknown user') names.add(name);
+			}
 		}
 		return [...names].sort((a, b) => a.localeCompare(b));
 	});
@@ -130,7 +135,7 @@
 			issueData = issuesResult;
 			labelData = labelsResult;
 			milestoneData = milestonesResult;
-			currentUser = me?.user ?? currentUser;
+			currentUser = me?.profile?.handle ?? currentUser;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -251,6 +256,12 @@
 	function chooseAssignee(name: string) {
 		assignee = name;
 		assigneeDraft = name;
+	}
+
+	function visibleAssignees(issue: Issue) {
+		return (issue.assignees ?? [])
+			.map((person) => userName(person))
+			.filter((person) => person !== 'Unknown user');
 	}
 </script>
 
@@ -390,8 +401,8 @@
 						</div>
 						<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
 							<span>#{issue.number}</span>
-							<span>opened by {issue.author}</span>
-							{#if issue.assignees?.length}<span>assigned to {issue.assignees.join(', ')}</span>{/if}
+							<span>opened by {userName(issue.author, issue.author_profile)}</span>
+							{#if visibleAssignees(issue).length}<span>assigned to {visibleAssignees(issue).join(', ')}</span>{/if}
 							{#if issue.milestone}<span>{issue.milestone}</span>{/if}
 							{#if issue.workspace}<span>{issue.workspace}</span>{/if}
 							<span>{new Date(issue.updated_at ?? issue.created_at).toLocaleDateString()}</span>

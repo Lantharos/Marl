@@ -192,11 +192,6 @@ pub struct StyConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct DevTokenRequest {
-    pub user: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct TokenResponse {
     pub token: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -260,6 +255,8 @@ pub struct Issue {
     pub state: String,
     pub status: String,
     pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_profile: Option<UserProfile>,
     pub assignees: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -296,6 +293,8 @@ pub struct Comment {
     pub id: String,
     pub issue_id: String,
     pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_profile: Option<UserProfile>,
     pub body: String,
     pub created_at: String,
 }

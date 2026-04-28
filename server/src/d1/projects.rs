@@ -6,6 +6,11 @@ pub async fn ensure_project(
     principal: &TokenPrincipal,
 ) -> Result<()> {
     ensure_account_tenant(db, &principal.user).await?;
+    if !tenant_exists(db, tenant).await? {
+        return Err(err(format!(
+            "tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"
+        )));
+    }
     if !tenant_control(db, tenant, &principal.user).await? {
         return Err(err("tenant control denied"));
     }
@@ -60,17 +65,16 @@ pub async fn get_project(
     struct Row {
         tenant: String,
         project: String,
-        owner: String,
     }
     let row: Option<Row> = db
-        .prepare("SELECT tenant, project, owner FROM projects WHERE tenant = ?1 AND project = ?2")
+        .prepare("SELECT tenant, project FROM projects WHERE tenant = ?1 AND project = ?2")
         .bind(&[js_str(tenant), js_str(project)])?
         .first(None)
         .await?;
     Ok(row.map(|r| ProjectSummary {
+        owner: r.tenant.clone(),
         tenant: r.tenant,
         project: r.project,
-        owner: r.owner,
     }))
 }
 
@@ -79,11 +83,10 @@ pub async fn projects(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec
     struct Row {
         tenant: String,
         project: String,
-        owner: String,
     }
     let result = db
         .prepare(
-            "SELECT p.tenant, p.project, p.owner FROM projects p \
+            "SELECT p.tenant, p.project FROM projects p \
              JOIN tenants t ON t.name = p.tenant \
              WHERE (t.owner = ?1 OR t.members_json LIKE ?2) \
              AND (t.kind != 'user' OR t.name = (SELECT handle FROM user_profiles WHERE user = ?1)) \
@@ -99,9 +102,9 @@ pub async fn projects(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec
     Ok(rows
         .into_iter()
         .map(|r| ProjectSummary {
+            owner: r.tenant.clone(),
             tenant: r.tenant,
             project: r.project,
-            owner: r.owner,
         })
         .collect())
 }

@@ -8,6 +8,7 @@ export interface Issue {
 	status: 'open' | 'closed';
 	state?: 'open' | 'closed';
 	author: string;
+	author_profile?: import('./api').UserProfile | null;
 	assignees?: string[];
 	created_at: string;
 	updated_at?: string;
@@ -20,6 +21,7 @@ export interface Issue {
 export interface Comment {
 	id: string;
 	author: string;
+	author_profile?: import('./api').UserProfile | null;
 	body: string;
 	created_at: string;
 	target_type?: string;

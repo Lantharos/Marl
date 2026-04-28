@@ -23,7 +23,6 @@
 	let { children } = $props();
 
 	let status = $state<'loading' | 'signedOut' | 'signedIn'>('loading');
-	let user = $state('');
 	let profile = $state<AveProfile | null>(null);
 	let tenants = $state<TenantSummary[]>([]);
 	let projects = $state<ProjectSummary[]>([]);
@@ -56,7 +55,6 @@
 		try {
 			await hydrateSession();
 			const me = await getInitializedMe();
-			user = me.user;
 			if (me.profile) {
 				profile = {
 					sub: me.profile.user,
@@ -78,7 +76,6 @@
 			projects = [];
 			tenants = [];
 			profile = null;
-			user = '';
 			status = 'signedOut';
 		} finally {
 			bootstrapDone = true;
@@ -130,7 +127,6 @@
 		projects = [];
 		tenants = [];
 		profile = null;
-		user = '';
 		appData.set({ me: null, projects: [], ready: false });
 	}
 </script>
@@ -238,7 +234,6 @@
 {:else if status === 'signedIn'}
 	<div class="flex h-screen flex-col overflow-hidden bg-[#0f0f0d]">
 		<TopNav
-			{user}
 			{profile}
 			{tenants}
 			{projects}

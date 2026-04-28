@@ -11,6 +11,7 @@
 	} from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
+	import { userName, withoutOpaqueUserIds } from '$lib/identity';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -106,6 +107,10 @@
 			default: return 'bg-[#2a2a28] text-[#a09d94]';
 		}
 	}
+
+	function historyMessage(entry: { message: string; kind: string }) {
+		return withoutOpaqueUserIds(entry.message) || entry.kind;
+	}
 </script>
 
 {#if loading}
@@ -190,8 +195,8 @@
 									{historyIcon(entry.kind)}
 								</div>
 								<div class="min-w-0 flex-1">
-									<div class="text-xs text-[#eae9e4]">{entry.message || entry.kind}</div>
-									<div class="text-[10px] text-[#6f6b5f]">{entry.author} · {new Date(entry.timestamp).toLocaleString()}</div>
+									<div class="text-xs text-[#eae9e4]">{historyMessage(entry)}</div>
+									<div class="text-[10px] text-[#6f6b5f]">{userName(entry.author, entry.author_profile)} · {new Date(entry.timestamp).toLocaleString()}</div>
 								</div>
 							</button>
 						{:else}
