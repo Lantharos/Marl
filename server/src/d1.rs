@@ -58,6 +58,7 @@ mod issues;
 mod objects;
 mod projects;
 mod settings;
+mod user_keys;
 mod workspaces;
 
 pub use auth::*;
@@ -66,4 +67,5 @@ pub use issues::*;
 pub use objects::*;
 pub use projects::*;
 pub use settings::*;
+pub use user_keys::*;
 pub use workspaces::*;

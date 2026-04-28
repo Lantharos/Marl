@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 base64 = "0.22.1"
+ed25519-dalek = { version = "2.2.0", features = ["serde"] }
 getrandom = { version = "0.2.17", features = ["js"] }
 hex = "0.4.3"
 js-sys = "0.3"

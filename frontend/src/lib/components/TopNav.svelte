@@ -49,8 +49,9 @@
 
 	const currentPath = $derived($page.url.pathname);
 	const pathParts = $derived(currentPath.split('/').filter(Boolean));
-	const currentTenant = $derived(pathParts[0] ?? '');
-	const currentProject = $derived(pathParts[1] ?? null);
+	const accountSettings = $derived(pathParts[0] === 'settings');
+	const currentTenant = $derived(accountSettings ? '' : (pathParts[0] ?? ''));
+	const currentProject = $derived(accountSettings ? null : (pathParts[1] ?? null));
 	const selectedTenant = $derived(currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
 	const displayName = $derived(profile?.preferredUsername || profile?.name || 'Signed in');
@@ -105,7 +106,7 @@
 		if (key === settingsKey) return;
 		settingsKey = key;
 		const controller = new AbortController();
-		loadSettings(currentTenant, currentProject, controller.signal);
+		loadSettings(currentTenant, currentProject ?? '', controller.signal);
 		return () => controller.abort();
 	});
 
@@ -279,6 +280,9 @@
 						{/if}
 					</div>
 					<div class="border-t border-[#2a2a28]">
+						<a class="block w-full px-3 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" href="/settings" onclick={() => (showProfile = false)}>
+							User settings
+						</a>
 						<button class="block w-full px-3 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" onclick={() => { onSignOut(); showProfile = false; }}>
 							Sign out
 						</button>

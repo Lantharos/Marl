@@ -1,30 +1,32 @@
 <script lang="ts">
-	import type { ProtocolItem } from '$lib/api';
+	import type { AccountKey } from '$lib/api';
 
 	let {
 		signingKeys,
 		sshKeys,
 		busy,
+		signingKeyName = $bindable(),
+		signingKeyBody = $bindable(),
 		sshKeyName = $bindable(),
 		sshKeyBody = $bindable(),
+		addSigningKey,
 		addSshKey,
-		removeProtocolItem
+		removeKey
 	}: {
-		signingKeys: ProtocolItem[];
-		sshKeys: ProtocolItem[];
+		signingKeys: AccountKey[];
+		sshKeys: AccountKey[];
 		busy: boolean;
+		signingKeyName: string;
+		signingKeyBody: string;
 		sshKeyName: string;
 		sshKeyBody: string;
+		addSigningKey: () => void;
 		addSshKey: () => void;
-		removeProtocolItem: (kind: string, id: string) => void;
+		removeKey: (kind: 'signing_key' | 'ssh_key', id: string) => void;
 	} = $props();
 
-	function title(item: ProtocolItem) {
-		return String(item.name ?? item.title ?? item.event ?? item.id);
-	}
-
-	function detail(item: ProtocolItem) {
-		return String(item.url ?? item.description ?? item.key ?? item.algorithm ?? '');
+	function shortKey(value: string) {
+		return value.length > 20 ? `${value.slice(0, 12)}...${value.slice(-8)}` : value;
 	}
 </script>
 
@@ -35,13 +37,21 @@
 			<div class="mb-2 text-xs text-[#8c887e]">Signing keys</div>
 			<div class="grid gap-1">
 				{#each signingKeys as item}
-					<div class="rounded bg-[#0f0f0d] px-3 py-2">
-						<div class="truncate text-xs font-medium text-[#eae9e4]">{title(item)}</div>
-						<div class="truncate text-[11px] text-[#6f6b5f]">{detail(item)}</div>
+					<div class="flex items-start justify-between gap-2 rounded bg-[#0f0f0d] px-3 py-2">
+						<div class="min-w-0">
+							<div class="truncate text-xs font-medium text-[#eae9e4]">{item.name}</div>
+							<div class="truncate text-[11px] text-[#6f6b5f]">{item.algorithm} · {shortKey(item.fingerprint)}</div>
+						</div>
+						<button class="text-[11px] text-[#8c887e] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeKey('signing_key', item.id)}>Delete</button>
 					</div>
 				{:else}
 					<p class="text-xs text-[#6f6b5f]">No signing keys.</p>
 				{/each}
+			</div>
+			<div class="mt-2 grid gap-2">
+				<input class="rounded bg-[#0f0f0d] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Key name" bind:value={signingKeyName} />
+				<textarea class="min-h-20 resize-y rounded bg-[#0f0f0d] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Ed25519 public key" bind:value={signingKeyBody}></textarea>
+				<button class="w-fit rounded bg-[#2a2a28] px-2.5 py-1 text-xs text-[#eae9e4]" disabled={busy || !signingKeyName.trim() || !signingKeyBody.trim()} onclick={addSigningKey}>Add signing key</button>
 			</div>
 		</div>
 		<div>
@@ -50,10 +60,10 @@
 				{#each sshKeys as item}
 					<div class="flex items-start justify-between gap-2 rounded bg-[#0f0f0d] px-3 py-2">
 						<div class="min-w-0">
-							<div class="truncate text-xs font-medium text-[#eae9e4]">{title(item)}</div>
-							<div class="truncate text-[11px] text-[#6f6b5f]">{detail(item)}</div>
+							<div class="truncate text-xs font-medium text-[#eae9e4]">{item.name}</div>
+							<div class="truncate text-[11px] text-[#6f6b5f]">{item.algorithm} · {shortKey(item.fingerprint)}</div>
 						</div>
-						<button class="text-[11px] text-[#8c887e] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeProtocolItem('ssh_key', item.id)}>Delete</button>
+						<button class="text-[11px] text-[#8c887e] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeKey('ssh_key', item.id)}>Delete</button>
 					</div>
 				{:else}
 					<p class="text-xs text-[#6f6b5f]">No SSH keys.</p>

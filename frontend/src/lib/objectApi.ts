@@ -19,6 +19,13 @@ export async function downloadObjects(tenant: string, project: string, ids: stri
 	);
 }
 
+export async function downloadObjectText(tenant: string, project: string, id: string | null | undefined, options: ApiOptions = {}) {
+	if (!id) return null;
+	const [object] = await downloadObjects(tenant, project, [id], options);
+	if (!object || object.kind !== 'blob') return null;
+	return new TextDecoder().decode(base64ToBytes(object.bytes_base64));
+}
+
 function bytesToBase64(bytes: Uint8Array) {
 	let binary = '';
 	const chunkSize = 0x8000;
@@ -26,4 +33,13 @@ function bytesToBase64(bytes: Uint8Array) {
 		binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
 	}
 	return btoa(binary);
+}
+
+function base64ToBytes(value: string) {
+	const binary = atob(value);
+	const bytes = new Uint8Array(binary.length);
+	for (let index = 0; index < binary.length; index += 1) {
+		bytes[index] = binary.charCodeAt(index);
+	}
+	return bytes;
 }

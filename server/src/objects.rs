@@ -42,7 +42,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
     if bytes.len() != size {
         return json_error(400, "object size does not match x-pig-object-size");
     }
-    let digest = hex::encode(Sha256::digest(&bytes));
+    let digest = object_digest_for_kind(&bytes, &kind)?;
     if digest != id {
         return json_error(400, "object id does not match SHA-256 digest");
     }
@@ -80,6 +80,50 @@ pub(crate) async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Re
 }
 
 // -- Helpers ----------------------------------------------
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct CanonicalSnapshot {
+    id: String,
+    parents: Vec<String>,
+    #[serde(default = "default_snapshot_kind")]
+    kind: String,
+    author: String,
+    agent: Option<String>,
+    #[serde(default)]
+    agent_model: Option<String>,
+    time: String,
+    message: Option<String>,
+    root_tree: String,
+    workspace_id: String,
+    intents: Vec<CanonicalIntent>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct CanonicalIntent {
+    intent_type: String,
+    unit: String,
+    name: String,
+    file: String,
+    #[serde(default)]
+    line_start: Option<usize>,
+    #[serde(default)]
+    line_end: Option<usize>,
+}
+
+fn object_digest_for_kind(bytes: &[u8], kind: &str) -> Result<String> {
+    if kind != "snapshot" {
+        return Ok(hex::encode(Sha256::digest(bytes)));
+    }
+    let mut snapshot: CanonicalSnapshot =
+        serde_json::from_slice(bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    snapshot.id.clear();
+    let canonical = serde_json::to_vec(&snapshot).map_err(|error| Error::RustError(error.to_string()))?;
+    Ok(hex::encode(Sha256::digest(canonical)))
+}
+
+fn default_snapshot_kind() -> String {
+    "save".to_string()
+}
 
 pub(crate) async fn require_auth(req: &Request, env: &Env) -> Result<String> {
     let Some(value) = req.headers().get("authorization")? else {

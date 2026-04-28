@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getHistoryEntryDetail, getProjectFile, isAbortError, type HistoryEntry } from '$lib/api';
+	import { getHistoryEntryDetail, isAbortError, type HistoryEntry } from '$lib/api';
+	import { downloadObjectText } from '$lib/objectApi';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -46,19 +47,17 @@
 			return;
 		}
 		try {
-			if (file.change_type !== 'added' && detail.parent_id) {
+			if (file.change_type !== 'added') {
 				try {
-					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.parent_id, { signal });
-					selectedOldText = f.text;
+					selectedOldText = await downloadObjectText(tenant, project, file.old_id, { signal });
 				} catch (error) {
 					if (isAbortError(error)) throw error;
 					selectedOldText = null;
 				}
 			}
-			if (file.change_type !== 'deleted' && detail.snapshot_id) {
+			if (file.change_type !== 'deleted') {
 				try {
-					const f = await getProjectFile(tenant, project, path, detail.workspace, detail.snapshot_id, { signal });
-					selectedNewText = f.text;
+					selectedNewText = await downloadObjectText(tenant, project, file.new_id, { signal });
 				} catch (error) {
 					if (isAbortError(error)) throw error;
 					selectedNewText = null;

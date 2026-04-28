@@ -7,6 +7,7 @@ export interface ApiOptions {
 export interface PageOptions extends ApiOptions {
 	page?: number;
 	perPage?: number;
+	all?: boolean;
 	state?: 'open' | 'closed' | 'all';
 	label?: string;
 	assignee?: string;
@@ -53,6 +54,7 @@ export function pageQuery(options: PageOptions = {}) {
 	const params = new URLSearchParams();
 	if (options.page) params.set('page', String(options.page));
 	if (options.perPage) params.set('per_page', String(options.perPage));
+	if (options.all) params.set('all', 'true');
 	if (options.state && options.state !== 'all') params.set('state', options.state);
 	if (options.label) params.set('label', options.label);
 	if (options.assignee) params.set('assignee', options.assignee);

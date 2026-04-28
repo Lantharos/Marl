@@ -17,6 +17,27 @@ pub async fn object_kind(
     Ok(row.map(|r| r.kind))
 }
 
+pub async fn object_ids_by_kind(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    kind: &str,
+) -> Result<Vec<String>> {
+    #[derive(Deserialize)]
+    struct Row {
+        id: String,
+    }
+    let result = db
+        .prepare(
+            "SELECT id FROM object_index WHERE tenant = ?1 AND project = ?2 AND kind = ?3 ORDER BY created_at DESC",
+        )
+        .bind(&[js_str(tenant), js_str(project), js_str(kind)])?
+        .all()
+        .await?;
+    let rows: Vec<Row> = result.results()?;
+    Ok(rows.into_iter().map(|row| row.id).collect())
+}
+
 pub async fn record_object(
     db: &D1Database,
     tenant: &str,

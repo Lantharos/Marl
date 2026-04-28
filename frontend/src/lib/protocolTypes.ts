@@ -22,6 +22,18 @@ export interface ProtocolItem {
 
 export type ProtocolDraft = Omit<ProtocolItem, 'id'> & { id?: string };
 
+export interface AccountKey {
+	id: string;
+	user: string;
+	kind: 'signing_key' | 'ssh_key' | string;
+	name: string;
+	public_key: string;
+	fingerprint: string;
+	algorithm: string;
+	created_at: string;
+	revoked_at?: string | null;
+}
+
 export interface Label {
 	id?: string;
 	name: string;

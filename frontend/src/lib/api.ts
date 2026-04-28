@@ -4,11 +4,11 @@ import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import { listIssues } from './issueApi';
 import { downloadObjects } from './objectApi';
 import type { Comment } from './issueApi';
-import type { CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
+import type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
 export * from './issueApi';
 export * from './objectApi';
-export type { CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
+export type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -329,6 +329,27 @@ export async function listProtocolItems(tenant: string, project: string, kind: s
 	const endpoint = protocolEndpoint(kind);
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/${endpoint}`, { signal: options.signal });
 	return (await response.json()) as Paginated<ProtocolItem>;
+}
+
+export async function listAccountKeys(kind: 'signing_key' | 'ssh_key', options: PageOptions = {}): Promise<Paginated<AccountKey>> {
+	const endpoint = kind === 'ssh_key' ? 'ssh-keys' : 'keys';
+	const response = await authedFetch(`/v1/account/${endpoint}${pageQuery(options)}`, { signal: options.signal });
+	return (await response.json()) as Paginated<AccountKey>;
+}
+
+export async function createAccountKey(kind: 'signing_key' | 'ssh_key', item: { name: string; public_key?: string; key?: string; algorithm?: string }): Promise<AccountKey> {
+	const endpoint = kind === 'ssh_key' ? 'ssh-keys' : 'keys';
+	const response = await authedFetch(`/v1/account/${endpoint}`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(item)
+	});
+	return (await response.json()) as AccountKey;
+}
+
+export async function deleteAccountKey(kind: 'signing_key' | 'ssh_key', id: string) {
+	const endpoint = kind === 'ssh_key' ? 'ssh-keys' : 'keys';
+	await authedFetch(`/v1/account/${endpoint}/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export async function createProtocolItem(tenant: string, project: string, kind: string, item: ProtocolDraft): Promise<ProtocolItem> {

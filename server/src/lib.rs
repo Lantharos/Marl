@@ -10,14 +10,18 @@ use sty_protocol::{
 };
 use worker::*;
 
+mod account_keys;
 mod auth;
 pub(crate) mod d1;
 mod protocol;
 mod protocol_profiles;
+mod protocol_ready;
 mod support;
 
+use account_keys::*;
 use auth::verify_ave_id_token;
 use protocol::*;
+use protocol_ready::*;
 use support::{
     apply_cors, bearer_token, bucket, db, json_error, object_key, object_size_limit, paginate_vec,
     param, preflight_response, project_params, put_bytes, r2_bytes, required_header,
@@ -45,6 +49,12 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/session/exchange", exchange_session)
         .delete_async("/v1/session", revoke_session)
         .get_async("/v1/me", me)
+        .get_async("/v1/account/keys", list_account_keys)
+        .post_async("/v1/account/keys", create_account_key)
+        .delete_async("/v1/account/keys/:key_id", delete_account_key)
+        .get_async("/v1/account/ssh-keys", list_account_ssh_keys)
+        .post_async("/v1/account/ssh-keys", create_account_ssh_key)
+        .delete_async("/v1/account/ssh-keys/:key_id", delete_account_ssh_key)
         .post_async("/v1/orgs", create_org)
         .get_async("/v1/projects", list_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)

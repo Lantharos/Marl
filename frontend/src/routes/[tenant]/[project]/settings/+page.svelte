@@ -1,24 +1,19 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import {
-		createProtocolItem,
-		deleteProtocolItem,
 		getCapabilities,
 		getProjectSettings,
 		isAbortError,
-		listProtocolItems,
 		updateProjectSettings,
 		type CapabilityResponse,
 		type NavbarItem,
 		type PanelItem,
-		type ProjectSettings,
-		type ProtocolItem
+		type ProjectSettings
 	} from '$lib/api';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import SettingsFeatureList from '$lib/components/SettingsFeatureList.svelte';
-	import SettingsKeys from '$lib/components/SettingsKeys.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -35,10 +30,6 @@
 	let error = $state('');
 	let busy = $state(false);
 	let capabilities = $state<CapabilityResponse | null>(null);
-	let signingKeys = $state<ProtocolItem[]>([]);
-	let sshKeys = $state<ProtocolItem[]>([]);
-	let sshKeyName = $state('');
-	let sshKeyBody = $state('');
 
 	const DEFAULT_NAVBAR: NavbarItem[] = [
 		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
@@ -166,16 +157,12 @@
 		loading = true;
 		error = '';
 		try {
-			const [projectSettings, caps, signingKeyData, sshKeyData] = await Promise.all([
+			const [projectSettings, caps] = await Promise.all([
 				getProjectSettings(tenant, project, { signal }),
-				getCapabilities({ signal }).catch(() => null),
-				listProtocolItems(tenant, project, 'key', { signal }).catch(() => ({ items: [] })),
-				listProtocolItems(tenant, project, 'ssh_key', { signal }).catch(() => ({ items: [] }))
+				getCapabilities({ signal }).catch(() => null)
 			]);
 			settings = projectSettings;
 			capabilities = caps;
-			signingKeys = signingKeyData.items;
-			sshKeys = sshKeyData.items;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -197,33 +184,6 @@
 		try {
 			const result = await updateProjectSettings(tenant, project, { visibility: next });
 			settings = { ...settings, visibility: result.visibility };
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function addSshKey() {
-		if (!sshKeyName.trim() || !sshKeyBody.trim()) return;
-		busy = true;
-		try {
-			await createProtocolItem(tenant, project, 'ssh_key', { id: sshKeyName.trim(), name: sshKeyName.trim(), key: sshKeyBody.trim() });
-			sshKeyName = '';
-			sshKeyBody = '';
-			await load(new AbortController().signal);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function removeProtocolItem(kind: string, id: string) {
-		busy = true;
-		try {
-			await deleteProtocolItem(tenant, project, kind, id);
-			await load(new AbortController().signal);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -269,15 +229,6 @@
 			</div>
 
 			<SettingsFeatureList {capabilities} />
-			<SettingsKeys
-				{signingKeys}
-				{sshKeys}
-				{busy}
-				bind:sshKeyName
-				bind:sshKeyBody
-				{addSshKey}
-				{removeProtocolItem}
-			/>
 
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 				<div class="flex items-center justify-between">

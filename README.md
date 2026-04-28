@@ -139,8 +139,8 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - search
 - stars and project settings
 - releases and tags
-- signed snapshot metadata endpoints
-- profiles and SSH keys
+- signed snapshot verification with user-scoped signing keys
+- profiles, account signing keys, and account SSH keys
 
 Protocol list endpoints return the standard pagination envelope:
 

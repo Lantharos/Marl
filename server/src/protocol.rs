@@ -86,81 +86,6 @@ pub async fn list_audit(req: Request, ctx: RouteContext<()>) -> Result<Response>
     Response::from_json(&paginate_vec(req.url()?, entries))
 }
 
-pub async fn list_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
-    let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let ready = d1::workspace_states(&database, &tenant, &project)
-        .await?
-        .into_iter()
-        .filter(|workspace| workspace.is_ready)
-        .map(|workspace| {
-            json!({
-                "workspace": workspace.name,
-                "author": "",
-                "marked_at": "",
-                "head": workspace.head,
-                "intents": [],
-                "ci_status": null,
-                "reviewers": [],
-                "approved_by": [],
-            })
-        })
-        .collect::<Vec<_>>();
-    Response::from_json(&paginate_vec(req.url()?, ready))
-}
-
-pub async fn get_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
-    let (tenant, project) = project_params(&ctx)?;
-    let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let state = d1::workspace_states(&database, &tenant, &project)
-        .await?
-        .into_iter()
-        .find(|item| item.name == workspace && item.is_ready);
-    match state {
-        Some(item) => Response::from_json(&json!({
-            "workspace": item.name,
-            "author": "",
-            "marked_at": "",
-            "head": item.head,
-            "intents": [],
-            "ci_status": null,
-            "reviewers": [],
-            "approved_by": [],
-        })),
-        None => json_error(404, "ready workspace not found"),
-    }
-}
-
-pub async fn unmark_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let (tenant, project) = project_params(&ctx)?;
-    let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    d1::set_parent_workspace(&database, &tenant, &project, &workspace, None).await?;
-    Response::from_json(&OkResponse { ok: true })
-}
-
-pub async fn reject_ready(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
-    Response::from_json(
-        &json!({ "ok": true, "status": "rejected", "reason": body["reason"].clone() }),
-    )
-}
-
 pub async fn search_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
@@ -228,26 +153,28 @@ pub async fn verify_snapshot(req: Request, ctx: RouteContext<()>) -> Result<Resp
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let exists = d1::object_kind(&database, &tenant, &project, &id)
-        .await?
-        .is_some();
-    Response::from_json(&json!({
-        "snapshot": id,
-        "verified": false,
-        "known": exists,
-        "reason": "snapshot signature verification requires registered signing material",
-    }))
+    let result =
+        crate::account_keys::verify_snapshot_id(&database, &ctx.env, &tenant, &project, &id)
+            .await?;
+    Response::from_json(&result)
 }
 
 pub async fn verify_all_snapshots(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    Response::from_json(&json!({
-        "verified": false,
-        "snapshots": [],
-        "reason": "snapshot signature verification requires registered signing material",
-    }))
+    let mut snapshots = Vec::new();
+    for id in d1::object_ids_by_kind(&database, &tenant, &project, "snapshot").await? {
+        snapshots.push(
+            crate::account_keys::verify_snapshot_id(&database, &ctx.env, &tenant, &project, &id)
+                .await?,
+        );
+    }
+    let verified = snapshots
+        .iter()
+        .all(|snapshot| snapshot["verified"].as_bool().unwrap_or(false));
+    Response::from_json(&json!({ "verified": verified, "snapshots": snapshots }))
 }
 
 pub async fn get_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
