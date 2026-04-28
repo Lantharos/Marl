@@ -82,9 +82,9 @@
 					</button>
 				</div>
 			{:else}
-				<div class="py-10 text-center">
-					<p class="text-sm text-[#6f6b5f]">No workspaces ready to merge.</p>
-					<p class="mt-1 text-xs text-[#5c5c5a]">Mark a workspace as ready from its detail page.</p>
+				<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+					<p class="text-sm text-[#8c887e]">No workspaces ready to merge.</p>
+					<p class="mt-1 text-xs text-[#6f6b5f]">Mark a workspace as ready from its detail page.</p>
 				</div>
 			{/each}
 		</div>

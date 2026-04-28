@@ -1,9 +1,24 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getProjectSettings, updateProjectSettings, isAbortError, type ProjectSettings, type NavbarItem, type PanelItem } from '$lib/api';
+	import {
+		createProtocolItem,
+		deleteProtocolItem,
+		getCapabilities,
+		getProjectSettings,
+		isAbortError,
+		listProtocolItems,
+		updateProjectSettings,
+		type CapabilityResponse,
+		type NavbarItem,
+		type PanelItem,
+		type ProjectSettings,
+		type ProtocolItem
+	} from '$lib/api';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import SettingsFeatureList from '$lib/components/SettingsFeatureList.svelte';
+	import SettingsKeys from '$lib/components/SettingsKeys.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -19,6 +34,11 @@
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
+	let capabilities = $state<CapabilityResponse | null>(null);
+	let signingKeys = $state<ProtocolItem[]>([]);
+	let sshKeys = $state<ProtocolItem[]>([]);
+	let sshKeyName = $state('');
+	let sshKeyBody = $state('');
 
 	const DEFAULT_NAVBAR: NavbarItem[] = [
 		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
@@ -26,8 +46,10 @@
 		{ id: 'workspaces', label: 'Workspaces', type: 'tab', enabled: true, order: 2 },
 		{ id: 'issues', label: 'Issues', type: 'tab', enabled: true, order: 3 },
 		{ id: 'ready', label: 'Ready', type: 'tab', enabled: true, order: 4 },
-		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 5 },
-		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 6 }
+		{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 5 },
+		{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 6 },
+		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 7 },
+		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 8 }
 	];
 
 	const DEFAULT_PANELS: PanelItem[] = [
@@ -36,7 +58,17 @@
 		{ id: 'activity', title: 'Activity', type: 'activity', enabled: true, order: 2 }
 	];
 
-	const navbarItems = $derived(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR);
+	function withDefaultNavbar(items: NavbarItem[]) {
+		const merged = [...items];
+		for (const item of DEFAULT_NAVBAR) {
+			if (!merged.some((candidate) => candidate.id === item.id)) {
+				merged.push({ ...item, order: merged.length });
+			}
+		}
+		return merged;
+	}
+
+	const navbarItems = $derived(withDefaultNavbar(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR));
 	const panelItems = $derived(settings.panels.length ? settings.panels : DEFAULT_PANELS);
 
 	let showAddNavbar = $state(false);
@@ -57,14 +89,14 @@
 	}
 
 	async function toggleNavbar(index: number) {
-		const items = [...(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR)];
+		const items = [...navbarItems];
 		items[index] = { ...items[index], enabled: !items[index].enabled };
 		settings = { ...settings, navbar_items: items };
 		await persistSettings({ navbar_items: items });
 	}
 
 	async function reorderNavbar(index: number, direction: -1 | 1) {
-		const items = [...(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR)];
+		const items = [...navbarItems];
 		const newIndex = index + direction;
 		if (newIndex < 0 || newIndex >= items.length) return;
 		[items[index], items[newIndex]] = [items[newIndex], items[index]];
@@ -74,7 +106,7 @@
 	}
 
 	async function removeNavbar(index: number) {
-		const items = [...(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR)];
+		const items = [...navbarItems];
 		items.splice(index, 1);
 		items.forEach((item, i) => (item.order = i));
 		settings = { ...settings, navbar_items: items };
@@ -83,7 +115,7 @@
 
 	async function addNavbarItem() {
 		if (!newNavbar.id || !newNavbar.label) return;
-		const items = [...(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR)];
+		const items = [...navbarItems];
 		items.forEach((item) => (item.order += 1));
 		const item = { ...newNavbar, order: 0 };
 		items.unshift(item);
@@ -134,7 +166,16 @@
 		loading = true;
 		error = '';
 		try {
-			settings = await getProjectSettings(tenant, project, { signal });
+			const [projectSettings, caps, signingKeyData, sshKeyData] = await Promise.all([
+				getProjectSettings(tenant, project, { signal }),
+				getCapabilities({ signal }).catch(() => null),
+				listProtocolItems(tenant, project, 'key', { signal }).catch(() => ({ items: [] })),
+				listProtocolItems(tenant, project, 'ssh_key', { signal }).catch(() => ({ items: [] }))
+			]);
+			settings = projectSettings;
+			capabilities = caps;
+			signingKeys = signingKeyData.items;
+			sshKeys = sshKeyData.items;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -162,6 +203,34 @@
 			busy = false;
 		}
 	}
+
+	async function addSshKey() {
+		if (!sshKeyName.trim() || !sshKeyBody.trim()) return;
+		busy = true;
+		try {
+			await createProtocolItem(tenant, project, 'ssh_key', { id: sshKeyName.trim(), name: sshKeyName.trim(), key: sshKeyBody.trim() });
+			sshKeyName = '';
+			sshKeyBody = '';
+			await load(new AbortController().signal);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function removeProtocolItem(kind: string, id: string) {
+		busy = true;
+		try {
+			await deleteProtocolItem(tenant, project, kind, id);
+			await load(new AbortController().signal);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
 </script>
 
 <div class="mx-auto max-w-xl">
@@ -198,6 +267,17 @@
 				<div class="text-sm font-medium text-[#eae9e4]">Stars</div>
 				<p class="mt-1 text-xs text-[#6f6b5f]">{settings.starred_count} stars</p>
 			</div>
+
+			<SettingsFeatureList {capabilities} />
+			<SettingsKeys
+				{signingKeys}
+				{sshKeys}
+				{busy}
+				bind:sshKeyName
+				bind:sshKeyBody
+				{addSshKey}
+				{removeProtocolItem}
+			/>
 
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 				<div class="flex items-center justify-between">
@@ -240,7 +320,7 @@
 							>
 								{item.enabled ? 'on' : 'off'}
 							</button>
-							{#if !['', 'code', 'workspaces', 'issues', 'ready', 'history', 'settings'].includes(item.id)}
+							{#if !['', 'code', 'workspaces', 'issues', 'ready', 'releases', 'automation', 'history', 'settings'].includes(item.id)}
 								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removeNavbar(i)}><X class="h-3.5 w-3.5" /></button>
 							{/if}
 						</div>

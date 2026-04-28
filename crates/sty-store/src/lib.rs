@@ -1,9 +1,10 @@
 use std::path::Path;
 
 use anyhow::Result;
+use serde_json::Value;
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
-    WorkspaceState,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary,
+    TenantSummary, TokenPrincipal, WorkspaceState,
 };
 
 /// Shared store interface for both local (SQLite) and worker (D1) backends.
@@ -103,6 +104,8 @@ pub trait Store {
         principal: &TokenPrincipal,
         title: &str,
         body: &str,
+        labels: &[String],
+        assignee: Option<&str>,
     ) -> Result<Issue>;
     fn update_issue_status(
         &self,
@@ -110,6 +113,20 @@ pub trait Store {
         project: &str,
         issue_id: &str,
         status: &str,
+    ) -> Result<Issue>;
+    fn add_issue_assignees(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        assignees: &[String],
+    ) -> Result<Issue>;
+    fn add_issue_labels(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        labels: &[String],
     ) -> Result<Issue>;
 
     // ── Comments ────────────────────────────────────────────
@@ -122,6 +139,19 @@ pub trait Store {
         principal: &TokenPrincipal,
         body: &str,
     ) -> Result<Comment>;
+
+    // Protocol items
+    fn list_protocol_items(&self, tenant: &str, project: &str, kind: &str) -> Result<Vec<Value>>;
+    fn get_protocol_item(&self, tenant: &str, project: &str, id: &str) -> Result<Option<Value>>;
+    fn upsert_protocol_item(
+        &self,
+        tenant: &str,
+        project: &str,
+        kind: &str,
+        id: &str,
+        item: Value,
+    ) -> Result<Value>;
+    fn delete_protocol_item(&self, tenant: &str, project: &str, id: &str) -> Result<()>;
 
     // ── Settings / Stars ───────────────────────────────────
     fn project_visibility(&self, tenant: &str, project: &str) -> Result<Option<String>>;

@@ -93,9 +93,8 @@
 </script>
 
 <div class="mx-auto max-w-4xl">
-	<div class="mb-4 flex items-center justify-between">
+	<div class="mb-4">
 		<h3 class="text-sm font-semibold text-[#f0eee4]">Workspaces</h3>
-		<p class="text-xs text-[#6f6b5f]">Derived from main. main is browsed in Code.</p>
 	</div>
 
 	{#if loading}

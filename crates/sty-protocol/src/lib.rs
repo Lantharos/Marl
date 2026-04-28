@@ -2,6 +2,49 @@ use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_AVE_CLIENT_ID: &str = "app_813ac5533bb87d939f328d76b5a1dca8";
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CapabilitiesResponse {
+    pub version: String,
+    pub capabilities: Vec<String>,
+}
+
+pub fn protocol_capabilities() -> CapabilitiesResponse {
+    CapabilitiesResponse {
+        version: "1.0".to_string(),
+        capabilities: [
+            "issues",
+            "milestones",
+            "labels",
+            "ready",
+            "comments",
+            "reactions",
+            "hooks",
+            "webhooks",
+            "search",
+            "stars",
+            "releases",
+            "signed_snapshots",
+            "audit_log",
+            "profiles",
+            "ssh_keys",
+        ]
+        .into_iter()
+        .map(ToOwned::to_owned)
+        .collect(),
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Paginated<T> {
+    pub items: Vec<T>,
+    pub page: usize,
+    pub per_page: usize,
+    pub total: usize,
+    pub total_pages: usize,
+    pub next: Option<usize>,
+    pub prev: Option<usize>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompareRequest {
     pub local_head: Option<String>,
@@ -199,21 +242,38 @@ pub struct Issue {
     pub number: u64,
     pub title: String,
     pub body: String,
+    pub state: String,
     pub status: String,
     pub author: String,
+    pub assignees: Vec<String>,
     pub created_at: String,
+    pub updated_at: String,
+    pub closed_at: Option<String>,
     pub labels: Vec<String>,
+    pub milestone: Option<String>,
+    pub workspace: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateIssueRequest {
     pub title: String,
     pub body: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub assignee: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateIssueRequest {
-    pub status: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

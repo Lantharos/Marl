@@ -65,13 +65,25 @@
 		{ id: 'workspaces', label: 'Workspaces', type: 'tab', enabled: true, order: 2 },
 		{ id: 'issues', label: 'Issues', type: 'tab', enabled: true, order: 3 },
 		{ id: 'ready', label: 'Ready', type: 'tab', enabled: true, order: 4 },
-		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 5 },
-		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 6 }
+		{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 5 },
+		{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 6 },
+		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 7 },
+		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 8 }
 	];
+
+	function withDefaultTabs(items: NavbarItem[]) {
+		const merged = [...items];
+		for (const tab of DEFAULT_TABS) {
+			if (!merged.some((item) => item.id === tab.id)) {
+				merged.push({ ...tab, order: merged.length });
+			}
+		}
+		return merged;
+	}
 
 	const visibleTabs = $derived(() => {
 		const items = settings?.navbar_items?.length ? settings.navbar_items : DEFAULT_TABS;
-		return items.filter((t) => t.enabled).sort((a, b) => a.order - b.order);
+		return withDefaultTabs(items).filter((t) => t.enabled).sort((a, b) => a.order - b.order);
 	});
 
 	const currentTab = $derived(() => {
@@ -80,7 +92,7 @@
 		if (parts.length < 3) return '';
 		const tab = parts[2];
 		const tabs = settings?.navbar_items?.length ? settings.navbar_items : DEFAULT_TABS;
-		return tabs.find((t) => t.id === tab)?.id ?? '';
+		return withDefaultTabs(tabs).find((t) => t.id === tab)?.id ?? '';
 	});
 
 	$effect(() => {

@@ -4,12 +4,13 @@ use std::sync::Mutex;
 
 use anyhow::{Result, anyhow, bail};
 use rusqlite::OptionalExtension;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
-    WorkspaceState, validate_segment,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary,
+    TenantSummary, TokenPrincipal, WorkspaceState, validate_segment,
 };
 
 use crate::Store;
@@ -98,6 +99,11 @@ impl SqliteStore {
                 status text not null default 'open',
                 author text not null,
                 created_at text not null,
+                updated_at text,
+                closed_at text,
+                assignees_json text not null default '[]',
+                milestone text,
+                workspace text,
                 labels_json text not null default '[]'
             );
             create table if not exists stars (
@@ -115,9 +121,19 @@ impl SqliteStore {
                 body text not null,
                 created_at text not null
             );
+            create table if not exists protocol_items (
+                id text primary key,
+                tenant text not null,
+                project text not null,
+                kind text not null,
+                data_json text not null,
+                created_at text not null,
+                updated_at text not null
+            );
             create index if not exists idx_history_workspace on history(tenant, project, workspace);
             create index if not exists idx_issues_project on issues(tenant, project);
             create index if not exists idx_comments_issue on comments(tenant, project, issue_id);
+            create index if not exists idx_protocol_items_project_kind on protocol_items(tenant, project, kind);
             ",
         )?;
         // Migration: add snapshot_id to existing history tables
@@ -131,6 +147,28 @@ impl SqliteStore {
             > 0;
         if !has_snapshot_id {
             conn.execute("ALTER TABLE history ADD COLUMN snapshot_id text", [])?;
+        }
+        for (column, definition) in [
+            ("updated_at", "text"),
+            ("closed_at", "text"),
+            ("assignees_json", "text not null default '[]'"),
+            ("milestone", "text"),
+            ("workspace", "text"),
+        ] {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('issues') WHERE name = ?1",
+                    [column],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0)
+                > 0;
+            if !exists {
+                conn.execute(
+                    &format!("ALTER TABLE issues ADD COLUMN {column} {definition}"),
+                    [],
+                )?;
+            }
         }
         // Migration: add comments table
         let has_comments: bool = conn
@@ -156,6 +194,32 @@ impl SqliteStore {
             )?;
             conn.execute(
                 "create index idx_comments_issue on comments(tenant, project, issue_id)",
+                [],
+            )?;
+        }
+        let has_protocol_items: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'protocol_items'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        if !has_protocol_items {
+            conn.execute(
+                "create table protocol_items (
+                    id text primary key,
+                    tenant text not null,
+                    project text not null,
+                    kind text not null,
+                    data_json text not null,
+                    created_at text not null,
+                    updated_at text not null
+                )",
+                [],
+            )?;
+            conn.execute(
+                "create index idx_protocol_items_project_kind on protocol_items(tenant, project, kind)",
                 [],
             )?;
         }
@@ -230,6 +294,36 @@ impl SqliteStore {
             )
             .unwrap_or(0);
         Ok(count as u64)
+    }
+
+    fn issue_by_id(&self, tenant: &str, project: &str, issue_id: &str) -> Result<Issue> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select id, number, title, body, status, author, created_at, labels_json, updated_at, closed_at, assignees_json, milestone, workspace from issues
+             where tenant = ?1 and project = ?2 and id = ?3",
+        )?;
+        let issue = stmt.query_row(rusqlite::params![tenant, project, issue_id], |row| {
+            let labels_json: String = row.get(7)?;
+            let assignees_json: String = row.get(10)?;
+            let created_at: String = row.get(6)?;
+            Ok(Issue {
+                id: row.get(0)?,
+                number: row.get(1)?,
+                title: row.get(2)?,
+                body: row.get(3)?,
+                state: row.get(4)?,
+                status: row.get(4)?,
+                author: row.get(5)?,
+                assignees: serde_json::from_str(&assignees_json).unwrap_or_default(),
+                created_at: created_at.clone(),
+                updated_at: row.get::<_, Option<String>>(8)?.unwrap_or(created_at),
+                closed_at: row.get(9)?,
+                labels: serde_json::from_str(&labels_json).unwrap_or_default(),
+                milestone: row.get(11)?,
+                workspace: row.get(12)?,
+            })
+        })?;
+        Ok(issue)
     }
 }
 
@@ -709,21 +803,29 @@ impl Store for SqliteStore {
     fn list_issues(&self, tenant: &str, project: &str) -> Result<Vec<Issue>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "select id, number, title, body, status, author, created_at, labels_json from issues
+            "select id, number, title, body, status, author, created_at, labels_json, updated_at, closed_at, assignees_json, milestone, workspace from issues
              where tenant = ?1 and project = ?2 order by number desc",
         )?;
         let rows = stmt.query_map(rusqlite::params![tenant, project], |row| {
             let labels_json: String = row.get(7)?;
+            let assignees_json: String = row.get(10)?;
             let labels: Vec<String> = serde_json::from_str(&labels_json).unwrap_or_default();
+            let created_at: String = row.get(6)?;
             Ok(Issue {
                 id: row.get(0)?,
                 number: row.get(1)?,
                 title: row.get(2)?,
                 body: row.get(3)?,
+                state: row.get(4)?,
                 status: row.get(4)?,
                 author: row.get(5)?,
-                created_at: row.get(6)?,
+                assignees: serde_json::from_str(&assignees_json).unwrap_or_default(),
+                created_at: created_at.clone(),
+                updated_at: row.get::<_, Option<String>>(8)?.unwrap_or(created_at),
+                closed_at: row.get(9)?,
                 labels,
+                milestone: row.get(11)?,
+                workspace: row.get(12)?,
             })
         })?;
         let mut issues = Vec::new();
@@ -740,6 +842,8 @@ impl Store for SqliteStore {
         principal: &TokenPrincipal,
         title: &str,
         body: &str,
+        labels: &[String],
+        assignee: Option<&str>,
     ) -> Result<Issue> {
         let conn = self.conn()?;
         let next_number: u64 = conn.query_row(
@@ -749,21 +853,31 @@ impl Store for SqliteStore {
         ).unwrap_or(1);
         let id = format!("issue-{}", next_number);
         let created_at = chrono::Utc::now().to_rfc3339();
-        let labels = serde_json::to_string(&Vec::<String>::new())?;
+        let labels_json = serde_json::to_string(labels)?;
+        let assignees = assignee
+            .map(|user| vec![user.to_string()])
+            .unwrap_or_default();
+        let assignees_json = serde_json::to_string(&assignees)?;
         conn.execute(
-            "insert into issues (id, tenant, project, number, title, body, status, author, created_at, labels_json)
-             values (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7, ?8, ?9)",
-            rusqlite::params![id, tenant, project, next_number, title, body, principal.user, created_at, labels],
+            "insert into issues (id, tenant, project, number, title, body, status, author, created_at, updated_at, assignees_json, labels_json)
+             values (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7, ?8, ?8, ?9, ?10)",
+            rusqlite::params![id, tenant, project, next_number, title, body, principal.user, created_at, assignees_json, labels_json],
         )?;
         Ok(Issue {
             id,
             number: next_number,
             title: title.to_string(),
             body: body.to_string(),
+            state: "open".to_string(),
             status: "open".to_string(),
             author: principal.user.clone(),
-            created_at,
-            labels: Vec::new(),
+            assignees,
+            created_at: created_at.clone(),
+            updated_at: created_at,
+            closed_at: None,
+            labels: labels.to_vec(),
+            milestone: None,
+            workspace: None,
         })
     }
 
@@ -775,29 +889,57 @@ impl Store for SqliteStore {
         status: &str,
     ) -> Result<Issue> {
         let conn = self.conn()?;
+        let updated_at = chrono::Utc::now().to_rfc3339();
+        let closed_at = (status == "closed").then_some(updated_at.clone());
         conn.execute(
-            "update issues set status = ?1 where tenant = ?2 and project = ?3 and id = ?4",
-            rusqlite::params![status, tenant, project, issue_id],
+            "update issues set status = ?1, updated_at = ?2, closed_at = ?3 where tenant = ?4 and project = ?5 and id = ?6",
+            rusqlite::params![status, updated_at, closed_at, tenant, project, issue_id],
         )?;
-        let mut stmt = conn.prepare(
-            "select id, number, title, body, status, author, created_at, labels_json from issues
-             where tenant = ?1 and project = ?2 and id = ?3",
+        self.issue_by_id(tenant, project, issue_id)
+    }
+
+    fn add_issue_assignees(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        assignees: &[String],
+    ) -> Result<Issue> {
+        let mut issue = self.issue_by_id(tenant, project, issue_id)?;
+        for assignee in assignees {
+            if !issue.assignees.contains(assignee) {
+                issue.assignees.push(assignee.clone());
+            }
+        }
+        let updated_at = chrono::Utc::now().to_rfc3339();
+        let assignees_json = serde_json::to_string(&issue.assignees)?;
+        self.conn()?.execute(
+            "update issues set assignees_json = ?1, updated_at = ?2 where tenant = ?3 and project = ?4 and id = ?5",
+            rusqlite::params![assignees_json, updated_at, tenant, project, issue_id],
         )?;
-        let issue = stmt.query_row(rusqlite::params![tenant, project, issue_id], |row| {
-            let labels_json: String = row.get(7)?;
-            let labels = serde_json::from_str(&labels_json).unwrap_or_default();
-            Ok(Issue {
-                id: row.get(0)?,
-                number: row.get(1)?,
-                title: row.get(2)?,
-                body: row.get(3)?,
-                status: row.get(4)?,
-                author: row.get(5)?,
-                created_at: row.get(6)?,
-                labels,
-            })
-        })?;
-        Ok(issue)
+        self.issue_by_id(tenant, project, issue_id)
+    }
+
+    fn add_issue_labels(
+        &self,
+        tenant: &str,
+        project: &str,
+        issue_id: &str,
+        labels: &[String],
+    ) -> Result<Issue> {
+        let mut issue = self.issue_by_id(tenant, project, issue_id)?;
+        for label in labels {
+            if !issue.labels.contains(label) {
+                issue.labels.push(label.clone());
+            }
+        }
+        let updated_at = chrono::Utc::now().to_rfc3339();
+        let labels_json = serde_json::to_string(&issue.labels)?;
+        self.conn()?.execute(
+            "update issues set labels_json = ?1, updated_at = ?2 where tenant = ?3 and project = ?4 and id = ?5",
+            rusqlite::params![labels_json, updated_at, tenant, project, issue_id],
+        )?;
+        self.issue_by_id(tenant, project, issue_id)
     }
 
     fn list_comments(&self, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>> {
@@ -854,6 +996,69 @@ impl Store for SqliteStore {
             body: body.to_string(),
             created_at,
         })
+    }
+
+    fn list_protocol_items(&self, tenant: &str, project: &str, kind: &str) -> Result<Vec<Value>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "select data_json from protocol_items where tenant = ?1 and project = ?2 and kind = ?3 order by created_at desc",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![tenant, project, kind], |row| {
+            let data: String = row.get(0)?;
+            Ok(data)
+        })?;
+        let mut items = Vec::new();
+        for row in rows {
+            items.push(serde_json::from_str(&row?)?);
+        }
+        Ok(items)
+    }
+
+    fn get_protocol_item(&self, tenant: &str, project: &str, id: &str) -> Result<Option<Value>> {
+        let conn = self.conn()?;
+        let data: Option<String> = conn
+            .query_row(
+                "select data_json from protocol_items where tenant = ?1 and project = ?2 and id = ?3",
+                rusqlite::params![tenant, project, id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        data.map(|value| serde_json::from_str(&value).map_err(Into::into))
+            .transpose()
+    }
+
+    fn upsert_protocol_item(
+        &self,
+        tenant: &str,
+        project: &str,
+        kind: &str,
+        id: &str,
+        mut item: Value,
+    ) -> Result<Value> {
+        let now = chrono::Utc::now().to_rfc3339();
+        item["id"] = json!(id);
+        if item["created_at"].is_null() {
+            item["created_at"] = json!(now.clone());
+        }
+        item["updated_at"] = json!(now.clone());
+        let data_json = serde_json::to_string(&item)?;
+        let conn = self.conn()?;
+        conn.execute(
+            "insert into protocol_items (id, tenant, project, kind, data_json, created_at, updated_at)
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+             on conflict(id) do update set data_json = excluded.data_json, updated_at = excluded.updated_at",
+            rusqlite::params![id, tenant, project, kind, data_json, now],
+        )?;
+        Ok(item)
+    }
+
+    fn delete_protocol_item(&self, tenant: &str, project: &str, id: &str) -> Result<()> {
+        let conn = self.conn()?;
+        conn.execute(
+            "delete from protocol_items where tenant = ?1 and project = ?2 and id = ?3",
+            rusqlite::params![tenant, project, id],
+        )?;
+        Ok(())
     }
 
     fn project_visibility(&self, tenant: &str, project: &str) -> Result<Option<String>> {

@@ -2,6 +2,12 @@
 
 `sty` is the hosted and local collaboration layer for PIG. PIG remains the local VCS engine; sty owns identity, project hosting, the PIG remote server, and the user-facing client.
 
+The Worker remote exposes the PIG protocol capability handshake at `/v1/capabilities` and advertises the optional protocol features implemented by sty: issues, milestones, labels, ready queues, comments, reactions, hooks, webhooks, search, stars, releases, signed snapshot metadata, audit log, profiles, and SSH keys. E2EE and CI are intentionally deferred.
+
+Protocol list endpoints return the standard pagination envelope with `items`, `page`, `per_page`, `total`, `total_pages`, `next`, and `prev`.
+
+The dashboard presents those features as native project surfaces: Issues owns issue search, labels, milestones, assignees, editing, and comments; Ready owns merge queues; Releases owns ship-tag release notes; Settings owns project visibility, navigation, hooks, webhooks, keys, advertised features, and audit history.
+
 ## Layout
 
 - `client` is the `sty` CLI. It handles login, project setup, and PIG handoff.

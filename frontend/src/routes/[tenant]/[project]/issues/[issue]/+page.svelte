@@ -1,7 +1,19 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getIssue, createIssueComment, updateIssueStatus, isAbortError, type Issue, type Comment } from '$lib/api';
+	import {
+		addIssueLabel,
+		assignIssue,
+		createIssueComment,
+		getIssue,
+		isAbortError,
+		updateIssue,
+		updateIssueStatus,
+		type Comment,
+		type Issue
+	} from '$lib/api';
 	import CommentThread from '$lib/components/CommentThread.svelte';
+	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
+	import Circle from 'lucide-svelte/icons/circle';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -10,17 +22,25 @@
 	let issue = $state<(Issue & { comments: Comment[] }) | null>(null);
 	let loading = $state(true);
 	let error = $state('');
+	let editing = $state(false);
+	let editTitle = $state('');
+	let editBody = $state('');
+	let label = $state('');
+	let assignee = $state('');
+	let busy = $state(false);
 
-	async function load(signal: AbortSignal) {
+	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			issue = await getIssue(tenant, project, issueId, { signal });
+			issue = await getIssue(tenant, project, issueId, signal ? { signal } : {});
+			editTitle = issue.title;
+			editBody = issue.body;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
-			if (!signal.aborted) loading = false;
+			if (!signal?.aborted) loading = false;
 		}
 	}
 
@@ -34,7 +54,7 @@
 	async function handleComment(body: string) {
 		if (!issue) return;
 		try {
-			const comment = await createIssueComment(tenant, project, issueId, body);
+			const comment = await createIssueComment(tenant, project, issue.id, body);
 			issue = { ...issue, comments: [...issue.comments, comment] };
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -43,49 +63,152 @@
 
 	async function handleStatusChange() {
 		if (!issue) return;
-		const next = issue.status === 'open' ? 'closed' : 'open';
+		const next = (issue.state ?? issue.status) === 'open' ? 'closed' : 'open';
 		try {
-			const updated = await updateIssueStatus(tenant, project, issueId, next);
-			issue = { ...issue, status: updated.status };
+			const updated = await updateIssueStatus(tenant, project, issue.id, next);
+			issue = { ...issue, ...updated };
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		}
 	}
+
+	async function saveEdit() {
+		if (!issue || !editTitle.trim()) return;
+		busy = true;
+		try {
+			const updated = await updateIssue(tenant, project, issue.id, { title: editTitle.trim(), body: editBody.trim() });
+			issue = { ...issue, ...updated };
+			editing = false;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleAddLabel() {
+		if (!issue || !label.trim()) return;
+		busy = true;
+		try {
+			const updated = await addIssueLabel(tenant, project, issue.id, label.trim());
+			issue = { ...issue, ...updated };
+			label = '';
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleAssign() {
+		if (!issue || !assignee.trim()) return;
+		busy = true;
+		try {
+			const updated = await assignIssue(tenant, project, issue.id, assignee.trim());
+			issue = { ...issue, ...updated };
+			assignee = '';
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
-<div class="mx-auto max-w-3xl">
+<div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_260px]">
 	{#if loading}
 		<div class="text-sm text-[#6f6b5f]">Loading issue...</div>
-	{:else if error}
+	{:else if error && !issue}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if issue}
-		<div class="mb-4">
-			<div class="flex items-center gap-2">
-				<span class="rounded bg-[#2a2a28] px-1.5 py-0.5 text-xs font-medium {issue.status === 'open' ? 'text-[#7cb97c]' : 'text-[#d96c5a]'}">{issue.status}</span>
-				<h2 class="text-xl font-semibold text-[#f0eee4]">{issue.title}</h2>
-				<button
-					onclick={handleStatusChange}
-					class="ml-auto rounded border border-[#2a2a28] bg-[#1a1a18] px-3 py-1 text-xs text-[#eae9e4] transition-colors hover:bg-[#2a2a28] focus:outline-none focus:ring-[1px] focus:ring-[#d9a66c]"
-				>
-					{issue.status === 'open' ? 'Close' : 'Reopen'}
+		<section class="min-w-0">
+			<div class="mb-4 flex items-start gap-3">
+				{#if (issue.state ?? issue.status) === 'open'}
+					<Circle class="mt-1 h-5 w-5 shrink-0 text-[#7cb97c]" />
+				{:else}
+					<CheckCircle2 class="mt-1 h-5 w-5 shrink-0 text-[#d96c5a]" />
+				{/if}
+				<div class="min-w-0 flex-1">
+					{#if editing}
+						<input class="w-full rounded bg-[#141412] px-3 py-2 text-lg font-semibold text-[#f0eee4] outline-none" bind:value={editTitle} />
+					{:else}
+						<h2 class="text-xl font-semibold text-[#f0eee4]">{issue.title}</h2>
+					{/if}
+					<div class="mt-1 text-xs text-[#6f6b5f]">
+						#{issue.number} opened by {issue.author} on {new Date(issue.created_at).toLocaleDateString()}
+					</div>
+				</div>
+				<button class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" onclick={handleStatusChange}>
+					{(issue.state ?? issue.status) === 'open' ? 'Close' : 'Reopen'}
 				</button>
 			</div>
-			<div class="mt-1 text-xs text-[#6f6b5f]">
-				#{issue.number} opened by {issue.author} on {new Date(issue.created_at).toLocaleDateString()}
-			</div>
-		</div>
 
-		<div class="rounded border border-[#2a2a28] bg-[#141412]">
-			<div class="flex items-center gap-2 border-b border-[#2a2a28] px-4 py-2">
-				<span class="text-sm font-medium text-[#eae9e4]">{issue.author}</span>
-				<span class="text-xs text-[#6f6b5f]">commented on {new Date(issue.created_at).toLocaleDateString()}</span>
-			</div>
-			<div class="px-4 py-3 text-sm leading-relaxed text-[#eae9e4] whitespace-pre-wrap">{issue.body}</div>
-		</div>
+			{#if error}
+				<div class="mb-4 text-sm text-[#d96c5a]">{error}</div>
+			{/if}
 
-		<div class="mt-6">
-			<h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Comments ({issue.comments.length})</h4>
-			<CommentThread comments={issue.comments} onSubmit={handleComment} />
-		</div>
+			<div class="rounded bg-[#141412]">
+				<div class="flex items-center justify-between border-b border-[#252522] px-4 py-2">
+					<div class="text-sm font-medium text-[#eae9e4]">{issue.author}</div>
+					<button class="text-xs text-[#8c887e] hover:text-[#eae9e4]" onclick={() => (editing = !editing)}>{editing ? 'Cancel' : 'Edit'}</button>
+				</div>
+				{#if editing}
+					<div class="grid gap-3 p-4">
+						<textarea class="min-h-[180px] resize-y rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" bind:value={editBody}></textarea>
+						<div class="flex justify-end">
+							<button class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d]" disabled={busy || !editTitle.trim()} onclick={saveEdit}>Save</button>
+						</div>
+					</div>
+				{:else}
+					<div class="whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-[#eae9e4]">{issue.body || 'No description.'}</div>
+				{/if}
+			</div>
+
+			<div class="mt-6">
+				<div class="mb-3 text-sm font-medium text-[#eae9e4]">Comments <span class="text-[#6f6b5f]">{issue.comments.length}</span></div>
+				<CommentThread comments={issue.comments} onSubmit={handleComment} />
+			</div>
+		</section>
+
+		<aside class="grid h-fit gap-5">
+			<section>
+				<div class="mb-2 text-sm font-medium text-[#eae9e4]">Labels</div>
+				<div class="flex flex-wrap gap-1">
+					{#each issue.labels as item}
+						<span class="rounded bg-[#141412] px-2 py-1 text-xs text-[#a09d94]">{item}</span>
+					{:else}
+						<span class="text-xs text-[#6f6b5f]">None</span>
+					{/each}
+				</div>
+				<div class="mt-2 flex gap-2">
+					<input class="min-w-0 flex-1 rounded bg-[#141412] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Add label" bind:value={label} />
+					<button class="rounded bg-[#2a2a28] px-2 text-xs text-[#eae9e4]" disabled={busy || !label.trim()} onclick={handleAddLabel}>Add</button>
+				</div>
+			</section>
+
+			<section>
+				<div class="mb-2 text-sm font-medium text-[#eae9e4]">Assignees</div>
+				<div class="grid gap-1">
+					{#each issue.assignees ?? [] as user}
+						<div class="rounded bg-[#141412] px-3 py-2 text-xs text-[#eae9e4]">{user}</div>
+					{:else}
+						<p class="text-xs text-[#6f6b5f]">No assignees.</p>
+					{/each}
+				</div>
+				<div class="mt-2 flex gap-2">
+					<input class="min-w-0 flex-1 rounded bg-[#141412] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Assign user" bind:value={assignee} />
+					<button class="rounded bg-[#2a2a28] px-2 text-xs text-[#eae9e4]" disabled={busy || !assignee.trim()} onclick={handleAssign}>Add</button>
+				</div>
+			</section>
+
+			<section>
+				<div class="mb-2 text-sm font-medium text-[#eae9e4]">Details</div>
+				<div class="grid gap-1 text-xs">
+					<div class="flex justify-between rounded bg-[#141412] px-3 py-2"><span class="text-[#6f6b5f]">State</span><span class="text-[#eae9e4]">{issue.state ?? issue.status}</span></div>
+					<div class="flex justify-between rounded bg-[#141412] px-3 py-2"><span class="text-[#6f6b5f]">Milestone</span><span class="text-[#eae9e4]">{issue.milestone ?? 'None'}</span></div>
+					<div class="flex justify-between rounded bg-[#141412] px-3 py-2"><span class="text-[#6f6b5f]">Workspace</span><span class="text-[#eae9e4]">{issue.workspace ?? 'None'}</span></div>
+				</div>
+			</section>
+		</aside>
 	{/if}
 </div>

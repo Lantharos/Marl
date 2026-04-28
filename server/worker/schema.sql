@@ -53,8 +53,24 @@ CREATE TABLE IF NOT EXISTS issues (
     status TEXT NOT NULL DEFAULT 'open',
     author TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    updated_at TEXT,
+    closed_at TEXT,
+    assignees_json TEXT NOT NULL DEFAULT '[]',
+    milestone TEXT,
+    workspace TEXT,
     labels_json TEXT NOT NULL DEFAULT '[]'
 );
+CREATE TABLE IF NOT EXISTS protocol_items (
+    id TEXT PRIMARY KEY,
+    tenant TEXT NOT NULL,
+    project TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    number INTEGER,
+    data_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_protocol_items_project_kind ON protocol_items(tenant, project, kind);
 CREATE TABLE IF NOT EXISTS stars (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,

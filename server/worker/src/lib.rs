@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use sty_protocol::{
     ChunkCompleteRequest, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
     CreateIssueRequest, DevTokenRequest, DownloadRequest, DownloadResponse, HeadResponse,
-    HeadUpdateRequest, HistoryResponse, IssuesResponse, LogHistoryRequest, MeResponse, MissingRequest,
+    HeadUpdateRequest, HistoryResponse, LogHistoryRequest, MeResponse, MissingRequest,
     MissingResponse, OkResponse, ObjectFileResponse, ProjectDetailResponse, ProjectSummary,
     ProjectTreeResponse, RemoteObject, SessionExchangeRequest, StarResponse, TokenResponse,
     TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse,
@@ -14,10 +14,12 @@ use sty_protocol::{
 use worker::*;
 
 mod auth;
-mod d1;
+pub(crate) mod d1;
+mod protocol;
 mod support;
 
 use auth::{dev_tokens_enabled, verify_ave_id_token};
+use protocol::*;
 use support::{
     apply_cors, bucket, db, decode_base64, json_error, object_chunk_key, object_key,
     param, preflight_response, project_params, put_bytes, required_header,
@@ -32,6 +34,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let request = req.clone()?;
     let mut response = Router::new()
         .post_async("/v1/auth/check", auth_check)
+        .get_async("/v1/capabilities", capabilities)
         .post_async("/v1/dev/tokens", dev_token)
         .post_async("/v1/session/exchange", exchange_session)
         .get_async("/v1/me", me)
@@ -44,7 +47,55 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/tenants/:tenant/projects/:project/files/:path", project_file)
         .get_async("/v1/tenants/:tenant/projects/:project/issues", project_issues)
         .post_async("/v1/tenants/:tenant/projects/:project/issues", create_issue)
+        .get_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id", get_issue)
         .patch_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id", update_issue)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/close", close_issue)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/reopen", reopen_issue)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/assignees", assign_issue)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/labels", label_issue)
+        .get_async("/v1/tenants/:tenant/projects/:project/labels", list_labels)
+        .post_async("/v1/tenants/:tenant/projects/:project/labels", create_label)
+        .delete_async("/v1/tenants/:tenant/projects/:project/labels/:item_id", delete_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/milestones", list_milestones)
+        .post_async("/v1/tenants/:tenant/projects/:project/milestones", create_milestone)
+        .get_async("/v1/tenants/:tenant/projects/:project/milestones/:item_id", get_protocol_item)
+        .post_async("/v1/tenants/:tenant/projects/:project/milestones/:item_id/close", close_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/ready", list_ready)
+        .get_async("/v1/tenants/:tenant/projects/:project/ready/:workspace", get_ready)
+        .delete_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready", unmark_ready)
+        .post_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject", reject_ready)
+        .get_async("/v1/tenants/:tenant/projects/:project/comments", list_protocol_comments)
+        .post_async("/v1/tenants/:tenant/projects/:project/comments", create_protocol_comment)
+        .delete_async("/v1/tenants/:tenant/projects/:project/comments/:item_id", delete_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions", list_reactions)
+        .post_async("/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions", add_reaction)
+        .delete_async("/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions/:reaction", delete_reaction)
+        .get_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions", list_reactions)
+        .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions", add_reaction)
+        .delete_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions/:reaction", delete_reaction)
+        .get_async("/v1/tenants/:tenant/projects/:project/hooks", list_hooks)
+        .post_async("/v1/tenants/:tenant/projects/:project/hooks", create_hook)
+        .delete_async("/v1/tenants/:tenant/projects/:project/hooks/:item_id", delete_protocol_item)
+        .post_async("/v1/tenants/:tenant/projects/:project/hooks/:item_id/test", test_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/webhooks", list_webhooks)
+        .post_async("/v1/tenants/:tenant/projects/:project/webhooks", create_webhook)
+        .delete_async("/v1/tenants/:tenant/projects/:project/webhooks/:item_id", delete_protocol_item)
+        .post_async("/v1/tenants/:tenant/projects/:project/webhooks/:item_id/test", test_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/search", search_project)
+        .get_async("/v1/tenants/:tenant/projects/:project/releases", list_releases)
+        .post_async("/v1/tenants/:tenant/projects/:project/releases", create_release)
+        .get_async("/v1/tenants/:tenant/projects/:project/releases/:item_id", get_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/keys", list_keys)
+        .post_async("/v1/tenants/:tenant/projects/:project/keys", create_key)
+        .delete_async("/v1/tenants/:tenant/projects/:project/keys/:item_id", delete_protocol_item)
+        .get_async("/v1/tenants/:tenant/projects/:project/snapshots/verify", verify_all_snapshots)
+        .get_async("/v1/tenants/:tenant/projects/:project/snapshots/:item_id/verify", verify_snapshot)
+        .get_async("/v1/tenants/:tenant/projects/:project/audit", list_audit)
+        .get_async("/v1/tenants/:tenant/projects/:project/users/me", profile_me)
+        .get_async("/v1/tenants/:tenant/projects/:project/users/:item_id", profile_user)
+        .get_async("/v1/tenants/:tenant/projects/:project/ssh-keys", list_ssh_keys)
+        .post_async("/v1/tenants/:tenant/projects/:project/ssh-keys", create_ssh_key)
+        .delete_async("/v1/tenants/:tenant/projects/:project/ssh-keys/:item_id", delete_protocol_item)
         .get_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", issue_comments)
         .post_async("/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments", create_comment)
         .get_async("/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head", get_head)
@@ -63,10 +114,16 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/tenants/:tenant/projects/:project/star", star_project)
         .delete_async("/v1/tenants/:tenant/projects/:project/star", unstar_project)
         .post_async("/v1/tenants/:tenant/projects/:project/objects/missing", missing)
+        .post_async("/v1/tenants/:tenant/projects/:project/objects/check", missing)
         .post_async("/v1/tenants/:tenant/projects/:project/objects/upload", upload)
+        .post_async("/v1/tenants/:tenant/projects/:project/objects", upload)
+        .get_async("/v1/tenants/:tenant/projects/:project/objects/:object", get_object)
         .put_async("/v1/tenants/:tenant/projects/:project/objects/:object/chunks/:chunk", upload_chunk)
         .post_async("/v1/tenants/:tenant/projects/:project/objects/:object/complete", complete_chunked_upload)
         .post_async("/v1/tenants/:tenant/projects/:project/objects/download", download)
+        .get_async("/v1/tenants/:tenant/projects/:project/tags", list_tags)
+        .post_async("/v1/tenants/:tenant/projects/:project/tags", create_tag)
+        .get_async("/v1/tenants/:tenant/projects/:project/tags/:item_id", get_protocol_item)
         .run(req, env)
         .await?;
     apply_cors(&request, &mut response)?;
@@ -76,6 +133,11 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 async fn auth_check(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     Response::from_json(&json!({ "ok": true, "user": user }))
+}
+
+async fn capabilities(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let _ = optional_auth(&req, &ctx.env).await?;
+    Response::from_json(&sty_protocol::protocol_capabilities())
 }
 
 async fn dev_token(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -256,8 +318,13 @@ async fn project_issues(req: Request, ctx: RouteContext<()>) -> Result<Response>
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let issues = d1::list_issues(&database, &tenant, &project).await?;
-    Response::from_json(&IssuesResponse { issues })
+    let mut issues = d1::list_issues(&database, &tenant, &project).await?;
+    let state = req.url()?.query_pairs().find_map(|(k, v)| (k == "state").then(|| v.to_string()));
+    if let Some(state) = state {
+        issues.retain(|issue| issue.state == state || issue.status == state);
+    }
+    let envelope = paginate_vec(req.url()?, issues);
+    Response::from_json(&envelope)
 }
 
 async fn create_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -266,8 +333,24 @@ async fn create_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Respons
     let body: CreateIssueRequest = req.json().await?;
     let database = db(&ctx.env)?;
     d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
-    let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }, &body.title, &body.body).await?;
+    let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }, &body.title, &body.body, &body.labels, body.assignee.as_deref()).await?;
     Response::from_json(&issue)
+}
+
+async fn get_issue(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = optional_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let database = db(&ctx.env)?;
+    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    let issue = d1::list_issues(&database, &tenant, &project)
+        .await?
+        .into_iter()
+        .find(|issue| issue.id == issue_id || issue.number.to_string() == issue_id);
+    match issue {
+        Some(issue) => Response::from_json(&issue),
+        None => json_error(404, "issue not found"),
+    }
 }
 
 async fn update_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -277,8 +360,72 @@ async fn update_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Respons
     let body: UpdateIssueRequest = req.json().await?;
     let database = db(&ctx.env)?;
     d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
-    let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, &body.status).await?;
+    let status = body.state.or(body.status).unwrap_or_else(|| "open".to_string());
+    let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, &status).await?;
     Response::from_json(&issue)
+}
+
+async fn close_issue(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    set_issue_state(req, ctx, "closed").await
+}
+
+async fn reopen_issue(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    set_issue_state(req, ctx, "open").await
+}
+
+async fn set_issue_state(req: Request, ctx: RouteContext<()>, state: &str) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, state).await?;
+    Response::from_json(&issue)
+}
+
+async fn assign_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let body: serde_json::Value = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    let assignees = issue_string_list(&body, "assignees", "user");
+    let issue = d1::add_issue_assignees(&database, &tenant, &project, &issue_id, &assignees).await?;
+    Response::from_json(&issue)
+}
+
+async fn label_issue(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let issue_id = param(&ctx, "issue_id")?;
+    let body: serde_json::Value = req.json().await?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    let labels = issue_string_list(&body, "labels", "label");
+    let issue = d1::add_issue_labels(&database, &tenant, &project, &issue_id, &labels).await?;
+    Response::from_json(&issue)
+}
+
+fn issue_string_list(body: &serde_json::Value, list_key: &str, single_key: &str) -> Vec<String> {
+    body[list_key]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(ToOwned::to_owned))
+                .collect()
+        })
+        .or_else(|| {
+            body["users"].as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(ToOwned::to_owned))
+                    .collect()
+            })
+        })
+        .or_else(|| body[single_key].as_str().map(|item| vec![item.to_string()]))
+        .unwrap_or_default()
 }
 
 async fn issue_comments(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -648,9 +795,33 @@ async fn download(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     Response::from_json(&DownloadResponse { objects })
 }
 
+async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let id = param(&ctx, "object")?;
+    let database = db(&ctx.env)?;
+    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    let store = bucket(&ctx.env)?;
+    let Some(object) = store.get(object_key(&tenant, &project, &id)).execute().await? else {
+        return json_error(404, "object not found");
+    };
+    let Some(body) = object.body() else {
+        return json_error(404, "object not found");
+    };
+    let bytes = body.bytes().await?;
+    let kind = d1::object_kind(&database, &tenant, &project, &id)
+        .await?
+        .unwrap_or_else(|| "blob".to_string());
+    Response::from_json(&RemoteObject {
+        id,
+        kind,
+        bytes_base64: BASE64.encode(bytes),
+    })
+}
+
 // ── Helpers ──────────────────────────────────────────────
 
-async fn require_auth(req: &Request, env: &Env) -> Result<String> {
+pub(crate) async fn require_auth(req: &Request, env: &Env) -> Result<String> {
     let Some(value) = req.headers().get("authorization")? else {
         return Err(Error::RustError("missing bearer token".to_string()));
     };
@@ -664,7 +835,7 @@ async fn require_auth(req: &Request, env: &Env) -> Result<String> {
     }
 }
 
-async fn optional_auth(req: &Request, env: &Env) -> Result<Option<String>> {
+pub(crate) async fn optional_auth(req: &Request, env: &Env) -> Result<Option<String>> {
     let Some(value) = req.headers().get("authorization")? else {
         return Ok(None);
     };
@@ -678,7 +849,7 @@ async fn optional_auth(req: &Request, env: &Env) -> Result<Option<String>> {
     }
 }
 
-async fn check_project_access(
+pub(crate) async fn check_project_access(
     env: &Env,
     tenant: &str,
     project: &str,

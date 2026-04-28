@@ -6,19 +6,20 @@ use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, patch, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use serde_json::json;
 use tower_http::cors::CorsLayer;
 
 use crate::auth::verify_ave_id_token;
 use crate::catalog::Catalog;
+use crate::protocol::*;
 use crate::store::{ObjectStore, Store};
 use sty_protocol::{
     ChunkCompleteRequest, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
     CreateIssueRequest, CreateOrgRequest, DevTokenRequest, DownloadRequest, DownloadResponse,
-    HeadResponse, HeadUpdateRequest, HistoryResponse, IssuesResponse, LogHistoryRequest,
-    MeResponse, MissingRequest, MissingResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
+    HeadResponse, HeadUpdateRequest, HistoryResponse, LogHistoryRequest, MeResponse,
+    MissingRequest, MissingResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
     SessionExchangeRequest, StarResponse, TokenPrincipal, TokenResponse, UpdateIssueRequest,
     UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
@@ -40,6 +41,7 @@ pub async fn run(bind: SocketAddr, store: Store, objects: ObjectStore) -> Result
 pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
     Router::new()
         .route("/v1/auth/check", post(auth_check))
+        .route("/v1/capabilities", get(capabilities))
         .route("/v1/dev/tokens", post(create_dev_token))
         .route("/v1/session/exchange", post(exchange_session))
         .route("/v1/me", get(me))
@@ -67,11 +69,79 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}",
-            patch(update_issue),
+            get(get_issue).patch(update_issue),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/close",
+            post(close_issue),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/reopen",
+            post(reopen_issue),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/assignees",
+            post(assign_issue),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/labels",
+            post(label_issue),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/comments",
             get(issue_comments).post(create_comment_handler),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/labels",
+            get(list_labels).post(create_label),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/labels/{item_id}",
+            delete(delete_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/milestones",
+            get(list_milestones).post(create_milestone),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/milestones/{item_id}",
+            get(get_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/milestones/{item_id}/close",
+            post(close_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/ready",
+            get(list_ready),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/ready/{workspace}",
+            get(get_ready),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/comments",
+            get(list_protocol_comments).post(create_protocol_comment),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/comments/{item_id}",
+            delete(delete_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/comments/{item_id}/reactions",
+            get(list_reactions).post(add_reaction),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/comments/{item_id}/reactions/{reaction}",
+            delete(delete_reaction),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/reactions",
+            get(list_reactions).post(add_reaction),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/issues/{issue_id}/reactions/{reaction}",
+            delete(delete_reaction),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/head",
@@ -91,11 +161,87 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/ready",
-            post(mark_ready),
+            post(mark_ready).delete(unmark_ready),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/merge",
             post(merge_workspace_handler),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/reject",
+            post(reject_ready),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/hooks",
+            get(list_hooks).post(create_hook),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/hooks/{item_id}",
+            delete(delete_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/hooks/{item_id}/test",
+            post(test_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/webhooks",
+            get(list_webhooks).post(create_webhook),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/webhooks/{item_id}",
+            delete(delete_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/webhooks/{item_id}/test",
+            post(test_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/search",
+            get(search_project),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/releases",
+            get(list_releases).post(create_release),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/releases/{item_id}",
+            get(get_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/keys",
+            get(list_keys).post(create_key),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/keys/{item_id}",
+            delete(delete_protocol_item),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/snapshots/verify",
+            get(verify_all_snapshots),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/snapshots/{item_id}/verify",
+            get(verify_snapshot),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/audit",
+            get(list_audit),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/users/me",
+            get(profile_me),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/users/{item_id}",
+            get(profile_user),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/ssh-keys",
+            get(list_ssh_keys).post(create_ssh_key),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/ssh-keys/{item_id}",
+            delete(delete_protocol_item),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/workspaces/{workspace}/parent",
@@ -122,8 +268,20 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
             post(missing),
         )
         .route(
+            "/v1/tenants/{tenant}/projects/{project}/objects/check",
+            post(missing),
+        )
+        .route(
             "/v1/tenants/{tenant}/projects/{project}/objects/upload",
             post(upload),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/objects",
+            post(upload),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/objects/{object}",
+            get(get_object),
         )
         .route(
             "/v1/tenants/{tenant}/projects/{project}/objects/{object}/chunks/{chunk}",
@@ -137,6 +295,14 @@ pub fn router(store: Arc<Store>, objects: Arc<ObjectStore>) -> Router {
             "/v1/tenants/{tenant}/projects/{project}/objects/download",
             post(download),
         )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/tags",
+            get(list_tags).post(create_tag),
+        )
+        .route(
+            "/v1/tenants/{tenant}/projects/{project}/tags/{item_id}",
+            get(get_protocol_item),
+        )
         .layer(cors_layer())
         .with_state(AppState { store, objects })
 }
@@ -149,7 +315,14 @@ fn cors_layer() -> CorsLayer {
             HeaderValue::from_static("http://localhost:4173"),
             HeaderValue::from_static("http://127.0.0.1:4173"),
         ])
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers([
             header::AUTHORIZATION,
             header::CONTENT_TYPE,
@@ -174,6 +347,11 @@ async fn auth_check(State(state): State<AppState>, headers: HeaderMap) -> Respon
         Ok(principal) => Json(json!({ "ok": true, "user": principal.user })).into_response(),
         Err(response) => response,
     }
+}
+
+async fn capabilities(headers: HeaderMap) -> Response {
+    let _ = headers;
+    Json(sty_protocol::protocol_capabilities()).into_response()
 }
 
 async fn me(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -321,12 +499,17 @@ async fn project_issues(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((tenant, project)): Path<(String, String)>,
+    axum::extract::Query(query): axum::extract::Query<std::collections::BTreeMap<String, String>>,
 ) -> Response {
     match optional_auth(&state, &headers).and_then(|principal| {
         check_project_access(&state, &tenant, &project, principal.as_ref())?;
-        map_result(state.store.list_issues(&tenant, &project))
+        let mut issues = map_result(state.store.list_issues(&tenant, &project))?;
+        if let Some(filter) = query.get("state") {
+            issues.retain(|issue| issue.state == *filter || issue.status == *filter);
+        }
+        Ok(paginate(issues, &query))
     }) {
-        Ok(issues) => Json(IssuesResponse { issues }).into_response(),
+        Ok(issues) => Json(issues).into_response(),
         Err(response) => response,
     }
 }
@@ -339,11 +522,32 @@ async fn create_issue(
 ) -> Response {
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
-        map_result(
-            state
-                .store
-                .create_issue(&tenant, &project, &principal, &body.title, &body.body),
-        )
+        map_result(state.store.create_issue(
+            &tenant,
+            &project,
+            &principal,
+            &body.title,
+            &body.body,
+            &body.labels,
+            body.assignee.as_deref(),
+        ))
+    }) {
+        Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn get_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+) -> Response {
+    match optional_auth(&state, &headers).and_then(|principal| {
+        check_project_access(&state, &tenant, &project, principal.as_ref())?;
+        let issue = map_result(state.store.list_issues(&tenant, &project))?
+            .into_iter()
+            .find(|issue| issue.id == issue_id || issue.number.to_string() == issue_id);
+        issue.ok_or_else(|| error(StatusCode::NOT_FOUND, "issue not found"))
     }) {
         Ok(issue) => Json(issue).into_response(),
         Err(response) => response,
@@ -359,14 +563,118 @@ async fn update_issue(
     match require_auth(&state, &headers).and_then(|principal| {
         map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
         map_result(
-            state
-                .store
-                .update_issue_status(&tenant, &project, &issue_id, &body.status),
+            state.store.update_issue_status(
+                &tenant,
+                &project,
+                &issue_id,
+                body.state
+                    .as_deref()
+                    .or(body.status.as_deref())
+                    .unwrap_or("open"),
+            ),
         )
     }) {
         Ok(issue) => Json(issue).into_response(),
         Err(response) => response,
     }
+}
+
+async fn close_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+) -> Response {
+    set_issue_state(state, headers, tenant, project, issue_id, "closed").await
+}
+
+async fn reopen_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+) -> Response {
+    set_issue_state(state, headers, tenant, project, issue_id, "open").await
+}
+
+async fn set_issue_state(
+    state: AppState,
+    headers: HeaderMap,
+    tenant: String,
+    project: String,
+    issue_id: String,
+    status: &str,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        map_result(
+            state
+                .store
+                .update_issue_status(&tenant, &project, &issue_id, status),
+        )
+    }) {
+        Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn assign_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        let assignees = issue_string_list(&body, "assignees", "user");
+        map_result(
+            state
+                .store
+                .add_issue_assignees(&tenant, &project, &issue_id, &assignees),
+        )
+    }) {
+        Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn label_issue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, issue_id)): Path<(String, String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        let labels = issue_string_list(&body, "labels", "label");
+        map_result(
+            state
+                .store
+                .add_issue_labels(&tenant, &project, &issue_id, &labels),
+        )
+    }) {
+        Ok(issue) => Json(issue).into_response(),
+        Err(response) => response,
+    }
+}
+
+fn issue_string_list(body: &serde_json::Value, list_key: &str, single_key: &str) -> Vec<String> {
+    body[list_key]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(ToOwned::to_owned))
+                .collect()
+        })
+        .or_else(|| {
+            body["users"].as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(ToOwned::to_owned))
+                    .collect()
+            })
+        })
+        .or_else(|| body[single_key].as_str().map(|item| vec![item.to_string()]))
+        .unwrap_or_default()
 }
 
 async fn issue_comments(
@@ -818,6 +1126,23 @@ async fn download(
     }
 }
 
+async fn get_object(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((tenant, project, object)): Path<(String, String, String)>,
+) -> Response {
+    match require_auth(&state, &headers).and_then(|principal| {
+        map_store_result(state.store.ensure_project(&tenant, &project, &principal))?;
+        let mut objects = map_result(state.objects.download(&tenant, &project, &[object]))?;
+        objects
+            .pop()
+            .ok_or_else(|| error(StatusCode::NOT_FOUND, "object not found"))
+    }) {
+        Ok(object) => Json(object).into_response(),
+        Err(response) => response,
+    }
+}
+
 async fn update_head(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -845,7 +1170,7 @@ async fn update_head(
     }
 }
 
-fn require_auth(
+pub(crate) fn require_auth(
     state: &AppState,
     headers: &HeaderMap,
 ) -> std::result::Result<TokenPrincipal, Response> {
@@ -868,7 +1193,7 @@ fn require_auth(
     }
 }
 
-fn optional_auth(
+pub(crate) fn optional_auth(
     state: &AppState,
     headers: &HeaderMap,
 ) -> std::result::Result<Option<TokenPrincipal>, Response> {
@@ -891,11 +1216,11 @@ fn optional_auth(
     }
 }
 
-fn map_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
+pub(crate) fn map_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
     value.map_err(|err| error(StatusCode::BAD_REQUEST, err.to_string()))
 }
 
-fn map_store_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
+pub(crate) fn map_store_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
     value.map_err(|err| {
         let message = err.to_string();
         let status = if message.contains("cannot access") || message.contains("cannot create") {
@@ -907,7 +1232,7 @@ fn map_store_result<T>(value: Result<T>) -> std::result::Result<T, Response> {
     })
 }
 
-fn check_project_access(
+pub(crate) fn check_project_access(
     state: &AppState,
     tenant: &str,
     project: &str,
@@ -944,6 +1269,45 @@ fn required_usize_header(headers: &HeaderMap, name: &str) -> std::result::Result
         .map_err(|_| error(StatusCode::BAD_REQUEST, format!("invalid {name} header")))
 }
 
-fn error(status: StatusCode, message: impl Into<String>) -> Response {
+pub(crate) fn paginate<T: serde::Serialize>(
+    items: Vec<T>,
+    query: &std::collections::BTreeMap<String, String>,
+) -> sty_protocol::Paginated<T> {
+    if query.get("all").is_some_and(|value| value == "true") {
+        return sty_protocol::Paginated {
+            page: 1,
+            per_page: items.len().max(1),
+            total: items.len(),
+            total_pages: 1,
+            next: None,
+            prev: None,
+            items,
+        };
+    }
+    let page = query
+        .get("page")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(1)
+        .max(1);
+    let per_page = query
+        .get("per_page")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(25)
+        .clamp(1, 100);
+    let total = items.len();
+    let total_pages = total.div_ceil(per_page).max(1);
+    let start = (page - 1).saturating_mul(per_page);
+    sty_protocol::Paginated {
+        items: items.into_iter().skip(start).take(per_page).collect(),
+        page,
+        per_page,
+        total,
+        total_pages,
+        next: (page < total_pages).then_some(page + 1),
+        prev: (page > 1).then_some(page - 1),
+    }
+}
+
+pub(crate) fn error(status: StatusCode, message: impl Into<String>) -> Response {
     (status, Json(json!({ "error": message.into() }))).into_response()
 }
