@@ -1,5 +1,5 @@
 {
-  "$schema": "../../frontend/node_modules/wrangler/config-schema.json",
+  "$schema": "../frontend/node_modules/wrangler/config-schema.json",
   "name": "sty-server",
   "main": "build/worker/shim.mjs",
   "compatibility_date": "2026-04-25",

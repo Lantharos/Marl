@@ -138,6 +138,16 @@ pub struct TokenPrincipal {
     pub user: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UserProfile {
+    pub user: String,
+    pub display_name: String,
+    pub handle: Option<String>,
+    pub avatar_url: Option<String>,
+    pub email: Option<String>,
+    pub updated_at: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProjectMetadata {
     pub tenant: String,
@@ -163,6 +173,7 @@ pub struct TenantSummary {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MeResponse {
     pub user: String,
+    pub profile: Option<UserProfile>,
     pub tenants: Vec<TenantSummary>,
 }
 
@@ -311,6 +322,8 @@ pub struct HistoryEntry {
     pub kind: String,
     pub message: String,
     pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_profile: Option<UserProfile>,
     pub timestamp: String,
     pub workspace: String,
     pub snapshot_id: Option<String>,

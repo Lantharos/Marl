@@ -2,8 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { finishLogin, getStyToken, hydrateSession } from '$lib/session';
+	import Spinner from '$lib/components/Spinner.svelte';
 
-	let message = $state('Finishing sign in');
+	let errorMessage = $state('');
 
 	onMount(async () => {
 		try {
@@ -12,13 +13,15 @@
 			await getStyToken();
 			await goto('/');
 		} catch (error) {
-			message = error instanceof Error ? error.message : 'Sign in failed';
+			errorMessage = error instanceof Error ? error.message : 'Sign in failed';
 		}
 	});
 </script>
 
-<main class="min-h-screen px-6 py-10 text-[#171714]">
-	<div class="mx-auto max-w-4xl">
-		<p class="text-sm text-[#6f6b5f]">{message}</p>
-	</div>
+<main class="grid min-h-screen place-items-center bg-[#0f0f0d] px-6">
+	{#if errorMessage}
+		<p class="max-w-md text-center text-sm text-[#d96c5a]">{errorMessage}</p>
+	{:else}
+		<Spinner />
+	{/if}
 </main>

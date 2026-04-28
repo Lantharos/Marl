@@ -1,7 +1,7 @@
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::Deserialize;
-use sty_protocol::DEFAULT_AVE_CLIENT_ID;
+use sty_protocol::{DEFAULT_AVE_CLIENT_ID, UserProfile};
 use worker::*;
 
 const DEFAULT_AVE_ISSUER: &str = "https://aveid.net";
@@ -15,9 +15,13 @@ struct DiscoveryDocument {
 #[derive(Debug, Deserialize)]
 struct AveClaims {
     sub: String,
+    name: Option<String>,
+    preferred_username: Option<String>,
+    email: Option<String>,
+    picture: Option<String>,
 }
 
-pub async fn verify_ave_id_token(env: &Env, id_token: &str) -> Result<String> {
+pub async fn verify_ave_id_token(env: &Env, id_token: &str) -> Result<UserProfile> {
     let issuer = env_string(env, "AVE_ISSUER").unwrap_or_else(|_| DEFAULT_AVE_ISSUER.to_string());
     let client_id =
         env_string(env, "AVE_CLIENT_ID").unwrap_or_else(|_| DEFAULT_AVE_CLIENT_ID.to_string());
@@ -45,13 +49,7 @@ pub async fn verify_ave_id_token(env: &Env, id_token: &str) -> Result<String> {
     validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
     let token = decode::<AveClaims>(id_token, &key, &validation)
         .map_err(|error| Error::RustError(error.to_string()))?;
-    Ok(token.claims.sub)
-}
-
-pub fn dev_tokens_enabled(env: &Env) -> bool {
-    env_string(env, "STY_DEV_TOKENS")
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
+    Ok(profile_from_claims(token.claims))
 }
 
 async fn discovery_document(issuer: &str) -> Result<DiscoveryDocument> {
@@ -77,4 +75,25 @@ async fn jwks(uri: &str) -> Result<JwkSet> {
 
 fn env_string(env: &Env, name: &str) -> Result<String> {
     env.var(name).map(|value| value.to_string())
+}
+
+fn profile_from_claims(claims: AveClaims) -> UserProfile {
+    let handle = clean_claim(claims.preferred_username);
+    let email = clean_claim(claims.email);
+    let display_name = clean_claim(claims.name)
+        .or_else(|| handle.clone())
+        .or_else(|| email.clone())
+        .unwrap_or_else(|| claims.sub.clone());
+    UserProfile {
+        user: claims.sub,
+        display_name,
+        handle,
+        avatar_url: clean_claim(claims.picture),
+        email,
+        updated_at: None,
+    }
+}
+
+fn clean_claim(value: Option<String>) -> Option<String> {
+    value.map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
 }

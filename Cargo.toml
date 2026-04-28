@@ -2,11 +2,9 @@
 resolver = "3"
 members = [
   "crates/sty-protocol",
-  "crates/sty-store",
-  "server/local",
   "client",
 ]
-exclude = ["server/worker"]
+exclude = ["server"]
 
 [workspace.package]
 version = "0.1.0"

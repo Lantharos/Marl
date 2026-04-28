@@ -2,6 +2,14 @@ CREATE TABLE IF NOT EXISTS tokens (
     token_hash TEXT PRIMARY KEY,
     user TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    handle TEXT,
+    avatar_url TEXT,
+    email TEXT,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS tenants (
     name TEXT PRIMARY KEY,
     kind TEXT NOT NULL,
@@ -96,5 +104,6 @@ CREATE TABLE IF NOT EXISTS object_index (
     PRIMARY KEY (tenant, project, id)
 );
 CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
+CREATE INDEX IF NOT EXISTS idx_history_project_time ON history(tenant, project, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
 CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);

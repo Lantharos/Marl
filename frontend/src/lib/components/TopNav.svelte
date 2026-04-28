@@ -12,44 +12,39 @@
 	import Star from 'lucide-svelte/icons/star';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Plus from 'lucide-svelte/icons/plus';
+	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import type { AveProfile } from '$lib/session';
 
 	let {
 		user,
+		profile,
 		tenants,
 		projects,
 		onSignOut,
 		onCreateProject,
 		onCreateOrg,
-		onDevLogin,
 		projectName,
 		orgName,
 		busy,
-		message,
-		devAuthEnabled,
-		currentDevUser,
-		devUser
+		message
 	}: {
 		user: string;
+		profile: AveProfile | null;
 		tenants: TenantSummary[];
 		projects: ProjectSummary[];
 		onSignOut: () => void;
-		onCreateProject: () => void;
+		onCreateProject: (tenantName?: string) => void;
 		onCreateOrg: () => void;
-		onDevLogin: () => void;
 		projectName: string;
 		orgName: string;
 		busy: boolean;
 		message: string;
-		devAuthEnabled: boolean;
-		currentDevUser: string | null;
-		devUser: string;
 	} = $props();
 
 	let showProfile = $state(false);
 	let showTenantMenu = $state(false);
 	let showProjectMenu = $state(false);
 	let showCreateOrg = $state(false);
-	let tenantName = $state('');
 	let settings = $state<ProjectSettings | null>(null);
 	let settingsLoading = $state(false);
 
@@ -57,7 +52,13 @@
 	const pathParts = $derived(currentPath.split('/').filter(Boolean));
 	const currentTenant = $derived(pathParts[0] ?? '');
 	const currentProject = $derived(pathParts[1] ?? null);
-	const tenantProjects = $derived(projects.filter((p) => p.tenant === currentTenant));
+	const selectedTenant = $derived(currentTenant || tenants[0]?.name || '');
+	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
+	const displayName = $derived(profile?.name || user);
+	const profileHandle = $derived(profile?.preferredUsername ? `@${profile.preferredUsername}` : profile?.email);
+	const profileDetail = $derived(profileHandle || profile?.sub || user);
+	const avatarUrl = $derived(profile?.picture);
+	const avatarInitials = $derived(initials(displayName || user));
 
 	const DEFAULT_TABS: NavbarItem[] = [
 		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
@@ -128,21 +129,29 @@
 			// ignore
 		}
 	}
+
+	function initials(value: string) {
+		const parts = value.trim().split(/\s+/).filter(Boolean);
+		if (parts.length >= 2) {
+			return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+		}
+		return (parts[0] ?? value).slice(0, 2).toUpperCase();
+	}
 </script>
 
 <header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
 	<div class="flex items-center gap-4 px-32 py-2.5 md:px-48 lg:px-64 xl:px-80">
 		<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
 
-		{#if currentTenant}
+		{#if selectedTenant}
 			<div class="flex items-center gap-0.5">
 				<div class="relative">
 					<button
 						class="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#d9a66c]"
 						onclick={() => (showTenantMenu = !showTenantMenu)}
 					>
-						{currentTenant}
-						<span class="text-xs">▼</span>
+						{selectedTenant}
+						<ChevronDown class="h-3.5 w-3.5 text-[#6f6b5f]" />
 					</button>
 				{#if showTenantMenu}
 					<div class="absolute left-0 top-full z-50 mt-1 w-56 rounded border border-[#2a2a28] bg-[#141412] py-1 shadow-lg">
@@ -150,7 +159,7 @@
 						{#each tenants as tenant}
 							<a
 								href="/{tenant.name}"
-								class="block px-3 py-1.5 text-sm {currentTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
+								class="block px-3 py-1.5 text-sm {selectedTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
 								onclick={() => (showTenantMenu = false)}
 							>
 								{tenant.name}
@@ -174,11 +183,11 @@
 						onclick={() => (showProjectMenu = !showProjectMenu)}
 					>
 						{currentProject}
-						<span class="text-xs text-[#6f6b5f]">▼</span>
+						<ChevronDown class="h-3.5 w-3.5 text-[#6f6b5f]" />
 					</button>
 					{#if showProjectMenu}
 						<div class="absolute left-0 top-full z-50 mt-1 w-64 rounded border border-[#2a2a28] bg-[#141412] py-1 shadow-lg">
-							<div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#5c5c5a]">{currentTenant} projects</div>
+							<div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#5c5c5a]">{selectedTenant} projects</div>
 							{#each tenantProjects as p}
 								<a
 									href="/{p.tenant}/{p.project}"
@@ -200,7 +209,7 @@
 								<button
 									class="mt-1 w-full rounded bg-[#2e2e2c] py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
 									disabled={busy || !projectName}
-									onclick={() => { tenantName = currentTenant; onCreateProject(); showProjectMenu = false; }}
+									onclick={() => { onCreateProject(selectedTenant); showProjectMenu = false; }}
 								>
 									Create
 								</button>
@@ -230,23 +239,24 @@
 
 		<div class="relative">
 			<button
-				class="flex h-7 w-7 items-center justify-center rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
+				class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
 				onclick={() => (showProfile = !showProfile)}
 			>
-				{user.slice(0, 2).toUpperCase()}
+				{#if avatarUrl}
+					<img src={avatarUrl} alt="" class="h-full w-full object-cover" />
+				{:else}
+					{avatarInitials}
+				{/if}
 			</button>
 			{#if showProfile}
 				<div class="absolute right-0 top-full z-50 mt-1 w-56 rounded border border-[#2a2a28] bg-[#141412] py-1 shadow-lg">
-					<div class="px-3 py-2 text-sm text-[#a09d94]">{user}</div>
-					<div class="border-t border-[#2a2a28]">
-						{#if devAuthEnabled}
-							<div class="grid gap-1.5 px-2 py-2">
-								<input class="w-full rounded bg-[#0f0f0d] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder={currentDevUser || 'dev'} bind:value={devUser} />
-								<button class="w-full rounded bg-[#2e2e2c] py-1 text-xs font-medium text-[#eae9e4]" onclick={() => { onDevLogin(); showProfile = false; }}>
-									Dev sign in
-								</button>
-							</div>
+					<div class="px-3 py-2">
+						<div class="truncate text-sm text-[#eae9e4]">{displayName}</div>
+						{#if profileDetail && profileDetail !== displayName}
+							<div class="mt-0.5 truncate text-xs text-[#6f6b5f]">{profileDetail}</div>
 						{/if}
+					</div>
+					<div class="border-t border-[#2a2a28]">
 						<button class="block w-full px-3 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" onclick={() => { onSignOut(); showProfile = false; }}>
 							Sign out
 						</button>

@@ -12,6 +12,15 @@ export interface TenantSummary {
 	owner: string;
 }
 
+export interface UserProfile {
+	user: string;
+	display_name: string;
+	handle?: string | null;
+	avatar_url?: string | null;
+	email?: string | null;
+	updated_at?: string | null;
+}
+
 export interface WorkspaceSummary {
 	name: string;
 	head: string | null;
@@ -99,6 +108,7 @@ export interface HistoryEntry {
 	kind: 'save' | 'ship' | 'cram' | 'merge' | 'ready';
 	message: string;
 	author: string;
+	author_profile?: UserProfile | null;
 	timestamp: string;
 	workspace: string;
 	snapshot_id: string | null;
@@ -147,6 +157,7 @@ export interface Activity {
 	id: string;
 	kind: 'save' | 'ship' | 'cram' | 'issue' | 'ready' | 'merge' | 'star';
 	actor: string;
+	actor_profile?: UserProfile | null;
 	message: string;
 	timestamp: string;
 	workspace?: string;
@@ -280,7 +291,7 @@ async function publicFetch(path: string, init: RequestInit = {}) {
 
 export async function getMe(options: ApiOptions = {}) {
 	const response = await authedFetch('/v1/me', { signal: options.signal });
-	return (await response.json()) as { user: string; tenants: TenantSummary[] };
+	return (await response.json()) as { user: string; profile?: UserProfile | null; tenants: TenantSummary[] };
 }
 
 export async function listProjects(options: ApiOptions = {}) {
@@ -709,6 +720,7 @@ export async function getProjectOverview(tenant: string, project: string, option
 		id: h.id,
 		kind: h.kind as Activity['kind'],
 		actor: h.author,
+		actor_profile: h.author_profile,
 		message: h.message,
 		timestamp: h.timestamp,
 		workspace: h.workspace

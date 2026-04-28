@@ -172,12 +172,15 @@ pub async fn search_project(req: Request, ctx: RouteContext<()>) -> Result<Respo
 
 pub async fn profile_me(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
-    profile_json(user)
+    let database = db(&ctx.env)?;
+    profile_json(&database, &user).await
 }
 
 pub async fn profile_user(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let _ = optional_auth(&req, &ctx.env).await?;
-    profile_json(param(&ctx, "item_id")?)
+    let database = db(&ctx.env)?;
+    let user = param(&ctx, "item_id")?;
+    profile_json(&database, &user).await
 }
 
 pub async fn list_reactions(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -223,12 +226,34 @@ pub async fn verify_all_snapshots(req: Request, ctx: RouteContext<()>) -> Result
     }))
 }
 
-fn profile_json(username: String) -> Result<Response> {
-    Response::from_json(&json!({
-        "username": username,
-        "display_name": null,
-        "bio": null,
+async fn profile_json(database: &worker::D1Database, user: &str) -> Result<Response> {
+    let profile = d1::user_profile(database, user).await?;
+    let fallback = json!({
+        "user": user,
+        "username": user,
+        "display_name": user,
+        "handle": null,
+        "avatar_url": null,
         "avatar": null,
+        "email": null,
+        "updated_at": null,
+        "bio": null,
+        "created_at": "",
+        "public_projects": 0,
+    });
+    let Some(profile) = profile else {
+        return Response::from_json(&fallback);
+    };
+    Response::from_json(&json!({
+        "user": profile.user,
+        "username": profile.handle.clone().unwrap_or_else(|| profile.user.clone()),
+        "display_name": profile.display_name,
+        "handle": profile.handle,
+        "avatar_url": profile.avatar_url,
+        "avatar": profile.avatar_url,
+        "email": profile.email,
+        "updated_at": profile.updated_at,
+        "bio": null,
         "created_at": "",
         "public_projects": 0,
     }))
@@ -247,10 +272,13 @@ pub async fn get_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Re
 }
 
 pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let _ = require_auth(&req, &ctx.env).await?;
+    let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     database.prepare("DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND id = ?3")
         .bind(&[wasm_bindgen::JsValue::from_str(&tenant), wasm_bindgen::JsValue::from_str(&project), wasm_bindgen::JsValue::from_str(&id)])?
         .run()
@@ -259,10 +287,13 @@ pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result
 }
 
 pub async fn close_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let _ = require_auth(&req, &ctx.env).await?;
+    let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let Some(mut item) = protocol_item(&database, &tenant, &project, &id).await? else {
         return json_error(404, "item not found");
     };
@@ -272,8 +303,13 @@ pub async fn close_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<
 }
 
 pub async fn test_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let _ = require_auth(&req, &ctx.env).await?;
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
+    let database = db(&ctx.env)?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     Response::from_json(&json!({ "ok": true, "tested": id }))
 }
 

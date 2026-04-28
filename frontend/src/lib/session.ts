@@ -4,6 +4,14 @@ import { AveSession, createLocalStorageAdapter } from '@ave-id/sdk';
 import { completeOAuthCallback, startPkceLogin } from '@ave-id/sdk/client';
 import { aveSessionToStore } from '@ave-id/sdk/svelte';
 
+export type AveProfile = {
+	sub: string;
+	name: string;
+	preferredUsername?: string;
+	email?: string;
+	picture?: string;
+};
+
 const defaultAveClientId = 'app_813ac5533bb87d939f328d76b5a1dca8';
 const redirectUri = browser ? `${window.location.origin}/auth/callback` : '';
 const storage = browser
@@ -30,14 +38,7 @@ export function apiBase() {
 	if (env.PUBLIC_STY_API_BASE) {
 		return env.PUBLIC_STY_API_BASE;
 	}
-	if (env.PUBLIC_STY_DEV_AUTH === 'worker') {
-		return 'http://127.0.0.1:8787';
-	}
-	return 'http://127.0.0.1:7379';
-}
-
-export function devAuthEnabled() {
-	return env.PUBLIC_STY_DEV_AUTH === 'true' || env.PUBLIC_STY_DEV_AUTH === 'worker';
+	return 'http://127.0.0.1:8787';
 }
 
 export function aveClientId() {
@@ -67,34 +68,22 @@ export async function signOut() {
 	await session.signOut();
 	if (browser) {
 		localStorage.removeItem('sty_token');
-		localStorage.removeItem('sty_dev_user');
 	}
+}
+
+export async function getAveProfile() {
+	if (!browser) {
+		return null;
+	}
+	const idToken = await session.getValidIdToken();
+	if (!idToken) {
+		return null;
+	}
+	return profileFromClaims(decodeJwtPayload(idToken));
 }
 
 export function hasStyToken() {
 	return browser && Boolean(localStorage.getItem('sty_token'));
-}
-
-export function currentDevUser() {
-	return browser ? localStorage.getItem('sty_dev_user') : null;
-}
-
-export async function startDevLogin(user: string) {
-	if (!browser) {
-		return null;
-	}
-	const response = await fetch(`${apiBase()}/v1/dev/tokens`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ user })
-	});
-	if (!response.ok) {
-		throw new Error(await response.text());
-	}
-	const body = (await response.json()) as { token: string };
-	localStorage.setItem('sty_token', body.token);
-	localStorage.setItem('sty_dev_user', user);
-	return body.token;
 }
 
 export async function getStyToken() {
@@ -120,4 +109,31 @@ export async function getStyToken() {
 	const body = (await response.json()) as { token: string };
 	localStorage.setItem('sty_token', body.token);
 	return body.token;
+}
+
+function decodeJwtPayload(token: string) {
+	const payload = token.split('.')[1];
+	if (!payload) {
+		return {};
+	}
+	const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+	const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+	return JSON.parse(atob(padded)) as Record<string, unknown>;
+}
+
+function stringClaim(claims: Record<string, unknown>, key: string) {
+	const value = claims[key];
+	return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function profileFromClaims(claims: Record<string, unknown>): AveProfile | null {
+	const sub = stringClaim(claims, 'sub');
+	if (!sub) {
+		return null;
+	}
+	const preferredUsername = stringClaim(claims, 'preferred_username');
+	const email = stringClaim(claims, 'email');
+	const name = stringClaim(claims, 'name') ?? preferredUsername ?? email ?? sub;
+	const picture = stringClaim(claims, 'picture');
+	return { sub, name, preferredUsername, email, picture };
 }

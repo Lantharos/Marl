@@ -1,0 +1,150 @@
+use super::*;
+pub async fn head(db: &D1Database, tenant: &str, project: &str, workspace: &str) -> Result<Option<String>> {
+    #[derive(Deserialize)]
+    struct Row {
+        head: Option<String>,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT head FROM workspace_heads WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .first(None)
+        .await?;
+    Ok(row.and_then(|r| r.head))
+}
+
+pub async fn update_head(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    expected_head: Option<&str>,
+    new_head: &str,
+) -> Result<bool> {
+    #[derive(Deserialize)]
+    struct Row {
+        head: Option<String>,
+    }
+    let current: Option<Row> = db
+        .prepare("SELECT head FROM workspace_heads WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .first(None)
+        .await?;
+
+    if current.as_ref().and_then(|r| r.head.as_deref()) != expected_head {
+        return Ok(false);
+    }
+
+    db.prepare(
+        "INSERT INTO workspace_heads (tenant, project, workspace, head) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(tenant, project, workspace) DO UPDATE SET head = excluded.head"
+    )
+    .bind(&[js_str(tenant), js_str(project), js_str(workspace), js_str(new_head)])?
+    .run()
+    .await?;
+
+    db.prepare(
+        "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable) \
+         VALUES (?1, ?2, ?3, 'active', 0, NULL, 0) \
+         ON CONFLICT(tenant, project, workspace) DO NOTHING"
+    )
+    .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+    .run()
+    .await?;
+
+    Ok(true)
+}
+
+// -- Workspace state --------------------------------------
+
+pub async fn workspace_states(db: &D1Database, tenant: &str, project: &str) -> Result<Vec<WorkspaceState>> {
+    #[derive(Deserialize)]
+    struct Row {
+        workspace: String,
+        status: String,
+        head: Option<String>,
+        parent_workspace: Option<String>,
+        is_ready: i64,
+        mergeable: i64,
+    }
+    let result = db
+        .prepare(
+            "SELECT ws.workspace, ws.status, wh.head, ws.parent_workspace, ws.is_ready, ws.mergeable \
+             FROM workspace_states ws \
+             LEFT JOIN workspace_heads wh ON wh.tenant = ws.tenant AND wh.project = ws.project AND wh.workspace = ws.workspace \
+             WHERE ws.tenant = ?1 AND ws.project = ?2 \
+             ORDER BY ws.workspace"
+        )
+        .bind(&[js_str(tenant), js_str(project)])?
+        .all()
+        .await?;
+    let rows: Vec<Row> = result.results()?;
+    let mut states: Vec<WorkspaceState> = rows
+        .into_iter()
+        .map(|r| WorkspaceState {
+            name: r.workspace.clone(),
+            status: r.status,
+            head: r.head,
+            parent_workspace: r.parent_workspace.clone(),
+            child_workspaces: Vec::new(),
+            is_ready: r.is_ready != 0,
+            mergeable: r.mergeable != 0,
+        })
+        .collect();
+    let mut parents = std::collections::HashMap::new();
+    for ws in &states {
+        if let Some(ref p) = ws.parent_workspace {
+            parents.entry(p.clone()).or_insert_with(Vec::new).push(ws.name.clone());
+        }
+    }
+    for ws in &mut states {
+        ws.child_workspaces = parents.get(&ws.name).cloned().unwrap_or_default();
+    }
+    Ok(states)
+}
+
+pub async fn set_parent_workspace(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    parent: Option<&str>,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET parent_workspace = ?1 WHERE tenant = ?2 AND project = ?3 AND workspace = ?4")
+        .bind(&[js_opt(parent), js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    Ok(())
+}
+
+pub async fn mark_workspace_ready(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    principal: &TokenPrincipal,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET status = 'ready', is_ready = 1 WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    log_history(db, tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace), None).await?;
+    Ok(())
+}
+
+pub async fn merge_workspace(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    principal: &TokenPrincipal,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET status = 'merged', is_ready = 0 WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    log_history(db, tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace), None).await?;
+    Ok(())
+}
+
+// -- History ----------------------------------------------
+

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import {
 		createOrg,
 		createProject,
@@ -10,13 +11,12 @@
 		type TenantSummary
 	} from '$lib/api';
 	import {
-		currentDevUser,
-		devAuthEnabled,
+		getAveProfile,
 		hasStyToken,
 		hydrateSession,
 		sessionStore,
 		signOut,
-		startDevLogin
+		type AveProfile
 	} from '$lib/session';
 	import TopNav from '$lib/components/TopNav.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -25,15 +25,20 @@
 
 	let status = $state<'loading' | 'signedOut' | 'signedIn'>('loading');
 	let user = $state('');
+	let profile = $state<AveProfile | null>(null);
 	let tenants = $state<TenantSummary[]>([]);
 	let projects = $state<ProjectSummary[]>([]);
 	let projectName = $state('');
 	let orgName = $state('');
-	let devUser = $state('dev');
 	let message = $state('');
 	let busy = $state(false);
+	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
 
 	onMount(() => {
+		if (isAuthRoute) {
+			status = 'signedOut';
+			return;
+		}
 		const unsubscribe = sessionStore.subscribe((state) => {
 			status = hasStyToken() ? 'signedIn' : state.status;
 		});
@@ -47,8 +52,18 @@
 			return;
 		}
 		try {
+			profile = await getAveProfile();
 			const me = await getMe();
 			user = me.user;
+			if (me.profile) {
+				profile = {
+					sub: me.profile.user,
+					name: me.profile.display_name,
+					preferredUsername: me.profile.handle ?? undefined,
+					email: me.profile.email ?? undefined,
+					picture: me.profile.avatar_url ?? undefined
+				};
+			}
 			tenants = me.tenants;
 			projects = await listProjects();
 			status = 'signedIn';
@@ -57,9 +72,9 @@
 		}
 	}
 
-	async function handleCreateProject() {
+	async function handleCreateProject(tenantName?: string) {
 		if (!projectName.trim()) return;
-		const tenant = tenants[0]?.name ?? user;
+		const tenant = tenantName ?? tenants[0]?.name ?? user;
 		busy = true;
 		message = '';
 		try {
@@ -89,23 +104,12 @@
 		}
 	}
 
-	async function handleDevLogin() {
-		busy = true;
-		message = '';
-		try {
-			await startDevLogin(devUser.trim() || 'dev');
-			await loadData();
-		} catch (error) {
-			message = error instanceof Error ? error.message : 'Failed';
-		} finally {
-			busy = false;
-		}
-	}
-
 	async function handleSignOut() {
 		await signOut();
 		status = 'signedOut';
 		projects = [];
+		tenants = [];
+		profile = null;
 		user = '';
 	}
 </script>
@@ -114,7 +118,9 @@
 	<title>sty</title>
 </svelte:head>
 
-{#if status === 'signedOut'}
+{#if isAuthRoute}
+	{@render children()}
+{:else if status === 'signedOut'}
 	<main class="min-h-screen bg-[#0f0f0d]">
 		<!-- Hero -->
 		<section class="px-6 pt-20 pb-16 md:px-12 lg:px-20">
@@ -126,18 +132,9 @@
 					Save, cram, and ship your code with confidence.
 				</p>
 				<div class="mt-8 flex justify-center gap-3">
-					{#if devAuthEnabled()}
-						<div class="flex gap-2">
-							<input class="rounded bg-[#1a1a18] px-3 py-2 text-sm text-[#eae9e4] outline-none focus:border-[#d9a66c] border border-[#2a2a28]" placeholder={currentDevUser() || 'dev'} bind:value={devUser} />
-							<button class="rounded bg-[#eae9e4] px-4 py-2 text-sm font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" disabled={busy} onclick={handleDevLogin}>
-								Dev sign in
-							</button>
-						</div>
-					{:else}
-						<button class="rounded bg-[#eae9e4] px-6 py-2.5 text-sm font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => import('$lib/session').then((m) => m.startLogin())}>
-							Sign in with Ave
-						</button>
-					{/if}
+					<button class="rounded bg-[#eae9e4] px-6 py-2.5 text-sm font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => import('$lib/session').then((m) => m.startLogin())}>
+						Sign in
+					</button>
 				</div>
 				{#if message}<p class="mt-3 text-sm text-[#d96c5a]">{message}</p>{/if}
 			</div>
@@ -153,8 +150,11 @@
 						<span class="h-3 w-3 rounded-full bg-[#7cb97c]"></span>
 						<span class="ml-2 text-xs text-[#6f6b5f]">terminal</span>
 					</div>
-					<pre class="mt-4 overflow-x-auto text-sm leading-relaxed text-[#a09d94]"><code><span class="text-[#6f6b5f]"># initialize a project</span>
-<span class="text-[#eae9e4]">$ pig init my-org/my-project</span>
+					<pre class="mt-4 overflow-x-auto text-sm leading-relaxed text-[#a09d94]"><code><span class="text-[#6f6b5f]"># sign in to sty</span>
+<span class="text-[#eae9e4]">$ sty login</span>
+
+<span class="text-[#6f6b5f]"># connect this repo</span>
+<span class="text-[#eae9e4]">$ sty init tenant/project</span>
 
 <span class="text-[#6f6b5f]"># create a workspace</span>
 <span class="text-[#eae9e4]">$ pig work new feature-x</span>
@@ -218,19 +218,16 @@
 	<div class="flex h-screen flex-col overflow-hidden bg-[#0f0f0d]">
 		<TopNav
 			{user}
+			{profile}
 			{tenants}
 			{projects}
 			onSignOut={handleSignOut}
 			onCreateProject={handleCreateProject}
 			onCreateOrg={handleCreateOrg}
-			onDevLogin={handleDevLogin}
 			{projectName}
 			{orgName}
 			{busy}
 			{message}
-			devAuthEnabled={devAuthEnabled()}
-			currentDevUser={currentDevUser()}
-			{devUser}
 		/>
 		<div class="flex-1 overflow-y-auto">
 			{@render children()}

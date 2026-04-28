@@ -28,17 +28,32 @@
 			default: return 'bg-[#2a2a28] text-[#a09d94]';
 		}
 	}
+
+	function initials(activity: Activity) {
+		const name = activity.actor_profile?.display_name || activity.actor;
+		const parts = name.trim().split(/\s+/).filter(Boolean);
+		if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+		return (parts[0] ?? name).slice(0, 2).toUpperCase();
+	}
+
+	function displayName(activity: Activity) {
+		return activity.actor_profile?.display_name || activity.actor_profile?.handle || activity.actor;
+	}
 </script>
 
 <div class="grid gap-0">
 	{#each activities as activity}
 		<div class="flex items-start gap-3 border-b border-[#1e1e1c] py-3 last:border-0">
-			<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold {color(activity.kind)}">
-				{icon(activity.kind)}
+			<div class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
+				{#if activity.actor_profile?.avatar_url}
+					<img src={activity.actor_profile.avatar_url} alt="" class="h-full w-full object-cover" />
+				{:else}
+					{initials(activity)}
+				{/if}
 			</div>
 			<div class="min-w-0 flex-1">
 				<p class="text-sm text-[#eae9e4]">
-					<span class="font-medium">{activity.actor}</span>
+					<span class="font-medium">{displayName(activity)}</span>
 					{activity.message}
 				</p>
 				<div class="mt-0.5 flex items-center gap-2 text-xs text-[#6f6b5f]">

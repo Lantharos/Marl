@@ -1,142 +1,165 @@
 # sty
 
-`sty` is the hosted and local collaboration layer for PIG. PIG remains the local VCS engine; sty owns identity, project hosting, the PIG remote server, and the user-facing client.
+`sty` is the official hosted collaboration layer for PIG. PIG is the local VCS engine; sty owns identity, project hosting, a reference PIG remote API, and the browser dashboard.
 
-The Worker remote exposes the PIG protocol capability handshake at `/v1/capabilities` and advertises the optional protocol features implemented by sty: issues, milestones, labels, ready queues, comments, reactions, hooks, webhooks, search, stars, releases, signed snapshot metadata, audit log, profiles, and SSH keys. E2EE and CI are intentionally deferred.
+The backend is a Cloudflare Worker in `server`. It uses D1 for project metadata, workspace heads, issues, history, settings, and protocol records, and R2 for immutable object bytes.
 
-Protocol list endpoints return the standard pagination envelope with `items`, `page`, `per_page`, `total`, `total_pages`, `next`, and `prev`.
+E2EE and CI are intentionally deferred.
 
-The dashboard presents those features as native project surfaces: Issues owns issue search, labels, milestones, assignees, editing, and comments; Ready owns merge queues; Releases owns ship-tag release notes; Settings owns project visibility, navigation, hooks, webhooks, keys, advertised features, and audit history.
+## Project Layout
 
-## Layout
+- `client` is the `sty` CLI.
+- `server` is the Cloudflare Worker backend.
+- `frontend` is the SvelteKit dashboard.
+- `crates/sty-protocol` contains shared request/response types.
 
-- `client` is the `sty` CLI. It handles login, project setup, and PIG handoff.
-- `server/local` is the local Axum remote server used for development and smoke tests.
-- `server/worker` is the Cloudflare Worker backend. It uses R2 for immutable object bytes and D1 for object metadata, workspace heads, project state, history, and compare/CAS metadata.
-- `frontend` is the SvelteKit project dashboard. It uses AveSession from `@ave-id/sdk`.
-- `crates/sty-protocol` contains the shared PIG remote request/response types.
+## Requirements
 
-## Local Development
+- Rust with the `wasm32-unknown-unknown` target for the Worker:
 
-Build the Rust workspace:
+```powershell
+rustup target add wasm32-unknown-unknown
+```
+
+- Bun for frontend and Wrangler commands.
+- Wrangler, run with `bunx wrangler ...`.
+- `worker-build` for the Rust Worker build step:
+
+```powershell
+cargo install worker-build
+```
+
+## Build The CLI
+
+Build the Rust workspace from the repo root:
 
 ```powershell
 cargo build
 ```
 
-Start the local remote:
+The `sty` binary will be in Cargo's debug output, usually `target/debug/sty` on macOS/Linux or `target\debug\sty.exe` on Windows. You can either reference that binary directly:
 
 ```powershell
-cargo run -p sty-local-server -- --data .sty-data --bind 127.0.0.1:7379
+target\debug\sty.exe whoami
 ```
 
-In another shell, log in and connect a repo:
+or add the debug output directory to your `PATH` while developing so `sty` works like a normal command.
+
+## Run The Worker Locally
+
+From `server`, apply the D1 schema before using the API. Use local migrations for `wrangler dev`:
 
 ```powershell
-cargo run -p sty -- login --dev --remote-url http://127.0.0.1:7379 --pig E:\Desktop\pig\target\debug\pig.exe
-cargo run -p sty -- whoami
-cargo run -p sty -- init dev/demo --remote-url http://127.0.0.1:7379 --pig E:\Desktop\pig\target\debug\pig.exe
-cargo run -p sty -- project list --remote-url http://127.0.0.1:7379
-pig sync
+cd server
+bunx wrangler d1 execute sty-db --local --file ./schema.sql
 ```
 
-To test the browser OAuth shape locally, register an Ave OAuth app with this redirect URI:
-
-```text
-http://127.0.0.1:7390/callback
-```
-
-Then start the local server and run:
+Then start the Worker:
 
 ```powershell
-cargo run -p sty -- login --remote-url http://127.0.0.1:7379 --pig E:\Desktop\pig\target\debug\pig.exe
+bunx wrangler dev
 ```
 
-`sty login` opens Ave, receives the localhost callback, completes the PKCE token exchange, sends the Ave `id_token` to sty, and imports the returned sty bearer token into PIG.
+By default, Wrangler serves the Worker at `http://127.0.0.1:8787`. The frontend also defaults to that API base. Set `PUBLIC_STY_API_BASE` only when pointing the frontend at a different backend.
 
-Frontend:
+For remote Cloudflare resources, apply the same schema remotely before deploying or testing against remote bindings:
 
 ```powershell
-cd frontend
+cd server
+bunx wrangler d1 execute sty-db --remote --file ./schema.sql
+```
+
+Then validate or deploy:
+
+```powershell
+bunx wrangler deploy --dry-run
+bunx wrangler deploy
+```
+
+Make sure the configured D1 database and R2 bucket in `server/wrangler.jsonc` exist for the environment you are using.
+
+## Run The Frontend
+
+From `frontend`:
+
+```powershell
+bun install
 bun run dev
 ```
 
-Set `PUBLIC_STY_API_BASE` when the frontend should talk to a non-default sty server. The Ave OAuth client id is public and defaults to `app_813ac5533bb87d939f328d76b5a1dca8`; `PUBLIC_AVE_CLIENT_ID` is only needed for testing a different Ave app.
+The dashboard uses Ave OAuth. The callback route is:
 
-In Svelte dev mode the dashboard also shows a dev-server sign-in. It calls `/v1/dev/tokens`, stores the returned sty bearer token locally, and can create orgs, create projects, list workspaces, browse the latest workspace tree, and render file contents against the configured API base. For a production-style frontend build that still targets a local dev backend, set:
-
-```powershell
-$env:PUBLIC_STY_DEV_AUTH="true"
+```text
+http://localhost:5173/auth/callback
 ```
 
-To point that dev sign-in at Wrangler's local Worker on port `8787`, use:
+If you use a different frontend origin, register that matching `/auth/callback` URL with the Ave app and set `PUBLIC_AVE_CLIENT_ID` if you are not using the default sty client id.
+
+## Normal User Flow
+
+Start the Worker, then sign in with the CLI:
 
 ```powershell
-$env:PUBLIC_STY_DEV_AUTH="worker"
-```
-
-## Auth
-
-The frontend uses AveSession:
-
-- `AveSession` persists and refreshes the browser session.
-- `/auth/callback` calls `completeOAuthCallback`.
-- The frontend or CLI sends a fresh Ave `id_token` to `POST /v1/session/exchange`.
-- The local server and Cloudflare Worker verify that token through Ave OIDC discovery and JWKS against the default sty Ave client id. `STY_AVE_CLIENT_ID` or `AVE_CLIENT_ID` can override it for alternate dev apps.
-- The server returns a sty bearer token accepted by PIG remote endpoints.
-- The CLI imports the sty bearer token into PIG with `pig auth import <remote-url> --token-stdin`.
-
-Local dev also supports `sty login --dev`, which requests a random dev token from `server/local` and imports it into PIG. Tokens are stored server-side by hash. A dev token can create projects only in its own tenant, so `sty login --dev --user dev` can create `dev/demo` but not `other/demo`.
-
-Tenants are GitHub-style namespaces. Every user gets a personal tenant automatically, and the dashboard can create org tenants that the current user owns. Projects are still addressed as `tenant/project`, so the PIG setup flow remains:
-
-```powershell
+sty login
 sty init tenant/project
 pig sync
 ```
 
-Useful CLI checks:
+`sty login` opens Ave, completes the OAuth callback locally, exchanges the Ave ID token with the sty Worker, and imports the returned sty bearer token into PIG. `sty init tenant/project` creates or connects the project and configures the PIG remote for the current repo.
+
+After that, use PIG normally:
 
 ```powershell
-sty whoami
-sty project list
+pig save "describe the work"
+pig work new feature-name
+pig work ready
+pig sync
 ```
 
-## Hosted Server
+## Protocol Features
 
-The Worker backend is in `server/worker`:
+The Worker exposes `/v1/capabilities` and advertises the implemented PIG protocol features:
 
-```powershell
-cargo check --manifest-path server\worker\Cargo.toml --target wasm32-unknown-unknown
-cd server\worker
-wrangler deploy --dry-run
+- issues, comments, labels, and milestones
+- ready queues and workspace merge metadata
+- hooks and webhooks
+- search
+- stars and project settings
+- releases and tags
+- signed snapshot metadata endpoints
+- profiles and SSH keys
+
+Protocol list endpoints return the standard pagination envelope:
+
+```json
+{
+  "items": [],
+  "page": 1,
+  "per_page": 25,
+  "total": 0,
+  "total_pages": 1,
+  "next": null,
+  "prev": null
+}
 ```
-
-Before deploying, create or bind the `sty-objects` R2 bucket. The Worker uses the public sty Ave client id from `wrangler.jsonc` by default and validates Ave id tokens with OIDC discovery and JWKS. Hosted dev-token minting is disabled unless `STY_DEV_TOKENS=true` is set for an explicit development environment.
 
 ## Verification
 
-Run the Rust tests:
+Rust workspace:
 
 ```powershell
-cargo test --workspace
+cargo check
 ```
 
-Run the real PIG smoke test:
+Worker:
 
 ```powershell
-.\scripts\smoke-pig.ps1
+cd server
+cargo check
+bunx wrangler deploy --dry-run
 ```
 
-Run the same PIG smoke through Wrangler's local Worker, R2, and Durable Object simulation:
-
-```powershell
-.\scripts\smoke-worker.ps1
-```
-
-The smoke test saves, syncs, and pulls both a small text file and a large binary file so the normal JSON upload path and chunked object upload path are both exercised.
-
-Check the frontend:
+Frontend:
 
 ```powershell
 cd frontend
@@ -144,6 +167,4 @@ bun run check
 bun run build
 ```
 
-PIG uploads local snapshot objects that are not already confirmed for the remote before comparing ancestry, so sty can classify `same`, `local_ahead`, `remote_ahead`, and `diverged` from stored snapshot parents without re-checking old history on every sync. A compare request for a local head the server still cannot read is treated as divergence instead of a push shortcut.
-
-Sty keeps immutable object bytes in R2 and indexes object id, kind, and size in D1. New uploads use the index for `objects/missing` and download kind lookup, while older objects with legacy kind sidecars are indexed the first time they are downloaded.
+Use `bunx wrangler dev` for the backend during local browser testing.

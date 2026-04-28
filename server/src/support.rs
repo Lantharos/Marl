@@ -84,9 +84,9 @@ pub fn decode_base64(value: &str) -> Result<Vec<u8>> {
         .map_err(|e| Error::RustError(e.to_string()))
 }
 
-pub fn preflight_response(req: &Request) -> Result<Response> {
+pub fn preflight_response(req: &Request, env: &Env) -> Result<Response> {
     let mut response = Response::empty()?.with_status(204);
-    apply_cors(req, &mut response)?;
+    apply_cors(req, env, &mut response)?;
     Ok(response)
 }
 
@@ -95,11 +95,12 @@ pub fn with_cors(mut response: Response) -> Result<Response> {
     Ok(response)
 }
 
-pub fn apply_cors(req: &Request, response: &mut Response) -> Result<()> {
+pub fn apply_cors(req: &Request, env: &Env, response: &mut Response) -> Result<()> {
     let origin = req.headers().get("origin")?;
-    if allowed_origin(origin.as_deref()) {
+    if allowed_origin(env, origin.as_deref()) {
         let headers = response.headers_mut();
         headers.set("access-control-allow-origin", origin.unwrap().as_str())?;
+        headers.set("vary", "Origin")?;
         set_cors_headers(headers)?;
     }
     Ok(())
@@ -118,14 +119,28 @@ fn set_cors_headers(headers: &mut Headers) -> Result<()> {
     Ok(())
 }
 
-fn allowed_origin(origin: Option<&str>) -> bool {
-    matches!(
+fn allowed_origin(env: &Env, origin: Option<&str>) -> bool {
+    let Some(origin) = origin else {
+        return false;
+    };
+    if matches!(
         origin,
-        Some("http://localhost:5173")
-            | Some("http://127.0.0.1:5173")
-            | Some("http://localhost:4173")
-            | Some("http://127.0.0.1:4173")
-    )
+        "http://localhost:5173"
+            | "http://127.0.0.1:5173"
+            | "http://localhost:4173"
+            | "http://127.0.0.1:4173"
+    ) {
+        return true;
+    }
+    env.var("STY_ALLOWED_ORIGINS")
+        .map(|value| {
+            value
+                .to_string()
+                .split(',')
+                .map(str::trim)
+                .any(|allowed| allowed == origin)
+        })
+        .unwrap_or(false)
 }
 
 pub async fn r2_bytes(store: &Bucket, key: &str) -> Result<Vec<u8>> {
