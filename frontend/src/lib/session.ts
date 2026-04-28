@@ -2,7 +2,6 @@ import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import { AveSession, createLocalStorageAdapter } from '@ave-id/sdk';
 import { completeOAuthCallback, startPkceLogin } from '@ave-id/sdk/client';
-import { aveSessionToStore } from '@ave-id/sdk/svelte';
 
 export type AveProfile = {
 	sub: string;
@@ -32,7 +31,7 @@ export const session = new AveSession({
 	devtools: import.meta.env.DEV
 });
 
-export const sessionStore = aveSessionToStore(session);
+let styTokenPromise: Promise<string | null> | null = null;
 
 export function apiBase() {
 	if (env.PUBLIC_STY_API_BASE) {
@@ -65,6 +64,13 @@ export async function finishLogin() {
 }
 
 export async function signOut() {
+	const token = browser ? localStorage.getItem('sty_token') : null;
+	if (token) {
+		await fetch(`${apiBase()}/v1/session`, {
+			method: 'DELETE',
+			headers: { authorization: `Bearer ${token}` }
+		}).catch(() => {});
+	}
 	await session.signOut();
 	if (browser) {
 		localStorage.removeItem('sty_token');
@@ -86,6 +92,17 @@ export function hasStyToken() {
 	return browser && Boolean(localStorage.getItem('sty_token'));
 }
 
+export function currentStyToken() {
+	return browser ? localStorage.getItem('sty_token') : null;
+}
+
+export function clearStyToken() {
+	styTokenPromise = null;
+	if (browser) {
+		localStorage.removeItem('sty_token');
+	}
+}
+
 export async function getStyToken() {
 	if (!browser) {
 		return null;
@@ -94,6 +111,16 @@ export async function getStyToken() {
 	if (existing) {
 		return existing;
 	}
+	if (styTokenPromise) {
+		return styTokenPromise;
+	}
+	styTokenPromise = exchangeStyToken().finally(() => {
+		styTokenPromise = null;
+	});
+	return styTokenPromise;
+}
+
+async function exchangeStyToken() {
 	const idToken = await session.getValidIdToken();
 	if (!idToken) {
 		return null;
@@ -106,7 +133,7 @@ export async function getStyToken() {
 	if (!response.ok) {
 		throw new Error(await response.text());
 	}
-	const body = (await response.json()) as { token: string };
+	const body = (await response.json()) as { token: string; expires_at?: string };
 	localStorage.setItem('sty_token', body.token);
 	return body.token;
 }

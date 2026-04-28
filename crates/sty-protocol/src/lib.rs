@@ -110,6 +110,8 @@ pub struct OkResponse {
 pub struct AuthCheckResponse {
     pub ok: bool,
     pub user: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<UserProfile>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -197,6 +199,8 @@ pub struct DevTokenRequest {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TokenResponse {
     pub token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

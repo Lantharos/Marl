@@ -13,7 +13,9 @@ pub(crate) async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Resu
     let (tenant, project) = project_params(&ctx)?;
     let body: HeadUpdateRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let workspace = param(&ctx, "workspace")?;
     let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
     if ok {
@@ -61,7 +63,9 @@ pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Resu
     let workspace = param(&ctx, "workspace")?;
     let body: LogHistoryRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message, body.snapshot_id.as_deref()).await?;
     Response::from_json(&OkResponse { ok: true })
 }
@@ -71,7 +75,9 @@ pub(crate) async fn mark_ready(req: Request, ctx: RouteContext<()>) -> Result<Re
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
     Response::from_json(&OkResponse { ok: true })
 }
@@ -81,7 +87,9 @@ pub(crate) async fn merge_workspace(req: Request, ctx: RouteContext<()>) -> Resu
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     d1::merge_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
     Response::from_json(&OkResponse { ok: true })
 }
@@ -138,7 +146,9 @@ pub(crate) async fn set_parent(mut req: Request, ctx: RouteContext<()>) -> Resul
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let parent = body["parent_workspace"].as_str();
     d1::set_parent_workspace(&database, &tenant, &project, &workspace, parent).await?;
     Response::from_json(&OkResponse { ok: true })
@@ -150,7 +160,9 @@ pub(crate) async fn compare(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let workspace = param(&ctx, "workspace")?;
     let body: CompareRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let remote_head = d1::head(&database, &tenant, &project, &workspace).await?;
     let relation = compare_relation(&ctx.env, &tenant, &project, body.local_head.as_deref(), remote_head.as_deref()).await?;
     Response::from_json(&CompareResponse { remote_head, relation })

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { finishLogin, getStyToken, hydrateSession } from '$lib/session';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -11,7 +11,8 @@
 			await finishLogin();
 			await hydrateSession();
 			await getStyToken();
-			await goto('/');
+			await invalidateAll();
+			await goto('/', { replaceState: true, invalidateAll: true });
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Sign in failed';
 		}

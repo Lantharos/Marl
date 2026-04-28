@@ -1,6 +1,12 @@
 pub(crate) async fn auth_check(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
-    Response::from_json(&json!({ "ok": true, "user": user }))
+    let database = db(&ctx.env)?;
+    let profile = d1::user_profile(&database, &user).await?;
+    Response::from_json(&AuthCheckResponse {
+        ok: true,
+        user,
+        profile,
+    })
 }
 
 pub(crate) async fn capabilities(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -20,8 +26,21 @@ pub(crate) async fn exchange_session(mut req: Request, ctx: RouteContext<()>) ->
     let database = db(&ctx.env)?;
     let profile = d1::upsert_user_profile(&database, &profile).await?;
     let user = profile.user.clone();
-    let token = d1::add_token(&database, &user).await?;
-    Response::from_json(&TokenResponse { token })
+    d1::ensure_account_tenant(&database, &user).await?;
+    d1::prune_expired_tokens(&database).await?;
+    let expires_at = token_expires_at(&ctx.env);
+    let token = d1::add_token(&database, &user, &expires_at).await?;
+    Response::from_json(&TokenResponse {
+        token,
+        expires_at: Some(expires_at),
+    })
+}
+
+pub(crate) async fn revoke_session(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let token = bearer_token(&req)?;
+    let database = db(&ctx.env)?;
+    d1::revoke_token(&database, &token).await?;
+    Response::from_json(&OkResponse { ok: true })
 }
 
 pub(crate) async fn me(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -89,4 +108,19 @@ pub(crate) async fn list_workspaces(req: Request, ctx: RouteContext<()>) -> Resu
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
     let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
     Response::from_json(&WorkspaceStateResponse { workspaces })
+}
+
+fn token_expires_at(env: &Env) -> String {
+    let ttl_seconds = env
+        .var("STY_TOKEN_TTL_SECONDS")
+        .ok()
+        .and_then(|value| value.to_string().parse::<f64>().ok())
+        .filter(|value| *value > 0.0)
+        .unwrap_or(60.0 * 60.0 * 24.0 * 30.0);
+    let now = js_sys::Date::new_0();
+    js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
+        now.get_time() + ttl_seconds * 1000.0,
+    ))
+    .to_iso_string()
+    .into()
 }

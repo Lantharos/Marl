@@ -1,4 +1,14 @@
 import { apiBase, getStyToken } from './session';
+import { authedFetch, pageQuery, publicFetch } from './apiShared';
+import type { ApiOptions, PageOptions, Paginated } from './apiShared';
+import { listIssues } from './issueApi';
+import { downloadObjects } from './objectApi';
+import type { Comment } from './issueApi';
+import type { CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
+export type { ApiOptions, PageOptions, Paginated } from './apiShared';
+export * from './issueApi';
+export * from './objectApi';
+export type { CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -50,36 +60,6 @@ export interface ProjectFile {
 	id: string;
 	text: string | null;
 	binary: boolean;
-}
-
-export interface Issue {
-	id: string;
-	number: number;
-	title: string;
-	body: string;
-	status: 'open' | 'closed';
-	state?: 'open' | 'closed';
-	author: string;
-	assignees?: string[];
-	created_at: string;
-	updated_at?: string;
-	closed_at?: string | null;
-	labels: string[];
-	milestone?: string | null;
-	workspace?: string | null;
-}
-
-export interface Comment {
-	id: string;
-	author: string;
-	body: string;
-	created_at: string;
-	target_type?: string;
-	target_id?: string;
-	file?: string | null;
-	line?: number | null;
-	updated_at?: string;
-	edited?: boolean;
 }
 
 export interface WorkspaceStatus {
@@ -175,123 +155,28 @@ export interface ProjectOverview {
 	default_workspace: string;
 }
 
-export interface ApiOptions {
-	signal?: AbortSignal;
-}
-
-export interface PageOptions extends ApiOptions {
-	page?: number;
-	perPage?: number;
-	state?: 'open' | 'closed' | 'all';
-	label?: string;
-	assignee?: string;
-}
-
-export interface Paginated<T> {
-	items: T[];
-	page: number;
-	per_page: number;
-	total: number;
-	total_pages: number;
-	next: number | null;
-	prev: number | null;
-}
-
-export interface CapabilityResponse {
-	version: string;
-	capabilities: string[];
-}
-
-export interface ProtocolItem {
-	id: string;
-	name?: string;
-	title?: string;
-	tag?: string;
-	body?: string;
-	description?: string;
-	state?: string;
-	event?: string;
-	url?: string;
-	color?: string;
-	author?: string;
-	created_at?: string;
-	updated_at?: string;
-	[key: string]: unknown;
-}
-
-export type ProtocolDraft = Omit<ProtocolItem, 'id'> & { id?: string };
-
-export interface Label {
-	id?: string;
-	name: string;
-	color: string;
-	description?: string | null;
-}
-
-export interface Milestone {
-	id: string;
-	title: string;
-	description?: string | null;
-	state?: 'open' | 'closed' | string;
-	due_at?: string | null;
-	open_issues?: number;
-	closed_issues?: number;
-	created_at?: string;
-}
-
-export interface Release {
-	id?: string;
-	tag: string;
-	name?: string | null;
-	notes?: string | null;
-	snapshot?: string | null;
-	author?: string;
-	created_at?: string;
-}
-
-export interface TagInfo {
-	id?: string;
-	tag?: string;
-	name?: string;
-	snapshot?: string | null;
-	author?: string;
-	created_at?: string;
-}
-
 export function isAbortError(error: unknown) {
 	return error instanceof Error && error.name === 'AbortError';
 }
 
-async function authedFetch(path: string, init: RequestInit = {}) {
-	const token = await getStyToken();
-	if (!token) {
-		throw new Error('Sign in first');
-	}
-	const headers = new Headers(init.headers);
-	headers.set('authorization', `Bearer ${token}`);
-	const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
-	if (!response.ok) {
-		throw new Error(await response.text());
-	}
-	return response;
-}
-
-async function publicFetch(path: string, init: RequestInit = {}) {
-	const token = await getStyToken();
-	const headers = new Headers(init.headers);
-	if (token) {
-		headers.set('authorization', `Bearer ${token}`);
-	}
-	const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
-	if (!response.ok) {
-		throw new Error(await response.text());
-	}
-	return response;
-}
+export type MeResponse = { user: string; profile?: UserProfile | null; tenants: TenantSummary[] };
 
 export async function getMe(options: ApiOptions = {}) {
 	const response = await authedFetch('/v1/me', { signal: options.signal });
-	return (await response.json()) as { user: string; profile?: UserProfile | null; tenants: TenantSummary[] };
+	return (await response.json()) as MeResponse;
+}
+
+export async function getInitializedMe(options: ApiOptions = {}) {
+	const me = await getMe(options);
+	if (!isAccountTenantReady(me)) {
+		throw new Error('Account tenant is still initializing');
+	}
+	return me;
+}
+
+function isAccountTenantReady(me: MeResponse) {
+	const handle = me.profile?.handle?.trim();
+	return Boolean(handle && me.tenants.some((tenant) => tenant.kind === 'user' && tenant.name === handle));
 }
 
 export async function listProjects(options: ApiOptions = {}) {
@@ -355,105 +240,6 @@ export async function getProjectFile(tenant: string, project: string, path: stri
 export async function getHistoryEntry(tenant: string, project: string, entryId: string, options: ApiOptions = {}): Promise<HistoryEntry> {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`, { signal: options.signal });
 	return (await response.json()) as HistoryEntry;
-}
-
-export async function downloadObjects(tenant: string, project: string, ids: string[], options: ApiOptions = {}): Promise<{ id: string; kind: string; bytes_base64: string }[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/objects/download`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ ids }),
-		signal: options.signal
-	});
-	const data = (await response.json()) as { objects: { id: string; kind: string; bytes_base64: string }[] };
-	return data.objects;
-}
-
-function pageQuery(options: PageOptions = {}) {
-	const params = new URLSearchParams();
-	if (options.page) params.set('page', String(options.page));
-	if (options.perPage) params.set('per_page', String(options.perPage));
-	if (options.state && options.state !== 'all') params.set('state', options.state);
-	if (options.label) params.set('label', options.label);
-	if (options.assignee) params.set('assignee', options.assignee);
-	const value = params.toString();
-	return value ? `?${value}` : '';
-}
-
-export async function listIssuesPage(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<Issue>> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues${pageQuery(options)}`, { signal: options.signal });
-	const data = (await response.json()) as Paginated<Issue> | { issues?: Issue[]; items?: Issue[] };
-	if ('page' in data && 'items' in data) return data;
-	const items = data.issues ?? data.items ?? [];
-	return { items, page: 1, per_page: items.length || 25, total: items.length, total_pages: 1, next: null, prev: null };
-}
-
-export async function listIssues(tenant: string, project: string, options: PageOptions = {}) {
-	const data = await listIssuesPage(tenant, project, options);
-	return { issues: data.items };
-}
-
-export async function getIssue(tenant: string, project: string, issueId: string, options: ApiOptions = {}): Promise<Issue & { comments: Comment[] }> {
-	const issues = await listIssues(tenant, project, options);
-	const issue = issues.issues.find((i) => i.id === issueId || String(i.number) === issueId);
-	if (!issue) throw new Error('Issue not found');
-	const comments = await listIssueComments(tenant, project, issue.id, options);
-	return { ...issue, comments };
-}
-
-export async function listIssueComments(tenant: string, project: string, issueId: string, options: ApiOptions = {}): Promise<Comment[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`, { signal: options.signal });
-	const data = (await response.json()) as { comments: Comment[] };
-	return data.comments;
-}
-
-export async function createIssueComment(tenant: string, project: string, issueId: string, body: string): Promise<Comment> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/comments`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ body })
-	});
-	return (await response.json()) as Comment;
-}
-
-export async function createIssue(tenant: string, project: string, issue: { title: string; body: string; labels?: string[]; assignee?: string }) {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(issue)
-	});
-	return (await response.json()) as Issue;
-}
-
-export async function updateIssue(
-	tenant: string,
-	project: string,
-	issueId: string,
-	issue: { title?: string; body?: string; state?: 'open' | 'closed'; status?: 'open' | 'closed' }
-): Promise<Issue> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}`, {
-		method: 'PATCH',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(issue)
-	});
-	return (await response.json()) as Issue;
-}
-
-export async function addIssueLabel(tenant: string, project: string, issueId: string, label: string): Promise<Issue> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/labels`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ label, labels: [label] })
-	});
-	return (await response.json()) as Issue;
-}
-
-export async function assignIssue(tenant: string, project: string, issueId: string, user: string): Promise<Issue> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/assignees`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ user, assignees: [user] })
-	});
-	return (await response.json()) as Issue;
 }
 
 export async function listLabelsPage(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<Label>> {
@@ -578,10 +364,6 @@ function protocolEndpoint(kind: string) {
 		ssh_key: 'ssh-keys'
 	};
 	return map[kind] ?? kind;
-}
-
-export async function updateIssueStatus(tenant: string, project: string, issueId: string, status: 'open' | 'closed'): Promise<Issue> {
-	return updateIssue(tenant, project, issueId, { status, state: status });
 }
 
 export async function listWorkspaceStatuses(tenant: string, project: string, options: ApiOptions = {}): Promise<WorkspaceStatus[]> {

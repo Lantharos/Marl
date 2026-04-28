@@ -1,20 +1,19 @@
 <script lang="ts">
 	import '../app.css';
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import {
 		createOrg,
 		createProject,
-		getMe,
+		getInitializedMe,
 		listProjects,
 		type ProjectSummary,
 		type TenantSummary
 	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import {
-		getAveProfile,
-		hasStyToken,
+		clearStyToken,
 		hydrateSession,
-		sessionStore,
 		signOut,
 		type AveProfile
 	} from '$lib/session';
@@ -28,32 +27,35 @@
 	let profile = $state<AveProfile | null>(null);
 	let tenants = $state<TenantSummary[]>([]);
 	let projects = $state<ProjectSummary[]>([]);
-	let projectName = $state('');
-	let orgName = $state('');
 	let message = $state('');
 	let busy = $state(false);
+	let loadDataPromise: Promise<void> | null = null;
+	let bootstrapDone = false;
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
 
-	onMount(() => {
+	$effect(() => {
 		if (isAuthRoute) {
-			status = 'signedOut';
+			bootstrapDone = false;
 			return;
 		}
-		const unsubscribe = sessionStore.subscribe((state) => {
-			status = hasStyToken() ? 'signedIn' : state.status;
-		});
-		hydrateSession().then(loadData).catch(() => { status = 'signedOut'; });
-		return unsubscribe;
+		if (!bootstrapDone && !loadDataPromise) {
+			void loadData();
+		}
 	});
 
 	async function loadData() {
-		if (!hasStyToken()) {
-			status = 'signedOut';
-			return;
-		}
+		if (loadDataPromise) return loadDataPromise;
+		loadDataPromise = loadInitializedData().finally(() => {
+			loadDataPromise = null;
+		});
+		return loadDataPromise;
+	}
+
+	async function loadInitializedData() {
+		status = 'loading';
 		try {
-			profile = await getAveProfile();
-			const me = await getMe();
+			await hydrateSession();
+			const me = await getInitializedMe();
 			user = me.user;
 			if (me.profile) {
 				profile = {
@@ -63,24 +65,40 @@
 					email: me.profile.email ?? undefined,
 					picture: me.profile.avatar_url ?? undefined
 				};
+			} else {
+				profile = null;
 			}
 			tenants = me.tenants;
 			projects = await listProjects();
+			appData.set({ me, projects, ready: true });
 			status = 'signedIn';
 		} catch {
+			clearStyToken();
+			appData.set({ me: null, projects: [], ready: false });
+			projects = [];
+			tenants = [];
+			profile = null;
+			user = '';
 			status = 'signedOut';
+		} finally {
+			bootstrapDone = true;
 		}
 	}
 
-	async function handleCreateProject(tenantName?: string) {
-		if (!projectName.trim()) return;
-		const tenant = tenantName ?? tenants[0]?.name ?? user;
+	async function handleCreateProject(name: string, tenantName?: string) {
+		if (!name.trim()) return;
+		const tenant = tenantName ?? tenants[0]?.name ?? profile?.preferredUsername;
+		if (!tenant) {
+			message = 'Account handle missing';
+			return;
+		}
 		busy = true;
 		message = '';
 		try {
-			await createProject(`${tenant}/${projectName.trim()}`);
-			projectName = '';
+			await createProject(`${tenant}/${name.trim()}`);
 			projects = await listProjects();
+			appData.update((data) => ({ ...data, projects }));
+			await goto(`/${tenant}/${name.trim()}`);
 		} catch (error) {
 			message = error instanceof Error ? error.message : 'Failed';
 		} finally {
@@ -88,15 +106,16 @@
 		}
 	}
 
-	async function handleCreateOrg() {
-		if (!orgName.trim()) return;
+	async function handleCreateOrg(name: string) {
+		if (!name.trim()) return;
 		busy = true;
 		message = '';
 		try {
-			await createOrg(orgName.trim());
-			orgName = '';
-			const me = await getMe();
+			const tenant = await createOrg(name.trim());
+			const me = await getInitializedMe();
 			tenants = me.tenants;
+			appData.set({ me, projects, ready: true });
+			await goto(`/${tenant.name}`);
 		} catch (error) {
 			message = error instanceof Error ? error.message : 'Failed';
 		} finally {
@@ -106,11 +125,13 @@
 
 	async function handleSignOut() {
 		await signOut();
+		bootstrapDone = false;
 		status = 'signedOut';
 		projects = [];
 		tenants = [];
 		profile = null;
 		user = '';
+		appData.set({ me: null, projects: [], ready: false });
 	}
 </script>
 
@@ -224,8 +245,6 @@
 			onSignOut={handleSignOut}
 			onCreateProject={handleCreateProject}
 			onCreateOrg={handleCreateOrg}
-			{projectName}
-			{orgName}
 			{busy}
 			{message}
 		/>

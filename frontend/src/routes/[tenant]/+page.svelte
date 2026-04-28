@@ -1,38 +1,49 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { listTenantProjects, type ProjectSummary } from '$lib/api';
+	import { onDestroy } from 'svelte';
+	import { appData } from '$lib/appState';
+	import type { ProjectSummary } from '$lib/api';
 	import Spinner from '$lib/components/Spinner.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 
 	let projects = $state<ProjectSummary[]>([]);
 	let loading = $state(true);
+	let latestProjects: ProjectSummary[] = [];
+	let dataReady = false;
+
+	const unsubscribe = appData.subscribe((data) => {
+		dataReady = data.ready;
+		latestProjects = data.projects;
+		applyTenantProjects();
+	});
 
 	$effect(() => {
-		const _tenant = tenant;
-		if (!_tenant) return;
-		loading = true;
-		listTenantProjects(_tenant).then((p) => {
-			projects = p;
-			loading = false;
-		}).catch(() => {
-			loading = false;
-		});
+		tenant;
+		applyTenantProjects();
 	});
+
+	onDestroy(unsubscribe);
+
+	function applyTenantProjects() {
+		if (!dataReady) return;
+		projects = latestProjects.filter((p) => p.tenant === tenant);
+		loading = false;
+	}
 </script>
 
 <div class="p-8">
-	{#if loading}
-		<Spinner />
-	{:else}
+	<div class="mx-auto max-w-5xl">
 		<div class="mb-6">
-			<h2 class="text-2xl font-semibold text-[#f0eee4]">{tenant}</h2>
+			<h2 class="text-2xl font-semibold text-[#f0eee4]">{tenant}'s Dashboard</h2>
 			<p class="mt-1 text-sm text-[#8c887e]">{projects.length} projects</p>
 		</div>
 
-		{#if projects.length === 0}
-			<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+		{#if loading}
+			<Spinner />
+		{:else if projects.length === 0}
+			<div class="mt-8 rounded border border-[#2a2a28] p-8 text-center">
 				<p class="text-sm text-[#8c887e]">No projects in this tenant yet.</p>
 			</div>
 		{:else}
@@ -48,5 +59,5 @@
 				{/each}
 			</div>
 		{/if}
-	{/if}
+	</div>
 </div>

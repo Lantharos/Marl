@@ -1,50 +1,43 @@
-import { processFile } from '@pierre/diffs';
-import { createTwoFilesPatch } from 'diff';
+import { diffLines } from 'diff';
 
-export function renderFileDiff(
-	path: string,
-	oldText: string | null,
-	newText: string | null
-) {
+export type DiffRow = {
+	kind: 'context' | 'add' | 'remove';
+	oldLine: number | null;
+	newLine: number | null;
+	text: string;
+};
+
+export function renderFileDiff(oldText: string | null, newText: string | null): DiffRow[] {
 	const oldContents = oldText ?? '';
 	const newContents = newText ?? '';
+	if (oldContents === newContents) return [];
 
-	if (oldContents === newContents) {
-		return null;
+	let oldLine = 1;
+	let newLine = 1;
+	const rows: DiffRow[] = [];
+
+	for (const part of diffLines(oldContents, newContents)) {
+		const lines = splitPart(part.value);
+		for (const text of lines) {
+			if (part.added) {
+				rows.push({ kind: 'add', oldLine: null, newLine, text });
+				newLine += 1;
+			} else if (part.removed) {
+				rows.push({ kind: 'remove', oldLine, newLine: null, text });
+				oldLine += 1;
+			} else {
+				rows.push({ kind: 'context', oldLine, newLine, text });
+				oldLine += 1;
+				newLine += 1;
+			}
+		}
 	}
 
-	const patch = createTwoFilesPatch(
-		`a/${path}`,
-		`b/${path}`,
-		oldContents,
-		newContents,
-		undefined,
-		undefined,
-		{ context: 3 }
-	);
-
-	return processFile(patch, {
-		cacheKey: diffCacheKey(path, oldContents, newContents),
-		oldFile: { name: path, contents: oldContents },
-		newFile: { name: path, contents: newContents }
-	});
+	return rows;
 }
 
-function diffCacheKey(path: string, oldContents: string, newContents: string) {
-	let hash = 2166136261;
-	hash = hashString(hash, path);
-	hash = hashString(hash, String(oldContents.length));
-	hash = hashString(hash, oldContents);
-	hash = hashString(hash, String(newContents.length));
-	hash = hashString(hash, newContents);
-	return `${path}:${hash >>> 0}`;
-}
-
-function hashString(hash: number, value: string) {
-	for (let i = 0; i < value.length; i += 1) {
-		hash ^= value.charCodeAt(i);
-		hash = Math.imul(hash, 16777619);
-	}
-	hash ^= 0;
-	return Math.imul(hash, 16777619);
+function splitPart(value: string) {
+	const lines = value.split('\n');
+	if (lines[lines.length - 1] === '') lines.pop();
+	return lines.length ? lines : [''];
 }

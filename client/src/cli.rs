@@ -14,12 +14,12 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     AuthCheckResponse, DEFAULT_AVE_CLIENT_ID, ProjectsResponse, StyConfig, TokenResponse,
-    validate_target,
+    UserProfile, validate_target,
 };
 use url::Url;
 use uuid::Uuid;
 
-const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:7379";
+const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:8787";
 
 #[derive(Parser)]
 #[command(name = "sty")]
@@ -214,13 +214,13 @@ fn exchange_oauth_code(
 ) -> Result<OAuthTokenResponse> {
     let response = Client::new()
         .post("https://api.aveid.net/api/oauth/token")
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("client_id", client_id),
-            ("redirect_uri", redirect_uri),
-            ("code", code),
-            ("code_verifier", verifier),
-        ])
+        .json(&serde_json::json!({
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "code": code,
+            "code_verifier": verifier,
+        }))
         .send()?;
     if !response.status().is_success() {
         let status = response.status();
@@ -252,7 +252,8 @@ fn auth_user(remote_url: &str, token: &str) -> Result<String> {
         let body = response.text().unwrap_or_default();
         bail!("auth check failed with status {status}: {body}");
     }
-    Ok(response.json::<AuthCheckResponse>()?.user)
+    let body = response.json::<AuthCheckResponse>()?;
+    Ok(visible_user(&body.user, body.profile.as_ref()))
 }
 
 fn pkce_token() -> String {
@@ -343,8 +344,26 @@ fn whoami() -> Result<()> {
         bail!("auth check failed with status {status}: {body}");
     }
     let body = response.json::<AuthCheckResponse>()?;
-    println!("{} on {}", body.user, config.remote_url);
+    println!(
+        "{} on {}",
+        visible_user(&body.user, body.profile.as_ref()),
+        config.remote_url
+    );
     Ok(())
+}
+
+fn visible_user(user: &str, profile: Option<&UserProfile>) -> String {
+    profile
+        .and_then(|profile| profile.handle.as_deref())
+        .map(str::trim)
+        .filter(|handle| !handle.is_empty())
+        .or_else(|| {
+            profile
+                .map(|profile| profile.display_name.trim())
+                .filter(|name| !name.is_empty())
+        })
+        .unwrap_or(user)
+        .to_string()
 }
 
 fn import_pig_auth(pig: &str, remote_url: &str, token: &str) -> Result<()> {

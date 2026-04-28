@@ -17,7 +17,9 @@ pub(crate) async fn create_issue(mut req: Request, ctx: RouteContext<()>) -> Res
     let (tenant, project) = project_params(&ctx)?;
     let body: CreateIssueRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }, &body.title, &body.body, &body.labels, body.assignee.as_deref()).await?;
     Response::from_json(&issue)
 }
@@ -44,7 +46,9 @@ pub(crate) async fn update_issue(mut req: Request, ctx: RouteContext<()>) -> Res
     let issue_id = param(&ctx, "issue_id")?;
     let body: UpdateIssueRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let status = body.state.or(body.status).unwrap_or_else(|| "open".to_string());
     let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, &status).await?;
     Response::from_json(&issue)
@@ -63,7 +67,9 @@ pub(crate) async fn set_issue_state(req: Request, ctx: RouteContext<()>, state: 
     let (tenant, project) = project_params(&ctx)?;
     let issue_id = param(&ctx, "issue_id")?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, state).await?;
     Response::from_json(&issue)
 }
@@ -74,7 +80,9 @@ pub(crate) async fn assign_issue(mut req: Request, ctx: RouteContext<()>) -> Res
     let issue_id = param(&ctx, "issue_id")?;
     let body: serde_json::Value = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let assignees = issue_string_list(&body, "assignees", "user");
     let issue = d1::add_issue_assignees(&database, &tenant, &project, &issue_id, &assignees).await?;
     Response::from_json(&issue)
@@ -86,7 +94,9 @@ pub(crate) async fn label_issue(mut req: Request, ctx: RouteContext<()>) -> Resu
     let issue_id = param(&ctx, "issue_id")?;
     let body: serde_json::Value = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let labels = issue_string_list(&body, "labels", "label");
     let issue = d1::add_issue_labels(&database, &tenant, &project, &issue_id, &labels).await?;
     Response::from_json(&issue)
@@ -129,7 +139,9 @@ pub(crate) async fn create_comment(mut req: Request, ctx: RouteContext<()>) -> R
     let issue_id = param(&ctx, "issue_id")?;
     let body: CreateCommentRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    if !d1::project_access(&database, &tenant, &project, &user).await? {
+        return json_error(403, "project access denied");
+    }
     let comment = d1::create_comment(&database, &tenant, &project, &issue_id, &sty_protocol::TokenPrincipal { user }, &body.body).await?;
     Response::from_json(&comment)
 }

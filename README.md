@@ -51,7 +51,7 @@ From `server`, apply the D1 schema before using the API. Use local migrations fo
 
 ```powershell
 cd server
-bunx wrangler d1 execute sty-db --local --file ./schema.sql
+bunx wrangler d1 migrations apply sty-db --local
 ```
 
 Then start the Worker:
@@ -66,7 +66,7 @@ For remote Cloudflare resources, apply the same schema remotely before deploying
 
 ```powershell
 cd server
-bunx wrangler d1 execute sty-db --remote --file ./schema.sql
+bunx wrangler d1 migrations apply sty-db --remote
 ```
 
 Then validate or deploy:
@@ -77,6 +77,12 @@ bunx wrangler deploy
 ```
 
 Make sure the configured D1 database and R2 bucket in `server/wrangler.jsonc` exist for the environment you are using.
+
+Optional Worker settings:
+
+- `STY_ALLOWED_ORIGINS` is a comma-separated list of frontend origins allowed by CORS.
+- `STY_TOKEN_TTL_SECONDS` controls sty bearer token lifetime. The default is 30 days.
+- `STY_MAX_OBJECT_BYTES` controls the maximum raw object upload size. The default is 64 MiB.
 
 ## Run The Frontend
 

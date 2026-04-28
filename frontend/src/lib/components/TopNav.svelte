@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import {
 		getProjectSettings,
 		starProject,
@@ -23,8 +24,6 @@
 		onSignOut,
 		onCreateProject,
 		onCreateOrg,
-		projectName,
-		orgName,
 		busy,
 		message
 	}: {
@@ -33,10 +32,8 @@
 		tenants: TenantSummary[];
 		projects: ProjectSummary[];
 		onSignOut: () => void;
-		onCreateProject: (tenantName?: string) => void;
-		onCreateOrg: () => void;
-		projectName: string;
-		orgName: string;
+		onCreateProject: (name: string, tenantName?: string) => Promise<void>;
+		onCreateOrg: (name: string) => Promise<void>;
 		busy: boolean;
 		message: string;
 	} = $props();
@@ -47,12 +44,14 @@
 	let showCreateOrg = $state(false);
 	let settings = $state<ProjectSettings | null>(null);
 	let settingsLoading = $state(false);
+	let newProjectName = $state('');
+	let newOrgName = $state('');
 
 	const currentPath = $derived($page.url.pathname);
 	const pathParts = $derived(currentPath.split('/').filter(Boolean));
 	const currentTenant = $derived(pathParts[0] ?? '');
 	const currentProject = $derived(pathParts[1] ?? null);
-	const selectedTenant = $derived(currentTenant || tenants[0]?.name || '');
+	const selectedTenant = $derived(currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
 	const displayName = $derived(profile?.name || user);
 	const profileHandle = $derived(profile?.preferredUsername ? `@${profile.preferredUsername}` : profile?.email);
@@ -137,43 +136,60 @@
 		}
 		return (parts[0] ?? value).slice(0, 2).toUpperCase();
 	}
+
+	async function createProjectFromMenu() {
+		if (!newProjectName.trim()) return;
+		const name = newProjectName.trim();
+		await onCreateProject(name, selectedTenant);
+		newProjectName = '';
+		showProjectMenu = false;
+	}
+
+	async function createOrgFromModal() {
+		if (!newOrgName.trim()) return;
+		const name = newOrgName.trim();
+		await onCreateOrg(name);
+		newOrgName = '';
+		showCreateOrg = false;
+	}
 </script>
 
 <header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
 	<div class="flex items-center gap-4 px-32 py-2.5 md:px-48 lg:px-64 xl:px-80">
 		<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
 
-		{#if selectedTenant}
-			<div class="flex items-center gap-0.5">
-				<div class="relative">
-					<button
-						class="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#d9a66c]"
-						onclick={() => (showTenantMenu = !showTenantMenu)}
-					>
-						{selectedTenant}
-						<ChevronDown class="h-3.5 w-3.5 text-[#6f6b5f]" />
-					</button>
-				{#if showTenantMenu}
-					<div class="absolute left-0 top-full z-50 mt-1 w-56 rounded border border-[#2a2a28] bg-[#141412] py-1 shadow-lg">
-						<div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#5c5c5a]">Tenants</div>
+		<div class="flex items-center gap-0.5">
+			<div class="relative">
+				<button
+					class="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#d9a66c]"
+					onclick={() => (showTenantMenu = !showTenantMenu)}
+				>
+					{selectedTenant || 'Tenants'}
+					<ChevronDown class="h-3.5 w-3.5 text-[#6f6b5f]" />
+				</button>
+			{#if showTenantMenu}
+				<div class="absolute left-0 top-full z-50 mt-1 w-56 rounded border border-[#2a2a28] bg-[#141412] py-1 shadow-lg">
+					{#if tenants.length === 0}
+						<p class="px-3 py-2 text-xs text-[#6f6b5f]">No tenants yet.</p>
+					{:else}
 						{#each tenants as tenant}
-							<a
-								href="/{tenant.name}"
-								class="block px-3 py-1.5 text-sm {selectedTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
-								onclick={() => (showTenantMenu = false)}
+							<button
+								class="block w-full px-3 py-1.5 text-left text-sm {selectedTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
+								onclick={() => { showTenantMenu = false; goto(`/${tenant.name}`); }}
 							>
 								{tenant.name}
-							</a>
+							</button>
 						{/each}
-						<button
-							class="flex items-center gap-1 w-full px-3 py-1.5 text-left text-xs text-[#6f6b5f] hover:bg-[#1e1e1c] hover:text-[#a09d94]"
-							onclick={() => { showTenantMenu = false; showCreateOrg = true; }}
-						>
-							<Plus class="h-3.5 w-3.5" /> New org
-						</button>
-					</div>
-				{/if}
-			</div>
+					{/if}
+					<button
+						class="flex w-full items-center gap-1 px-3 py-1.5 text-left text-xs text-[#6f6b5f] hover:bg-[#1e1e1c] hover:text-[#a09d94]"
+						onclick={() => { showTenantMenu = false; showCreateOrg = true; }}
+					>
+						<Plus class="h-3.5 w-3.5" /> New tenant
+					</button>
+				</div>
+			{/if}
+		</div>
 
 			{#if currentProject}
 				<span class="text-[#5c5c5a]">/</span>
@@ -204,12 +220,12 @@
 								<input
 									class="w-full rounded bg-[#0f0f0d] px-2 py-1 text-xs text-[#eae9e4] outline-none"
 									placeholder="new project"
-									bind:value={projectName}
+									bind:value={newProjectName}
 								/>
 								<button
 									class="mt-1 w-full rounded bg-[#2e2e2c] py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
-									disabled={busy || !projectName}
-									onclick={() => { onCreateProject(selectedTenant); showProjectMenu = false; }}
+									disabled={busy || !newProjectName.trim()}
+									onclick={createProjectFromMenu}
 								>
 									Create
 								</button>
@@ -232,8 +248,7 @@
 				</span>
 				{/if}
 			{/if}
-			</div>
-		{/if}
+		</div>
 
 		<div class="flex-1"></div>
 
@@ -299,11 +314,11 @@
 {#if showCreateOrg}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
 		<div class="w-full max-w-sm rounded border border-[#2a2a28] bg-[#141412] p-5">
-			<h3 class="text-sm font-semibold text-[#f0eee4]">New organization</h3>
-			<input class="mt-3 w-full rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="org name" bind:value={orgName} />
+			<h3 class="text-sm font-semibold text-[#f0eee4]">New tenant</h3>
+			<input class="mt-3 w-full rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="tenant name" bind:value={newOrgName} />
 			<div class="mt-3 flex justify-end gap-2">
 				<button class="px-3 py-1.5 text-xs text-[#a09d94] hover:text-[#eae9e4]" onclick={() => (showCreateOrg = false)}>Cancel</button>
-				<button class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d]" disabled={busy || !orgName} onclick={() => { onCreateOrg(); showCreateOrg = false; }}>Create</button>
+				<button class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d]" disabled={busy || !newOrgName.trim()} onclick={createOrgFromModal}>Create</button>
 			</div>
 			{#if message}<p class="mt-2 text-xs text-[#d96c5a]">{message}</p>{/if}
 		</div>

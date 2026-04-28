@@ -1,12 +1,12 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary, TenantSummary, TokenPrincipal,
-    UserProfile, WorkspaceState,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary,
+    TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
 };
 use uuid::Uuid;
-use worker::*;
 use worker::D1Database;
+use worker::*;
 
 fn token_hash(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))

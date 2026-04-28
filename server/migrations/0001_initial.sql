@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON tokens(user);
 CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
+
 CREATE TABLE IF NOT EXISTS user_profiles (
     user TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
@@ -16,12 +17,14 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     email TEXT,
     updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS tenants (
     name TEXT PRIMARY KEY,
     kind TEXT NOT NULL,
     owner TEXT NOT NULL,
     members_json TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS projects (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
@@ -29,6 +32,7 @@ CREATE TABLE IF NOT EXISTS projects (
     settings_json TEXT NOT NULL DEFAULT '{}',
     PRIMARY KEY (tenant, project)
 );
+
 CREATE TABLE IF NOT EXISTS workspace_heads (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
@@ -36,6 +40,7 @@ CREATE TABLE IF NOT EXISTS workspace_heads (
     head TEXT,
     PRIMARY KEY (tenant, project, workspace)
 );
+
 CREATE TABLE IF NOT EXISTS workspace_states (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
@@ -46,6 +51,7 @@ CREATE TABLE IF NOT EXISTS workspace_states (
     mergeable INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (tenant, project, workspace)
 );
+
 CREATE TABLE IF NOT EXISTS history (
     id TEXT PRIMARY KEY,
     tenant TEXT NOT NULL,
@@ -57,6 +63,9 @@ CREATE TABLE IF NOT EXISTS history (
     timestamp TEXT NOT NULL,
     snapshot_id TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
+CREATE INDEX IF NOT EXISTS idx_history_project_time ON history(tenant, project, timestamp DESC);
+
 CREATE TABLE IF NOT EXISTS issues (
     id TEXT PRIMARY KEY,
     tenant TEXT NOT NULL,
@@ -74,6 +83,8 @@ CREATE TABLE IF NOT EXISTS issues (
     workspace TEXT,
     labels_json TEXT NOT NULL DEFAULT '[]'
 );
+CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
+
 CREATE TABLE IF NOT EXISTS protocol_items (
     id TEXT PRIMARY KEY,
     tenant TEXT NOT NULL,
@@ -85,12 +96,14 @@ CREATE TABLE IF NOT EXISTS protocol_items (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_protocol_items_project_kind ON protocol_items(tenant, project, kind);
+
 CREATE TABLE IF NOT EXISTS stars (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
     user TEXT NOT NULL,
     PRIMARY KEY (tenant, project, user)
 );
+
 CREATE TABLE IF NOT EXISTS comments (
     id TEXT PRIMARY KEY,
     tenant TEXT NOT NULL,
@@ -100,6 +113,8 @@ CREATE TABLE IF NOT EXISTS comments (
     body TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);
+
 CREATE TABLE IF NOT EXISTS object_index (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
@@ -109,7 +124,3 @@ CREATE TABLE IF NOT EXISTS object_index (
     created_at TEXT NOT NULL,
     PRIMARY KEY (tenant, project, id)
 );
-CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
-CREATE INDEX IF NOT EXISTS idx_history_project_time ON history(tenant, project, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
-CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);

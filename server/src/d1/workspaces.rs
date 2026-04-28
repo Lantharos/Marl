@@ -1,5 +1,10 @@
 use super::*;
-pub async fn head(db: &D1Database, tenant: &str, project: &str, workspace: &str) -> Result<Option<String>> {
+pub async fn head(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+) -> Result<Option<String>> {
     #[derive(Deserialize)]
     struct Row {
         head: Option<String>,
@@ -36,9 +41,14 @@ pub async fn update_head(
 
     db.prepare(
         "INSERT INTO workspace_heads (tenant, project, workspace, head) VALUES (?1, ?2, ?3, ?4) \
-         ON CONFLICT(tenant, project, workspace) DO UPDATE SET head = excluded.head"
+         ON CONFLICT(tenant, project, workspace) DO UPDATE SET head = excluded.head",
     )
-    .bind(&[js_str(tenant), js_str(project), js_str(workspace), js_str(new_head)])?
+    .bind(&[
+        js_str(tenant),
+        js_str(project),
+        js_str(workspace),
+        js_str(new_head),
+    ])?
     .run()
     .await?;
 
@@ -56,7 +66,11 @@ pub async fn update_head(
 
 // -- Workspace state --------------------------------------
 
-pub async fn workspace_states(db: &D1Database, tenant: &str, project: &str) -> Result<Vec<WorkspaceState>> {
+pub async fn workspace_states(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+) -> Result<Vec<WorkspaceState>> {
     #[derive(Deserialize)]
     struct Row {
         workspace: String,
@@ -93,7 +107,10 @@ pub async fn workspace_states(db: &D1Database, tenant: &str, project: &str) -> R
     let mut parents = std::collections::HashMap::new();
     for ws in &states {
         if let Some(ref p) = ws.parent_workspace {
-            parents.entry(p.clone()).or_insert_with(Vec::new).push(ws.name.clone());
+            parents
+                .entry(p.clone())
+                .or_insert_with(Vec::new)
+                .push(ws.name.clone());
         }
     }
     for ws in &mut states {
@@ -127,7 +144,17 @@ pub async fn mark_workspace_ready(
         .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
         .run()
         .await?;
-    log_history(db, tenant, project, workspace, principal, "ready", &format!("{} marked workspace {} as ready", principal.user, workspace), None).await?;
+    log_history(
+        db,
+        tenant,
+        project,
+        workspace,
+        principal,
+        "ready",
+        &format!("{} marked workspace {} as ready", principal.user, workspace),
+        None,
+    )
+    .await?;
     Ok(())
 }
 
@@ -142,9 +169,18 @@ pub async fn merge_workspace(
         .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
         .run()
         .await?;
-    log_history(db, tenant, project, workspace, principal, "merge", &format!("{} merged workspace {}", principal.user, workspace), None).await?;
+    log_history(
+        db,
+        tenant,
+        project,
+        workspace,
+        principal,
+        "merge",
+        &format!("{} merged workspace {}", principal.user, workspace),
+        None,
+    )
+    .await?;
     Ok(())
 }
 
 // -- History ----------------------------------------------
-

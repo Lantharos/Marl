@@ -28,7 +28,7 @@ pub async fn record_object(
     db.prepare(
         "INSERT INTO object_index (tenant, project, id, kind, size, created_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
-         ON CONFLICT(tenant, project, id) DO UPDATE SET kind = excluded.kind, size = excluded.size"
+         ON CONFLICT(tenant, project, id) DO UPDATE SET kind = excluded.kind, size = excluded.size",
     )
     .bind(&[
         js_str(tenant),

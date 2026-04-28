@@ -38,7 +38,14 @@ pub async fn workspace_history(
             id: r.id,
             kind: r.kind,
             message: r.message,
-            author_profile: profile_from_row(&r.author, r.display_name, r.handle, r.avatar_url, r.email, r.updated_at),
+            author_profile: profile_from_row(
+                &r.author,
+                r.display_name,
+                r.handle,
+                r.avatar_url,
+                r.email,
+                r.updated_at,
+            ),
             author: r.author,
             timestamp: r.timestamp,
             workspace: r.workspace,
@@ -85,7 +92,14 @@ pub async fn project_history(
             id: r.id,
             kind: r.kind,
             message: r.message,
-            author_profile: profile_from_row(&r.author, r.display_name, r.handle, r.avatar_url, r.email, r.updated_at),
+            author_profile: profile_from_row(
+                &r.author,
+                r.display_name,
+                r.handle,
+                r.avatar_url,
+                r.email,
+                r.updated_at,
+            ),
             author: r.author,
             timestamp: r.timestamp,
             workspace: r.workspace,
@@ -161,7 +175,14 @@ pub async fn get_history_entry(
         id: r.id,
         kind: r.kind,
         message: r.message,
-        author_profile: profile_from_row(&r.author, r.display_name, r.handle, r.avatar_url, r.email, r.updated_at),
+        author_profile: profile_from_row(
+            &r.author,
+            r.display_name,
+            r.handle,
+            r.avatar_url,
+            r.email,
+            r.updated_at,
+        ),
         author: r.author,
         timestamp: r.timestamp,
         workspace: r.workspace,
@@ -188,4 +209,3 @@ fn profile_from_row(
 }
 
 // -- Issues -----------------------------------------------
-

@@ -95,5 +95,7 @@ fn profile_from_claims(claims: AveClaims) -> UserProfile {
 }
 
 fn clean_claim(value: Option<String>) -> Option<String> {
-    value.map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }

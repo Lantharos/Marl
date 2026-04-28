@@ -37,7 +37,8 @@ pub async fn list_issues(db: &D1Database, tenant: &str, project: &str) -> Result
                 state: r.status.clone(),
                 status: r.status,
                 author: r.author,
-                assignees: serde_json::from_str(r.assignees_json.as_deref().unwrap_or("[]")).unwrap_or_default(),
+                assignees: serde_json::from_str(r.assignees_json.as_deref().unwrap_or("[]"))
+                    .unwrap_or_default(),
                 updated_at: r.updated_at.unwrap_or_else(|| created_at.clone()),
                 created_at,
                 closed_at: r.closed_at,
@@ -73,7 +74,9 @@ pub async fn create_issue(
     let id = format!("issue-{}", next_number);
     let created_at = now_rfc3339();
     let labels_json = serde_json::to_string(labels).map_err(|e| err(e.to_string()))?;
-    let assignees = assignee.map(|user| vec![user.to_string()]).unwrap_or_default();
+    let assignees = assignee
+        .map(|user| vec![user.to_string()])
+        .unwrap_or_default();
     let assignees_json = serde_json::to_string(&assignees).map_err(|e| err(e.to_string()))?;
 
     db.prepare(
@@ -121,7 +124,11 @@ pub async fn update_issue_status(
     status: &str,
 ) -> Result<Issue> {
     let updated_at = now_rfc3339();
-    let closed_at = if status == "closed" { Some(updated_at.as_str()) } else { None };
+    let closed_at = if status == "closed" {
+        Some(updated_at.as_str())
+    } else {
+        None
+    };
     db.prepare(
         "UPDATE issues SET status = ?1, updated_at = ?2, closed_at = ?3 WHERE tenant = ?4 AND project = ?5 AND id = ?6"
     )
@@ -164,7 +171,8 @@ pub async fn update_issue_status(
         state: row.status.clone(),
         status: row.status,
         author: row.author,
-        assignees: serde_json::from_str(row.assignees_json.as_deref().unwrap_or("[]")).unwrap_or_default(),
+        assignees: serde_json::from_str(row.assignees_json.as_deref().unwrap_or("[]"))
+            .unwrap_or_default(),
         updated_at: row.updated_at.unwrap_or_else(|| created_at.clone()),
         created_at,
         closed_at: row.closed_at,
@@ -245,7 +253,12 @@ pub async fn add_issue_labels(
     issue.updated_at = updated_at;
     Ok(issue)
 }
-pub async fn list_comments(db: &D1Database, tenant: &str, project: &str, issue_id: &str) -> Result<Vec<Comment>> {
+pub async fn list_comments(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    issue_id: &str,
+) -> Result<Vec<Comment>> {
     #[derive(Deserialize)]
     struct Row {
         id: String,
@@ -258,7 +271,7 @@ pub async fn list_comments(db: &D1Database, tenant: &str, project: &str, issue_i
         .prepare(
             "SELECT id, issue_id, author, body, created_at FROM comments \
              WHERE tenant = ?1 AND project = ?2 AND issue_id = ?3 \
-             ORDER BY created_at"
+             ORDER BY created_at",
         )
         .bind(&[js_str(tenant), js_str(project), js_str(issue_id)])?
         .all()
@@ -288,7 +301,7 @@ pub async fn create_comment(
     let created_at = now_rfc3339();
     db.prepare(
         "INSERT INTO comments (id, tenant, project, issue_id, author, body, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )
     .bind(&[
         js_str(&id),
@@ -311,4 +324,3 @@ pub async fn create_comment(
 }
 
 // -- Settings / Stars -------------------------------------
-

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { renderFileDiff, type DiffRow } from '$lib/diff';
 
 	let {
 		path,
@@ -11,107 +11,45 @@
 		newText: string | null;
 	} = $props();
 
-	let scrollHost = $state<HTMLDivElement>();
-	let contentHost = $state<HTMLDivElement>();
-	let view: { cleanUp(): void } | null = null;
-	let virtualizer: { cleanUp(): void } | null = null;
-	let renderRun = 0;
+	const rows = $derived(renderFileDiff(oldText, newText));
 
-	$effect(() => {
-		const _scroll = scrollHost;
-		const _content = contentHost;
-		const _path = path;
-		const _old = oldText;
-		const _new = newText;
-		if (!_scroll || !_content) return;
+	function rowClass(kind: DiffRow['kind']) {
+		switch (kind) {
+			case 'add':
+				return 'bg-[#122016] text-[#bfe8c2]';
+			case 'remove':
+				return 'bg-[#241513] text-[#e6b8ae]';
+			default:
+				return 'text-[#d8d5ca]';
+		}
+	}
 
-		const run = ++renderRun;
-		view?.cleanUp();
-		virtualizer?.cleanUp();
-		view = null;
-		virtualizer = null;
-		_content.replaceChildren();
-
-		(async () => {
-			const [{ FileDiff, VirtualizedFileDiff, Virtualizer }, { renderFileDiff }] = await Promise.all([
-				import('@pierre/diffs'),
-				import('$lib/diff')
-			]);
-			if (run !== renderRun || !scrollHost || !contentHost) return;
-
-			const diff = renderFileDiff(_path, _old, _new);
-			if (!diff) return;
-
-			const lineCount = (_old ?? '').split('\n').length + (_new ?? '').split('\n').length;
-			const useVirtual = lineCount > 300;
-
-			if (useVirtual) {
-				const nextVirtualizer = new Virtualizer({ overscrollSize: 1000 });
-				nextVirtualizer.setup(_scroll, _content);
-
-				const v = new VirtualizedFileDiff(
-					{
-						theme: 'pierre-dark',
-						diffStyle: 'unified',
-						diffIndicators: 'bars',
-						overflow: 'wrap',
-						unsafeCSS: `
-							:host {
-								--diffs-bg: #141412;
-								--diffs-bg-context: #141412;
-							}
-						`
-					},
-					nextVirtualizer
-				);
-				v.render({
-					fileDiff: diff,
-					containerWrapper: _content,
-					oldFile: { name: _path, contents: _old ?? '' },
-					newFile: { name: _path, contents: _new ?? '' }
-				});
-				virtualizer = nextVirtualizer;
-				view = v;
-			} else {
-				const v = new FileDiff({
-					theme: 'pierre-dark',
-					diffStyle: 'unified',
-					diffIndicators: 'bars',
-					overflow: 'wrap',
-					unsafeCSS: `
-						:host {
-							--diffs-bg: #141412;
-							--diffs-bg-context: #141412;
-						}
-					`
-				});
-				v.render({
-					fileDiff: diff,
-					containerWrapper: _content,
-					oldFile: { name: _path, contents: _old ?? '' },
-					newFile: { name: _path, contents: _new ?? '' }
-				});
-				view = v;
-			}
-		})();
-		return () => {
-			if (run === renderRun) renderRun += 1;
-			view?.cleanUp();
-			virtualizer?.cleanUp();
-			view = null;
-			virtualizer = null;
-		};
-	});
-
-	onDestroy(() => {
-		renderRun += 1;
-		view?.cleanUp();
-		virtualizer?.cleanUp();
-		view = null;
-		virtualizer = null;
-	});
+	function marker(kind: DiffRow['kind']) {
+		switch (kind) {
+			case 'add':
+				return '+';
+			case 'remove':
+				return '-';
+			default:
+				return ' ';
+		}
+	}
 </script>
 
-<div bind:this={scrollHost} class="h-full overflow-auto bg-[#141412]">
-	<div bind:this={contentHost}></div>
+<div class="h-full overflow-auto bg-[#141412] font-mono text-[12px] leading-5">
+	<div class="sticky top-0 z-10 border-b border-[#2a2a28] bg-[#141412] px-3 py-2 text-xs text-[#a09d94]">
+		{path}
+	</div>
+	{#if rows.length}
+		{#each rows as row}
+			<div class="grid grid-cols-[42px_42px_20px_1fr] border-b border-[#1d1d1a] {rowClass(row.kind)}">
+				<div class="select-none border-r border-[#2a2a28] px-2 text-right text-[#6f6b5f]">{row.oldLine ?? ''}</div>
+				<div class="select-none border-r border-[#2a2a28] px-2 text-right text-[#6f6b5f]">{row.newLine ?? ''}</div>
+				<div class="select-none text-center text-[#8a8578]">{marker(row.kind)}</div>
+				<pre class="min-w-0 overflow-x-auto px-2 whitespace-pre-wrap break-words">{row.text || ' '}</pre>
+			</div>
+		{/each}
+	{:else}
+		<div class="grid min-h-[180px] place-items-center text-sm text-[#6f6b5f]">No changes.</div>
+	{/if}
 </div>

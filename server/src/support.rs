@@ -1,8 +1,5 @@
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
 use serde_json::json;
-use sha2::{Digest, Sha256};
-use sty_protocol::{RemoteObject, validate_segment};
+use sty_protocol::validate_segment;
 use worker::*;
 
 pub fn bucket(env: &Env) -> Result<Bucket> {
@@ -31,22 +28,6 @@ pub fn object_key(tenant: &str, project: &str, id: &str) -> String {
     format!("projects/{tenant}/{project}/objects/{id}")
 }
 
-pub fn object_chunk_key(tenant: &str, project: &str, id: &str, chunk_index: usize) -> String {
-    format!("projects/{tenant}/{project}/objects/.uploads/{id}/{chunk_index}.chunk")
-}
-
-pub fn validate_object(object: &RemoteObject) -> Result<()> {
-    validate_object_metadata(&object.id, &object.kind)?;
-    let bytes = decode_base64(&object.bytes_base64)?;
-    let digest = hex::encode(Sha256::digest(&bytes));
-    if digest != object.id {
-        return Err(Error::RustError(
-            "object id does not match SHA-256 digest".to_string(),
-        ));
-    }
-    Ok(())
-}
-
 pub fn validate_object_metadata(id: &str, kind: &str) -> Result<()> {
     if !matches!(kind, "blob" | "tree" | "snapshot") {
         return Err(Error::RustError("unknown object kind".to_string()));
@@ -61,6 +42,16 @@ pub fn required_header(req: &Request, name: &str) -> Result<String> {
     req.headers()
         .get(name)?
         .ok_or_else(|| Error::RustError(format!("missing {name} header")))
+}
+
+pub fn bearer_token(req: &Request) -> Result<String> {
+    let Some(value) = req.headers().get("authorization")? else {
+        return Err(Error::RustError("missing bearer token".to_string()));
+    };
+    value
+        .strip_prefix("Bearer ")
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| Error::RustError("missing bearer token".to_string()))
 }
 
 pub fn required_usize_header(req: &Request, name: &str) -> Result<usize> {
@@ -78,10 +69,54 @@ pub fn json_error(status: u16, message: &str) -> Result<Response> {
     with_cors(Response::from_json(&json!({ "error": message }))?.with_status(status))
 }
 
-pub fn decode_base64(value: &str) -> Result<Vec<u8>> {
-    BASE64
-        .decode(value)
-        .map_err(|e| Error::RustError(e.to_string()))
+pub fn response_for_error(error: Error) -> Result<Response> {
+    let message = error.to_string();
+    let status = status_for_error(&message);
+    json_error(status, public_error_message(status, &message))
+}
+
+pub fn object_size_limit(env: &Env) -> usize {
+    env.var("STY_MAX_OBJECT_BYTES")
+        .ok()
+        .and_then(|value| value.to_string().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(64 * 1024 * 1024)
+}
+
+fn status_for_error(message: &str) -> u16 {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("missing bearer token")
+        || lower.contains("invalid bearer token")
+        || lower.contains("sign in required")
+    {
+        return 401;
+    }
+    if lower.contains("access denied") || lower.contains("forbidden") {
+        return 403;
+    }
+    if lower.contains("not found") || lower.contains("missing object") {
+        return 404;
+    }
+    if lower.contains("invalid")
+        || lower.contains("missing route param")
+        || lower.contains("missing x-")
+        || lower.contains("account handle")
+        || lower.contains("unknown object kind")
+    {
+        return 400;
+    }
+    if lower.contains("changed") || lower.contains("conflict") {
+        return 409;
+    }
+    500
+}
+
+fn public_error_message(status: u16, message: &str) -> &str {
+    if status == 500 {
+        "internal server error"
+    } else {
+        message
+    }
 }
 
 pub fn preflight_response(req: &Request, env: &Env) -> Result<Response> {
@@ -113,7 +148,11 @@ fn set_cors_headers(headers: &mut Headers) -> Result<()> {
     )?;
     headers.set(
         "access-control-allow-headers",
-        "authorization,content-type,x-pig-object-kind,x-pig-chunk-count,x-pig-total-size",
+        "authorization,content-type,x-pig-object-kind,x-pig-object-size,x-pig-chunk-count,x-pig-total-size",
+    )?;
+    headers.set(
+        "access-control-expose-headers",
+        "etag,x-pig-object-kind,x-pig-object-size",
     )?;
     headers.set("access-control-max-age", "86400")?;
     Ok(())
@@ -151,4 +190,85 @@ pub async fn r2_bytes(store: &Bucket, key: &str) -> Result<Vec<u8>> {
         return Err(Error::RustError(format!("missing object body {key}")));
     };
     body.bytes().await
+}
+
+pub(crate) fn paginate_vec<T: serde::Serialize>(
+    url: Url,
+    items: Vec<T>,
+) -> sty_protocol::Paginated<T> {
+    let all = url
+        .query_pairs()
+        .any(|(key, value)| key == "all" && value == "true");
+    if all {
+        return sty_protocol::Paginated {
+            total: items.len(),
+            total_pages: 1,
+            next: None,
+            prev: None,
+            page: 1,
+            per_page: items.len().max(1),
+            items,
+        };
+    }
+    let page = query_usize(&url, "page").unwrap_or(1).max(1);
+    let per_page = query_usize(&url, "per_page").unwrap_or(25).clamp(1, 100);
+    let total = items.len();
+    let total_pages = total.div_ceil(per_page).max(1);
+    let start = (page - 1).saturating_mul(per_page);
+    let page_items = items
+        .into_iter()
+        .skip(start)
+        .take(per_page)
+        .collect::<Vec<_>>();
+    sty_protocol::Paginated {
+        items: page_items,
+        page,
+        per_page,
+        total,
+        total_pages,
+        next: (page < total_pages).then_some(page + 1),
+        prev: (page > 1).then_some(page - 1),
+    }
+}
+
+fn query_usize(url: &Url, key: &str) -> Option<usize> {
+    url.query_pairs()
+        .find_map(|(name, value)| (name == key).then(|| value.parse().ok()).flatten())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_object_metadata() {
+        let id = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        assert!(validate_object_metadata(id, "blob").is_ok());
+        assert!(validate_object_metadata(id, "tree").is_ok());
+        assert!(validate_object_metadata(id, "snapshot").is_ok());
+        assert!(validate_object_metadata(id, "commit").is_err());
+        assert!(validate_object_metadata("abc", "blob").is_err());
+    }
+
+    #[test]
+    fn maps_expected_errors_to_http_statuses() {
+        assert_eq!(status_for_error("missing bearer token"), 401);
+        assert_eq!(status_for_error("project access denied"), 403);
+        assert_eq!(status_for_error("object not found"), 404);
+        assert_eq!(status_for_error("invalid object id"), 400);
+        assert_eq!(status_for_error("workspace head changed"), 409);
+        assert_eq!(status_for_error("database unavailable"), 500);
+    }
+
+    #[test]
+    fn hides_internal_server_errors() {
+        assert_eq!(
+            public_error_message(500, "database unavailable"),
+            "internal server error"
+        );
+        assert_eq!(
+            public_error_message(403, "project access denied"),
+            "project access denied"
+        );
+    }
 }

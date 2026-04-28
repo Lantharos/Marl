@@ -1,5 +1,9 @@
 use super::*;
-pub async fn project_visibility(db: &D1Database, tenant: &str, project: &str) -> Result<Option<String>> {
+pub async fn project_visibility(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+) -> Result<Option<String>> {
     #[derive(Deserialize)]
     struct Row {
         settings_json: String,
@@ -17,7 +21,12 @@ pub async fn project_visibility(db: &D1Database, tenant: &str, project: &str) ->
     Ok(visibility)
 }
 
-pub async fn project_settings(db: &D1Database, tenant: &str, project: &str, principal: &TokenPrincipal) -> Result<ProjectSettings> {
+pub async fn project_settings(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    principal: &TokenPrincipal,
+) -> Result<ProjectSettings> {
     #[derive(Deserialize)]
     struct Row {
         settings_json: String,
@@ -38,11 +47,12 @@ pub async fn project_settings(db: &D1Database, tenant: &str, project: &str, prin
                 default_workspace: "main".to_string(),
                 navbar_items: vec![],
                 panels: vec![],
-            })
+            });
         }
     };
 
-    let mut settings: ProjectSettings = serde_json::from_str(&settings_json).map_err(|e| err(e.to_string()))?;
+    let mut settings: ProjectSettings =
+        serde_json::from_str(&settings_json).map_err(|e| err(e.to_string()))?;
 
     #[derive(Deserialize)]
     struct CountRow {
@@ -125,10 +135,11 @@ pub async fn is_starred(
         count: f64,
     }
     let row: Option<CountRow> = db
-        .prepare("SELECT COUNT(*) AS count FROM stars WHERE tenant = ?1 AND project = ?2 AND user = ?3")
+        .prepare(
+            "SELECT COUNT(*) AS count FROM stars WHERE tenant = ?1 AND project = ?2 AND user = ?3",
+        )
         .bind(&[js_str(tenant), js_str(project), js_str(&principal.user)])?
         .first(None)
         .await?;
     Ok(row.map(|r| r.count as u64).unwrap_or(0) > 0)
 }
-
