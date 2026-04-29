@@ -4,7 +4,6 @@
 	import { page } from '$app/stores';
 	import {
 		createOrg,
-		createProject,
 		getInitializedMe,
 		listProjects,
 		type ProjectSummary,
@@ -80,27 +79,6 @@
 			status = 'signedOut';
 		} finally {
 			bootstrapDone = true;
-		}
-	}
-
-	async function handleCreateProject(name: string, tenantName?: string) {
-		if (!name.trim()) return;
-		const tenant = tenantName ?? tenants[0]?.name ?? profile?.preferredUsername;
-		if (!tenant) {
-			message = 'Account handle missing';
-			return;
-		}
-		busy = true;
-		message = '';
-		try {
-			await createProject(`${tenant}/${name.trim()}`);
-			projects = await listProjects();
-			appData.update((data) => ({ ...data, projects }));
-			await goto(`/${tenant}/${name.trim()}`);
-		} catch (error) {
-			message = error instanceof Error ? error.message : 'Failed';
-		} finally {
-			busy = false;
 		}
 	}
 
@@ -239,7 +217,6 @@
 			{tenants}
 			{projects}
 			onSignOut={handleSignOut}
-			onCreateProject={handleCreateProject}
 			onCreateOrg={handleCreateOrg}
 			{busy}
 			{message}

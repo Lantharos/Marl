@@ -25,7 +25,6 @@
 		tenants,
 		projects,
 		onSignOut,
-		onCreateProject,
 		onCreateOrg,
 		busy,
 		message
@@ -34,7 +33,6 @@
 		tenants: TenantSummary[];
 		projects: ProjectSummary[];
 		onSignOut: () => void;
-		onCreateProject: (name: string, tenantName?: string) => Promise<void>;
 		onCreateOrg: (name: string) => Promise<void>;
 		busy: boolean;
 		message: string;
@@ -48,7 +46,6 @@
 	let stats = $state<ProjectStats | null>(null);
 	let settingsLoading = $state(false);
 	let settingsKey = '';
-	let newProjectName = $state('');
 	let newOrgName = $state('');
 
 	const currentPath = $derived($page.url.pathname);
@@ -173,14 +170,6 @@
 		return (parts[0] ?? value).slice(0, 2).toUpperCase();
 	}
 
-	async function createProjectFromMenu() {
-		if (!newProjectName.trim()) return;
-		const name = newProjectName.trim();
-		await onCreateProject(name, selectedTenant);
-		newProjectName = '';
-		showProjectMenu = false;
-	}
-
 	async function createOrgFromModal() {
 		if (!newOrgName.trim()) return;
 		const name = newOrgName.trim();
@@ -268,21 +257,6 @@
 							{#if tenantProjects.length === 0}
 								<p class="px-3 py-1.5 text-xs text-[#6f6b5f]">No projects</p>
 							{/if}
-							<div class="mt-1 border-t border-[#2a2a28] px-2 pt-2">
-								<input
-									class="w-full rounded bg-[#0f0f0d] px-2 py-1 text-xs text-[#eae9e4] outline-none"
-									placeholder="new project"
-									bind:value={newProjectName}
-								/>
-								<button
-									class="mt-1 w-full rounded bg-[#2e2e2c] py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
-									disabled={busy || !newProjectName.trim()}
-									onclick={createProjectFromMenu}
-								>
-									Create
-								</button>
-								{#if message}<p class="mt-1 text-[10px] text-[#d96c5a]">{message}</p>{/if}
-							</div>
 						</div>
 					{/if}
 				</div>

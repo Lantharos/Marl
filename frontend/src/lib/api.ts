@@ -162,15 +162,6 @@ export async function createOrg(name: string) {
 	return (await response.json()) as TenantSummary;
 }
 
-export async function createProject(slug: string) {
-	const [tenant, project] = slug.split('/');
-	await authedFetch(`/v1/tenants/${tenant}/projects/${project}`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({})
-	});
-}
-
 export async function getProject(tenant: string, project: string, options: ApiOptions = {}) {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}`, { signal: options.signal });
 	return (await response.json()) as ProjectDetail;

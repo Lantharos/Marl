@@ -231,11 +231,6 @@
 			</div>
 
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-				<div class="text-sm font-medium text-[#eae9e4]">Stars</div>
-				<p class="mt-1 text-xs text-[#6f6b5f]">{settings.starred_count} stars</p>
-			</div>
-
-			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 				<div class="flex items-center justify-between">
 					<div class="min-w-0">
 						<div class="text-sm font-medium text-[#eae9e4]">Navigation</div>
