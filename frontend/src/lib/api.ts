@@ -2,13 +2,13 @@ import { apiBase, getStyToken } from './session';
 import { authedFetch, notifyProjectStatsChanged, pageQuery, publicFetch } from './apiShared';
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
-import type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
+import type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
 export * from './issueApi';
 export * from './objectApi';
 export * from './projectDataApi';
-export type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, TagInfo } from './protocolTypes';
+export type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -51,7 +51,7 @@ export interface NavbarItem {
 export interface PanelItem {
 	id: string;
 	title: string;
-	type: 'text' | 'button' | 'link' | 'info' | 'stats' | 'workspaces' | 'activity';
+	type: 'text' | 'button' | 'link' | 'info' | 'workspaces' | 'releases' | 'activity';
 	content?: string;
 	url?: string;
 	button_label?: string;
@@ -99,6 +99,7 @@ export interface ProjectOverview {
 		history_count: number;
 	};
 	recent_activity: Activity[];
+	releases: Release[];
 	default_workspace: string;
 }
 
@@ -234,6 +235,18 @@ export async function createRelease(tenant: string, project: string, release: Pa
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(release)
+	});
+	const item = (await response.json()) as Release;
+	notifyProjectStatsChanged(tenant, project);
+	return item;
+}
+
+export async function uploadReleaseArtifact(tenant: string, project: string, releaseId: string, file: File): Promise<Release> {
+	const form = new FormData();
+	form.set('file', file);
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/releases/${encodeURIComponent(releaseId)}/artifacts`, {
+		method: 'POST',
+		body: form
 	});
 	const item = (await response.json()) as Release;
 	notifyProjectStatsChanged(tenant, project);

@@ -69,15 +69,14 @@
 		{ id: 'code', label: 'Code', type: 'tab', enabled: true, order: 1 },
 		{ id: 'workspaces', label: 'Workspaces', type: 'tab', enabled: true, order: 2 },
 		{ id: 'issues', label: 'Issues', type: 'tab', enabled: true, order: 3 },
-		{ id: 'ready', label: 'Ready', type: 'tab', enabled: true, order: 4 },
-		{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 5 },
-		{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 6 },
-		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 7 },
-		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 8 }
+		{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 4 },
+		{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 5 },
+		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 6 },
+		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 7 }
 	];
 
 	function withDefaultTabs(items: NavbarItem[]) {
-		const merged = [...items];
+		const merged = items.filter((item) => item.id !== 'ready');
 		for (const tab of DEFAULT_TABS) {
 			if (!merged.some((item) => item.id === tab.id)) {
 				merged.push({ ...tab, order: merged.length });
@@ -162,7 +161,7 @@
 				settings = { ...settings, is_starred: true, starred_count: settings.starred_count + 1 };
 			}
 		} catch {
-			// ignore
+			return;
 		}
 	}
 
@@ -197,8 +196,6 @@
 				return stats.workspace_count;
 			case 'issues':
 				return stats.open_issue_count;
-			case 'ready':
-				return stats.ready_count;
 			case 'releases':
 				return stats.release_count;
 			case 'history':

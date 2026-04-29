@@ -12,6 +12,7 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
     let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
     let settings = d1::project_settings(&database, &tenant, &project, &principal).await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
+    let releases = latest_releases(&database, &tenant, &project, 5).await?;
     let default_workspace = settings.default_workspace.clone();
     let default_head = d1::head(&database, &tenant, &project, &default_workspace).await?;
     let etag = overview_etag(
@@ -19,6 +20,7 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
         &workspaces,
         &settings,
         &stats,
+        &releases,
         default_head.as_deref(),
     )?;
     if let Some(response) = not_modified_response(&req, &etag, false, 15, false)? {
@@ -49,6 +51,7 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
         "readme": readme,
         "stats": stats,
         "recent_activity": recent_activity,
+        "releases": releases,
         "default_workspace": default_workspace,
     }))?;
     apply_cache_headers(response.headers_mut(), &etag, false, 15, false)?;
@@ -116,6 +119,7 @@ fn overview_etag(
     workspaces: &[sty_protocol::WorkspaceState],
     settings: &sty_protocol::ProjectSettings,
     stats: &sty_protocol::ProjectStats,
+    releases: &[serde_json::Value],
     default_head: Option<&str>,
 ) -> Result<String> {
     let body = serde_json::to_vec(&json!({
@@ -123,8 +127,40 @@ fn overview_etag(
         "workspaces": workspaces,
         "settings": settings,
         "stats": stats,
+        "releases": releases,
         "default_head": default_head,
     }))
     .map_err(|error| Error::RustError(error.to_string()))?;
     Ok(format!("overview-{}", hex::encode(Sha256::digest(body))))
+}
+
+async fn latest_releases(
+    database: &D1Database,
+    tenant: &str,
+    project: &str,
+    limit: usize,
+) -> Result<Vec<serde_json::Value>> {
+    #[derive(serde::Deserialize)]
+    struct Row {
+        data_json: String,
+    }
+    let result = database
+        .prepare(
+            "SELECT data_json FROM protocol_items
+             WHERE tenant = ?1 AND project = ?2 AND kind = 'release'
+             ORDER BY created_at DESC
+             LIMIT ?3",
+        )
+        .bind(&[
+            wasm_bindgen::JsValue::from_str(tenant),
+            wasm_bindgen::JsValue::from_str(project),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
+        .all()
+        .await?;
+    let rows: Vec<Row> = result.results()?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| serde_json::from_str::<serde_json::Value>(&row.data_json).ok())
+        .collect())
 }

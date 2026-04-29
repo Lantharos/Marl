@@ -16,12 +16,14 @@ pub(crate) mod d1;
 mod protocol;
 mod protocol_profiles;
 mod protocol_ready;
+mod releases;
 mod support;
 
 use account_keys::*;
 use auth::verify_ave_id_token;
 use protocol::*;
 use protocol_ready::*;
+use releases::*;
 use support::{
     apply_cache_headers, apply_cors, bearer_token, bucket, db, frontend_origin, json_error,
     not_modified_response, object_key, object_size_limit, paginate_vec, param, preflight_response,
@@ -222,9 +224,17 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/releases",
             create_release,
         )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/releases/:item_id/artifacts",
+            upload_release_artifact,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/releases/:item_id/artifacts/:artifact_id/download",
+            download_release_artifact,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/releases/:item_id",
-            get_protocol_item,
+            get_release,
         )
         .get_async("/v1/tenants/:tenant/projects/:project/keys", list_keys)
         .post_async("/v1/tenants/:tenant/projects/:project/keys", create_key)
@@ -240,7 +250,6 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/snapshots/:item_id/verify",
             verify_snapshot,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/audit", list_audit)
         .get_async("/v1/tenants/:tenant/projects/:project/users/me", profile_me)
         .get_async(
             "/v1/tenants/:tenant/projects/:project/users/:item_id",

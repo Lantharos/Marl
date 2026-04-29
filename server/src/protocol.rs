@@ -45,14 +45,6 @@ pub async fn create_webhook(req: Request, ctx: RouteContext<()>) -> Result<Respo
     create_protocol_kind(req, ctx, "webhook").await
 }
 
-pub async fn list_releases(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    list_protocol_kind(req, ctx, "release").await
-}
-
-pub async fn create_release(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    create_release_from_tag(req, ctx).await
-}
-
 pub async fn list_tags(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     list_protocol_kind(req, ctx, "tag").await
 }
@@ -75,15 +67,6 @@ pub async fn list_ssh_keys(req: Request, ctx: RouteContext<()>) -> Result<Respon
 
 pub async fn create_ssh_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     create_protocol_kind(req, ctx, "ssh_key").await
-}
-
-pub async fn list_audit(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
-    let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let entries = d1::project_history(&database, &tenant, &project).await?;
-    Response::from_json(&paginate_vec(req.url()?, entries))
 }
 
 pub async fn search_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -309,73 +292,6 @@ async fn create_protocol_kind(
     Response::from_json(&body)
 }
 
-async fn create_release_from_tag(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let (tenant, project) = project_params(&ctx)?;
-    let mut body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
-    let tag = body["tag"].as_str().unwrap_or_default().trim().to_string();
-    if tag.is_empty() {
-        return json_error(400, "release requires an existing tag");
-    }
-    let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let tags = list_protocol_values(&database, &tenant, &project, "tag").await?;
-    let tag_item = match tags.into_iter().find(|item| {
-        item["tag"].as_str() == Some(tag.as_str())
-            || item["name"].as_str() == Some(tag.as_str())
-            || item["id"].as_str() == Some(tag.as_str())
-    }) {
-        Some(item) => item,
-        None => {
-            let tag_item = json!({
-                "id": tag.clone(),
-                "tag": tag.clone(),
-                "name": tag.clone(),
-                "author": user.clone(),
-                "created_at": js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default()
-            });
-            upsert_protocol_item(&database, &tenant, &project, "tag", &tag, tag_item.clone())
-                .await?;
-            tag_item
-        }
-    };
-    let now = js_sys::Date::new_0()
-        .to_iso_string()
-        .as_string()
-        .unwrap_or_default();
-    let storage_id = format!("release:{tag}");
-    body["id"] = json!(storage_id.clone());
-    body["kind"] = json!("release");
-    body["tag"] = json!(tag.clone());
-    if body["author"].is_null() {
-        body["author"] = json!(user);
-    }
-    if body["created_at"].is_null() {
-        body["created_at"] = json!(now.clone());
-    }
-    body["updated_at"] = json!(now);
-    if body["snapshot"].is_null() {
-        body["snapshot"] = tag_item["snapshot"]
-            .clone()
-            .as_str()
-            .map(|snapshot| json!(snapshot))
-            .unwrap_or_else(|| tag_item["head"].clone());
-    }
-    upsert_protocol_item(
-        &database,
-        &tenant,
-        &project,
-        "release",
-        &storage_id,
-        body.clone(),
-    )
-    .await?;
-    d1::recompute_project_stats(&database, &tenant, &project).await?;
-    Response::from_json(&body)
-}
-
 async fn protocol_item_kind(
     database: &worker::D1Database,
     tenant: &str,
@@ -396,34 +312,6 @@ async fn protocol_item_kind(
         .first(None)
         .await?;
     Ok(row.map(|row| row.kind))
-}
-
-async fn list_protocol_values(
-    database: &worker::D1Database,
-    tenant: &str,
-    project: &str,
-    kind: &str,
-) -> Result<Vec<serde_json::Value>> {
-    let result = database
-        .prepare(
-            "SELECT data_json FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND kind = ?3 ORDER BY created_at DESC",
-        )
-        .bind(&[
-            wasm_bindgen::JsValue::from_str(tenant),
-            wasm_bindgen::JsValue::from_str(project),
-            wasm_bindgen::JsValue::from_str(kind),
-        ])?
-        .all()
-        .await?;
-    #[derive(serde::Deserialize)]
-    struct Row {
-        data_json: String,
-    }
-    let rows: Vec<Row> = result.results()?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| serde_json::from_str::<serde_json::Value>(&row.data_json).ok())
-        .collect())
 }
 
 async fn protocol_item(

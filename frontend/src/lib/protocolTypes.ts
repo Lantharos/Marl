@@ -61,6 +61,28 @@ export interface Release {
 	snapshot?: string | null;
 	author?: string;
 	created_at?: string;
+	updated_at?: string;
+	latest?: boolean;
+	prerelease?: boolean;
+	draft?: boolean;
+	source?: {
+		snapshot?: string | null;
+		workspace?: string | null;
+	};
+	artifacts?: ReleaseArtifact[];
+	assets?: ReleaseArtifact[];
+}
+
+export interface ReleaseArtifact {
+	id?: string;
+	name: string;
+	url?: string | null;
+	download_url?: string | null;
+	size?: number | string | null;
+	digest?: string | null;
+	content_type?: string | null;
+	uploaded_at?: string | null;
+	uploaded_by?: string | null;
 }
 
 export interface TagInfo {

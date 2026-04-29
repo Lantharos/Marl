@@ -6,6 +6,7 @@
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
+	const snapshot = $derived($page.url.searchParams.get('snapshot') ?? undefined);
 
 	let tree = $state<ProjectTree | null>(null);
 	let file = $state<ProjectFile | null>(null);
@@ -13,11 +14,11 @@
 	let error = $state('');
 	let fileController: AbortController | null = null;
 
-	async function load(signal: AbortSignal) {
+	async function load(signal: AbortSignal, snapshotId = snapshot) {
 		loading = true;
 		error = '';
 		try {
-			tree = await getProjectTree(tenant, project, 'main', undefined, { signal });
+			tree = await getProjectTree(tenant, project, 'main', snapshotId, { signal });
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed to load';
@@ -28,8 +29,9 @@
 
 	$effect(() => {
 		if (!tenant || !project) return;
+		const currentSnapshot = snapshot;
 		const controller = new AbortController();
-		load(controller.signal);
+		load(controller.signal, currentSnapshot);
 		return () => {
 			controller.abort();
 			fileController?.abort();
@@ -43,7 +45,7 @@
 		const controller = new AbortController();
 		fileController = controller;
 		try {
-			file = await getProjectFile(tenant, project, path, 'main', undefined, { signal: controller.signal });
+			file = await getProjectFile(tenant, project, path, 'main', snapshot, { signal: controller.signal });
 		} catch (e) {
 			if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed to load file';
 		} finally {
@@ -57,6 +59,9 @@
 {:else if error}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
 {:else}
+	{#if snapshot}
+		<div class="mb-3 font-mono text-xs text-[#8c887e]">Source snapshot {snapshot.slice(0, 12)}</div>
+	{/if}
 	<div class="flex flex-col md:flex-row gap-0 rounded border border-[#2a2a28] bg-[#141412] overflow-hidden" style="height: calc(100vh - 180px);">
 		<div class="h-48 md:h-auto md:w-[280px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-[#2a2a28]">
 			<div class="flex-1 overflow-auto min-h-0 py-1.5">

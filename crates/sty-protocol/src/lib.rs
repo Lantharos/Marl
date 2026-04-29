@@ -26,7 +26,6 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "stars",
             "releases",
             "signed_snapshots",
-            "audit_log",
             "profiles",
             "ssh_keys",
             "remote_approvals",

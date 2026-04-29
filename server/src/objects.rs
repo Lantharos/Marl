@@ -213,7 +213,11 @@ pub(crate) async fn check_project_access(
     }
 }
 
-async fn project_write_error(db: &D1Database, tenant: &str, project: &str) -> Result<Response> {
+pub(crate) async fn project_write_error(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+) -> Result<Response> {
     if !d1::tenant_exists(db, tenant).await? {
         return json_error(
             404,
