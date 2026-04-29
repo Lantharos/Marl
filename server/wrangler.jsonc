@@ -5,27 +5,28 @@
   "compatibility_date": "2026-04-25",
   "compatibility_flags": ["nodejs_compat_v2"],
   "build": {
-    "command": "worker-build --release"
+    "command": "worker-build --release",
   },
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
   "vars": {
     "AVE_ISSUER": "https://aveid.net",
-    "AVE_CLIENT_ID": "app_813ac5533bb87d939f328d76b5a1dca8"
+    "AVE_CLIENT_ID": "app_813ac5533bb87d939f328d76b5a1dca8",
+    "STY_FRONTEND_ORIGIN": "http://localhost:5173",
   },
   "r2_buckets": [
     {
       "binding": "STY_OBJECTS",
-      "bucket_name": "sty-objects"
-    }
+      "bucket_name": "sty-objects",
+    },
   ],
   "d1_databases": [
     {
       "binding": "STY_DB",
       "database_name": "sty-db",
-      "database_id": "local-sty-db"
-    }
-  ]
+      "database_id": "local-sty-db",
+    },
+  ],
 }

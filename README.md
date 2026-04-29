@@ -81,6 +81,7 @@ Make sure the configured D1 database and R2 bucket in `server/wrangler.jsonc` ex
 Optional Worker settings:
 
 - `STY_ALLOWED_ORIGINS` is a comma-separated list of frontend origins allowed by CORS.
+- `STY_FRONTEND_ORIGIN` is the browser origin used for OAuth callbacks and remote approval links. The local default is `http://127.0.0.1:5173`.
 - `STY_TOKEN_TTL_SECONDS` controls sty bearer token lifetime. The default is 30 days.
 - `STY_MAX_OBJECT_BYTES` controls the maximum raw object upload size. The default is 64 MiB.
 
@@ -140,7 +141,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - stars and project settings
 - releases and tags
 - signed snapshot verification with user-scoped signing keys
-- profiles, account signing keys, and account SSH keys
+- profiles and account signing keys
 
 Protocol list endpoints return the standard pagination envelope:
 

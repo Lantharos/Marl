@@ -2,11 +2,11 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     AuthCheckResponse, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
-    CreateIssueRequest, HeadResponse, HeadUpdateRequest, HistoryResponse, LogHistoryRequest,
-    MeResponse, MissingRequest, MissingResponse, ObjectFileResponse, OkResponse,
-    ProjectDetailResponse, ProjectSummary, ProjectTreeResponse, SessionExchangeRequest,
-    StarResponse, TokenResponse, TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest,
-    WorkspaceStateResponse, WorkspaceSummary,
+    CreateIssueRequest, HeadResponse, HeadUpdateRequest, HistoryEntry, HistoryResponse,
+    HistorySignature, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
+    ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse,
+    SessionExchangeRequest, StarResponse, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
+    UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary,
 };
 use worker::*;
 
@@ -24,7 +24,7 @@ use protocol::*;
 use protocol_ready::*;
 use support::{
     apply_cors, bearer_token, bucket, db, json_error, object_key, object_size_limit, paginate_vec,
-    param, preflight_response, project_params, put_bytes, r2_bytes, required_header,
+    param, preflight_response, project_params, put_bytes, r2_bytes, required_header, frontend_origin,
     required_usize_header, response_for_error, validate_object_metadata,
 };
 
@@ -49,6 +49,12 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/session/exchange", exchange_session)
         .delete_async("/v1/session", revoke_session)
         .get_async("/v1/me", me)
+        .post_async("/v1/remote-approvals", create_remote_approval)
+        .get_async("/v1/remote-approvals/:approval_id", get_remote_approval)
+        .post_async(
+            "/v1/remote-approvals/:approval_id/approve",
+            approve_remote_approval,
+        )
         .get_async("/v1/account/keys", list_account_keys)
         .post_async("/v1/account/keys", create_account_key)
         .delete_async("/v1/account/keys/:key_id", delete_account_key)
@@ -72,6 +78,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/files/:path",
             project_file,
         )
+        .get_async("/v1/tenants/:tenant/projects/:project/files", project_file)
         .get_async(
             "/v1/tenants/:tenant/projects/:project/issues",
             project_issues,

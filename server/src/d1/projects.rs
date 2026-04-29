@@ -134,6 +134,19 @@ pub async fn project_access(
     })
 }
 
+pub async fn project_exists(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
+    #[derive(Deserialize)]
+    struct Row {
+        count: i64,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT COUNT(*) AS count FROM projects WHERE tenant = ?1 AND project = ?2")
+        .bind(&[js_str(tenant), js_str(project)])?
+        .first(None)
+        .await?;
+    Ok(row.is_some_and(|row| row.count > 0))
+}
+
 pub async fn tenants(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>> {
     let account_tenant = ensure_account_tenant(db, &principal.user).await?;
     #[derive(Deserialize)]
@@ -276,7 +289,7 @@ async fn account_tenant_name(db: &D1Database, user: &str) -> Result<String> {
     Ok(handle)
 }
 
-async fn tenant_exists(db: &D1Database, tenant: &str) -> Result<bool> {
+pub async fn tenant_exists(db: &D1Database, tenant: &str) -> Result<bool> {
     #[derive(Deserialize)]
     struct Row {
         count: i64,

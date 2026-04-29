@@ -11,7 +11,7 @@
 	} from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
-	import { userName, withoutOpaqueUserIds } from '$lib/identity';
+	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -83,28 +83,6 @@
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
 			busy = false;
-		}
-	}
-
-	function historyIcon(kind: 'save' | 'ship' | 'cram' | 'merge' | 'ready') {
-		switch (kind) {
-			case 'save': return 'S';
-			case 'ship': return 'SHIP';
-			case 'cram': return 'C';
-			case 'merge': return 'M';
-			case 'ready': return 'R';
-			default: return '?';
-		}
-	}
-
-	function historyColor(kind: 'save' | 'ship' | 'cram' | 'merge' | 'ready') {
-		switch (kind) {
-			case 'save': return 'bg-[#2a2a28] text-[#a09d94]';
-			case 'ship': return 'bg-[#3a3a36] text-[#7cb97c]';
-			case 'cram': return 'bg-[#3a3a36] text-[#d9a66c]';
-			case 'merge': return 'bg-[#3a3a36] text-[#d96c5a]';
-			case 'ready': return 'bg-[#3a3a36] text-[#6ba4c7]';
-			default: return 'bg-[#2a2a28] text-[#a09d94]';
 		}
 	}
 
@@ -191,12 +169,24 @@
 								class="relative flex w-full items-start gap-2 py-1.5 text-left hover:opacity-80"
 								onclick={() => goto(`/${tenant}/${project}/history/${entry.id}`)}
 							>
-								<div class="relative z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[8px] font-bold {historyColor(entry.kind)}">
-									{historyIcon(entry.kind)}
+								<div class="relative z-10 flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[8px] font-medium text-[#eae9e4]">
+									{#if entry.author_profile?.avatar_url}
+										<img src={entry.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />
+									{:else}
+										{userInitials(entry.author, entry.author_profile)}
+									{/if}
 								</div>
 								<div class="min-w-0 flex-1">
-									<div class="text-xs text-[#eae9e4]">{historyMessage(entry)}</div>
-									<div class="text-[10px] text-[#6f6b5f]">{userName(entry.author, entry.author_profile)} · {new Date(entry.timestamp).toLocaleString()}</div>
+									<div class="flex flex-wrap items-center gap-1.5 text-xs text-[#eae9e4]">
+										<span>{historyMessage(entry)}</span>
+										{#if entry.agent}
+											<span class="rounded bg-[#1e1e1c] px-1 py-0.5 text-[9px] text-[#a09d94]">{entry.agent}</span>
+										{/if}
+										{#if entry.signature}
+											<span class="rounded border border-[#25462a] bg-[#142018] px-1 py-0.5 text-[9px] text-[#7cb97c]">signed</span>
+										{/if}
+									</div>
+									<div class="text-[10px] text-[#6f6b5f]">{userDisplayName(entry.author, entry.author_profile)} · {new Date(entry.timestamp).toLocaleString()}</div>
 								</div>
 							</button>
 						{:else}

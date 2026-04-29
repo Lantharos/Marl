@@ -31,9 +31,10 @@
 	let loadDataPromise: Promise<void> | null = null;
 	let bootstrapDone = false;
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
+	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/'));
 
 	$effect(() => {
-		if (isAuthRoute) {
+		if (isStandaloneRoute) {
 			bootstrapDone = false;
 			return;
 		}
@@ -135,7 +136,7 @@
 	<title>sty</title>
 </svelte:head>
 
-{#if isAuthRoute}
+{#if isStandaloneRoute}
 	{@render children()}
 {:else if status === 'signedOut'}
 	<main class="min-h-screen bg-[#0f0f0d]">

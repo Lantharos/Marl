@@ -7,6 +7,15 @@ export type DiffRow = {
 	text: string;
 };
 
+export type DiffHunk = {
+	id: string;
+	before: DiffRow[];
+	rows: DiffRow[];
+	after: DiffRow[];
+	hiddenBefore: number;
+	hiddenAfter: number;
+};
+
 export function renderFileDiff(oldText: string | null, newText: string | null): DiffRow[] {
 	const oldContents = oldText ?? '';
 	const newContents = newText ?? '';
@@ -34,6 +43,45 @@ export function renderFileDiff(oldText: string | null, newText: string | null): 
 	}
 
 	return rows;
+}
+
+export function renderFileDiffHunks(oldText: string | null, newText: string | null, context = 4): DiffHunk[] {
+	const rows = renderFileDiff(oldText, newText);
+	const changed = rows
+		.map((row, index) => ({ row, index }))
+		.filter(({ row }) => row.kind !== 'context')
+		.map(({ index }) => index);
+	if (changed.length === 0) return [];
+
+	const ranges = changed.map((index) => ({
+		start: Math.max(0, index - context),
+		end: Math.min(rows.length - 1, index + context)
+	}));
+	const merged: { start: number; end: number }[] = [];
+	for (const range of ranges) {
+		const last = merged[merged.length - 1];
+		if (last && range.start <= last.end + 1) {
+			last.end = Math.max(last.end, range.end);
+		} else {
+			merged.push(range);
+		}
+	}
+
+	return merged.map((range, index) => {
+		const hunkRows = rows.slice(range.start, range.end + 1);
+		const firstChange = hunkRows.findIndex((row) => row.kind !== 'context');
+		const lastChange = hunkRows.findLastIndex((row) => row.kind !== 'context');
+		const before = firstChange > 0 ? hunkRows.slice(0, firstChange) : [];
+		const after = lastChange >= 0 ? hunkRows.slice(lastChange + 1) : [];
+		return {
+			id: `${range.start}-${range.end}-${index}`,
+			before,
+			rows: hunkRows.slice(firstChange, lastChange + 1),
+			after,
+			hiddenBefore: range.start,
+			hiddenAfter: rows.length - range.end - 1
+		};
+	});
 }
 
 function splitPart(value: string) {

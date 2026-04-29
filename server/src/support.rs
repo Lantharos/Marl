@@ -83,6 +83,22 @@ pub fn object_size_limit(env: &Env) -> usize {
         .unwrap_or(64 * 1024 * 1024)
 }
 
+pub fn frontend_origin(req: &Request, env: &Env) -> String {
+    if let Ok(origin) = env.var("STY_FRONTEND_ORIGIN").or_else(|_| env.var("STY_WEB_ORIGIN")) {
+        return origin.to_string();
+    }
+    req.url()
+        .ok()
+        .and_then(|url| {
+            let port = url
+                .port()
+                .map(|port| format!(":{port}"))
+                .unwrap_or_default();
+            Some(format!("{}://{}{}", url.scheme(), url.host_str()?, port))
+        })
+        .unwrap_or_else(|| "http://127.0.0.1:8787".to_string())
+}
+
 fn status_for_error(message: &str) -> u16 {
     let lower = message.to_ascii_lowercase();
     if lower.contains("missing bearer token")
@@ -94,6 +110,7 @@ fn status_for_error(message: &str) -> u16 {
     if lower.contains("access denied")
         || lower.contains("forbidden")
         || lower.contains("control denied")
+        || lower.contains("browser approval required")
     {
         return 403;
     }

@@ -44,11 +44,19 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let path = param(&ctx, "path")?;
-    let workspace = req.url()?.query_pairs().find_map(|(k, v)| {
+    let url = req.url()?;
+    let path = param(&ctx, "path")
+        .ok()
+        .or_else(|| {
+            url.query_pairs()
+                .find_map(|(key, value)| (key == "path").then(|| value.to_string()))
+        })
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::RustError("path is required".to_string()))?;
+    let workspace = url.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
-    let snapshot_param = req.url()?.query_pairs().find_map(|(k, v)| {
+    let snapshot_param = url.query_pairs().find_map(|(k, v)| {
         (k == "snapshot").then(|| v.to_string())
     });
     let head_id = if let Some(snapshot) = snapshot_param {

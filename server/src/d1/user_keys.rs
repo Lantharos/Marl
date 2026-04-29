@@ -14,6 +14,7 @@ pub struct UserKey {
 }
 
 pub async fn list_user_keys(db: &D1Database, user: &str, kind: &str) -> Result<Vec<UserKey>> {
+    ensure_user_keys_schema(db).await?;
     let result = db
         .prepare(
             "SELECT id, user, kind, name, public_key, fingerprint, algorithm, created_at, revoked_at
@@ -28,6 +29,7 @@ pub async fn list_user_keys(db: &D1Database, user: &str, kind: &str) -> Result<V
 }
 
 pub async fn user_key_by_id(db: &D1Database, user: &str, id: &str) -> Result<Option<UserKey>> {
+    ensure_user_keys_schema(db).await?;
     db.prepare(
         "SELECT id, user, kind, name, public_key, fingerprint, algorithm, created_at, revoked_at
          FROM user_keys
@@ -43,6 +45,7 @@ pub async fn active_signing_key(
     user: &str,
     key_id: &str,
 ) -> Result<Option<UserKey>> {
+    ensure_user_keys_schema(db).await?;
     db.prepare(
         "SELECT id, user, kind, name, public_key, fingerprint, algorithm, created_at, revoked_at
          FROM user_keys
@@ -54,6 +57,7 @@ pub async fn active_signing_key(
 }
 
 pub async fn upsert_user_key(db: &D1Database, key: &UserKey) -> Result<()> {
+    ensure_user_keys_schema(db).await?;
     db.prepare(
         "INSERT INTO user_keys (id, user, kind, name, public_key, fingerprint, algorithm, created_at, revoked_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL)
@@ -80,6 +84,7 @@ pub async fn upsert_user_key(db: &D1Database, key: &UserKey) -> Result<()> {
 }
 
 pub async fn revoke_user_key(db: &D1Database, user: &str, id: &str) -> Result<bool> {
+    ensure_user_keys_schema(db).await?;
     let existing = user_key_by_id(db, user, id).await?;
     if existing.is_none() {
         return Ok(false);
@@ -89,4 +94,31 @@ pub async fn revoke_user_key(db: &D1Database, user: &str, id: &str) -> Result<bo
         .run()
         .await?;
     Ok(true)
+}
+
+async fn ensure_user_keys_schema(db: &D1Database) -> Result<()> {
+    db.prepare(
+        "CREATE TABLE IF NOT EXISTS user_keys (
+            id TEXT PRIMARY KEY,
+            user TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            name TEXT NOT NULL,
+            public_key TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            algorithm TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            revoked_at TEXT
+        )",
+    )
+    .run()
+    .await?;
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_user_keys_user_kind ON user_keys(user, kind)")
+        .run()
+        .await?;
+    db.prepare(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_keys_user_fingerprint ON user_keys(user, fingerprint)",
+    )
+    .run()
+    .await?;
+    Ok(())
 }

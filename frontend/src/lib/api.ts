@@ -93,6 +93,11 @@ export interface HistoryEntry {
 	agent?: string;
 	model?: string;
 	tool?: string;
+	signature?: {
+		user: string;
+		key_id: string;
+		algorithm: string;
+	} | null;
 }
 
 export interface ChangedFile {
@@ -161,6 +166,15 @@ export function isAbortError(error: unknown) {
 }
 
 export type MeResponse = { user: string; profile?: UserProfile | null; tenants: TenantSummary[] };
+
+export interface RemoteApproval {
+	id: string;
+	action: string;
+	summary: string;
+	status: 'pending' | 'approved' | 'consumed' | 'denied' | 'expired' | string;
+	expires_at: string;
+	approved_at?: string | null;
+}
 
 export async function getMe(options: ApiOptions = {}) {
 	const response = await authedFetch('/v1/me', { signal: options.signal });
@@ -232,7 +246,7 @@ export async function getProjectTree(tenant: string, project: string, workspace 
 }
 
 export async function getProjectFile(tenant: string, project: string, path: string, workspace = 'main', snapshot?: string, options: ApiOptions = {}) {
-	let url = `/v1/tenants/${tenant}/projects/${project}/files/${encodeURIComponent(path)}?workspace=${encodeURIComponent(workspace)}`;
+	let url = `/v1/tenants/${tenant}/projects/${project}/files?path=${encodeURIComponent(path)}&workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
 	const response = await publicFetch(url, { signal: options.signal });
 	return (await response.json()) as ProjectFile;
@@ -350,6 +364,18 @@ export async function createAccountKey(kind: 'signing_key' | 'ssh_key', item: { 
 export async function deleteAccountKey(kind: 'signing_key' | 'ssh_key', id: string) {
 	const endpoint = kind === 'ssh_key' ? 'ssh-keys' : 'keys';
 	await authedFetch(`/v1/account/${endpoint}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function getRemoteApproval(id: string): Promise<RemoteApproval> {
+	const response = await authedFetch(`/v1/remote-approvals/${encodeURIComponent(id)}`);
+	return (await response.json()) as RemoteApproval;
+}
+
+export async function approveRemoteApproval(id: string): Promise<RemoteApproval> {
+	const response = await authedFetch(`/v1/remote-approvals/${encodeURIComponent(id)}/approve`, {
+		method: 'POST'
+	});
+	return (await response.json()) as RemoteApproval;
 }
 
 export async function createProtocolItem(tenant: string, project: string, kind: string, item: ProtocolDraft): Promise<ProtocolItem> {

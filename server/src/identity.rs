@@ -11,7 +11,9 @@ pub(crate) async fn auth_check(req: Request, ctx: RouteContext<()>) -> Result<Re
 
 pub(crate) async fn capabilities(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let _ = optional_auth(&req, &ctx.env).await?;
-    Response::from_json(&sty_protocol::protocol_capabilities())
+    let mut capabilities = sty_protocol::protocol_capabilities();
+    capabilities.frontend_url = Some(frontend_origin(&req, &ctx.env));
+    Response::from_json(&capabilities)
 }
 
 pub(crate) async fn exchange_session(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -29,7 +31,11 @@ pub(crate) async fn exchange_session(mut req: Request, ctx: RouteContext<()>) ->
     d1::ensure_account_tenant(&database, &user).await?;
     d1::prune_expired_tokens(&database).await?;
     let expires_at = token_expires_at(&ctx.env);
-    let token = d1::add_token(&database, &user, &expires_at).await?;
+    let kind = match body.client.as_deref() {
+        Some("web") => "web",
+        _ => "cli",
+    };
+    let token = d1::add_token(&database, &user, &expires_at, kind).await?;
     Response::from_json(&TokenResponse {
         token,
         expires_at: Some(expires_at),

@@ -5,7 +5,7 @@
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import { userName, withoutOpaqueUserIds } from '$lib/identity';
+	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -97,25 +97,14 @@
 
 	const gitStatus = $derived(detail?.files.map((f) => ({ path: f.path, status: f.change_type as 'added' | 'deleted' | 'modified' | 'renamed' | 'untracked' })) ?? []);
 
-	function icon(kind: HistoryEntry['kind']) {
+	function actionLabel(kind: HistoryEntry['kind']) {
 		switch (kind) {
-			case 'save': return 'S';
-			case 'ship': return 'SHIP';
-			case 'cram': return 'C';
-			case 'merge': return 'M';
-			case 'ready': return 'R';
-			default: return '?';
-		}
-	}
-
-	function color(kind: HistoryEntry['kind']) {
-		switch (kind) {
-			case 'save': return 'bg-[#2a2a28] text-[#a09d94]';
-			case 'ship': return 'bg-[#3a3a36] text-[#7cb97c]';
-			case 'cram': return 'bg-[#3a3a36] text-[#d9a66c]';
-			case 'merge': return 'bg-[#3a3a36] text-[#d96c5a]';
-			case 'ready': return 'bg-[#3a3a36] text-[#6ba4c7]';
-			default: return 'bg-[#2a2a28] text-[#a09d94]';
+			case 'save': return 'saved';
+			case 'ship': return 'shipped';
+			case 'cram': return 'crammed';
+			case 'merge': return 'merged';
+			case 'ready': return 'marked ready';
+			default: return kind;
 		}
 	}
 
@@ -131,16 +120,29 @@
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if detail}
 		<div class="flex items-start gap-3 rounded border border-[#2a2a28] bg-[#141412] px-4 py-3">
-			<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold {color(detail.kind)}">
-				{icon(detail.kind)}
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
+				{#if detail.author_profile?.avatar_url}
+					<img src={detail.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />
+				{:else}
+					{userInitials(detail.author, detail.author_profile)}
+				{/if}
 			</div>
 			<div class="min-w-0 flex-1">
 				<div class="flex flex-wrap items-center gap-2">
 					<span class="text-sm font-medium text-[#eae9e4]">{displayMessage(detail)}</span>
+					<span class="text-xs text-[#6f6b5f]">{actionLabel(detail.kind)}</span>
 					<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">{detail.workspace}</span>
+					{#if detail.agent}
+						<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#a09d94]">{detail.agent}{detail.model ? ` ${detail.model}` : ''}</span>
+					{/if}
+					{#if detail.signature}
+						<span class="rounded border border-[#25462a] bg-[#142018] px-1.5 py-0.5 text-[10px] text-[#7cb97c]">signed</span>
+					{:else if detail.snapshot_id}
+						<span class="rounded border border-[#2a2a28] bg-[#10100e] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">unsigned</span>
+					{/if}
 				</div>
 				<div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#6f6b5f]">
-					<span>{userName(detail.author, detail.author_profile)}</span>
+					<span>{userDisplayName(detail.author, detail.author_profile)}</span>
 					<span>{new Date(detail.timestamp).toLocaleString()}</span>
 					{#if detail.snapshot_id}
 						<span class="font-mono text-[10px]">{detail.snapshot_id.slice(0, 12)}</span>
@@ -171,6 +173,7 @@
 							path={selectedPath}
 							oldText={selectedOldText}
 							newText={selectedNewText}
+							entry={detail}
 						/>
 					{/if}
 				</div>

@@ -1,6 +1,7 @@
 export interface CapabilityResponse {
 	version: string;
 	capabilities: string[];
+	frontend_url?: string | null;
 }
 
 export interface ProtocolItem {

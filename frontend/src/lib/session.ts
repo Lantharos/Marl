@@ -128,7 +128,7 @@ async function exchangeStyToken() {
 	const response = await fetch(`${apiBase()}/v1/session/exchange`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ id_token: idToken })
+		body: JSON.stringify({ id_token: idToken, client: 'web' })
 	});
 	if (!response.ok) {
 		throw new Error(await response.text());

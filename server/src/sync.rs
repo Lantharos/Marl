@@ -31,7 +31,8 @@ pub(crate) async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Re
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let entries = d1::workspace_history(&database, &tenant, &project, &workspace).await?;
+    let mut entries = d1::workspace_history(&database, &tenant, &project, &workspace).await?;
+    enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -40,7 +41,8 @@ pub(crate) async fn project_history(req: Request, ctx: RouteContext<()>) -> Resu
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let entries = d1::project_history(&database, &tenant, &project).await?;
+    let mut entries = d1::project_history(&database, &tenant, &project).await?;
+    enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -50,11 +52,64 @@ pub(crate) async fn history_entry(req: Request, ctx: RouteContext<()>) -> Result
     let entry_id = param(&ctx, "entry_id")?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let entry = d1::get_history_entry(&database, &tenant, &project, &entry_id).await?;
+    let mut entry = d1::get_history_entry(&database, &tenant, &project, &entry_id).await?;
+    if let Some(entry) = &mut entry {
+        enrich_history_entry(&ctx.env, &tenant, &project, entry).await?;
+    }
     match entry {
         Some(e) => Response::from_json(&e),
         None => json_error(404, "history entry not found"),
     }
+}
+
+async fn enrich_history_entries(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    entries: &mut [HistoryEntry],
+) -> Result<()> {
+    for entry in entries {
+        enrich_history_entry(env, tenant, project, entry).await?;
+    }
+    Ok(())
+}
+
+async fn enrich_history_entry(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    entry: &mut HistoryEntry,
+) -> Result<()> {
+    let Some(snapshot_id) = entry.snapshot_id.as_deref() else {
+        return Ok(());
+    };
+    let store = bucket(env)?;
+    let bytes = match r2_bytes(&store, &object_key(tenant, project, snapshot_id)).await {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(()),
+    };
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    entry.agent = snapshot["agent"].as_str().map(ToOwned::to_owned);
+    entry.model = snapshot["agent_model"].as_str().map(ToOwned::to_owned);
+    entry.signature = snapshot["signature"].as_object().map(|signature| HistorySignature {
+        user: signature
+            .get("user")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        key_id: signature
+            .get("key_id")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        algorithm: signature
+            .get("algorithm")
+            .and_then(|value| value.as_str())
+            .unwrap_or("ed25519")
+            .to_string(),
+    });
+    Ok(())
 }
 
 pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {

@@ -6,6 +6,8 @@ pub const DEFAULT_AVE_CLIENT_ID: &str = "app_813ac5533bb87d939f328d76b5a1dca8";
 pub struct CapabilitiesResponse {
     pub version: String,
     pub capabilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frontend_url: Option<String>,
 }
 
 pub fn protocol_capabilities() -> CapabilitiesResponse {
@@ -27,10 +29,12 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "audit_log",
             "profiles",
             "ssh_keys",
+            "remote_approvals",
         ]
         .into_iter()
         .map(ToOwned::to_owned)
         .collect(),
+        frontend_url: None,
     }
 }
 
@@ -201,6 +205,36 @@ pub struct TokenResponse {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SessionExchangeRequest {
     pub id_token: String,
+    #[serde(default)]
+    pub client: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RemoteApprovalRequest {
+    pub action: String,
+    pub summary: String,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RemoteApprovalResponse {
+    pub id: String,
+    pub action: String,
+    pub summary: String,
+    pub status: String,
+    pub verify_url: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RemoteApprovalStatus {
+    pub id: String,
+    pub action: String,
+    pub summary: String,
+    pub status: String,
+    pub expires_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approved_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -330,11 +364,24 @@ pub struct HistoryEntry {
     pub timestamp: String,
     pub workspace: String,
     pub snapshot_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<HistorySignature>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HistoryResponse {
     pub entries: Vec<HistoryEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HistorySignature {
+    pub user: String,
+    pub key_id: String,
+    pub algorithm: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

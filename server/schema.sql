@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS tokens (
     token_hash TEXT PRIMARY KEY,
     user TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'cli',
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     revoked_at TEXT,
@@ -8,6 +9,7 @@ CREATE TABLE IF NOT EXISTS tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON tokens(user);
 CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_tokens_kind ON tokens(kind);
 CREATE TABLE IF NOT EXISTS user_profiles (
     user TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
@@ -113,3 +115,15 @@ CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, wor
 CREATE INDEX IF NOT EXISTS idx_history_project_time ON history(tenant, project, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
 CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);
+CREATE TABLE IF NOT EXISTS remote_approvals (
+    id TEXT PRIMARY KEY,
+    user TEXT NOT NULL,
+    action TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    approved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_remote_approvals_user_status ON remote_approvals(user, status);

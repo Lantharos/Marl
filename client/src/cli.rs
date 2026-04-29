@@ -238,7 +238,7 @@ fn exchange_sty_token(remote_url: &str, id_token: &str) -> Result<String> {
     let response = spinner::run("Creating sty session", || {
         Client::new()
             .post(url)
-            .json(&serde_json::json!({ "id_token": id_token }))
+            .json(&serde_json::json!({ "id_token": id_token, "client": "cli" }))
             .send()
     })?;
     if !response.status().is_success() {

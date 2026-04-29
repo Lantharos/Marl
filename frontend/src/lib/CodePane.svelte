@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ProjectFile } from '$lib/api';
+	import { highlightCode } from '$lib/codeHighlight';
 
 	let { file }: { file: ProjectFile | null } = $props();
 
@@ -19,7 +20,7 @@
 		{#each lines as line, index}
 			<div class="grid grid-cols-[44px_1fr] border-b border-[#171714] hover:bg-[#171714]">
 				<div class="select-none border-r border-[#242420] px-2 text-right text-[#5f5b52]">{index + 1}</div>
-				<pre class="min-w-0 overflow-x-auto px-3 py-0 whitespace-pre-wrap break-words">{line || ' '}</pre>
+				<pre class="min-w-0 overflow-x-auto px-3 py-0 whitespace-pre-wrap break-words">{@html highlightCode(line || ' ')}</pre>
 			</div>
 		{/each}
 	</div>

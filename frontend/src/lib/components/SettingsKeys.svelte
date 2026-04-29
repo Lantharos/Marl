@@ -3,26 +3,18 @@
 
 	let {
 		signingKeys,
-		sshKeys,
 		busy,
 		signingKeyName = $bindable(),
 		signingKeyBody = $bindable(),
-		sshKeyName = $bindable(),
-		sshKeyBody = $bindable(),
 		addSigningKey,
-		addSshKey,
 		removeKey
 	}: {
 		signingKeys: AccountKey[];
-		sshKeys: AccountKey[];
 		busy: boolean;
 		signingKeyName: string;
 		signingKeyBody: string;
-		sshKeyName: string;
-		sshKeyBody: string;
 		addSigningKey: () => void;
-		addSshKey: () => void;
-		removeKey: (kind: 'signing_key' | 'ssh_key', id: string) => void;
+		removeKey: (kind: 'signing_key', id: string) => void;
 	} = $props();
 
 	function shortKey(value: string) {
@@ -30,50 +22,50 @@
 	}
 </script>
 
-<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-	<div class="text-sm font-medium text-[#eae9e4]">Keys</div>
-	<div class="mt-3 grid gap-4 md:grid-cols-2">
-		<div>
-			<div class="mb-2 text-xs text-[#8c887e]">Signing keys</div>
-			<div class="grid gap-1">
-				{#each signingKeys as item}
-					<div class="flex items-start justify-between gap-2 rounded bg-[#0f0f0d] px-3 py-2">
-						<div class="min-w-0">
-							<div class="truncate text-xs font-medium text-[#eae9e4]">{item.name}</div>
-							<div class="truncate text-[11px] text-[#6f6b5f]">{item.algorithm} · {shortKey(item.fingerprint)}</div>
-						</div>
-						<button class="text-[11px] text-[#8c887e] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeKey('signing_key', item.id)}>Delete</button>
+<div class="rounded border border-[#2a2a28] bg-[#141412]">
+	<div class="border-b border-[#252522] px-4 py-3">
+		<div class="text-sm font-medium text-[#eae9e4]">Signing keys</div>
+	</div>
+	<div class="grid gap-1 p-3">
+		{#each signingKeys as item}
+			<div class="flex items-start justify-between gap-3 rounded bg-[#0f0f0d] px-3 py-2.5">
+				<div class="min-w-0">
+					<div class="truncate text-sm font-medium text-[#eae9e4]">{item.name}</div>
+					<div class="mt-1 truncate text-xs text-[#6f6b5f]">
+						{item.algorithm} - {shortKey(item.fingerprint)}
 					</div>
-				{:else}
-					<p class="text-xs text-[#6f6b5f]">No signing keys.</p>
-				{/each}
+				</div>
+				<button
+					class="rounded px-2 py-1 text-xs text-[#8c887e] hover:bg-[#1b1b18] hover:text-[#d96c5a] disabled:opacity-50"
+					disabled={busy}
+					onclick={() => removeKey('signing_key', item.id)}
+				>
+					Delete
+				</button>
 			</div>
-			<div class="mt-2 grid gap-2">
-				<input class="rounded bg-[#0f0f0d] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Key name" bind:value={signingKeyName} />
-				<textarea class="min-h-20 resize-y rounded bg-[#0f0f0d] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Ed25519 public key" bind:value={signingKeyBody}></textarea>
-				<button class="w-fit rounded bg-[#2a2a28] px-2.5 py-1 text-xs text-[#eae9e4]" disabled={busy || !signingKeyName.trim() || !signingKeyBody.trim()} onclick={addSigningKey}>Add signing key</button>
-			</div>
-		</div>
-		<div>
-			<div class="mb-2 text-xs text-[#8c887e]">SSH keys</div>
-			<div class="grid gap-1">
-				{#each sshKeys as item}
-					<div class="flex items-start justify-between gap-2 rounded bg-[#0f0f0d] px-3 py-2">
-						<div class="min-w-0">
-							<div class="truncate text-xs font-medium text-[#eae9e4]">{item.name}</div>
-							<div class="truncate text-[11px] text-[#6f6b5f]">{item.algorithm} · {shortKey(item.fingerprint)}</div>
-						</div>
-						<button class="text-[11px] text-[#8c887e] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeKey('ssh_key', item.id)}>Delete</button>
-					</div>
-				{:else}
-					<p class="text-xs text-[#6f6b5f]">No SSH keys.</p>
-				{/each}
-			</div>
-			<div class="mt-2 grid gap-2">
-				<input class="rounded bg-[#0f0f0d] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Key name" bind:value={sshKeyName} />
-				<textarea class="min-h-20 resize-y rounded bg-[#0f0f0d] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="ssh-ed25519 ..." bind:value={sshKeyBody}></textarea>
-				<button class="w-fit rounded bg-[#2a2a28] px-2.5 py-1 text-xs text-[#eae9e4]" disabled={busy || !sshKeyName.trim() || !sshKeyBody.trim()} onclick={addSshKey}>Add SSH key</button>
-			</div>
+		{:else}
+			<div class="px-3 py-8 text-center text-sm text-[#8c887e]">No signing keys yet.</div>
+		{/each}
+	</div>
+	<div class="border-t border-[#252522] p-4">
+		<div class="grid gap-2">
+			<input
+				class="rounded border border-transparent bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#3a3a35]"
+				placeholder="Key name"
+				bind:value={signingKeyName}
+			/>
+			<textarea
+				class="min-h-24 resize-y rounded border border-transparent bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#3a3a35]"
+				placeholder="Ed25519 public key"
+				bind:value={signingKeyBody}
+			></textarea>
+			<button
+				class="w-fit rounded bg-[#eae9e4] px-4 py-2 text-sm font-medium text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-50"
+				disabled={busy || !signingKeyName.trim() || !signingKeyBody.trim()}
+				onclick={addSigningKey}
+			>
+				Add signing key
+			</button>
 		</div>
 	</div>
 </div>

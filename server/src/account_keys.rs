@@ -3,11 +3,15 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sty_protocol::OkResponse;
+use sty_protocol::{
+    OkResponse, RemoteApprovalRequest, RemoteApprovalResponse, RemoteApprovalStatus,
+};
 use worker::*;
 
-use crate::support::{bucket, db, json_error, object_key, paginate_vec, param, r2_bytes};
-use crate::{d1, require_auth};
+use crate::support::{
+    bearer_token, bucket, db, frontend_origin, json_error, object_key, paginate_vec, param, r2_bytes,
+};
+use crate::{d1, require_auth, require_web_auth};
 
 pub async fn list_account_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     list_account_key_kind(req, ctx, "signing_key").await
@@ -31,6 +35,65 @@ pub async fn create_account_ssh_key(req: Request, ctx: RouteContext<()>) -> Resu
 
 pub async fn delete_account_ssh_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     delete_account_key_kind(req, ctx, "ssh_key").await
+}
+
+pub async fn create_remote_approval(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let body: RemoteApprovalRequest = req.json().await?;
+    if body.action.trim().is_empty() || body.summary.trim().is_empty() {
+        return json_error(400, "approval action and summary are required");
+    }
+    let payload_json = serde_json::to_string(&body.payload)
+        .map_err(|error| Error::RustError(error.to_string()))?;
+    let database = db(&ctx.env)?;
+    let expires_at = approval_expires_at();
+    let approval = d1::create_remote_approval(
+        &database,
+        &user,
+        body.action.trim(),
+        body.summary.trim(),
+        &payload_json,
+        &expires_at,
+    )
+    .await?;
+    Response::from_json(&approval_response(&req, &ctx.env, approval))
+}
+
+pub async fn get_remote_approval(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let id = param(&ctx, "approval_id")?;
+    let database = db(&ctx.env)?;
+    let Some(approval) = d1::remote_approval(&database, &id).await? else {
+        return json_error(404, "approval not found");
+    };
+    if approval.user != user {
+        return json_error(404, "approval not found");
+    }
+    Response::from_json(&RemoteApprovalStatus {
+        id: approval.id,
+        action: approval.action,
+        summary: approval.summary,
+        status: approval.status,
+        expires_at: approval.expires_at,
+        approved_at: approval.approved_at,
+    })
+}
+
+pub async fn approve_remote_approval(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_web_auth(&req, &ctx.env).await?;
+    let id = param(&ctx, "approval_id")?;
+    let database = db(&ctx.env)?;
+    let Some(approval) = d1::approve_remote_approval(&database, &id, &user).await? else {
+        return json_error(404, "approval not found");
+    };
+    Response::from_json(&RemoteApprovalStatus {
+        id: approval.id,
+        action: approval.action,
+        summary: approval.summary,
+        status: approval.status,
+        expires_at: approval.expires_at,
+        approved_at: approval.approved_at,
+    })
 }
 
 async fn list_account_key_kind(
@@ -79,6 +142,7 @@ async fn create_account_key_kind(
         .to_string();
     if kind == "signing_key" {
         decode_ed25519_public_key(&public_key)?;
+        require_signing_key_approval(&req, &ctx.env, &user, &body).await?;
     }
     let database = db(&ctx.env)?;
     let item = d1::UserKey {
@@ -97,6 +161,59 @@ async fn create_account_key_kind(
     };
     d1::upsert_user_key(&database, &item).await?;
     Response::from_json(&item)
+}
+
+async fn require_signing_key_approval(
+    req: &Request,
+    env: &Env,
+    user: &str,
+    body: &serde_json::Value,
+) -> Result<()> {
+    let database = db(env)?;
+    let token = bearer_token(req)?;
+    if matches!(
+        d1::token_kind(&database, &token).await?.as_deref(),
+        Some("web")
+    ) {
+        return Ok(());
+    }
+    let approval_id = body["approval_id"]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            Error::RustError("browser approval required for signing key upload".to_string())
+        })?;
+    match d1::consume_remote_approval(&database, approval_id, user, "signing_key_upload").await? {
+        Some(approval) if approval.status == "consumed" => Ok(()),
+        Some(approval) => Err(Error::RustError(format!("approval is {}", approval.status))),
+        None => Err(Error::RustError("approval not found".to_string())),
+    }
+}
+
+fn approval_response(
+    req: &Request,
+    env: &Env,
+    approval: d1::RemoteApproval,
+) -> RemoteApprovalResponse {
+    RemoteApprovalResponse {
+        id: approval.id.clone(),
+        action: approval.action,
+        summary: approval.summary,
+        status: approval.status,
+        verify_url: verify_url(req, env, &approval.id),
+        expires_at: approval.expires_at,
+    }
+}
+
+fn verify_url(req: &Request, env: &Env, id: &str) -> String {
+    format!("{}/verify/{id}", frontend_origin(req, env).trim_end_matches('/'))
+}
+
+fn approval_expires_at() -> String {
+    let date = js_sys::Date::new_0();
+    date.set_time(date.get_time() + 5.0 * 60.0 * 1000.0);
+    date.to_iso_string().into()
 }
 
 async fn delete_account_key_kind(

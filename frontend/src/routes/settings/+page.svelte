@@ -13,22 +13,15 @@
 	let busy = $state(false);
 	let error = $state('');
 	let signingKeys = $state<AccountKey[]>([]);
-	let sshKeys = $state<AccountKey[]>([]);
 	let signingKeyName = $state('');
 	let signingKeyBody = $state('');
-	let sshKeyName = $state('');
-	let sshKeyBody = $state('');
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			const [signing, ssh] = await Promise.all([
-				listAccountKeys('signing_key', { all: true, signal }),
-				listAccountKeys('ssh_key', { all: true, signal })
-			]);
+			const signing = await listAccountKeys('signing_key', { all: true, signal });
 			signingKeys = signing.items;
-			sshKeys = ssh.items;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -63,26 +56,7 @@
 		}
 	}
 
-	async function addSshKey() {
-		if (!sshKeyName.trim() || !sshKeyBody.trim()) return;
-		busy = true;
-		error = '';
-		try {
-			await createAccountKey('ssh_key', {
-				name: sshKeyName.trim(),
-				public_key: sshKeyBody.trim()
-			});
-			sshKeyName = '';
-			sshKeyBody = '';
-			await load();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function removeKey(kind: 'signing_key' | 'ssh_key', id: string) {
+	async function removeKey(kind: 'signing_key', id: string) {
 		busy = true;
 		error = '';
 		try {
@@ -96,11 +70,16 @@
 	}
 </script>
 
-<div class="mx-auto max-w-xl">
-	<h3 class="mb-4 text-sm font-semibold text-[#f0eee4]">User settings</h3>
+<div class="mx-auto max-w-2xl px-8 py-10">
+	<div class="mb-6">
+		<h3 class="text-lg font-semibold text-[#f0eee4]">User settings</h3>
+		<p class="mt-1 text-sm text-[#8c887e]">Signing keys are used to verify snapshots you publish.</p>
+	</div>
 
 	{#if loading}
-		<Spinner />
+		<div class="flex min-h-[220px] items-center justify-center">
+			<Spinner />
+		</div>
 	{:else}
 		<div class="grid gap-4">
 			{#if error}
@@ -108,14 +87,10 @@
 			{/if}
 			<SettingsKeys
 				{signingKeys}
-				{sshKeys}
 				{busy}
 				bind:signingKeyName
 				bind:signingKeyBody
-				bind:sshKeyName
-				bind:sshKeyBody
 				{addSigningKey}
-				{addSshKey}
 				{removeKey}
 			/>
 		</div>

@@ -1,16 +1,23 @@
 use super::*;
-pub async fn add_token(db: &D1Database, user: &str, expires_at: &str) -> Result<String> {
+pub async fn add_token(
+    db: &D1Database,
+    user: &str,
+    expires_at: &str,
+    kind: &str,
+) -> Result<String> {
+    ensure_token_schema(db).await?;
     let token = format!("sty_{}", Uuid::new_v4().simple());
     let hash = token_hash(&token);
     let created_at = now_rfc3339();
-    db.prepare("INSERT INTO tokens (token_hash, user, created_at, expires_at, revoked_at, last_used_at) VALUES (?1, ?2, ?3, ?4, NULL, NULL)")
-        .bind(&[js_str(&hash), js_str(user), js_str(&created_at), js_str(expires_at)])?
+    db.prepare("INSERT INTO tokens (token_hash, user, kind, created_at, expires_at, revoked_at, last_used_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL)")
+        .bind(&[js_str(&hash), js_str(user), js_str(kind), js_str(&created_at), js_str(expires_at)])?
         .run()
         .await?;
     Ok(token)
 }
 
 pub async fn revoke_token(db: &D1Database, token: &str) -> Result<bool> {
+    ensure_token_schema(db).await?;
     let hash = token_hash(token);
     let revoked_at = now_rfc3339();
     let result = db
@@ -22,6 +29,7 @@ pub async fn revoke_token(db: &D1Database, token: &str) -> Result<bool> {
 }
 
 pub async fn prune_expired_tokens(db: &D1Database) -> Result<()> {
+    ensure_token_schema(db).await?;
     let now = now_rfc3339();
     db.prepare("DELETE FROM tokens WHERE expires_at <= ?1 OR revoked_at IS NOT NULL")
         .bind(&[js_str(&now)])?
@@ -91,6 +99,7 @@ pub async fn user_profile(db: &D1Database, user: &str) -> Result<Option<UserProf
 }
 
 pub async fn principal_for_token(db: &D1Database, token: &str) -> Result<Option<TokenPrincipal>> {
+    ensure_token_schema(db).await?;
     let hash = token_hash(token);
     #[derive(Deserialize)]
     struct Row {
@@ -114,6 +123,40 @@ pub async fn principal_for_token(db: &D1Database, token: &str) -> Result<Option<
         .run()
         .await?;
     Ok(Some(TokenPrincipal { user: row.user }))
+}
+
+pub async fn token_kind(db: &D1Database, token: &str) -> Result<Option<String>> {
+    ensure_token_schema(db).await?;
+    let hash = token_hash(token);
+    #[derive(Deserialize)]
+    struct Row {
+        kind: String,
+        expires_at: String,
+        revoked_at: Option<String>,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT kind, expires_at, revoked_at FROM tokens WHERE token_hash = ?1")
+        .bind(&[js_str(&hash)])?
+        .first(None)
+        .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    if row.revoked_at.is_some() || row.expires_at <= now_rfc3339() {
+        return Ok(None);
+    }
+    Ok(Some(row.kind))
+}
+
+async fn ensure_token_schema(db: &D1Database) -> Result<()> {
+    db.prepare("ALTER TABLE tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'cli'")
+        .run()
+        .await
+        .ok();
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_tokens_kind ON tokens(kind)")
+        .run()
+        .await?;
+    Ok(())
 }
 
 // -- Tenants / Projects -----------------------------------

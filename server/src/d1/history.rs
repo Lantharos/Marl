@@ -50,6 +50,9 @@ pub async fn workspace_history(
             timestamp: r.timestamp,
             workspace: r.workspace,
             snapshot_id: r.snapshot_id,
+            agent: None,
+            model: None,
+            signature: None,
         })
         .collect())
 }
@@ -104,6 +107,9 @@ pub async fn project_history(
             timestamp: r.timestamp,
             workspace: r.workspace,
             snapshot_id: r.snapshot_id,
+            agent: None,
+            model: None,
+            signature: None,
         })
         .collect())
 }
@@ -187,6 +193,9 @@ pub async fn get_history_entry(
         timestamp: r.timestamp,
         workspace: r.workspace,
         snapshot_id: r.snapshot_id,
+        agent: None,
+        model: None,
+        signature: None,
     }))
 }
 

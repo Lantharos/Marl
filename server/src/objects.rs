@@ -3,7 +3,7 @@ pub(crate) async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
+        return project_write_error(&database, &tenant, &project).await;
     }
     let body: MissingRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
@@ -33,7 +33,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
     }
     let database = db(&ctx.env)?;
     if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
+        return project_write_error(&database, &tenant, &project).await;
     }
     if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
@@ -126,17 +126,34 @@ fn default_snapshot_kind() -> String {
 }
 
 pub(crate) async fn require_auth(req: &Request, env: &Env) -> Result<String> {
+    let token = bearer_token_from_request(req)?;
+    let database = db(env)?;
+    match d1::principal_for_token(&database, &token).await? {
+        Some(principal) => Ok(principal.user),
+        None => Err(Error::RustError("invalid bearer token".to_string())),
+    }
+}
+
+pub(crate) async fn require_web_auth(req: &Request, env: &Env) -> Result<String> {
+    let token = bearer_token_from_request(req)?;
+    let database = db(env)?;
+    let principal = d1::principal_for_token(&database, &token)
+        .await?
+        .ok_or_else(|| Error::RustError("invalid bearer token".to_string()))?;
+    match d1::token_kind(&database, &token).await?.as_deref() {
+        Some("web") => Ok(principal.user),
+        _ => Err(Error::RustError("browser approval required".to_string())),
+    }
+}
+
+fn bearer_token_from_request(req: &Request) -> Result<String> {
     let Some(value) = req.headers().get("authorization")? else {
         return Err(Error::RustError("missing bearer token".to_string()));
     };
     let Some(token) = value.strip_prefix("Bearer ") else {
         return Err(Error::RustError("missing bearer token".to_string()));
     };
-    let database = db(env)?;
-    match d1::principal_for_token(&database, token).await? {
-        Some(principal) => Ok(principal.user),
-        None => Err(Error::RustError("invalid bearer token".to_string())),
-    }
+    Ok(token.to_string())
 }
 
 pub(crate) async fn optional_auth(req: &Request, env: &Env) -> Result<Option<String>> {
@@ -160,6 +177,16 @@ pub(crate) async fn check_project_access(
     user: Option<&str>,
 ) -> Result<()> {
     let database = db(env)?;
+    if !d1::tenant_exists(&database, tenant).await? {
+        return Err(Error::RustError(format!(
+            "tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"
+        )));
+    }
+    if !d1::project_exists(&database, tenant, project).await? {
+        return Err(Error::RustError(format!(
+            "project `{tenant}/{project}` does not exist; create it first with `sty init {tenant}/{project}`"
+        )));
+    }
     if let Some(u) = user {
         if d1::project_access(&database, tenant, project, u).await?
             || matches!(
@@ -177,4 +204,20 @@ pub(crate) async fn check_project_access(
             _ => Err(Error::RustError("sign in required".to_string())),
         }
     }
+}
+
+async fn project_write_error(db: &D1Database, tenant: &str, project: &str) -> Result<Response> {
+    if !d1::tenant_exists(db, tenant).await? {
+        return json_error(
+            404,
+            &format!("tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"),
+        );
+    }
+    if !d1::project_exists(db, tenant, project).await? {
+        return json_error(
+            404,
+            &format!("project `{tenant}/{project}` does not exist; create it first with `sty init {tenant}/{project}`"),
+        );
+    }
+    json_error(403, "project access denied")
 }
