@@ -61,8 +61,8 @@ export interface PanelItem {
 
 export interface ProjectSettings {
 	visibility: 'public' | 'private';
-	starred_count: number;
-	is_starred: boolean;
+	follower_count: number;
+	is_following: boolean;
 	default_workspace: string;
 	navbar_items: NavbarItem[];
 	panels: PanelItem[];
@@ -78,7 +78,7 @@ export interface ProjectStats {
 
 export interface Activity {
 	id: string;
-	kind: 'save' | 'ship' | 'cram' | 'issue' | 'ready' | 'merge' | 'star';
+	kind: 'save' | 'ship' | 'cram' | 'issue' | 'ready' | 'merge';
 	actor: string;
 	actor_profile?: UserProfile | null;
 	message: string;
@@ -104,6 +104,35 @@ export interface ProjectOverview {
 }
 
 export type MeResponse = { user: string; profile?: UserProfile | null; tenants: TenantSummary[] };
+
+export interface ProjectDiscoveryItem {
+	tenant: string;
+	project: string;
+	owner: string;
+	stats: ProjectStats;
+	last_activity_at?: string | null;
+	latest_release?: Release | null;
+}
+
+export interface ProjectReleaseFeedItem {
+	tenant: string;
+	project: string;
+	owner: string;
+	release: Release;
+	released_at: string;
+}
+
+export interface HomeResponse {
+	projects: ProjectDiscoveryItem[];
+	following: ProjectDiscoveryItem[];
+	releases: ProjectReleaseFeedItem[];
+	discover: ProjectDiscoveryItem[];
+}
+
+export interface FollowResponse {
+	is_following: boolean;
+	can_follow: boolean;
+}
 
 export interface RemoteApproval {
 	id: string;
@@ -146,6 +175,25 @@ export async function listProjects(options: ApiOptions = {}) {
 	}
 	const body = (await response.json()) as { projects: ProjectSummary[] };
 	return body.projects;
+}
+
+export async function getHome(options: ApiOptions = {}): Promise<HomeResponse> {
+	const response = await authedFetch('/v1/home', { signal: options.signal });
+	return (await response.json()) as HomeResponse;
+}
+
+export async function discoverProjects(query: string, options: PageOptions = {}): Promise<Paginated<ProjectDiscoveryItem>> {
+	const params = new URLSearchParams();
+	if (query.trim()) params.set('q', query.trim());
+	const paging = pageQuery(options).replace(/^\?/, '');
+	if (paging) {
+		for (const [key, value] of new URLSearchParams(paging)) {
+			params.set(key, value);
+		}
+	}
+	const value = params.toString();
+	const response = await publicFetch(`/v1/discover/projects${value ? `?${value}` : ''}`, { signal: options.signal });
+	return (await response.json()) as Paginated<ProjectDiscoveryItem>;
 }
 
 export async function listTenantProjects(tenant: string, options: ApiOptions = {}): Promise<ProjectSummary[]> {
@@ -340,7 +388,7 @@ function protocolEndpoint(kind: string) {
 }
 
 export async function getProjectOverview(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectOverview> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/overview`, { signal: options.signal });
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/overview`, { signal: options.signal });
 	return (await response.json()) as ProjectOverview;
 }
 
@@ -363,12 +411,19 @@ export async function updateProjectSettings(tenant: string, project: string, set
 	return (await response.json()) as ProjectSettings;
 }
 
-export async function starProject(tenant: string, project: string) {
-	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/star`, { method: 'POST' });
+export async function getProjectFollow(tenant: string, project: string, options: ApiOptions = {}): Promise<FollowResponse> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/follow`, { signal: options.signal });
+	return (await response.json()) as FollowResponse;
 }
 
-export async function unstarProject(tenant: string, project: string) {
-	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/star`, { method: 'DELETE' });
+export async function followProject(tenant: string, project: string): Promise<FollowResponse> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/follow`, { method: 'POST' });
+	return (await response.json()) as FollowResponse;
+}
+
+export async function unfollowProject(tenant: string, project: string): Promise<FollowResponse> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/follow`, { method: 'DELETE' });
+	return (await response.json()) as FollowResponse;
 }
 
 export async function setParentWorkspace(tenant: string, project: string, workspace: string, parent_workspace: string | null) {

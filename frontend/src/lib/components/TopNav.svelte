@@ -5,16 +5,17 @@
 	import {
 		getProjectStats,
 		getProjectSettings,
+		getProjectFollow,
 		isAbortError,
-		starProject,
-		unstarProject,
+		followProject,
+		unfollowProject,
 		type ProjectSummary,
 		type TenantSummary,
 		type ProjectSettings,
 		type ProjectStats,
+		type FollowResponse,
 		type NavbarItem
 	} from '$lib/api';
-	import Star from 'lucide-svelte/icons/star';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -43,6 +44,7 @@
 	let showProjectMenu = $state(false);
 	let showCreateOrg = $state(false);
 	let settings = $state<ProjectSettings | null>(null);
+	let follow = $state<FollowResponse | null>(null);
 	let stats = $state<ProjectStats | null>(null);
 	let settingsLoading = $state(false);
 	let settingsKey = '';
@@ -50,10 +52,11 @@
 
 	const currentPath = $derived($page.url.pathname);
 	const pathParts = $derived(currentPath.split('/').filter(Boolean));
+	const homePage = $derived(pathParts.length === 0);
 	const accountSettings = $derived(pathParts[0] === 'settings');
 	const currentTenant = $derived(accountSettings ? '' : (pathParts[0] ?? ''));
 	const currentProject = $derived(accountSettings ? null : (pathParts[1] ?? null));
-	const selectedTenant = $derived(currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
+	const selectedTenant = $derived(homePage || accountSettings ? '' : currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
 	const displayName = $derived(profile?.preferredUsername || profile?.name || 'Signed in');
 	const profileHandle = $derived(profile?.preferredUsername ? `@${profile.preferredUsername}` : profile?.email);
@@ -101,6 +104,7 @@
 		if (!key) {
 			settingsKey = '';
 			settings = null;
+			follow = null;
 			stats = null;
 			return;
 		}
@@ -124,15 +128,18 @@
 	async function loadProjectChrome(tenant: string, project: string, signal?: AbortSignal) {
 		settingsLoading = true;
 		try {
-			const [loadedSettings, loadedStats] = await Promise.all([
-				getProjectSettings(tenant, project, signal ? { signal } : {}),
-				getProjectStats(tenant, project, signal ? { signal } : {})
+			const [loadedSettings, loadedStats, loadedFollow] = await Promise.all([
+				getProjectSettings(tenant, project, signal ? { signal } : {}).catch(() => null),
+				getProjectStats(tenant, project, signal ? { signal } : {}),
+				getProjectFollow(tenant, project, signal ? { signal } : {}).catch(() => null)
 			]);
 			settings = loadedSettings;
 			stats = loadedStats;
+			follow = loadedFollow;
 		} catch (error) {
 			if (isAbortError(error)) return;
 			settings = null;
+			follow = null;
 			stats = null;
 		} finally {
 			if (!signal?.aborted) settingsLoading = false;
@@ -147,15 +154,13 @@
 		}
 	}
 
-	async function handleToggleStar() {
-		if (!settings || !currentTenant || !currentProject) return;
+	async function handleToggleFollow() {
+		if (!follow || !currentTenant || !currentProject) return;
 		try {
-			if (settings.is_starred) {
-				await unstarProject(currentTenant, currentProject);
-				settings = { ...settings, is_starred: false, starred_count: Math.max(0, settings.starred_count - 1) };
+			if (follow.is_following) {
+				follow = await unfollowProject(currentTenant, currentProject);
 			} else {
-				await starProject(currentTenant, currentProject);
-				settings = { ...settings, is_starred: true, starred_count: settings.starred_count + 1 };
+				follow = await followProject(currentTenant, currentProject);
 			}
 		} catch {
 			return;
@@ -205,7 +210,7 @@
 					class="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#d9a66c]"
 					onclick={() => (showTenantMenu = !showTenantMenu)}
 				>
-					{selectedTenant || 'Tenants'}
+					{homePage ? 'Home' : selectedTenant || 'Tenants'}
 					<ChevronDown class="h-3.5 w-3.5 text-[#6f6b5f]" />
 				</button>
 			{#if showTenantMenu}
@@ -215,7 +220,7 @@
 					{:else}
 						{#each tenants as tenant}
 							<button
-								class="block w-full px-3 py-1.5 text-left text-sm {selectedTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
+								class="block w-full px-3 py-1.5 text-left text-sm {!homePage && selectedTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
 								onclick={() => { showTenantMenu = false; goto(`/${tenant.name}`); }}
 							>
 								{tenant.name}
@@ -261,14 +266,15 @@
 					{/if}
 				</div>
 
-				{#if settings && !settingsLoading}
+				{#if follow?.can_follow && !settingsLoading}
 				<button
-					class="ml-1 flex items-center gap-1 rounded border border-[#2a2a28] px-2 py-0.5 text-xs text-[#a09d94] hover:border-[#d9a66c] hover:text-[#d9a66c]"
-					onclick={handleToggleStar}
+					class="ml-1 rounded border px-2.5 py-1 text-xs font-medium {follow.is_following ? 'border-[#d9a66c] bg-[#1a1712] text-[#d9a66c] hover:bg-[#211d16]' : 'border-[#2a2a28] text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]'}"
+					onclick={handleToggleFollow}
 				>
-					<Star class="h-3.5 w-3.5" fill={settings.is_starred ? 'currentColor' : 'none'} />
-					<span>{settings.starred_count}</span>
+					{follow.is_following ? 'Following' : 'Follow'}
 				</button>
+				{/if}
+				{#if settings && !settingsLoading}
 				<span class="ml-1.5 rounded border border-[#2a2a28] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#6f6b5f]">
 					{settings.visibility}
 				</span>

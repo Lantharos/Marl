@@ -34,8 +34,8 @@ pub async fn ensure_project(
 
     let settings = serde_json::to_string(&ProjectSettings {
         visibility: "private".to_string(),
-        starred_count: 0,
-        is_starred: false,
+        follower_count: 0,
+        is_following: false,
         default_workspace: "main".to_string(),
         navbar_items: vec![],
         panels: vec![],

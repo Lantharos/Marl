@@ -307,5 +307,3 @@ pub async fn create_comment(
         created_at,
     })
 }
-
-// -- Settings / Stars -------------------------------------

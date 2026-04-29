@@ -5,8 +5,8 @@ use sty_protocol::{
     CreateIssueRequest, HeadResponse, HeadUpdateRequest, HistoryEntry, HistoryResponse,
     HistorySignature, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
     ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse,
-    SessionExchangeRequest, StarResponse, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
-    UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary,
+    SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest,
+    WorkspaceStateResponse, WorkspaceSummary,
 };
 use worker::*;
 
@@ -33,6 +33,7 @@ use support::{
 
 include!("code.rs");
 include!("graph.rs");
+include!("home.rs");
 include!("identity.rs");
 include!("issues.rs");
 include!("objects.rs");
@@ -65,6 +66,9 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/account/ssh-keys", create_account_ssh_key)
         .delete_async("/v1/account/ssh-keys/:key_id", delete_account_ssh_key)
         .post_async("/v1/orgs", create_org)
+        .get_async("/v1/home", home)
+        .get_async("/v1/follows", follows)
+        .get_async("/v1/discover/projects", discover_projects)
         .get_async("/v1/projects", list_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
@@ -327,8 +331,12 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/settings",
             update_settings,
         )
-        .post_async("/v1/tenants/:tenant/projects/:project/star", star_project)
-        .delete_async("/v1/tenants/:tenant/projects/:project/star", unstar_project)
+        .get_async("/v1/tenants/:tenant/projects/:project/follow", project_follow)
+        .post_async("/v1/tenants/:tenant/projects/:project/follow", follow_project)
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/follow",
+            unfollow_project,
+        )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/objects/missing",
             missing,

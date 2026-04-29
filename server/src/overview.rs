@@ -1,16 +1,16 @@
 pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+    let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
-    let principal = sty_protocol::TokenPrincipal { user };
+    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    let principal = user
+        .as_ref()
+        .map(|user| sty_protocol::TokenPrincipal { user: user.clone() });
     let project_summary = d1::get_project(&database, &tenant, &project)
         .await?
         .ok_or_else(|| Error::RustError("project not found".to_string()))?;
     let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
-    let settings = d1::project_settings(&database, &tenant, &project, &principal).await?;
+    let settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let releases = latest_releases(&database, &tenant, &project, 5).await?;
     let default_workspace = settings.default_workspace.clone();

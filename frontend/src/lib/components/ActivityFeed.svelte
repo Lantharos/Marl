@@ -12,7 +12,6 @@
 			case 'issue': return 'I';
 			case 'ready': return 'R';
 			case 'merge': return 'M';
-			case 'star': return '★';
 			default: return '?';
 		}
 	}
@@ -25,7 +24,6 @@
 			case 'issue': return 'bg-[#3a3a36] text-[#d9a66c]';
 			case 'ready': return 'bg-[#3a3a36] text-[#6ba4c7]';
 			case 'merge': return 'bg-[#3a3a36] text-[#d96c5a]';
-			case 'star': return 'bg-[#3a3a36] text-[#d9a66c]';
 			default: return 'bg-[#2a2a28] text-[#a09d94]';
 		}
 	}
@@ -59,7 +57,6 @@
 			case 'issue': return 'updated an issue';
 			case 'ready': return 'marked a workspace ready';
 			case 'merge': return 'merged';
-			case 'star': return 'starred';
 			default: return null;
 		}
 	}

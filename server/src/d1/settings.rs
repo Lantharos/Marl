@@ -25,7 +25,7 @@ pub async fn project_settings(
     db: &D1Database,
     tenant: &str,
     project: &str,
-    principal: &TokenPrincipal,
+    principal: Option<&TokenPrincipal>,
 ) -> Result<ProjectSettings> {
     #[derive(Deserialize)]
     struct Row {
@@ -42,8 +42,8 @@ pub async fn project_settings(
         None => {
             return Ok(ProjectSettings {
                 visibility: "private".to_string(),
-                starred_count: 0,
-                is_starred: false,
+                follower_count: 0,
+                is_following: false,
                 default_workspace: "main".to_string(),
                 navbar_items: vec![],
                 panels: vec![],
@@ -54,17 +54,8 @@ pub async fn project_settings(
     let mut settings: ProjectSettings =
         serde_json::from_str(&settings_json).map_err(|e| err(e.to_string()))?;
 
-    #[derive(Deserialize)]
-    struct CountRow {
-        count: f64,
-    }
-    let count_row: Option<CountRow> = db
-        .prepare("SELECT COUNT(*) AS count FROM stars WHERE tenant = ?1 AND project = ?2")
-        .bind(&[js_str(tenant), js_str(project)])?
-        .first(None)
-        .await?;
-    settings.starred_count = count_row.map(|r| r.count as u64).unwrap_or(0);
-    settings.is_starred = is_starred(db, tenant, project, principal).await?;
+    settings.follower_count = follower_count(db, tenant, project).await?;
+    settings.is_following = is_following(db, tenant, project, principal).await?;
 
     Ok(settings)
 }
@@ -79,7 +70,7 @@ pub async fn update_project_settings(
     navbar_items: Option<Vec<NavbarItem>>,
     panels: Option<Vec<PanelItem>>,
 ) -> Result<ProjectSettings> {
-    let mut settings = project_settings(db, tenant, project, principal).await?;
+    let mut settings = project_settings(db, tenant, project, Some(principal)).await?;
     settings.visibility = visibility.to_string();
     settings.default_workspace = default_workspace.to_string();
     if let Some(items) = navbar_items {
@@ -94,52 +85,4 @@ pub async fn update_project_settings(
         .run()
         .await?;
     Ok(settings)
-}
-
-pub async fn star_project(
-    db: &D1Database,
-    tenant: &str,
-    project: &str,
-    principal: &TokenPrincipal,
-) -> Result<(bool, u64)> {
-    db.prepare("INSERT OR IGNORE INTO stars (tenant, project, user) VALUES (?1, ?2, ?3)")
-        .bind(&[js_str(tenant), js_str(project), js_str(&principal.user)])?
-        .run()
-        .await?;
-    let count = star_count(db, tenant, project).await?;
-    Ok((true, count))
-}
-
-pub async fn unstar_project(
-    db: &D1Database,
-    tenant: &str,
-    project: &str,
-    principal: &TokenPrincipal,
-) -> Result<(bool, u64)> {
-    db.prepare("DELETE FROM stars WHERE tenant = ?1 AND project = ?2 AND user = ?3")
-        .bind(&[js_str(tenant), js_str(project), js_str(&principal.user)])?
-        .run()
-        .await?;
-    let count = star_count(db, tenant, project).await?;
-    Ok((false, count))
-}
-
-pub async fn is_starred(
-    db: &D1Database,
-    tenant: &str,
-    project: &str,
-    principal: &TokenPrincipal,
-) -> Result<bool> {
-    #[derive(Deserialize)]
-    struct CountRow {
-        count: f64,
-    }
-    let row: Option<CountRow> = db
-        .prepare(
-            "SELECT COUNT(*) AS count FROM stars WHERE tenant = ?1 AND project = ?2 AND user = ?3",
-        )
-        .bind(&[js_str(tenant), js_str(project), js_str(&principal.user)])?
-        .first(None)
-        .await?;
-    Ok(row.map(|r| r.count as u64).unwrap_or(0) > 0)
 }

@@ -19,8 +19,8 @@
 
 	let settings = $state<ProjectSettings>({
 		visibility: 'private',
-		starred_count: 0,
-		is_starred: false,
+		follower_count: 0,
+		is_following: false,
 		default_workspace: 'main',
 		navbar_items: [],
 		panels: []

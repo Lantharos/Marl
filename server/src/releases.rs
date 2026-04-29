@@ -32,7 +32,7 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
     }
 
     let principal = TokenPrincipal { user: user.clone() };
-    let settings = d1::project_settings(&database, &tenant, &project, &principal).await?;
+    let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
     let latest_snapshot = d1::head(&database, &tenant, &project, &settings.default_workspace).await?;
     let tag_item = ensure_tag(&database, &tenant, &project, &tag, &user, latest_snapshot.as_deref())
         .await?;

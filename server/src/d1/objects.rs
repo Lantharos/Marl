@@ -63,16 +63,3 @@ pub async fn record_object(
     .await?;
     Ok(())
 }
-
-pub(super) async fn star_count(db: &D1Database, tenant: &str, project: &str) -> Result<u64> {
-    #[derive(Deserialize)]
-    struct CountRow {
-        count: f64,
-    }
-    let row: Option<CountRow> = db
-        .prepare("SELECT COUNT(*) AS count FROM stars WHERE tenant = ?1 AND project = ?2")
-        .bind(&[js_str(tenant), js_str(project)])?
-        .first(None)
-        .await?;
-    Ok(row.map(|r| r.count as u64).unwrap_or(0))
-}

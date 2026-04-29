@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary,
-    ProjectStats, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
+    Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectStats,
+    ProjectSummary, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
 };
 use uuid::Uuid;
 use worker::D1Database;
@@ -53,6 +53,8 @@ fn user_profile_from_parts(
 // -- Auth -------------------------------------------------
 
 mod auth;
+mod discovery;
+mod follows;
 mod history;
 mod issues;
 mod objects;
@@ -64,6 +66,8 @@ mod user_keys;
 mod workspaces;
 
 pub use auth::*;
+pub use discovery::*;
+pub use follows::*;
 pub use history::*;
 pub use issues::*;
 pub use objects::*;

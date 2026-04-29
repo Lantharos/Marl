@@ -23,7 +23,7 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "hooks",
             "webhooks",
             "search",
-            "stars",
+            "follows",
             "releases",
             "signed_snapshots",
             "profiles",
@@ -361,6 +361,33 @@ pub struct ProjectsResponse {
     pub projects: Vec<ProjectSummary>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProjectDiscoveryItem {
+    pub tenant: String,
+    pub project: String,
+    pub owner: String,
+    pub stats: ProjectStats,
+    pub last_activity_at: Option<String>,
+    pub latest_release: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProjectReleaseFeedItem {
+    pub tenant: String,
+    pub project: String,
+    pub owner: String,
+    pub release: serde_json::Value,
+    pub released_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HomeResponse {
+    pub projects: Vec<ProjectDiscoveryItem>,
+    pub following: Vec<ProjectDiscoveryItem>,
+    pub releases: Vec<ProjectReleaseFeedItem>,
+    pub discover: Vec<ProjectDiscoveryItem>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HistoryEntry {
     pub id: String,
@@ -481,8 +508,10 @@ fn default_true() -> bool {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProjectSettings {
     pub visibility: String,
-    pub starred_count: u64,
-    pub is_starred: bool,
+    #[serde(default)]
+    pub follower_count: u64,
+    #[serde(default)]
+    pub is_following: bool,
     pub default_workspace: String,
     #[serde(default)]
     pub navbar_items: Vec<NavbarItem>,
@@ -499,9 +528,9 @@ pub struct UpdateSettingsRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct StarResponse {
-    pub is_starred: bool,
-    pub starred_count: u64,
+pub struct FollowResponse {
+    pub is_following: bool,
+    pub can_follow: bool,
 }
 
 pub fn validate_target(target: &str) -> anyhow::Result<(&str, &str)> {
