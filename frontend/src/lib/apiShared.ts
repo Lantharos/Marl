@@ -23,6 +23,10 @@ export interface Paginated<T> {
 	prev: number | null;
 }
 
+export function isAbortError(error: unknown) {
+	return error instanceof Error && error.name === 'AbortError';
+}
+
 export async function authedFetch(path: string, init: RequestInit = {}) {
 	const token = await getStyToken();
 	if (!token) {
@@ -60,4 +64,9 @@ export function pageQuery(options: PageOptions = {}) {
 	if (options.assignee) params.set('assignee', options.assignee);
 	const value = params.toString();
 	return value ? `?${value}` : '';
+}
+
+export function notifyProjectStatsChanged(tenant: string, project: string) {
+	if (typeof window === 'undefined') return;
+	window.dispatchEvent(new CustomEvent('sty:project-stats-changed', { detail: { tenant, project } }));
 }

@@ -3,12 +3,15 @@ pub(crate) async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let workspace = req.url()?.query_pairs().find_map(|(k, v)| {
-        (k == "workspace").then(|| v.to_string())
-    }).unwrap_or_else(|| "main".to_string());
-    let snapshot_param = req.url()?.query_pairs().find_map(|(k, v)| {
-        (k == "snapshot").then(|| v.to_string())
-    });
+    let url = req.url()?;
+    let workspace = url
+        .query_pairs()
+        .find_map(|(k, v)| (k == "workspace").then(|| v.to_string()))
+        .unwrap_or_else(|| "main".to_string());
+    let snapshot_param = url
+        .query_pairs()
+        .find_map(|(k, v)| (k == "snapshot").then(|| v.to_string()));
+    let pinned_snapshot = snapshot_param.is_some();
     let head_id = if let Some(snapshot) = snapshot_param {
         snapshot
     } else {
@@ -25,18 +28,36 @@ pub(crate) async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<
             }
         }
     };
+    let public_cache = matches!(
+        d1::project_visibility(&database, &tenant, &project).await?,
+        Some(visibility) if visibility == "public"
+    );
+    let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
+    if let Some(response) =
+        not_modified_response(&req, &head_id, public_cache, cache_seconds, pinned_snapshot)?
+    {
+        return Ok(response);
+    }
     let store = bucket(&ctx.env)?;
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
     let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();
     let mut entries = Vec::new();
     walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
-    Response::from_json(&ProjectTreeResponse {
+    let mut response = Response::from_json(&ProjectTreeResponse {
         workspace: workspace.clone(),
         head: Some(head_id.clone()),
         root_tree: Some(root_tree),
         entries,
-    })
+    })?;
+    apply_cache_headers(
+        response.headers_mut(),
+        &head_id,
+        public_cache,
+        cache_seconds,
+        pinned_snapshot,
+    )?;
+    Ok(response)
 }
 
 pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -56,9 +77,10 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
     let workspace = url.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
-    let snapshot_param = url.query_pairs().find_map(|(k, v)| {
-        (k == "snapshot").then(|| v.to_string())
-    });
+    let snapshot_param = url
+        .query_pairs()
+        .find_map(|(k, v)| (k == "snapshot").then(|| v.to_string()));
+    let pinned_snapshot = snapshot_param.is_some();
     let head_id = if let Some(snapshot) = snapshot_param {
         snapshot
     } else {
@@ -78,12 +100,30 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
     if entry.entry_type != "blob" {
         return json_error(400, "path is not a file");
     }
+    let public_cache = matches!(
+        d1::project_visibility(&database, &tenant, &project).await?,
+        Some(visibility) if visibility == "public"
+    );
+    let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
+    if let Some(response) =
+        not_modified_response(&req, &entry.id, public_cache, cache_seconds, pinned_snapshot)?
+    {
+        return Ok(response);
+    }
     let bytes = r2_bytes(&store, &object_key(&tenant, &project, &entry.id)).await?;
     let text = String::from_utf8(bytes).ok();
-    Response::from_json(&ObjectFileResponse {
+    let mut response = Response::from_json(&ObjectFileResponse {
         path: path.clone(),
         id: entry.id.clone(),
         binary: text.is_none(),
         text,
-    })
+    })?;
+    apply_cache_headers(
+        response.headers_mut(),
+        &entry.id,
+        public_cache,
+        cache_seconds,
+        pinned_snapshot,
+    )?;
+    Ok(response)
 }

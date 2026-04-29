@@ -23,9 +23,10 @@ use auth::verify_ave_id_token;
 use protocol::*;
 use protocol_ready::*;
 use support::{
-    apply_cors, bearer_token, bucket, db, json_error, object_key, object_size_limit, paginate_vec,
-    param, preflight_response, project_params, put_bytes, r2_bytes, required_header, frontend_origin,
-    required_usize_header, response_for_error, validate_object_metadata,
+    apply_cache_headers, apply_cors, bearer_token, bucket, db, frontend_origin, json_error,
+    not_modified_response, object_key, object_size_limit, paginate_vec, param, preflight_response,
+    project_params, put_bytes, r2_bytes, required_header, required_usize_header,
+    response_for_error, validate_object_metadata,
 };
 
 include!("code.rs");
@@ -68,6 +69,10 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async(
             "/v1/tenants/:tenant/projects/:project/overview",
             project_overview,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/stats",
+            project_stats,
         )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/workspaces",

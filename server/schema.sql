@@ -127,3 +127,14 @@ CREATE TABLE IF NOT EXISTS remote_approvals (
     approved_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_remote_approvals_user_status ON remote_approvals(user, status);
+CREATE TABLE IF NOT EXISTS project_stats (
+    tenant TEXT NOT NULL,
+    project TEXT NOT NULL,
+    workspace_count INTEGER NOT NULL DEFAULT 0,
+    open_issue_count INTEGER NOT NULL DEFAULT 0,
+    ready_count INTEGER NOT NULL DEFAULT 0,
+    release_count INTEGER NOT NULL DEFAULT 0,
+    history_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (tenant, project)
+);

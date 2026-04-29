@@ -153,6 +153,51 @@ pub fn with_cors(mut response: Response) -> Result<Response> {
     Ok(response)
 }
 
+pub fn not_modified_response(
+    req: &Request,
+    etag: &str,
+    public_cache: bool,
+    seconds: u32,
+    immutable: bool,
+) -> Result<Option<Response>> {
+    let normalized = normalize_etag(etag);
+    let Some(value) = req.headers().get("if-none-match")? else {
+        return Ok(None);
+    };
+    let matches = value
+        .split(',')
+        .map(str::trim)
+        .any(|candidate| candidate == normalized || candidate.trim_matches('"') == etag);
+    if !matches {
+        return Ok(None);
+    }
+    let mut response = Response::empty()?.with_status(304);
+    apply_cache_headers(response.headers_mut(), etag, public_cache, seconds, immutable)?;
+    Ok(Some(response))
+}
+
+pub fn apply_cache_headers(
+    headers: &mut Headers,
+    etag: &str,
+    public_cache: bool,
+    seconds: u32,
+    immutable: bool,
+) -> Result<()> {
+    let mut value = if public_cache {
+        format!("public, max-age={seconds}, s-maxage={seconds}")
+    } else {
+        format!("private, max-age={seconds}")
+    };
+    if immutable {
+        value.push_str(", immutable");
+    } else if public_cache {
+        value.push_str(", stale-while-revalidate=30");
+    }
+    headers.set("cache-control", &value)?;
+    headers.set("etag", &normalize_etag(etag))?;
+    Ok(())
+}
+
 pub fn apply_cors(req: &Request, env: &Env, response: &mut Response) -> Result<()> {
     let origin = req.headers().get("origin")?;
     if allowed_origin(env, origin.as_deref()) {
@@ -179,6 +224,14 @@ fn set_cors_headers(headers: &mut Headers) -> Result<()> {
     )?;
     headers.set("access-control-max-age", "86400")?;
     Ok(())
+}
+
+fn normalize_etag(etag: &str) -> String {
+    if etag.starts_with('"') && etag.ends_with('"') {
+        etag.to_string()
+    } else {
+        format!("\"{etag}\"")
+    }
 }
 
 fn allowed_origin(env: &Env, origin: Option<&str>) -> bool {

@@ -83,8 +83,8 @@
 						{#if ov}
 							<div class="mt-2 flex flex-wrap gap-3 text-xs text-[#6f6b5f]">
 								<span>{ov.stats.workspace_count} workspaces</span>
-								<span>{ov.stats.issue_count} issues</span>
-								<span>{ov.stats.open_ready_count} ready</span>
+								<span>{ov.stats.open_issue_count} open issues</span>
+								<span>{ov.stats.ready_count} ready</span>
 							</div>
 						{/if}
 					</button>

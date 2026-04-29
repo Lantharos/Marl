@@ -113,6 +113,7 @@ pub async fn create_issue(
     ])?
     .run()
     .await?;
+    recompute_project_stats(db, tenant, project).await?;
 
     list_issues(db, tenant, project)
         .await?
@@ -140,6 +141,7 @@ pub async fn update_issue_status(
     .bind(&[js_str(status), js_str(&updated_at), js_opt(closed_at), js_str(tenant), js_str(project), js_str(issue_id)])?
     .run()
     .await?;
+    recompute_project_stats(db, tenant, project).await?;
 
     list_issues(db, tenant, project)
         .await?

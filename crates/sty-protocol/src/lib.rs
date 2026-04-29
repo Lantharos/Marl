@@ -256,6 +256,15 @@ pub struct ProjectDetailResponse {
     pub workspaces: Vec<WorkspaceSummary>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProjectStats {
+    pub workspace_count: u64,
+    pub open_issue_count: u64,
+    pub ready_count: u64,
+    pub release_count: u64,
+    pub history_count: u64,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TreeEntryInfo {
     pub path: String,

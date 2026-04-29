@@ -62,6 +62,15 @@ pub async fn project_history(
     tenant: &str,
     project: &str,
 ) -> Result<Vec<HistoryEntry>> {
+    project_history_with_limit(db, tenant, project, None).await
+}
+
+pub async fn project_history_with_limit(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    limit: Option<usize>,
+) -> Result<Vec<HistoryEntry>> {
     #[derive(Deserialize)]
     struct Row {
         id: String,
@@ -77,8 +86,23 @@ pub async fn project_history(
         workspace: String,
         snapshot_id: Option<String>,
     }
-    let result = db
-        .prepare(
+    let result = if let Some(limit) = limit {
+        db.prepare(
+            "SELECT h.id, h.kind, h.message, h.author, u.display_name, u.handle, u.avatar_url, u.email, u.updated_at, \
+             h.timestamp, h.workspace, h.snapshot_id FROM history h \
+             LEFT JOIN user_profiles u ON u.user = h.author \
+             WHERE h.tenant = ?1 AND h.project = ?2 \
+             ORDER BY h.timestamp DESC LIMIT ?3"
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(project),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
+        .all()
+        .await?
+    } else {
+        db.prepare(
             "SELECT h.id, h.kind, h.message, h.author, u.display_name, u.handle, u.avatar_url, u.email, u.updated_at, \
              h.timestamp, h.workspace, h.snapshot_id FROM history h \
              LEFT JOIN user_profiles u ON u.user = h.author \
@@ -87,7 +111,8 @@ pub async fn project_history(
         )
         .bind(&[js_str(tenant), js_str(project)])?
         .all()
-        .await?;
+        .await?
+    };
     let rows: Vec<Row> = result.results()?;
     Ok(rows
         .into_iter()
@@ -143,6 +168,7 @@ pub async fn log_history(
     ])?
     .run()
     .await?;
+    recompute_project_stats(db, tenant, project).await?;
     Ok(())
 }
 

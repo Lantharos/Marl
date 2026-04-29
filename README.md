@@ -3,6 +3,7 @@
 `sty` is the official hosted collaboration layer for PIG. PIG is the local VCS engine; sty owns identity, project hosting, a reference PIG remote API, and the browser dashboard.
 
 The backend is a Cloudflare Worker in `server`. It uses D1 for project metadata, workspace heads, issues, history, settings, and protocol records, and R2 for immutable object bytes.
+D1 also keeps a small `project_stats` row per project so dashboard counters stay cheap. R2-backed objects, code trees, file reads, and project overview responses return ETags and cache headers so browsers and Cloudflare can avoid re-fetching content until the relevant snapshot or project state changes.
 
 E2EE and CI are intentionally deferred.
 
@@ -53,6 +54,8 @@ From `server`, apply the D1 schema before using the API. Use local migrations fo
 cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
+
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, and cached project statistics.
 
 Then start the Worker:
 
@@ -156,6 +159,8 @@ Protocol list endpoints return the standard pagination envelope:
   "prev": null
 }
 ```
+
+The dashboard uses `GET /v1/tenants/:tenant/projects/:project/stats` for tab counters. Those counts are maintained in D1 when workspaces, issues, releases, and history change, so the UI does not need to fetch every list just to show navigation totals.
 
 ## Verification
 

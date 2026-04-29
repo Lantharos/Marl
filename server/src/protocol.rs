@@ -197,6 +197,7 @@ pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result
     if !d1::project_access(&database, &tenant, &project, &user).await? {
         return json_error(403, "project access denied");
     }
+    let kind = protocol_item_kind(&database, &tenant, &project, &id).await?;
     database
         .prepare("DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND id = ?3")
         .bind(&[
@@ -206,6 +207,9 @@ pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result
         ])?
         .run()
         .await?;
+    if kind.as_deref() == Some("release") {
+        d1::recompute_project_stats(&database, &tenant, &project).await?;
+    }
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -287,6 +291,7 @@ async fn create_protocol_kind(
         .as_string()
         .unwrap_or_default();
     body["id"] = json!(id.clone());
+    body["kind"] = json!(kind);
     if body["author"].is_null() {
         body["author"] = json!(user);
     }
@@ -298,6 +303,9 @@ async fn create_protocol_kind(
         body["state"] = json!("open");
     }
     upsert_protocol_item(&database, &tenant, &project, kind, &id, body.clone()).await?;
+    if kind == "release" {
+        d1::recompute_project_stats(&database, &tenant, &project).await?;
+    }
     Response::from_json(&body)
 }
 
@@ -339,6 +347,7 @@ async fn create_release_from_tag(mut req: Request, ctx: RouteContext<()>) -> Res
         .unwrap_or_default();
     let storage_id = format!("release:{tag}");
     body["id"] = json!(storage_id.clone());
+    body["kind"] = json!("release");
     body["tag"] = json!(tag.clone());
     if body["author"].is_null() {
         body["author"] = json!(user);
@@ -363,7 +372,30 @@ async fn create_release_from_tag(mut req: Request, ctx: RouteContext<()>) -> Res
         body.clone(),
     )
     .await?;
+    d1::recompute_project_stats(&database, &tenant, &project).await?;
     Response::from_json(&body)
+}
+
+async fn protocol_item_kind(
+    database: &worker::D1Database,
+    tenant: &str,
+    project: &str,
+    id: &str,
+) -> Result<Option<String>> {
+    #[derive(serde::Deserialize)]
+    struct Row {
+        kind: String,
+    }
+    let row: Option<Row> = database
+        .prepare("SELECT kind FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND id = ?3")
+        .bind(&[
+            wasm_bindgen::JsValue::from_str(tenant),
+            wasm_bindgen::JsValue::from_str(project),
+            wasm_bindgen::JsValue::from_str(id),
+        ])?
+        .first(None)
+        .await?;
+    Ok(row.map(|row| row.kind))
 }
 
 async fn list_protocol_values(

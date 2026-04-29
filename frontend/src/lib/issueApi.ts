@@ -1,4 +1,12 @@
-import { authedFetch, pageQuery, publicFetch, type ApiOptions, type PageOptions, type Paginated } from './apiShared';
+import {
+	authedFetch,
+	notifyProjectStatsChanged,
+	pageQuery,
+	publicFetch,
+	type ApiOptions,
+	type PageOptions,
+	type Paginated
+} from './apiShared';
 
 export interface Issue {
 	id: string;
@@ -74,7 +82,9 @@ export async function createIssue(tenant: string, project: string, issue: { titl
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(issue)
 	});
-	return (await response.json()) as Issue;
+	const item = (await response.json()) as Issue;
+	notifyProjectStatsChanged(tenant, project);
+	return item;
 }
 
 export async function updateIssue(
@@ -88,7 +98,9 @@ export async function updateIssue(
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(issue)
 	});
-	return (await response.json()) as Issue;
+	const item = (await response.json()) as Issue;
+	if (issue.status || issue.state) notifyProjectStatsChanged(tenant, project);
+	return item;
 }
 
 export async function addIssueLabel(tenant: string, project: string, issueId: string, label: string): Promise<Issue> {

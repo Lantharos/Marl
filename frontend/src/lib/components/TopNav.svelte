@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import {
+		getProjectStats,
 		getProjectSettings,
 		isAbortError,
 		starProject,
@@ -9,6 +11,7 @@
 		type ProjectSummary,
 		type TenantSummary,
 		type ProjectSettings,
+		type ProjectStats,
 		type NavbarItem
 	} from '$lib/api';
 	import Star from 'lucide-svelte/icons/star';
@@ -42,6 +45,7 @@
 	let showProjectMenu = $state(false);
 	let showCreateOrg = $state(false);
 	let settings = $state<ProjectSettings | null>(null);
+	let stats = $state<ProjectStats | null>(null);
 	let settingsLoading = $state(false);
 	let settingsKey = '';
 	let newProjectName = $state('');
@@ -101,24 +105,49 @@
 		if (!key) {
 			settingsKey = '';
 			settings = null;
+			stats = null;
 			return;
 		}
 		if (key === settingsKey) return;
 		settingsKey = key;
 		const controller = new AbortController();
-		loadSettings(currentTenant, currentProject ?? '', controller.signal);
+		loadProjectChrome(currentTenant, currentProject ?? '', controller.signal);
 		return () => controller.abort();
 	});
 
-	async function loadSettings(tenant: string, project: string, signal?: AbortSignal) {
+	onMount(() => {
+		const handleStatsChanged = (event: Event) => {
+			const detail = (event as CustomEvent<{ tenant: string; project: string }>).detail;
+			if (!detail || detail.tenant !== currentTenant || detail.project !== currentProject) return;
+			void refreshProjectStats(detail.tenant, detail.project);
+		};
+		window.addEventListener('sty:project-stats-changed', handleStatsChanged);
+		return () => window.removeEventListener('sty:project-stats-changed', handleStatsChanged);
+	});
+
+	async function loadProjectChrome(tenant: string, project: string, signal?: AbortSignal) {
 		settingsLoading = true;
 		try {
-			settings = await getProjectSettings(tenant, project, signal ? { signal } : {});
+			const [loadedSettings, loadedStats] = await Promise.all([
+				getProjectSettings(tenant, project, signal ? { signal } : {}),
+				getProjectStats(tenant, project, signal ? { signal } : {})
+			]);
+			settings = loadedSettings;
+			stats = loadedStats;
 		} catch (error) {
 			if (isAbortError(error)) return;
 			settings = null;
+			stats = null;
 		} finally {
 			if (!signal?.aborted) settingsLoading = false;
+		}
+	}
+
+	async function refreshProjectStats(tenant: string, project: string) {
+		try {
+			stats = await getProjectStats(tenant, project);
+		} catch {
+			return;
 		}
 	}
 
@@ -159,6 +188,24 @@
 		await onCreateOrg(name);
 		newOrgName = '';
 		showCreateOrg = false;
+	}
+
+	function tabCount(id: string) {
+		if (!stats) return null;
+		switch (id) {
+			case 'workspaces':
+				return stats.workspace_count;
+			case 'issues':
+				return stats.open_issue_count;
+			case 'ready':
+				return stats.ready_count;
+			case 'releases':
+				return stats.release_count;
+			case 'history':
+				return stats.history_count;
+			default:
+				return null;
+		}
 	}
 </script>
 
@@ -310,11 +357,15 @@
 					</a>
 				{:else}
 					{@const href = tab.id ? `/${currentTenant}/${currentProject}/${tab.id}` : `/${currentTenant}/${currentProject}`}
+					{@const count = tabCount(tab.id)}
 					<a
 						{href}
-						class="border-b-2 px-3 py-2 text-sm font-medium {currentTab() === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"
+						class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium {currentTab() === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"
 					>
 						{tab.label}
+						{#if count !== null}
+							<span class="text-[11px] font-normal text-[#6f6b5f]">{count}</span>
+						{/if}
 					</a>
 				{/if}
 			{/each}

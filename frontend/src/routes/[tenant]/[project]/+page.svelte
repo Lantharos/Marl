@@ -87,16 +87,20 @@
 									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">Workspaces</div>
 								</div>
 								<div class="rounded bg-[#0f0f0d] p-2 text-center">
-									<div class="text-base font-semibold text-[#f0eee4]">{stats.issue_count}</div>
-									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">Issues</div>
+									<div class="text-base font-semibold text-[#f0eee4]">{stats.open_issue_count}</div>
+									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">Open issues</div>
 								</div>
 								<div class="rounded bg-[#0f0f0d] p-2 text-center">
-									<div class="text-base font-semibold text-[#f0eee4]">{stats.open_ready_count}</div>
+									<div class="text-base font-semibold text-[#f0eee4]">{stats.ready_count}</div>
 									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">Ready</div>
 								</div>
 								<div class="rounded bg-[#0f0f0d] p-2 text-center">
-									<div class="text-base font-semibold text-[#f0eee4]">{stats.star_count}</div>
-									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">Stars</div>
+									<div class="text-base font-semibold text-[#f0eee4]">{stats.release_count}</div>
+									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">Releases</div>
+								</div>
+								<div class="rounded bg-[#0f0f0d] p-2 text-center">
+									<div class="text-base font-semibold text-[#f0eee4]">{stats.history_count}</div>
+									<div class="text-[10px] uppercase tracking-wide text-[#6f6b5f]">History</div>
 								</div>
 							</div>
 						{:else if panel.type === 'workspaces'}

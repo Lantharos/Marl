@@ -2,7 +2,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     Comment, HistoryEntry, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectSummary,
-    TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
+    ProjectStats, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
 };
 use uuid::Uuid;
 use worker::D1Database;
@@ -59,6 +59,7 @@ mod objects;
 mod projects;
 mod remote_approvals;
 mod settings;
+mod stats;
 mod user_keys;
 mod workspaces;
 
@@ -69,5 +70,6 @@ pub use objects::*;
 pub use projects::*;
 pub use remote_approvals::*;
 pub use settings::*;
+pub use stats::*;
 pub use user_keys::*;
 pub use workspaces::*;

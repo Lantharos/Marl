@@ -52,6 +52,7 @@ pub async fn ensure_project(
     ])?
     .run()
     .await?;
+    recompute_project_stats(db, tenant, project).await?;
 
     Ok(())
 }

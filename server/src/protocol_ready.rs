@@ -13,7 +13,7 @@ pub async fn list_ready(req: Request, ctx: RouteContext<()>) -> Result<Response>
     let ready = d1::workspace_states(&database, &tenant, &project)
         .await?
         .into_iter()
-        .filter(|workspace| workspace.is_ready)
+        .filter(|workspace| workspace.is_ready && workspace.name != "main")
         .map(|workspace| {
             json!({
                 "workspace": workspace.name,
@@ -63,7 +63,14 @@ pub async fn unmark_ready(req: Request, ctx: RouteContext<()>) -> Result<Respons
     if !d1::project_access(&database, &tenant, &project, &user).await? {
         return json_error(403, "project access denied");
     }
-    d1::set_parent_workspace(&database, &tenant, &project, &workspace, None).await?;
+    d1::unmark_workspace_ready(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        &sty_protocol::TokenPrincipal { user },
+    )
+    .await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -74,7 +81,17 @@ pub async fn reject_ready(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     if !d1::project_access(&database, &tenant, &project, &user).await? {
         return json_error(403, "project access denied");
     }
+    let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
+    d1::reject_workspace_ready(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        &sty_protocol::TokenPrincipal { user },
+        body["reason"].as_str(),
+    )
+    .await?;
     Response::from_json(
         &json!({ "ok": true, "status": "rejected", "reason": body["reason"].clone() }),
     )

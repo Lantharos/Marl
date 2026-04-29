@@ -60,6 +60,7 @@ pub async fn update_head(
     .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
     .run()
     .await?;
+    recompute_project_stats(db, tenant, project).await?;
 
     Ok(true)
 }
@@ -152,6 +153,61 @@ pub async fn mark_workspace_ready(
         principal,
         "ready",
         &format!("marked workspace {workspace} as ready"),
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn unmark_workspace_ready(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    principal: &TokenPrincipal,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET status = 'active', is_ready = 0, mergeable = 0 WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    log_history(
+        db,
+        tenant,
+        project,
+        workspace,
+        principal,
+        "ready",
+        &format!("unmarked workspace {workspace} as ready"),
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn reject_workspace_ready(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    principal: &TokenPrincipal,
+    reason: Option<&str>,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET status = 'active', is_ready = 0, mergeable = 0 WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    let message = reason
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("rejected workspace {workspace}: {value}"))
+        .unwrap_or_else(|| format!("rejected workspace {workspace}"));
+    log_history(
+        db,
+        tenant,
+        project,
+        workspace,
+        principal,
+        "ready",
+        &message,
         None,
     )
     .await?;

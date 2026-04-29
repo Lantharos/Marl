@@ -58,6 +58,13 @@ pub(crate) async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Re
     let id = param(&ctx, "object")?;
     let database = db(&ctx.env)?;
     check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    let public_cache = matches!(
+        d1::project_visibility(&database, &tenant, &project).await?,
+        Some(visibility) if visibility == "public"
+    );
+    if let Some(response) = not_modified_response(&req, &id, public_cache, 31_536_000, true)? {
+        return Ok(response);
+    }
     let store = bucket(&ctx.env)?;
     let Some(object) = store.get(object_key(&tenant, &project, &id)).execute().await? else {
         return json_error(404, "object not found");
@@ -75,7 +82,7 @@ pub(crate) async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Re
     headers.set("content-type", "application/octet-stream")?;
     headers.set("x-pig-object-kind", &kind)?;
     headers.set("x-pig-object-size", &size.to_string())?;
-    headers.set("etag", &id)?;
+    apply_cache_headers(headers, &id, public_cache, 31_536_000, true)?;
     Ok(response)
 }
 
