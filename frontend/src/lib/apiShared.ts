@@ -21,6 +21,7 @@ export interface Paginated<T> {
 	total_pages: number;
 	next: number | null;
 	prev: number | null;
+	scope?: 'public' | 'all';
 }
 
 export function isAbortError(error: unknown) {

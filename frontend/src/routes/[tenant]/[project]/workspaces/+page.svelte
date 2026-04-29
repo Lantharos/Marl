@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 	import {
 		isAbortError,
 		listWorkspaceStatuses,
@@ -9,6 +10,7 @@
 		type Paginated,
 		type WorkspaceStatus
 	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
@@ -27,6 +29,13 @@
 	let error = $state('');
 	let filter = $state<'open' | 'ready' | 'merged' | 'all'>('open');
 	let workspacePage = $state(1);
+	let canMutate = $state(false);
+
+	const unsubscribe = appData.subscribe((value) => {
+		canMutate = Boolean(value.me);
+	});
+
+	onDestroy(unsubscribe);
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
@@ -196,7 +205,7 @@
 						</div>
 						<ChevronRight class="mt-1 h-4 w-4 shrink-0 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
 					</button>
-					{#if workspace.status !== 'merged'}
+					{#if canMutate && workspace.status !== 'merged'}
 						<div class="flex items-center pr-4">
 							{#if workspace.is_ready && workspace.mergeable}
 								<button

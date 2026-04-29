@@ -1,10 +1,6 @@
 use super::*;
 
-pub async fn project_stats(
-    db: &D1Database,
-    tenant: &str,
-    project: &str,
-) -> Result<ProjectStats> {
+pub async fn project_stats(db: &D1Database, tenant: &str, project: &str) -> Result<ProjectStats> {
     let stats = select_project_stats(db, tenant, project).await?;
     if let Some(stats) = stats {
         return Ok(stats);
@@ -15,11 +11,7 @@ pub async fn project_stats(
         .unwrap_or_default())
 }
 
-pub async fn recompute_project_stats(
-    db: &D1Database,
-    tenant: &str,
-    project: &str,
-) -> Result<()> {
+pub async fn recompute_project_stats(db: &D1Database, tenant: &str, project: &str) -> Result<()> {
     let updated_at = now_rfc3339();
     db.prepare(
         "INSERT INTO project_stats (

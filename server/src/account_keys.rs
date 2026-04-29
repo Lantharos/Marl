@@ -9,7 +9,8 @@ use sty_protocol::{
 use worker::*;
 
 use crate::support::{
-    bearer_token, bucket, db, frontend_origin, json_error, object_key, paginate_vec, param, r2_bytes,
+    bearer_token, bucket, db, frontend_origin, json_error, object_key, paginate_vec, param,
+    r2_bytes,
 };
 use crate::{d1, require_auth, require_web_auth};
 
@@ -207,7 +208,10 @@ fn approval_response(
 }
 
 fn verify_url(req: &Request, env: &Env, id: &str) -> String {
-    format!("{}/verify/{id}", frontend_origin(req, env).trim_end_matches('/'))
+    format!(
+        "{}/verify/{id}",
+        frontend_origin(req, env).trim_end_matches('/')
+    )
 }
 
 fn approval_expires_at() -> String {

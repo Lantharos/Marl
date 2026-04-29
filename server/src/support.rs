@@ -84,7 +84,10 @@ pub fn object_size_limit(env: &Env) -> usize {
 }
 
 pub fn frontend_origin(req: &Request, env: &Env) -> String {
-    if let Ok(origin) = env.var("STY_FRONTEND_ORIGIN").or_else(|_| env.var("STY_WEB_ORIGIN")) {
+    if let Ok(origin) = env
+        .var("STY_FRONTEND_ORIGIN")
+        .or_else(|_| env.var("STY_WEB_ORIGIN"))
+    {
         return origin.to_string();
     }
     req.url()
@@ -172,7 +175,13 @@ pub fn not_modified_response(
         return Ok(None);
     }
     let mut response = Response::empty()?.with_status(304);
-    apply_cache_headers(response.headers_mut(), etag, public_cache, seconds, immutable)?;
+    apply_cache_headers(
+        response.headers_mut(),
+        etag,
+        public_cache,
+        seconds,
+        immutable,
+    )?;
     Ok(Some(response))
 }
 

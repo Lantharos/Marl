@@ -201,14 +201,7 @@ pub async fn reject_workspace_ready(
         .map(|value| format!("rejected workspace {workspace}: {value}"))
         .unwrap_or_else(|| format!("rejected workspace {workspace}"));
     log_history(
-        db,
-        tenant,
-        project,
-        workspace,
-        principal,
-        "ready",
-        &message,
-        None,
+        db, tenant, project, workspace, principal, "ready", &message, None,
     )
     .await?;
     Ok(())

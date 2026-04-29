@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import { appData } from '$lib/appState';
+	import { startLogin } from '$lib/session';
 	import {
 		discoverProjects,
 		getHome,
@@ -21,6 +22,7 @@
 	let publicResults = $state<ProjectDiscoveryItem[] | null>(null);
 	let searchBusy = $state(false);
 	let loadedForUser = '';
+	let signedIn = $state(false);
 
 	const filteredProjects = $derived(
 		home ? home.projects.filter((project) => matchesProject(project, projectSearch)) : []
@@ -29,11 +31,13 @@
 	const controller = new AbortController();
 	const unsubscribe = appData.subscribe((data) => {
 		if (!data.ready || !data.me) {
-			loading = true;
+			signedIn = false;
+			loading = false;
 			home = null;
 			loadedForUser = '';
 			return;
 		}
+		signedIn = true;
 		if (loadedForUser === data.me.user) return;
 		loadedForUser = data.me.user;
 		void loadHome();
@@ -105,6 +109,108 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{signedIn ? 'Home - sty' : 'sty - PIG project hosting'}</title>
+	<meta
+		name="description"
+		content={signedIn ? 'Your sty projects and followed project releases.' : 'sty hosts PIG projects with workspaces, issues, releases, and code history.'}
+	/>
+	<meta property="og:title" content={signedIn ? 'Home - sty' : 'sty - PIG project hosting'} />
+	<meta
+		property="og:description"
+		content={signedIn ? 'Your sty projects and followed project releases.' : 'sty hosts PIG projects with workspaces, issues, releases, and code history.'}
+	/>
+	<meta property="og:type" content="website" />
+</svelte:head>
+
+{#if !signedIn}
+	<main>
+		<section class="px-6 pt-20 pb-16 md:px-12 lg:px-20">
+			<div class="mx-auto max-w-4xl text-center">
+				<h1 class="text-6xl font-bold tracking-tight text-[#f0eee4] md:text-7xl">sty</h1>
+				<p class="mt-4 text-xl text-[#d9a66c] md:text-2xl">where pigs ship code</p>
+				<p class="mt-4 text-sm leading-6 text-[#8c887e] md:text-base">
+					Version control for humans who think in workspaces, not branches.<br class="hidden md:block" />
+					Save, cram, and ship your code with confidence.
+				</p>
+				<div class="mt-8 flex justify-center gap-3">
+					<button class="rounded bg-[#eae9e4] px-6 py-2.5 text-sm font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={startLogin}>
+						Sign in
+					</button>
+				</div>
+			</div>
+		</section>
+
+		<section class="px-6 pb-16 md:px-12 lg:px-20">
+			<div class="mx-auto max-w-2xl">
+				<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+					<div class="flex items-center gap-2 border-b border-[#2a2a28] pb-3">
+						<span class="h-3 w-3 rounded-full bg-[#d96c5a]"></span>
+						<span class="h-3 w-3 rounded-full bg-[#d9a66c]"></span>
+						<span class="h-3 w-3 rounded-full bg-[#7cb97c]"></span>
+						<span class="ml-2 text-xs text-[#6f6b5f]">terminal</span>
+					</div>
+					<pre class="mt-4 overflow-x-auto text-sm leading-relaxed text-[#a09d94]"><code><span class="text-[#6f6b5f]"># sign in to sty</span>
+<span class="text-[#eae9e4]">$ sty login</span>
+
+<span class="text-[#6f6b5f]"># connect this repo</span>
+<span class="text-[#eae9e4]">$ sty init tenant/project</span>
+
+<span class="text-[#6f6b5f]"># create a workspace</span>
+<span class="text-[#eae9e4]">$ pig work new feature-x</span>
+
+<span class="text-[#6f6b5f]"># save your progress</span>
+<span class="text-[#eae9e4]">$ pig save "add user auth"</span>
+
+<span class="text-[#6f6b5f]"># squash unsaved work</span>
+<span class="text-[#eae9e4]">$ pig cram "polish auth flow"</span>
+
+<span class="text-[#6f6b5f]"># sync to sty</span>
+<span class="text-[#eae9e4]">$ pig sync</span>
+
+<span class="text-[#6f6b5f]"># ship when ready</span>
+<span class="text-[#eae9e4]">$ pig ship</span></code></pre>
+				</div>
+			</div>
+		</section>
+
+		<section class="px-6 pb-20 md:px-12 lg:px-20">
+			<div class="mx-auto max-w-4xl">
+				<h2 class="text-center text-sm font-semibold uppercase tracking-wide text-[#6f6b5f]">Features</h2>
+				<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+						<div class="text-lg font-semibold text-[#eae9e4]">Workspaces</div>
+						<p class="mt-2 text-sm text-[#8c887e]">Branch-less version control. Create workspaces from any parent, not just main.</p>
+					</div>
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+						<div class="text-lg font-semibold text-[#eae9e4]">Saves & Crams</div>
+						<p class="mt-2 text-sm text-[#8c887e]">Lightweight checkpoints you can squash. No more WIP commits.</p>
+					</div>
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+						<div class="text-lg font-semibold text-[#eae9e4]">Ready to Ship</div>
+						<p class="mt-2 text-sm text-[#8c887e]">Mark workspaces as ready, review diffs, and merge with confidence.</p>
+					</div>
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+						<div class="text-lg font-semibold text-[#eae9e4]">Code Browser</div>
+						<p class="mt-2 text-sm text-[#8c887e]">Browse any workspace's files with syntax highlighting right in the browser.</p>
+					</div>
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+						<div class="text-lg font-semibold text-[#eae9e4]">History</div>
+						<p class="mt-2 text-sm text-[#8c887e]">Full history with diffs for every save, cram, and ship. See exactly what changed.</p>
+					</div>
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+						<div class="text-lg font-semibold text-[#eae9e4]">Issues</div>
+						<p class="mt-2 text-sm text-[#8c887e]">Track bugs and features alongside your code. Comment and close when done.</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<footer class="border-t border-[#2a2a28] px-6 py-8 md:px-12 lg:px-20">
+			<div class="mx-auto max-w-4xl text-center text-xs text-[#6f6b5f]">sty - where pigs ship code</div>
+		</footer>
+	</main>
+{:else}
 <div class="p-8">
 	<div class="mx-auto max-w-5xl">
 		<div class="flex items-end justify-between gap-4">
@@ -140,7 +246,6 @@
 					<div class="mb-3 flex items-center justify-between gap-3">
 						<div>
 							<h3 class="text-sm font-medium text-[#eae9e4]">Projects</h3>
-							<p class="mt-0.5 text-xs text-[#6f6b5f]">{home.projects.length} total</p>
 						</div>
 						<input
 							class="h-9 w-72 max-w-full rounded border border-[#2a2a28] bg-[#141412] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#3a3a36]"
@@ -158,22 +263,20 @@
 							<p class="text-sm text-[#8c887e]">No projects match that search.</p>
 						</div>
 					{:else}
-						<div class="overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
+						<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
 							{#each filteredProjects as project}
 								<button
-									class="flex w-full items-center justify-between gap-4 border-b border-[#252522] px-4 py-3 text-left last:border-b-0 hover:bg-[#1a1a18]"
+									class="min-h-28 rounded border border-[#2a2a28] bg-[#141412] p-4 text-left hover:border-[#3a3a36] hover:bg-[#1a1a18]"
 									onclick={() => goto(projectPath(project))}
 								>
-									<div class="min-w-0">
-										<div class="truncate text-sm font-medium text-[#f0eee4]">{projectLabel(project)}</div>
-										<div class="mt-1 flex flex-wrap gap-3 text-xs text-[#6f6b5f]">
-											<span>{project.stats.workspace_count} workspaces</span>
-											<span>{project.stats.open_issue_count} open issues</span>
-											<span>{project.stats.release_count} releases</span>
-										</div>
+									<div class="truncate text-sm font-medium text-[#f0eee4]">{projectLabel(project)}</div>
+									<div class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#6f6b5f]">
+										<span>{project.stats.workspace_count} workspaces</span>
+										<span>{project.stats.open_issue_count} issues</span>
+										<span>{project.stats.release_count} releases</span>
 									</div>
 									{#if timestamp(project.last_activity_at)}
-										<div class="shrink-0 text-xs text-[#6f6b5f]">{timestamp(project.last_activity_at)}</div>
+										<div class="mt-5 text-xs text-[#6f6b5f]">{timestamp(project.last_activity_at)}</div>
 									{/if}
 								</button>
 							{/each}
@@ -245,3 +348,4 @@
 		{/if}
 	</div>
 </div>
+{/if}

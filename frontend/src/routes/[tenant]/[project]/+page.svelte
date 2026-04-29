@@ -1,22 +1,29 @@
 <script lang="ts">
-	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import { getProjectOverview, type ProjectOverview, type WorkspaceStatus, type ProjectSettings, type PanelItem, type Release } from '$lib/api';
+	import { appData } from '$lib/appState';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Tag from 'lucide-svelte/icons/tag';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import type { PageProps } from './$types';
 
-	let overview = $state<ProjectOverview | null>(null);
-	let workspaces = $state<WorkspaceStatus[]>([]);
-	let releases = $state<Release[]>([]);
-	let readme = $state<string | null>(null);
-	let settings = $state<ProjectSettings | null>(null);
-	let loading = $state(true);
+	let { data }: PageProps = $props();
 
-	const tenant = $derived($page.params.tenant as string);
-	const project = $derived($page.params.project as string);
+	let authedOverview = $state<ProjectOverview | null>(null);
+	let loading = $state(false);
+	let signedIn = $state(false);
+	let authedLoadKey = '';
+
+	const tenant = $derived(data.tenant);
+	const project = $derived(data.project);
+	const overview = $derived(authedOverview ?? data.overview);
+	const workspaces = $derived<WorkspaceStatus[]>(overview?.workspaces ?? []);
+	const releases = $derived<Release[]>(overview?.releases ?? []);
+	const readme = $derived<string | null>(overview?.readme ?? null);
+	const settings = $derived<ProjectSettings | null>(overview?.settings ?? null);
 
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
@@ -54,27 +61,45 @@
 		return value ? new Date(value).toLocaleDateString() : '';
 	}
 
-	$effect(() => {
-		const _tenant = tenant;
-		const _project = project;
-		if (!_tenant || !_project) return;
-		loading = true;
-		(async () => {
-			try {
-				const ov = await getProjectOverview(_tenant, _project);
-				overview = ov;
-				workspaces = ov.workspaces;
-				releases = ov.releases ?? [];
-				readme = ov.readme;
-				settings = ov.settings;
-			} catch {
-				overview = null;
-			} finally {
-				loading = false;
-			}
-		})();
+	const unsubscribe = appData.subscribe((value) => {
+		signedIn = Boolean(value.me);
+		if (signedIn && !overview) void loadAuthedOverview();
 	});
+
+	onDestroy(unsubscribe);
+
+	$effect(() => {
+		authedOverview = null;
+		authedLoadKey = '';
+		loading = false;
+		if (!data.overview && signedIn) void loadAuthedOverview();
+	});
+
+	function applyOverview(value: ProjectOverview | null) {
+		authedOverview = value;
+		loading = false;
+	}
+
+	async function loadAuthedOverview() {
+		const key = `${tenant}/${project}`;
+		if (authedLoadKey === key) return;
+		authedLoadKey = key;
+		loading = true;
+		try {
+			applyOverview(await getProjectOverview(tenant, project));
+		} catch {
+			applyOverview(null);
+		}
+	}
 </script>
+
+<svelte:head>
+	<title>{data.seo.title}</title>
+	<meta name="description" content={data.seo.description} />
+	<meta property="og:title" content={data.seo.title} />
+	<meta property="og:description" content={data.seo.description} />
+	<meta property="og:type" content="article" />
+</svelte:head>
 
 {#if loading}
 	<Spinner />
@@ -186,5 +211,9 @@
 				</div>
 			{/each}
 		</div>
+	</div>
+{:else}
+	<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+		<p class="text-sm text-[#8c887e]">{data.accessStatus === 404 ? 'Project not found.' : 'This project is private.'}</p>
 	</div>
 {/if}

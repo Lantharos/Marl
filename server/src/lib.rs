@@ -5,8 +5,8 @@ use sty_protocol::{
     CreateIssueRequest, HeadResponse, HeadUpdateRequest, HistoryEntry, HistoryResponse,
     HistorySignature, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
     ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse,
-    SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest,
-    WorkspaceStateResponse, WorkspaceSummary,
+    SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
+    UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary, validate_segment,
 };
 use worker::*;
 
@@ -70,6 +70,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/follows", follows)
         .get_async("/v1/discover/projects", discover_projects)
         .get_async("/v1/projects", list_projects)
+        .get_async("/v1/tenants/:tenant/projects", tenant_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
         .get_async(

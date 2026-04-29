@@ -13,9 +13,9 @@
 		type TenantSummary,
 		type ProjectSettings,
 		type ProjectStats,
-		type FollowResponse,
-		type NavbarItem
+		type FollowResponse
 	} from '$lib/api';
+	import { projectTabCount, projectTabs } from '$lib/projectChrome';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -64,30 +64,8 @@
 	const avatarUrl = $derived(profile?.picture);
 	const avatarInitials = $derived(initials(displayName));
 
-	const DEFAULT_TABS: NavbarItem[] = [
-		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
-		{ id: 'code', label: 'Code', type: 'tab', enabled: true, order: 1 },
-		{ id: 'workspaces', label: 'Workspaces', type: 'tab', enabled: true, order: 2 },
-		{ id: 'issues', label: 'Issues', type: 'tab', enabled: true, order: 3 },
-		{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 4 },
-		{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 5 },
-		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 6 },
-		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 7 }
-	];
-
-	function withDefaultTabs(items: NavbarItem[]) {
-		const merged = items.filter((item) => item.id !== 'ready');
-		for (const tab of DEFAULT_TABS) {
-			if (!merged.some((item) => item.id === tab.id)) {
-				merged.push({ ...tab, order: merged.length });
-			}
-		}
-		return merged;
-	}
-
 	const visibleTabs = $derived(() => {
-		const items = settings?.navbar_items?.length ? settings.navbar_items : DEFAULT_TABS;
-		return withDefaultTabs(items).filter((t) => t.enabled).sort((a, b) => a.order - b.order);
+		return projectTabs(settings?.navbar_items, 'private');
 	});
 
 	const currentTab = $derived(() => {
@@ -95,8 +73,7 @@
 		const parts = currentPath.split('/').filter(Boolean);
 		if (parts.length < 3) return '';
 		const tab = parts[2];
-		const tabs = settings?.navbar_items?.length ? settings.navbar_items : DEFAULT_TABS;
-		return withDefaultTabs(tabs).find((t) => t.id === tab)?.id ?? '';
+		return projectTabs(settings?.navbar_items, 'private').find((t) => t.id === tab)?.id ?? '';
 	});
 
 	$effect(() => {
@@ -183,21 +160,6 @@
 		showCreateOrg = false;
 	}
 
-	function tabCount(id: string) {
-		if (!stats) return null;
-		switch (id) {
-			case 'workspaces':
-				return stats.workspace_count;
-			case 'issues':
-				return stats.open_issue_count;
-			case 'releases':
-				return stats.release_count;
-			case 'history':
-				return stats.history_count;
-			default:
-				return null;
-		}
-	}
 </script>
 
 <header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
@@ -332,9 +294,9 @@
 							<ExternalLink class="h-3 w-3" />
 						{/if}
 					</a>
-				{:else}
+					{:else}
 					{@const href = tab.id ? `/${currentTenant}/${currentProject}/${tab.id}` : `/${currentTenant}/${currentProject}`}
-					{@const count = tabCount(tab.id)}
+					{@const count = projectTabCount(stats, tab.id)}
 					<a
 						{href}
 						class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium {currentTab() === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"

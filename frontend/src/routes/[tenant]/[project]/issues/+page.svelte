@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 	import {
 		createIssue,
 		createLabel,
@@ -15,6 +16,7 @@
 		type Milestone,
 		type Paginated
 	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
@@ -62,6 +64,13 @@
 	let milestoneTitle = $state('');
 	let milestoneDescription = $state('');
 	let milestoneDue = $state('');
+	let canMutate = $state(false);
+
+	const unsubscribe = appData.subscribe((value) => {
+		canMutate = Boolean(value.me);
+	});
+
+	onDestroy(unsubscribe);
 
 	const issues = $derived(issueData?.items ?? []);
 	const labels = $derived(labelData?.items ?? []);
@@ -113,8 +122,12 @@
 	const exactDraftLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelDraft.trim().toLowerCase()));
 	const exactDraftAssignee = $derived(people().find((person) => person.toLowerCase() === assigneeDraft.trim().toLowerCase()));
 	const canCreateIssue = $derived(
-		!!title.trim() && !busy && (!labelDraft.trim() || !!exactDraftLabel) && (!assigneeDraft.trim() || !!exactDraftAssignee)
+		canMutate && !!title.trim() && !busy && (!labelDraft.trim() || !!exactDraftLabel) && (!assigneeDraft.trim() || !!exactDraftAssignee)
 	);
+
+	$effect(() => {
+		if (!canMutate) showIssueForm = false;
+	});
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
@@ -306,13 +319,15 @@
 			</div>
 		{/if}
 
-		<div class="ml-auto">
+		{#if canMutate}
+			<div class="ml-auto">
 			{#if activeTab === 'issues'}
 				<button class="inline-flex items-center gap-1 bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showIssueForm = !showIssueForm)}>
 					<Plus class="h-3.5 w-3.5" /> New issue
 				</button>
 			{/if}
-		</div>
+			</div>
+		{/if}
 	</div>
 
 	{#if error}
@@ -322,7 +337,7 @@
 	{#if loading}
 		<Spinner />
 	{:else if activeTab === 'issues'}
-		{#if showIssueForm}
+		{#if canMutate && showIssueForm}
 			<div class="mb-4 grid gap-3 bg-[#141412] p-4">
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Title" bind:value={title} />
 				<textarea class="min-h-[110px] resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Description" bind:value={body}></textarea>
@@ -417,7 +432,7 @@
 		</div>
 		<PaginationControls data={issueData} onPage={(page) => (issuePage = page)} />
 	{:else if activeTab === 'labels'}
-		<div class="grid gap-5 lg:grid-cols-[1fr_320px]">
+		<div class={canMutate ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
 			<div class="divide-y divide-[#252522] bg-[#141412]">
 				{#each filteredLabels as label}
 					<button class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#191917]" onclick={() => setLabelFilter(label.name)}>
@@ -434,6 +449,7 @@
 					</div>
 				{/each}
 			</div>
+			{#if canMutate}
 			<form class="grid h-fit gap-3 bg-[#141412] p-4" onsubmit={(event) => { event.preventDefault(); handleCreateLabel(); }}>
 				<div class="text-sm font-medium text-[#eae9e4]">New label</div>
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Name" bind:value={labelName} />
@@ -444,10 +460,11 @@
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Description" bind:value={labelDescription} />
 				<button class="bg-[#eae9e4] px-3 py-2 text-xs font-medium text-[#0f0f0d]" disabled={busy || !labelName.trim()}>Create label</button>
 			</form>
+			{/if}
 		</div>
 		<PaginationControls data={labelData} onPage={(page) => (labelPage = page)} />
 	{:else}
-		<div class="grid gap-5 lg:grid-cols-[1fr_320px]">
+		<div class={canMutate ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
 			<div class="divide-y divide-[#252522] bg-[#141412]">
 				{#each filteredMilestones as milestone}
 					<div class="px-4 py-3">
@@ -468,6 +485,7 @@
 					</div>
 				{/each}
 			</div>
+			{#if canMutate}
 			<form class="grid h-fit gap-3 bg-[#141412] p-4" onsubmit={(event) => { event.preventDefault(); handleCreateMilestone(); }}>
 				<div class="text-sm font-medium text-[#eae9e4]">New milestone</div>
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Title" bind:value={milestoneTitle} />
@@ -475,6 +493,7 @@
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Due date, YYYY-MM-DD" bind:value={milestoneDue} />
 				<button class="bg-[#eae9e4] px-3 py-2 text-xs font-medium text-[#0f0f0d]" disabled={busy || !milestoneTitle.trim()}>Create milestone</button>
 			</form>
+			{/if}
 		</div>
 		<PaginationControls data={milestoneData} onPage={(page) => (milestonePage = page)} />
 	{/if}

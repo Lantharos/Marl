@@ -201,6 +201,19 @@ export async function listTenantProjects(tenant: string, options: ApiOptions = {
 	return all.filter((p) => p.tenant === tenant);
 }
 
+export async function listTenantProjectCards(
+	tenant: string,
+	query: string,
+	options: PageOptions = {}
+): Promise<Paginated<ProjectDiscoveryItem>> {
+	const params = new URLSearchParams();
+	params.set('page', String(options.page ?? 1));
+	params.set('per_page', String(options.perPage ?? 30));
+	if (query.trim()) params.set('q', query.trim());
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects?${params}`, { signal: options.signal });
+	return (await response.json()) as Paginated<ProjectDiscoveryItem>;
+}
+
 export async function createOrg(name: string) {
 	const response = await authedFetch('/v1/orgs', {
 		method: 'POST',

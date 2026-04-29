@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 	import {
 		createRelease,
 		isAbortError,
@@ -11,6 +12,7 @@
 		type ReleaseArtifact,
 		type TagInfo
 	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import { apiBase } from '$lib/session';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
@@ -40,6 +42,13 @@
 	let dragging = $state(false);
 	let busy = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
+	let canMutate = $state(false);
+
+	const unsubscribe = appData.subscribe((value) => {
+		canMutate = Boolean(value.me);
+	});
+
+	onDestroy(unsubscribe);
 
 	const releases = $derived(releaseData?.items ?? []);
 	const tagSuggestions = $derived(() => {
@@ -53,6 +62,10 @@
 	});
 	const exactTag = $derived(tags.find((item) => (item.tag ?? item.name ?? item.id ?? '').toLowerCase() === tag.trim().toLowerCase()));
 	const tagWillBeCreated = $derived(!!tag.trim() && !exactTag);
+
+	$effect(() => {
+		if (!canMutate) showForm = false;
+	});
 
 	function releaseTitle(release: Release) {
 		return release.name?.trim() || release.tag;
@@ -179,12 +192,14 @@
 			<h3 class="text-base font-semibold text-[#f0eee4]">Releases</h3>
 			<p class="mt-1 text-sm text-[#8c887e]">Changelogs, pinned source snapshots, and uploaded artifacts.</p>
 		</div>
-		<button class="inline-flex items-center gap-1 rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showForm = !showForm)}>
-			<Plus class="h-3.5 w-3.5" /> New release
-		</button>
+		{#if canMutate}
+			<button class="inline-flex items-center gap-1 rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showForm = !showForm)}>
+				<Plus class="h-3.5 w-3.5" /> New release
+			</button>
+		{/if}
 	</div>
 
-	{#if showForm}
+	{#if canMutate && showForm}
 		<div class="mb-5 grid gap-4 rounded border border-[#2a2a28] bg-[#141412] p-4">
 			<div class="grid gap-3 md:grid-cols-2 md:items-start">
 				<div class="grid gap-2">

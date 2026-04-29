@@ -8,6 +8,7 @@
 		type PanelItem,
 		type ProjectSettings
 	} from '$lib/api';
+	import { DEFAULT_PROJECT_TABS, mergeProjectTabs } from '$lib/projectChrome';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronUp from 'lucide-svelte/icons/chevron-up';
@@ -29,32 +30,11 @@
 	let error = $state('');
 	let busy = $state(false);
 
-	const DEFAULT_NAVBAR: NavbarItem[] = [
-		{ id: '', label: 'Overview', type: 'tab', enabled: true, order: 0 },
-		{ id: 'code', label: 'Code', type: 'tab', enabled: true, order: 1 },
-		{ id: 'workspaces', label: 'Workspaces', type: 'tab', enabled: true, order: 2 },
-		{ id: 'issues', label: 'Issues', type: 'tab', enabled: true, order: 3 },
-		{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 4 },
-		{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 5 },
-		{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 6 },
-		{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 7 }
-	];
-
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
 		{ id: 'releases', title: 'Releases', type: 'releases', enabled: true, order: 1 },
 		{ id: 'activity', title: 'Activity', type: 'activity', enabled: true, order: 2 }
 	];
-
-	function withDefaultNavbar(items: NavbarItem[]) {
-		const merged = items.filter((item) => item.id !== 'ready');
-		for (const item of DEFAULT_NAVBAR) {
-			if (!merged.some((candidate) => candidate.id === item.id)) {
-				merged.push({ ...item, order: merged.length });
-			}
-		}
-		return merged;
-	}
 
 	function withDefaultPanels(items: PanelItem[]) {
 		const merged = items.filter((item) => item.id !== 'stats' && (item.type as string) !== 'stats');
@@ -66,7 +46,7 @@
 		return merged;
 	}
 
-	const navbarItems = $derived(withDefaultNavbar(settings.navbar_items.length ? settings.navbar_items : DEFAULT_NAVBAR));
+	const navbarItems = $derived(mergeProjectTabs(settings.navbar_items.length ? settings.navbar_items : DEFAULT_PROJECT_TABS));
 	const panelItems = $derived(withDefaultPanels(settings.panels.length ? settings.panels : DEFAULT_PANELS));
 
 	let showAddNavbar = $state(false);

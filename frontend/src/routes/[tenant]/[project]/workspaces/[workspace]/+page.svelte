@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import {
 		getWorkspaceDetail,
 		getProjectFile,
@@ -9,6 +10,7 @@
 		markWorkspaceReady,
 		type ProjectFile
 	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
@@ -23,6 +25,13 @@
 	let error = $state('');
 	let busy = $state(false);
 	let fileController: AbortController | null = null;
+	let canMutate = $state(false);
+
+	const unsubscribe = appData.subscribe((value) => {
+		canMutate = Boolean(value.me);
+	});
+
+	onDestroy(unsubscribe);
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
@@ -107,6 +116,7 @@
 					{/if}
 				</div>
 			</div>
+			{#if canMutate}
 			<div class="flex gap-2">
 				{#if !detail.is_ready}
 					<button
@@ -126,6 +136,7 @@
 					</button>
 				{/if}
 			</div>
+			{/if}
 		</div>
 
 		<div class="grid gap-5 xl:grid-cols-[1fr_300px]">

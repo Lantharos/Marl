@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 	import {
 		addIssueLabel,
 		assignIssue,
@@ -11,6 +12,7 @@
 		type Comment,
 		type Issue
 	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import CommentThread from '$lib/components/CommentThread.svelte';
 	import { userName } from '$lib/identity';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
@@ -29,6 +31,17 @@
 	let label = $state('');
 	let assignee = $state('');
 	let busy = $state(false);
+	let canMutate = $state(false);
+
+	const unsubscribe = appData.subscribe((value) => {
+		canMutate = Boolean(value.me);
+	});
+
+	onDestroy(unsubscribe);
+
+	$effect(() => {
+		if (!canMutate) editing = false;
+	});
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
@@ -139,9 +152,11 @@
 						#{issue.number} opened by {userName(issue.author, issue.author_profile)} on {new Date(issue.created_at).toLocaleDateString()}
 					</div>
 				</div>
-				<button class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" onclick={handleStatusChange}>
-					{(issue.state ?? issue.status) === 'open' ? 'Close' : 'Reopen'}
-				</button>
+				{#if canMutate}
+					<button class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" onclick={handleStatusChange}>
+						{(issue.state ?? issue.status) === 'open' ? 'Close' : 'Reopen'}
+					</button>
+				{/if}
 			</div>
 
 			{#if error}
@@ -151,7 +166,9 @@
 			<div class="rounded bg-[#141412]">
 				<div class="flex items-center justify-between border-b border-[#252522] px-4 py-2">
 					<div class="text-sm font-medium text-[#eae9e4]">{userName(issue.author, issue.author_profile)}</div>
-					<button class="text-xs text-[#8c887e] hover:text-[#eae9e4]" onclick={() => (editing = !editing)}>{editing ? 'Cancel' : 'Edit'}</button>
+					{#if canMutate}
+						<button class="text-xs text-[#8c887e] hover:text-[#eae9e4]" onclick={() => (editing = !editing)}>{editing ? 'Cancel' : 'Edit'}</button>
+					{/if}
 				</div>
 				{#if editing}
 					<div class="grid gap-3 p-4">
@@ -167,7 +184,7 @@
 
 			<div class="mt-6">
 				<div class="mb-3 text-sm font-medium text-[#eae9e4]">Comments <span class="text-[#6f6b5f]">{issue.comments.length}</span></div>
-				<CommentThread comments={issue.comments} onSubmit={handleComment} />
+				<CommentThread comments={issue.comments} onSubmit={handleComment} readonly={!canMutate} />
 			</div>
 		</section>
 
@@ -181,10 +198,12 @@
 						<span class="text-xs text-[#6f6b5f]">None</span>
 					{/each}
 				</div>
-				<div class="mt-2 flex gap-2">
-					<input class="min-w-0 flex-1 rounded bg-[#141412] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Add label" bind:value={label} />
-					<button class="rounded bg-[#2a2a28] px-2 text-xs text-[#eae9e4]" disabled={busy || !label.trim()} onclick={handleAddLabel}>Add</button>
-				</div>
+				{#if canMutate}
+					<div class="mt-2 flex gap-2">
+						<input class="min-w-0 flex-1 rounded bg-[#141412] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Add label" bind:value={label} />
+						<button class="rounded bg-[#2a2a28] px-2 text-xs text-[#eae9e4]" disabled={busy || !label.trim()} onclick={handleAddLabel}>Add</button>
+					</div>
+				{/if}
 			</section>
 
 			<section>
@@ -196,10 +215,12 @@
 						<p class="text-xs text-[#6f6b5f]">No assignees.</p>
 					{/each}
 				</div>
-				<div class="mt-2 flex gap-2">
-					<input class="min-w-0 flex-1 rounded bg-[#141412] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Assign user" bind:value={assignee} />
-					<button class="rounded bg-[#2a2a28] px-2 text-xs text-[#eae9e4]" disabled={busy || !assignee.trim()} onclick={handleAssign}>Add</button>
-				</div>
+				{#if canMutate}
+					<div class="mt-2 flex gap-2">
+						<input class="min-w-0 flex-1 rounded bg-[#141412] px-2 py-1.5 text-xs text-[#eae9e4] outline-none" placeholder="Assign user" bind:value={assignee} />
+						<button class="rounded bg-[#2a2a28] px-2 text-xs text-[#eae9e4]" disabled={busy || !assignee.trim()} onclick={handleAssign}>Add</button>
+					</div>
+				{/if}
 			</section>
 
 			<section>

@@ -14,6 +14,7 @@
 		clearStyToken,
 		hydrateSession,
 		signOut,
+		startLogin,
 		type AveProfile
 	} from '$lib/session';
 	import TopNav from '$lib/components/TopNav.svelte';
@@ -31,6 +32,19 @@
 	let bootstrapDone = false;
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
 	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/'));
+	const isErrorPage = $derived($page.status >= 400);
+	const pathParts = $derived($page.url.pathname.split('/').filter(Boolean));
+	const reservedRoot = $derived(['auth', 'settings', 'verify'].includes(pathParts[0] ?? ''));
+	const projectSection = $derived(pathParts[2] ?? '');
+	const isPublicProjectSection = $derived(!['settings', 'automation', 'protocol'].includes(projectSection));
+	const isLandingPage = $derived($page.url.pathname === '/');
+	const isProjectRoute = $derived(pathParts.length >= 2 && !reservedRoot);
+	const isPublicRoute = $derived(
+		isLandingPage ||
+			(pathParts.length === 1 && !reservedRoot) ||
+			(pathParts.length >= 2 && !reservedRoot && isPublicProjectSection)
+	);
+	const hasPublicShell = $derived(isPublicRoute && !isLandingPage && !isProjectRoute);
 
 	$effect(() => {
 		if (isStandaloneRoute) {
@@ -114,8 +128,24 @@
 	<title>sty</title>
 </svelte:head>
 
-{#if isStandaloneRoute}
+{#if isStandaloneRoute || isErrorPage}
 	{@render children()}
+{:else if status !== 'signedIn' && isLandingPage}
+	{@render children()}
+{:else if status !== 'signedIn' && isProjectRoute && isPublicRoute}
+	{@render children()}
+{:else if status !== 'signedIn' && hasPublicShell}
+	<div class="min-h-screen bg-[#0f0f0d]">
+		<header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
+			<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-2.5">
+				<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
+				<button class="rounded border border-[#2a2a28] px-3 py-1.5 text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" onclick={startLogin}>
+					Sign in
+				</button>
+			</div>
+		</header>
+		{@render children()}
+	</div>
 {:else if status === 'signedOut'}
 	<main class="min-h-screen bg-[#0f0f0d]">
 		<!-- Hero -->
@@ -206,7 +236,7 @@
 		<!-- Footer -->
 		<footer class="border-t border-[#2a2a28] px-6 py-8 md:px-12 lg:px-20">
 			<div class="mx-auto max-w-4xl text-center text-xs text-[#6f6b5f]">
-				sty — where pigs ship code
+				sty - where pigs ship code
 			</div>
 		</footer>
 	</main>

@@ -26,12 +26,12 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
     if let Some(response) = not_modified_response(&req, &etag, false, 15, false)? {
         return Ok(response);
     }
-    let history = d1::project_history_with_limit(&database, &tenant, &project, Some(20)).await?;
+    let history = d1::project_history_with_limit(&database, &tenant, &project, Some(10)).await?;
     let readme =
         project_readme_text(&ctx.env, &database, &tenant, &project, &default_workspace).await?;
     let recent_activity = history
         .into_iter()
-        .take(20)
+        .take(10)
         .map(|entry| {
             json!({
                 "id": entry.id,

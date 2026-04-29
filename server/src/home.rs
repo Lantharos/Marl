@@ -25,6 +25,50 @@ pub(crate) async fn discover_projects(req: Request, ctx: RouteContext<()>) -> Re
     Response::from_json(&paginate_vec(url, projects))
 }
 
+pub(crate) async fn tenant_projects(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let tenant = param(&ctx, "tenant")?;
+    validate_segment(&tenant).map_err(|error| Error::RustError(error.to_string()))?;
+    let url = req.url()?;
+    let query = url
+        .query_pairs()
+        .find_map(|(key, value)| (key == "q").then(|| value.to_string()))
+        .unwrap_or_default();
+    let database = db(&ctx.env)?;
+    if !d1::tenant_exists(&database, &tenant).await? {
+        return json_error(404, "tenant not found");
+    }
+    let user = optional_auth(&req, &ctx.env).await?;
+    let can_access = match user.as_deref() {
+        Some(user) => d1::tenant_access(&database, &tenant, user).await?,
+        None => false,
+    };
+    let scope = if can_access { "all" } else { "public" };
+    let projects = if can_access {
+        d1::tenant_project_cards(&database, &tenant, &query, 500).await?
+    } else {
+        d1::tenant_public_project_cards(&database, &tenant, &query, 500).await?
+    };
+    let sty_protocol::Paginated {
+        items,
+        page,
+        per_page,
+        total,
+        total_pages,
+        next,
+        prev,
+    } = paginate_vec(url, projects);
+    Response::from_json(&json!({
+        "items": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "next": next,
+        "prev": prev,
+        "scope": scope,
+    }))
+}
+
 pub(crate) async fn follows(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let url = req.url()?;

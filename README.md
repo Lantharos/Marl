@@ -141,7 +141,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - ready queues and workspace merge metadata
 - hooks and webhooks
 - search
-- private project follows, home feed, public project discovery, and project settings
+- private project follows, home feed, public project discovery, paginated tenant project pages, and project settings
 - releases, tags, changelog notes, pinned source snapshots, and uploaded artifacts
 - signed snapshot verification with user-scoped signing keys
 - profiles and account signing keys

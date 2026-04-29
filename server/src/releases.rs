@@ -33,9 +33,17 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
 
     let principal = TokenPrincipal { user: user.clone() };
     let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
-    let latest_snapshot = d1::head(&database, &tenant, &project, &settings.default_workspace).await?;
-    let tag_item = ensure_tag(&database, &tenant, &project, &tag, &user, latest_snapshot.as_deref())
-        .await?;
+    let latest_snapshot =
+        d1::head(&database, &tenant, &project, &settings.default_workspace).await?;
+    let tag_item = ensure_tag(
+        &database,
+        &tenant,
+        &project,
+        &tag,
+        &user,
+        latest_snapshot.as_deref(),
+    )
+    .await?;
     let now = now_iso();
     let snapshot = body["snapshot"]
         .as_str()
@@ -81,10 +89,7 @@ pub async fn get_release(req: Request, ctx: RouteContext<()>) -> Result<Response
     Response::from_json(&item)
 }
 
-pub async fn upload_release_artifact(
-    mut req: Request,
-    ctx: RouteContext<()>,
-) -> Result<Response> {
+pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let release_id = param(&ctx, "item_id")?;
@@ -92,7 +97,9 @@ pub async fn upload_release_artifact(
     if !d1::project_access(&database, &tenant, &project, &user).await? {
         return project_write_error(&database, &tenant, &project).await;
     }
-    let Some(mut release) = release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await? else {
+    let Some(mut release) =
+        release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
+    else {
         return json_error(404, "release not found");
     };
     let storage_release_id = release["id"]
@@ -163,14 +170,18 @@ pub async fn upload_release_artifact(
         .ok_or_else(|| Error::RustError("release artifacts must be an array".to_string()))?;
     artifacts.push(artifact);
     release["updated_at"] = json!(now_iso());
-    upsert_release(&database, &tenant, &project, &storage_release_id, release.clone()).await?;
+    upsert_release(
+        &database,
+        &tenant,
+        &project,
+        &storage_release_id,
+        release.clone(),
+    )
+    .await?;
     Response::from_json(&release)
 }
 
-pub async fn download_release_artifact(
-    req: Request,
-    ctx: RouteContext<()>,
-) -> Result<Response> {
+pub async fn download_release_artifact(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let release_id = param(&ctx, "item_id")?;
@@ -181,7 +192,9 @@ pub async fn download_release_artifact(
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
     );
-    let Some(release) = release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await? else {
+    let Some(release) =
+        release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
+    else {
         return json_error(404, "release not found");
     };
     let Some(artifact) = release_artifact(&release, &artifact_id) else {
@@ -208,7 +221,13 @@ pub async fn download_release_artifact(
             &format!("attachment; filename=\"{}\"", safe_file_name(name)),
         )?;
     }
-    apply_cache_headers(headers, object.etag().as_str(), public_cache, 31_536_000, true)?;
+    apply_cache_headers(
+        headers,
+        object.etag().as_str(),
+        public_cache,
+        31_536_000,
+        true,
+    )?;
     Ok(response)
 }
 
@@ -244,8 +263,15 @@ async fn ensure_tag(
     if let Some(snapshot) = snapshot {
         item["snapshot"] = json!(snapshot);
     }
-    upsert_protocol_item(database, tenant, project, "tag", item["id"].as_str().unwrap(), item.clone())
-        .await?;
+    upsert_protocol_item(
+        database,
+        tenant,
+        project,
+        "tag",
+        item["id"].as_str().unwrap(),
+        item.clone(),
+    )
+    .await?;
     Ok(item)
 }
 
@@ -298,8 +324,10 @@ async fn release_item(
         .bind(&[js_str(tenant), js_str(project), js_str(id)])?
         .first(None)
         .await?;
-    row.map(|row| serde_json::from_str(&row.data_json).map_err(|error| Error::RustError(error.to_string())))
-        .transpose()
+    row.map(|row| {
+        serde_json::from_str(&row.data_json).map_err(|error| Error::RustError(error.to_string()))
+    })
+    .transpose()
 }
 
 async fn release_item_by_id_or_tag(
@@ -336,7 +364,8 @@ async fn upsert_protocol_item(
     item: serde_json::Value,
 ) -> Result<()> {
     let now = now_iso();
-    let data_json = serde_json::to_string(&item).map_err(|error| Error::RustError(error.to_string()))?;
+    let data_json =
+        serde_json::to_string(&item).map_err(|error| Error::RustError(error.to_string()))?;
     database
         .prepare(
             "INSERT INTO protocol_items (id, tenant, project, kind, number, data_json, created_at, updated_at)
@@ -367,12 +396,16 @@ fn release_artifact<'a>(
 }
 
 fn release_id(tenant: &str, project: &str, tag: &str) -> String {
-    let digest = hex::encode(Sha256::digest(format!("{tenant}/{project}:{tag}").as_bytes()));
+    let digest = hex::encode(Sha256::digest(
+        format!("{tenant}/{project}:{tag}").as_bytes(),
+    ));
     format!("release:{}", &digest[..24])
 }
 
 fn tag_id(tenant: &str, project: &str, tag: &str) -> String {
-    let digest = hex::encode(Sha256::digest(format!("{tenant}/{project}:{tag}").as_bytes()));
+    let digest = hex::encode(Sha256::digest(
+        format!("{tenant}/{project}:{tag}").as_bytes(),
+    ));
     format!("tag:{}", &digest[..24])
 }
 
@@ -384,7 +417,9 @@ fn release_artifact_key(
     file_name: &str,
 ) -> String {
     let release_key = release_id.replace(['/', '\\'], "_");
-    format!("projects/{tenant}/{project}/releases/{release_key}/artifacts/{artifact_id}/{file_name}")
+    format!(
+        "projects/{tenant}/{project}/releases/{release_key}/artifacts/{artifact_id}/{file_name}"
+    )
 }
 
 fn release_artifact_download_url(

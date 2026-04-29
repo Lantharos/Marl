@@ -100,6 +100,81 @@ pub async fn public_project_cards(
     Ok(rows.into_iter().map(project_card_item).collect())
 }
 
+pub async fn tenant_public_project_cards(
+    db: &D1Database,
+    tenant: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<ProjectDiscoveryItem>> {
+    let trimmed = query.trim().to_ascii_lowercase();
+    let pattern = format!("%{}%", trimmed);
+    let result = db
+        .prepare(
+            "SELECT p.tenant, p.project, p.owner,
+                    COALESCE(ps.workspace_count, 0) AS workspace_count,
+                    COALESCE(ps.open_issue_count, 0) AS open_issue_count,
+                    COALESCE(ps.ready_count, 0) AS ready_count,
+                    COALESCE(ps.release_count, 0) AS release_count,
+                    COALESCE(ps.history_count, 0) AS history_count,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
+             FROM projects p
+             LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
+             WHERE p.tenant = ?1
+             AND COALESCE(json_extract(p.settings_json, '$.visibility'), 'private') = 'public'
+             AND (?2 = '' OR LOWER(p.project) LIKE ?3 OR LOWER(p.tenant || '/' || p.project) LIKE ?3)
+             ORDER BY last_activity_at DESC, p.project
+             LIMIT ?4",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(&trimmed),
+            js_str(&pattern),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
+        .all()
+        .await?;
+    let rows: Vec<ProjectCardRow> = result.results()?;
+    Ok(rows.into_iter().map(project_card_item).collect())
+}
+
+pub async fn tenant_project_cards(
+    db: &D1Database,
+    tenant: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<ProjectDiscoveryItem>> {
+    let trimmed = query.trim().to_ascii_lowercase();
+    let pattern = format!("%{}%", trimmed);
+    let result = db
+        .prepare(
+            "SELECT p.tenant, p.project, p.owner,
+                    COALESCE(ps.workspace_count, 0) AS workspace_count,
+                    COALESCE(ps.open_issue_count, 0) AS open_issue_count,
+                    COALESCE(ps.ready_count, 0) AS ready_count,
+                    COALESCE(ps.release_count, 0) AS release_count,
+                    COALESCE(ps.history_count, 0) AS history_count,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
+             FROM projects p
+             LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
+             WHERE p.tenant = ?1
+             AND (?2 = '' OR LOWER(p.project) LIKE ?3 OR LOWER(p.tenant || '/' || p.project) LIKE ?3)
+             ORDER BY last_activity_at DESC, p.project
+             LIMIT ?4",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(&trimmed),
+            js_str(&pattern),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
+        .all()
+        .await?;
+    let rows: Vec<ProjectCardRow> = result.results()?;
+    Ok(rows.into_iter().map(project_card_item).collect())
+}
+
 pub async fn followed_release_feed(
     db: &D1Database,
     principal: &TokenPrincipal,
