@@ -11,6 +11,14 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
         .ok_or_else(|| Error::RustError("project not found".to_string()))?;
     let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
     let settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
+    let access = d1::project_access_response(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        settings.visibility == "public",
+    )
+    .await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let releases = latest_releases(&database, &tenant, &project, 5).await?;
     let default_workspace = settings.default_workspace.clone();
@@ -19,6 +27,7 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
         &project_summary,
         &workspaces,
         &settings,
+        &access,
         &stats,
         &releases,
         default_head.as_deref(),
@@ -48,6 +57,7 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
         "project": project_summary,
         "workspaces": workspaces,
         "settings": settings,
+        "access": access,
         "readme": readme,
         "stats": stats,
         "recent_activity": recent_activity,
@@ -118,6 +128,7 @@ fn overview_etag(
     project: &ProjectSummary,
     workspaces: &[sty_protocol::WorkspaceState],
     settings: &sty_protocol::ProjectSettings,
+    access: &sty_protocol::AccessResponse,
     stats: &sty_protocol::ProjectStats,
     releases: &[serde_json::Value],
     default_head: Option<&str>,
@@ -126,6 +137,7 @@ fn overview_etag(
         "project": project,
         "workspaces": workspaces,
         "settings": settings,
+        "access": access,
         "stats": stats,
         "releases": releases,
         "default_head": default_head,

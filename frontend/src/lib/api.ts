@@ -2,9 +2,12 @@ import { apiBase, getStyToken } from './session';
 import { authedFetch, notifyProjectStatsChanged, pageQuery, publicFetch } from './apiShared';
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
+import type { AccessResponse, UserProfile } from './collaboratorTypes';
 import type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
+export * from './collaboratorApi';
+export type { AccessResponse, Collaborator, CollaboratorRole, UserProfile } from './collaboratorTypes';
 export * from './issueApi';
 export * from './objectApi';
 export * from './projectDataApi';
@@ -13,20 +16,13 @@ export type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, P
 export interface ProjectSummary {
 	tenant: string;
 	project: string;
+	owner?: string;
 }
 
 export interface TenantSummary {
 	name: string;
 	kind: 'user' | 'org' | string;
-}
-
-export interface UserProfile {
-	user: string;
-	display_name: string;
-	handle?: string | null;
-	avatar_url?: string | null;
-	email?: string | null;
-	updated_at?: string | null;
+	owner?: string;
 }
 
 export interface WorkspaceSummary {
@@ -90,6 +86,7 @@ export interface ProjectOverview {
 	project: ProjectSummary;
 	workspaces: WorkspaceStatus[];
 	settings: ProjectSettings;
+	access: AccessResponse;
 	readme: string | null;
 	stats: {
 		workspace_count: number;

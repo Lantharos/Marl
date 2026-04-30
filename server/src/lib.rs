@@ -12,6 +12,7 @@ use worker::*;
 
 mod account_keys;
 mod auth;
+mod collaborators;
 pub(crate) mod d1;
 mod protocol;
 mod protocol_profiles;
@@ -21,6 +22,7 @@ mod support;
 
 use account_keys::*;
 use auth::verify_ave_id_token;
+use collaborators::*;
 use protocol::*;
 use protocol_ready::*;
 use releases::*;
@@ -53,6 +55,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/session/exchange", exchange_session)
         .delete_async("/v1/session", revoke_session)
         .get_async("/v1/me", me)
+        .get_async("/v1/users/search", search_users)
         .post_async("/v1/remote-approvals", create_remote_approval)
         .get_async("/v1/remote-approvals/:approval_id", get_remote_approval)
         .post_async(
@@ -66,6 +69,16 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/v1/account/ssh-keys", create_account_ssh_key)
         .delete_async("/v1/account/ssh-keys/:key_id", delete_account_ssh_key)
         .post_async("/v1/orgs", create_org)
+        .get_async("/v1/tenants/:tenant/collaborators", list_tenant_collaborators)
+        .post_async("/v1/tenants/:tenant/collaborators", add_tenant_collaborator)
+        .patch_async(
+            "/v1/tenants/:tenant/collaborators/:user",
+            update_tenant_collaborator,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/collaborators/:user",
+            delete_tenant_collaborator,
+        )
         .get_async("/v1/home", home)
         .get_async("/v1/follows", follows)
         .get_async("/v1/discover/projects", discover_projects)
@@ -73,6 +86,26 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/tenants/:tenant/projects", tenant_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/access",
+            project_access,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/collaborators",
+            list_project_collaborators,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/collaborators",
+            add_project_collaborator,
+        )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/collaborators/:user",
+            update_project_collaborator,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/collaborators/:user",
+            delete_project_collaborator,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/overview",
             project_overview,

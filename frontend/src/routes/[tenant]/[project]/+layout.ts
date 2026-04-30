@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import type { ProjectSettings, ProjectStats } from '$lib/api';
+import type { AccessResponse, ProjectSettings, ProjectStats } from '$lib/api';
 import { apiUrl } from '$lib/loadApi';
 import type { LayoutLoad } from './$types';
 
@@ -19,11 +19,12 @@ async function loadProjectChromeItem<T>(fetch: typeof globalThis.fetch, path: st
 
 export const load: LayoutLoad = async ({ fetch, params }) => {
 	const base = `/v1/tenants/${encodeURIComponent(params.tenant)}/projects/${encodeURIComponent(params.project)}`;
-	const [settings, stats] = await Promise.all([
+	const [settings, stats, access] = await Promise.all([
 		loadProjectChromeItem<ProjectSettings>(fetch, `${base}/settings`),
-		loadProjectChromeItem<ProjectStats>(fetch, `${base}/stats`)
+		loadProjectChromeItem<ProjectStats>(fetch, `${base}/stats`),
+		loadProjectChromeItem<AccessResponse>(fetch, `${base}/access`)
 	]);
 	return {
-		projectChrome: { settings, stats }
+		projectChrome: { settings, stats, access }
 	};
 };

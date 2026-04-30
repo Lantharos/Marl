@@ -6,9 +6,11 @@
 		getProjectStats,
 		getProjectSettings,
 		getProjectFollow,
+		getProjectAccess,
 		isAbortError,
 		followProject,
 		unfollowProject,
+		type AccessResponse,
 		type ProjectSummary,
 		type TenantSummary,
 		type ProjectSettings,
@@ -16,6 +18,7 @@
 		type FollowResponse
 	} from '$lib/api';
 	import { projectTabCount, projectTabs } from '$lib/projectChrome';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -46,6 +49,7 @@
 	let settings = $state<ProjectSettings | null>(null);
 	let follow = $state<FollowResponse | null>(null);
 	let stats = $state<ProjectStats | null>(null);
+	let access = $state<AccessResponse | null>(null);
 	let settingsLoading = $state(false);
 	let settingsKey = '';
 	let newOrgName = $state('');
@@ -65,7 +69,7 @@
 	const avatarInitials = $derived(initials(displayName));
 
 	const visibleTabs = $derived(() => {
-		return projectTabs(settings?.navbar_items, 'private');
+		return projectTabs(settings?.navbar_items, access?.can_maintain ? 'private' : 'public');
 	});
 
 	const currentTab = $derived(() => {
@@ -73,7 +77,7 @@
 		const parts = currentPath.split('/').filter(Boolean);
 		if (parts.length < 3) return '';
 		const tab = parts[2];
-		return projectTabs(settings?.navbar_items, 'private').find((t) => t.id === tab)?.id ?? '';
+		return projectTabs(settings?.navbar_items, access?.can_maintain ? 'private' : 'public').find((t) => t.id === tab)?.id ?? '';
 	});
 
 	$effect(() => {
@@ -83,6 +87,8 @@
 			settings = null;
 			follow = null;
 			stats = null;
+			access = null;
+			currentProjectAccess.set(null);
 			return;
 		}
 		if (key === settingsKey) return;
@@ -105,19 +111,24 @@
 	async function loadProjectChrome(tenant: string, project: string, signal?: AbortSignal) {
 		settingsLoading = true;
 		try {
-			const [loadedSettings, loadedStats, loadedFollow] = await Promise.all([
+			const [loadedSettings, loadedStats, loadedFollow, loadedAccess] = await Promise.all([
 				getProjectSettings(tenant, project, signal ? { signal } : {}).catch(() => null),
 				getProjectStats(tenant, project, signal ? { signal } : {}),
-				getProjectFollow(tenant, project, signal ? { signal } : {}).catch(() => null)
+				getProjectFollow(tenant, project, signal ? { signal } : {}).catch(() => null),
+				getProjectAccess(tenant, project, signal ? { signal } : {}).catch(() => null)
 			]);
 			settings = loadedSettings;
 			stats = loadedStats;
 			follow = loadedFollow;
+			access = loadedAccess;
+			currentProjectAccess.set(loadedAccess);
 		} catch (error) {
 			if (isAbortError(error)) return;
 			settings = null;
 			follow = null;
 			stats = null;
+			access = null;
+			currentProjectAccess.set(null);
 		} finally {
 			if (!signal?.aborted) settingsLoading = false;
 		}

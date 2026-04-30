@@ -12,10 +12,10 @@
 		type Comment,
 		type Issue
 	} from '$lib/api';
-	import { appData } from '$lib/appState';
 	import CommentThread from '$lib/components/CommentThread.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
 
@@ -34,8 +34,8 @@
 	let busy = $state(false);
 	let canMutate = $state(false);
 
-	const unsubscribe = appData.subscribe((value) => {
-		canMutate = Boolean(value.me);
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canMutate = Boolean(value?.can_write);
 	});
 
 	onDestroy(unsubscribe);

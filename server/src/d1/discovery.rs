@@ -5,6 +5,7 @@ pub async fn dashboard_project_cards(
     db: &D1Database,
     principal: &TokenPrincipal,
 ) -> Result<Vec<ProjectDiscoveryItem>> {
+    ensure_collaboration_schema(db).await?;
     let result = db
         .prepare(
             "SELECT p.tenant, p.project, p.owner,
@@ -18,14 +19,13 @@ pub async fn dashboard_project_cards(
              FROM projects p
              JOIN tenants t ON t.name = p.tenant
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
-             WHERE (t.owner = ?1 OR t.members_json LIKE ?2)
-             AND (t.kind != 'user' OR t.name = (SELECT handle FROM user_profiles WHERE user = ?1))
+             WHERE (t.owner = ?1
+                OR p.owner = ?1
+                OR EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant = t.name AND tm.user = ?1)
+                OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.tenant = p.tenant AND pm.project = p.project AND pm.user = ?1))
              ORDER BY last_activity_at DESC, p.tenant, p.project",
         )
-        .bind(&[
-            js_str(&principal.user),
-            js_str(&format!("%\"{}\"%", principal.user)),
-        ])?
+        .bind(&[js_str(&principal.user)])?
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;

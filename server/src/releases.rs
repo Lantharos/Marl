@@ -7,7 +7,7 @@ use crate::support::{
     apply_cache_headers, bucket, db, json_error, object_size_limit, paginate_vec, param,
     project_params,
 };
-use crate::{check_project_access, d1, optional_auth, project_write_error, require_auth};
+use crate::{check_project_access, check_project_role, d1, optional_auth, require_auth};
 
 pub async fn list_releases(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
@@ -27,9 +27,7 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
         return json_error(400, "release requires a tag");
     }
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return project_write_error(&database, &tenant, &project).await;
-    }
+    check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
 
     let principal = TokenPrincipal { user: user.clone() };
     let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
@@ -94,9 +92,7 @@ pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) ->
     let (tenant, project) = project_params(&ctx)?;
     let release_id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return project_write_error(&database, &tenant, &project).await;
-    }
+    check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
     let Some(mut release) =
         release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
     else {

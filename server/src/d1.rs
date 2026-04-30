@@ -53,6 +53,8 @@ fn user_profile_from_parts(
 // -- Auth -------------------------------------------------
 
 mod auth;
+mod collaborator_support;
+mod collaborators;
 mod discovery;
 mod follows;
 mod history;
@@ -66,6 +68,8 @@ mod user_keys;
 mod workspaces;
 
 pub use auth::*;
+pub use collaborator_support::*;
+pub use collaborators::*;
 pub use discovery::*;
 pub use follows::*;
 pub use history::*;

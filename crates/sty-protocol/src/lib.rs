@@ -29,6 +29,8 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "profiles",
             "ssh_keys",
             "remote_approvals",
+            "permissions",
+            "collaborators",
         ]
         .into_iter()
         .map(ToOwned::to_owned)
@@ -151,6 +153,46 @@ pub struct UserProfile {
     pub avatar_url: Option<String>,
     pub email: Option<String>,
     pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Collaborator {
+    pub user: String,
+    pub role: String,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<UserProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+    pub direct: bool,
+    pub removable: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CollaboratorRequest {
+    pub user: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CollaboratorUpdateRequest {
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AccessResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    pub can_read: bool,
+    pub can_write: bool,
+    pub can_maintain: bool,
+    pub can_admin: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

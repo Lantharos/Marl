@@ -80,6 +80,7 @@ pub async fn get_project(
 }
 
 pub async fn projects(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>> {
+    ensure_collaboration_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         tenant: String,
@@ -89,14 +90,13 @@ pub async fn projects(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec
         .prepare(
             "SELECT p.tenant, p.project FROM projects p \
              JOIN tenants t ON t.name = p.tenant \
-             WHERE (t.owner = ?1 OR t.members_json LIKE ?2) \
-             AND (t.kind != 'user' OR t.name = (SELECT handle FROM user_profiles WHERE user = ?1)) \
+             WHERE (t.owner = ?1 \
+                OR p.owner = ?1 \
+                OR EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant = t.name AND tm.user = ?1) \
+                OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.tenant = p.tenant AND pm.project = p.project AND pm.user = ?1)) \
              ORDER BY p.tenant, p.project",
         )
-        .bind(&[
-            js_str(&principal.user),
-            js_str(&format!("%\"{}\"%", principal.user)),
-        ])?
+        .bind(&[js_str(&principal.user)])?
         .all()
         .await?;
     let rows: Vec<Row> = result.results()?;
@@ -118,21 +118,17 @@ pub async fn project_access(
 ) -> Result<bool> {
     #[derive(Deserialize)]
     struct Row {
-        owner: String,
+        count: i64,
     }
     let row: Option<Row> = db
-        .prepare(
-            "SELECT owner FROM projects \
-             WHERE tenant = ?1 AND project = ?2",
-        )
+        .prepare("SELECT COUNT(*) AS count FROM projects WHERE tenant = ?1 AND project = ?2")
         .bind(&[js_str(tenant), js_str(project)])?
         .first(None)
         .await?;
-    Ok(match row {
-        Some(row) if row.owner == user => true,
-        Some(_) => tenant_access(db, tenant, user).await?,
-        None => false,
-    })
+    if !row.is_some_and(|row| row.count > 0) {
+        return Ok(false);
+    }
+    Ok(project_effective_role(db, tenant, project, user).await?.is_some())
 }
 
 pub async fn project_exists(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
@@ -149,6 +145,7 @@ pub async fn project_exists(db: &D1Database, tenant: &str, project: &str) -> Res
 }
 
 pub async fn tenants(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>> {
+    ensure_collaboration_schema(db).await?;
     let account_tenant = ensure_account_tenant(db, &principal.user).await?;
     #[derive(Deserialize)]
     struct Row {
@@ -159,13 +156,12 @@ pub async fn tenants(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<
     let result = db
         .prepare(
             "SELECT name, kind, owner FROM tenants \
-             WHERE (owner = ?1 OR members_json LIKE ?2) \
-             AND (kind != 'user' OR name = ?3) \
-             ORDER BY CASE WHEN name = ?3 THEN 0 ELSE 1 END, name",
+             WHERE (owner = ?1 OR EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant = tenants.name AND tm.user = ?1)) \
+             AND (kind != 'user' OR name = ?2) \
+             ORDER BY CASE WHEN name = ?2 THEN 0 ELSE 1 END, name",
         )
         .bind(&[
             js_str(&principal.user),
-            js_str(&format!("%\"{}\"%", principal.user)),
             js_str(&account_tenant),
         ])?
         .all()
@@ -204,47 +200,17 @@ pub async fn create_org(
 }
 
 pub async fn tenant_control(db: &D1Database, tenant: &str, user: &str) -> Result<bool> {
-    let account_tenant = account_tenant_name(db, user).await?;
-    if tenant == account_tenant {
-        ensure_account_tenant(db, user).await?;
-        return Ok(true);
-    }
-    #[derive(Deserialize)]
-    struct Row {
-        owner: String,
-    }
-    let row: Option<Row> = db
-        .prepare("SELECT owner FROM tenants WHERE name = ?1")
-        .bind(&[js_str(tenant)])?
-        .first(None)
-        .await?;
-    Ok(row.is_some_and(|row| row.owner == user))
+    Ok(role_allows(
+        tenant_effective_role(db, tenant, user).await?.as_deref(),
+        "maintainer",
+    ))
 }
 
 pub async fn tenant_access(db: &D1Database, tenant: &str, user: &str) -> Result<bool> {
-    let account_tenant = account_tenant_name(db, user).await?;
-    if tenant == account_tenant {
-        ensure_account_tenant(db, user).await?;
-        return Ok(true);
-    }
-    #[derive(Deserialize)]
-    struct Row {
-        owner: String,
-        members_json: String,
-    }
-    let row: Option<Row> = db
-        .prepare("SELECT owner, members_json FROM tenants WHERE name = ?1")
-        .bind(&[js_str(tenant)])?
-        .first(None)
-        .await?;
-    Ok(match row {
-        Some(r) if r.owner == user => true,
-        Some(r) => {
-            let members: Vec<String> = serde_json::from_str(&r.members_json).unwrap_or_default();
-            members.iter().any(|m| m == user)
-        }
-        None => false,
-    })
+    Ok(role_allows(
+        tenant_effective_role(db, tenant, user).await?.as_deref(),
+        "viewer",
+    ))
 }
 
 pub async fn ensure_account_tenant(db: &D1Database, user: &str) -> Result<String> {
@@ -269,7 +235,7 @@ pub async fn ensure_account_tenant(db: &D1Database, user: &str) -> Result<String
     Ok(tenant)
 }
 
-async fn account_tenant_name(db: &D1Database, user: &str) -> Result<String> {
+pub(crate) async fn account_tenant_name(db: &D1Database, user: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct Row {
         handle: Option<String>,

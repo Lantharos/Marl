@@ -1,4 +1,6 @@
 mod cli;
+mod collaborator_commands;
+mod collaborators;
 mod http;
 mod spinner;
 

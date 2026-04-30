@@ -55,7 +55,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, and cached project statistics.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, and tenant/project collaborators.
 
 Then start the Worker:
 
@@ -133,6 +133,30 @@ pig work ready
 pig sync
 ```
 
+## Collaboration And Permissions
+
+sty has tenant-scoped and project-scoped collaborators.
+
+- `owner` is implicit and cannot be assigned.
+- `maintainer` can manage settings, releases, collaborators, ready merges, hooks, webhooks, and other project administration.
+- `contributor` can sync code, create issues/comments, mark work ready, and update normal project work.
+- `viewer` can read private projects without write access.
+
+Tenant collaborators inherit access into every project in that tenant. Project collaborators apply only to one project. Tenant owners can manage tenant collaborators; project owners, tenant maintainers, and project maintainers can manage project collaborators.
+
+CLI examples:
+
+```powershell
+sty tenant collaborators list tenant
+sty tenant collaborators add tenant kristof --role maintainer
+sty project collaborators list tenant/project
+sty project collaborators add tenant/project ave --role contributor
+sty project collaborators update tenant/project ave --role viewer
+sty project collaborators remove tenant/project ave
+```
+
+The dashboard exposes tenant collaborators on the tenant page and project collaborators in project settings.
+
 ## Protocol Features
 
 The Worker exposes `/v1/capabilities` and advertises the implemented PIG protocol features:
@@ -145,6 +169,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - releases, tags, changelog notes, pinned source snapshots, and uploaded artifacts
 - signed snapshot verification with user-scoped signing keys
 - profiles and account signing keys
+- permissions and collaborators for tenants and projects
 
 Protocol list endpoints return the standard pagination envelope:
 

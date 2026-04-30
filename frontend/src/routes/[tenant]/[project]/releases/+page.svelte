@@ -12,12 +12,12 @@
 		type ReleaseArtifact,
 		type TagInfo
 	} from '$lib/api';
-	import { appData } from '$lib/appState';
 	import { apiBase } from '$lib/session';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import Box from 'lucide-svelte/icons/box';
 	import Download from 'lucide-svelte/icons/download';
 	import GitCommit from 'lucide-svelte/icons/git-commit';
@@ -44,8 +44,8 @@
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let canMutate = $state(false);
 
-	const unsubscribe = appData.subscribe((value) => {
-		canMutate = Boolean(value.me);
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canMutate = Boolean(value?.can_maintain);
 	});
 
 	onDestroy(unsubscribe);

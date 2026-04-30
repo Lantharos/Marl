@@ -9,6 +9,8 @@
 	} from '$lib/api';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import SettingsAutomation from '$lib/components/SettingsAutomation.svelte';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
+	import { onDestroy } from 'svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -22,6 +24,13 @@
 	let hookUrl = $state('');
 	let webhookEvent = $state('snapshot.saved');
 	let webhookUrl = $state('');
+	let canMaintain = $state(false);
+
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canMaintain = Boolean(value?.can_maintain);
+	});
+
+	onDestroy(unsubscribe);
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
@@ -85,6 +94,10 @@
 		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
+	{:else if !canMaintain}
+		<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+			<p class="text-sm text-[#8c887e]">Project automation is limited to maintainers.</p>
+		</div>
 	{:else}
 		<SettingsAutomation
 			{hooks}

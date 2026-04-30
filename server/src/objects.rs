@@ -2,9 +2,7 @@ pub(crate) async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return project_write_error(&database, &tenant, &project).await;
-    }
+    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
     let body: MissingRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
     let mut missing = Vec::new();
@@ -32,9 +30,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
         return json_error(413, "object is larger than the configured upload limit");
     }
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return project_write_error(&database, &tenant, &project).await;
-    }
+    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
     if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
     }
@@ -213,22 +209,27 @@ pub(crate) async fn check_project_access(
     }
 }
 
-pub(crate) async fn project_write_error(
+pub(crate) async fn check_project_role(
     db: &D1Database,
     tenant: &str,
     project: &str,
-) -> Result<Response> {
+    user: &str,
+    minimum: &str,
+) -> Result<()> {
     if !d1::tenant_exists(db, tenant).await? {
-        return json_error(
-            404,
-            &format!("tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"),
-        );
+        return Err(Error::RustError(format!(
+            "tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"
+        )));
     }
     if !d1::project_exists(db, tenant, project).await? {
-        return json_error(
-            404,
-            &format!("project `{tenant}/{project}` does not exist; create it first with `sty init {tenant}/{project}`"),
-        );
+        return Err(Error::RustError(format!(
+            "project `{tenant}/{project}` does not exist; create it first with `sty init {tenant}/{project}`"
+        )));
     }
-    json_error(403, "project access denied")
+    if d1::project_role_allows(db, tenant, project, user, minimum).await? {
+        return Ok(());
+    }
+    Err(Error::RustError(format!(
+        "project {minimum} access denied"
+    )))
 }

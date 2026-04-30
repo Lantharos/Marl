@@ -4,7 +4,7 @@ use worker::*;
 
 use crate::protocol_profiles::profile_json;
 use crate::support::{db, json_error, paginate_vec, param, project_params};
-use crate::{check_project_access, d1, optional_auth, require_auth};
+use crate::{check_project_access, check_project_role, d1, optional_auth, require_auth};
 pub async fn list_labels(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     list_protocol_kind(req, ctx, "label").await
 }
@@ -117,7 +117,8 @@ pub async fn list_reactions(req: Request, ctx: RouteContext<()>) -> Result<Respo
 pub async fn add_reaction(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    check_project_access(&ctx.env, &tenant, &project, Some(&user)).await?;
+    let database = db(&ctx.env)?;
+    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let emoji = body["emoji"].as_str().unwrap_or("+1");
     Response::from_json(&json!([{ "emoji": emoji, "count": 1, "reacted": true }]))
@@ -126,7 +127,8 @@ pub async fn add_reaction(mut req: Request, ctx: RouteContext<()>) -> Result<Res
 pub async fn delete_reaction(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
-    check_project_access(&ctx.env, &tenant, &project, Some(&user)).await?;
+    let database = db(&ctx.env)?;
+    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -177,9 +179,7 @@ pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
     let kind = protocol_item_kind(&database, &tenant, &project, &id).await?;
     database
         .prepare("DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND id = ?3")
@@ -201,9 +201,7 @@ pub async fn close_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
     let Some(mut item) = protocol_item(&database, &tenant, &project, &id).await? else {
         return json_error(404, "item not found");
     };
@@ -217,9 +215,7 @@ pub async fn test_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<R
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
     Response::from_json(&json!({ "ok": true, "tested": id }))
 }
 
@@ -260,9 +256,7 @@ async fn create_protocol_kind(
     let (tenant, project) = project_params(&ctx)?;
     let mut body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let database = db(&ctx.env)?;
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    check_project_role(&database, &tenant, &project, &user, minimum_role_for_kind(kind)).await?;
     let id = body["id"]
         .as_str()
         .map(ToOwned::to_owned)
@@ -290,6 +284,13 @@ async fn create_protocol_kind(
         d1::recompute_project_stats(&database, &tenant, &project).await?;
     }
     Response::from_json(&body)
+}
+
+fn minimum_role_for_kind(kind: &str) -> &'static str {
+    match kind {
+        "comment" => "contributor",
+        _ => "maintainer",
+    }
 }
 
 async fn protocol_item_kind(

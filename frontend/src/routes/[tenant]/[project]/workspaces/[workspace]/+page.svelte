@@ -10,11 +10,11 @@
 		markWorkspaceReady,
 		type ProjectFile
 	} from '$lib/api';
-	import { appData } from '$lib/appState';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -26,10 +26,12 @@
 	let error = $state('');
 	let busy = $state(false);
 	let fileController: AbortController | null = null;
-	let canMutate = $state(false);
+	let canWrite = $state(false);
+	let canMaintain = $state(false);
 
-	const unsubscribe = appData.subscribe((value) => {
-		canMutate = Boolean(value.me);
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canWrite = Boolean(value?.can_write);
+		canMaintain = Boolean(value?.can_maintain);
 	});
 
 	onDestroy(unsubscribe);
@@ -117,9 +119,9 @@
 					{/if}
 				</div>
 			</div>
-			{#if canMutate}
+			{#if canWrite || canMaintain}
 			<div class="flex gap-2">
-				{#if !detail.is_ready}
+				{#if canWrite && !detail.is_ready}
 					<button
 						class="rounded bg-[#6ba4c7] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#5a93b6]"
 						disabled={busy}
@@ -127,7 +129,7 @@
 					>
 						Mark ready
 					</button>
-				{:else}
+				{:else if canMaintain}
 					<button
 						class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]"
 						disabled={busy}

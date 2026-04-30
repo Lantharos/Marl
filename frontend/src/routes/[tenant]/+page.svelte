@@ -1,26 +1,42 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import {
+		addTenantCollaborator,
+		deleteTenantCollaborator,
 		isAbortError,
+		listTenantCollaborators,
 		listTenantProjectCards,
+		updateTenantCollaborator,
+		type Collaborator,
+		type CollaboratorRole,
 		type Paginated,
 		type ProjectDiscoveryItem
 	} from '$lib/api';
 	import { appData } from '$lib/appState';
+	import CollaboratorsPanel from '$lib/components/CollaboratorsPanel.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let authedProjects = $state<Paginated<ProjectDiscoveryItem> | null>(null);
 	let signedInTenantNames = $state<string[]>([]);
+	let currentUser = $state('');
+	let ownedTenantNames = $state<string[]>([]);
+	let tenantCollaborators = $state<Collaborator[]>([]);
+	let collaboratorBusy = $state(false);
+	let collaboratorError = $state('');
 	let authedLoadKey = '';
+	let collaboratorLoadKey = '';
 
 	const projects = $derived(authedProjects ?? data.projects);
 	const canAccessTenant = $derived(signedInTenantNames.includes(data.tenant));
+	const canManageTenant = $derived(ownedTenantNames.includes(data.tenant));
 	const projectScope = $derived(projects.scope === 'all' || canAccessTenant ? 'all' : 'public');
 	const projectScopeLabel = $derived(projectScope === 'all' ? 'Projects' : 'Public projects');
 
 	const unsubscribe = appData.subscribe((value) => {
 		signedInTenantNames = value.me?.tenants.map((tenant) => tenant.name) ?? [];
+		ownedTenantNames = value.me?.tenants.filter((tenant) => tenant.owner === value.me?.user).map((tenant) => tenant.name) ?? [];
+		currentUser = value.me?.user ?? '';
 	});
 
 	onDestroy(unsubscribe);
@@ -39,6 +55,20 @@
 		return () => controller.abort();
 	});
 
+	$effect(() => {
+		const key = canAccessTenant ? `${data.tenant}:${currentUser}` : '';
+		if (!key) {
+			tenantCollaborators = [];
+			collaboratorLoadKey = '';
+			return;
+		}
+		if (collaboratorLoadKey === key) return;
+		collaboratorLoadKey = key;
+		const controller = new AbortController();
+		void loadCollaborators(controller.signal);
+		return () => controller.abort();
+	});
+
 	async function loadAccessibleProjects(signal: AbortSignal) {
 		try {
 			authedProjects = await listTenantProjectCards(data.tenant, data.query, {
@@ -50,6 +80,42 @@
 			if (isAbortError(error)) return;
 			authedProjects = null;
 		}
+	}
+
+	async function loadCollaborators(signal?: AbortSignal) {
+		try {
+			tenantCollaborators = (await listTenantCollaborators(data.tenant, { all: true, signal })).items;
+			collaboratorError = '';
+		} catch (error) {
+			if (isAbortError(error)) return;
+			tenantCollaborators = [];
+			collaboratorError = error instanceof Error ? error.message : 'Failed';
+		}
+	}
+
+	async function withCollaboratorBusy(action: () => Promise<void>) {
+		collaboratorBusy = true;
+		collaboratorError = '';
+		try {
+			await action();
+			await loadCollaborators();
+		} catch (error) {
+			collaboratorError = error instanceof Error ? error.message : 'Failed';
+		} finally {
+			collaboratorBusy = false;
+		}
+	}
+
+	function addTenantUser(user: string, role: CollaboratorRole) {
+		return withCollaboratorBusy(() => addTenantCollaborator(data.tenant, user, role).then(() => {}));
+	}
+
+	function updateTenantUser(user: string, role: CollaboratorRole) {
+		return withCollaboratorBusy(() => updateTenantCollaborator(data.tenant, user, role).then(() => {}));
+	}
+
+	function removeTenantUser(user: string) {
+		return withCollaboratorBusy(() => deleteTenantCollaborator(data.tenant, user));
 	}
 
 	function projectPath(project: { tenant: string; project: string }) {
@@ -146,6 +212,24 @@
 					</div>
 				</div>
 			{/if}
+		{/if}
+
+		{#if canAccessTenant}
+			<div class="mt-6 grid gap-3">
+				{#if collaboratorError}
+					<div class="text-sm text-[#d96c5a]">{collaboratorError}</div>
+				{/if}
+				<CollaboratorsPanel
+					title="Tenant collaborators"
+					description="Tenant access applies to every project in this namespace."
+					collaborators={tenantCollaborators}
+					canManage={canManageTenant}
+					busy={collaboratorBusy}
+					onAdd={addTenantUser}
+					onUpdate={updateTenantUser}
+					onRemove={removeTenantUser}
+				/>
+			</div>
 		{/if}
 	</div>
 </div>

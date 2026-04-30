@@ -1,14 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import {
+		getProjectAccess,
 		getProjectSettings,
 		isAbortError,
 		updateProjectSettings,
+		type AccessResponse,
 		type NavbarItem,
 		type PanelItem,
 		type ProjectSettings
 	} from '$lib/api';
 	import { DEFAULT_PROJECT_TABS, mergeProjectTabs } from '$lib/projectChrome';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
+	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronUp from 'lucide-svelte/icons/chevron-up';
@@ -29,6 +33,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
+	let access = $state<AccessResponse | null>(null);
 
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
@@ -145,7 +150,13 @@
 		loading = true;
 		error = '';
 		try {
-			settings = await getProjectSettings(tenant, project, { signal });
+			const [loadedSettings, loadedAccess] = await Promise.all([
+				getProjectSettings(tenant, project, { signal }),
+				getProjectAccess(tenant, project, { signal })
+			]);
+			settings = loadedSettings;
+			access = loadedAccess;
+			currentProjectAccess.set(loadedAccess);
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -178,6 +189,7 @@
 		newPanel = { ...newPanel, type };
 	}
 
+	const canManageProject = $derived(Boolean(access?.can_maintain));
 </script>
 
 <div class="mx-auto max-w-xl">
@@ -187,6 +199,10 @@
 		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
+	{:else if !canManageProject}
+		<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+			<p class="text-sm text-[#8c887e]">Project settings are limited to maintainers.</p>
+		</div>
 	{:else}
 		<div class="grid gap-4">
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
@@ -387,6 +403,8 @@
 					</div>
 				{/if}
 			</div>
+
+			<ProjectCollaboratorsSettings {tenant} {project} {access} />
 
 			<div class="rounded border border-[#d96c5a]/30 bg-[#141412] p-4">
 				<div class="text-sm font-medium text-[#d96c5a]">Danger Zone</div>

@@ -19,10 +19,14 @@ use sty_protocol::{
 use url::Url;
 use uuid::Uuid;
 
+use crate::collaborator_commands::{
+    ProjectCollaboratorCommands, TenantCollaboratorCommands, project_collaborators,
+    tenant_collaborators,
+};
 use crate::http::{RequestBuilderExt, response_error};
 use crate::spinner;
 
-const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:8787";
+pub(crate) const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:8787";
 
 #[derive(Parser)]
 #[command(name = "sty")]
@@ -73,6 +77,10 @@ enum ProjectCommands {
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
     },
+    Collaborators {
+        #[command(subcommand)]
+        command: ProjectCollaboratorCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -81,6 +89,10 @@ enum TenantCommands {
         name: String,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
+    },
+    Collaborators {
+        #[command(subcommand)]
+        command: TenantCollaboratorCommands,
     },
 }
 
@@ -102,9 +114,11 @@ pub fn run() -> Result<()> {
         Commands::Project { command } => match command {
             ProjectCommands::Create { target, remote_url } => create_project(&target, &remote_url),
             ProjectCommands::List { remote_url } => list_projects(&remote_url),
+            ProjectCommands::Collaborators { command } => project_collaborators(command),
         },
         Commands::Tenant { command } => match command {
             TenantCommands::New { name, remote_url } => create_tenant(&name, &remote_url),
+            TenantCommands::Collaborators { command } => tenant_collaborators(command),
         },
     }
 }
@@ -409,7 +423,7 @@ fn save_config(config: &StyConfig) -> Result<()> {
     Ok(())
 }
 
-fn load_config() -> Result<StyConfig> {
+pub(crate) fn load_config() -> Result<StyConfig> {
     let path = config_path()?;
     let bytes = std::fs::read(&path)
         .with_context(|| format!("run `sty login` first; missing {}", path.display()))?;

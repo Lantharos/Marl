@@ -16,10 +16,10 @@
 		type Milestone,
 		type Paginated
 	} from '$lib/api';
-	import { appData } from '$lib/appState';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
 	import Plus from 'lucide-svelte/icons/plus';
@@ -40,7 +40,6 @@
 	let labelQuery = $state('');
 	let milestoneQuery = $state('');
 	let selectedLabel = $state('');
-
 	let issueData = $state<Paginated<Issue> | null>(null);
 	let labelData = $state<Paginated<Label> | null>(null);
 	let milestoneData = $state<Paginated<Milestone> | null>(null);
@@ -60,14 +59,15 @@
 	let labelName = $state('');
 	let labelColor = $state('#d9a66c');
 	let labelDescription = $state('');
-
 	let milestoneTitle = $state('');
 	let milestoneDescription = $state('');
 	let milestoneDue = $state('');
-	let canMutate = $state(false);
+	let canWrite = $state(false);
+	let canMaintain = $state(false);
 
-	const unsubscribe = appData.subscribe((value) => {
-		canMutate = Boolean(value.me);
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canWrite = Boolean(value?.can_write);
+		canMaintain = Boolean(value?.can_maintain);
 	});
 
 	onDestroy(unsubscribe);
@@ -122,11 +122,11 @@
 	const exactDraftLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelDraft.trim().toLowerCase()));
 	const exactDraftAssignee = $derived(people().find((person) => person.toLowerCase() === assigneeDraft.trim().toLowerCase()));
 	const canCreateIssue = $derived(
-		canMutate && !!title.trim() && !busy && (!labelDraft.trim() || !!exactDraftLabel) && (!assigneeDraft.trim() || !!exactDraftAssignee)
+		canWrite && !!title.trim() && !busy && (!labelDraft.trim() || !!exactDraftLabel) && (!assigneeDraft.trim() || !!exactDraftAssignee)
 	);
 
 	$effect(() => {
-		if (!canMutate) showIssueForm = false;
+		if (!canWrite) showIssueForm = false;
 	});
 
 	async function load(signal?: AbortSignal) {
@@ -305,21 +305,21 @@
 			</div>
 			<div class="flex items-center gap-2 bg-[#141412] px-2.5 py-1.5">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search issues" bind:value={query} />
+				<input class="w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search issues" bind:value={query} />
 			</div>
 		{:else if activeTab === 'labels'}
 			<div class="flex items-center gap-2 bg-[#141412] px-2.5 py-1.5">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search labels" bind:value={labelQuery} />
+				<input class="w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search labels" bind:value={labelQuery} />
 			</div>
 		{:else}
 			<div class="flex items-center gap-2 bg-[#141412] px-2.5 py-1.5">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search milestones" bind:value={milestoneQuery} />
+				<input class="w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search milestones" bind:value={milestoneQuery} />
 			</div>
 		{/if}
 
-		{#if canMutate}
+		{#if canWrite}
 			<div class="ml-auto">
 			{#if activeTab === 'issues'}
 				<button class="inline-flex items-center gap-1 bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showIssueForm = !showIssueForm)}>
@@ -337,7 +337,7 @@
 	{#if loading}
 		<Spinner />
 	{:else if activeTab === 'issues'}
-		{#if canMutate && showIssueForm}
+		{#if canWrite && showIssueForm}
 			<div class="mb-4 grid gap-3 bg-[#141412] p-4">
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Title" bind:value={title} />
 				<textarea class="min-h-[110px] resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Description" bind:value={body}></textarea>
@@ -432,7 +432,7 @@
 		</div>
 		<PaginationControls data={issueData} onPage={(page) => (issuePage = page)} />
 	{:else if activeTab === 'labels'}
-		<div class={canMutate ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
+		<div class={canMaintain ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
 			<div class="divide-y divide-[#252522] bg-[#141412]">
 				{#each filteredLabels as label}
 					<button class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#191917]" onclick={() => setLabelFilter(label.name)}>
@@ -449,7 +449,7 @@
 					</div>
 				{/each}
 			</div>
-			{#if canMutate}
+			{#if canMaintain}
 			<form class="grid h-fit gap-3 bg-[#141412] p-4" onsubmit={(event) => { event.preventDefault(); handleCreateLabel(); }}>
 				<div class="text-sm font-medium text-[#eae9e4]">New label</div>
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Name" bind:value={labelName} />
@@ -464,7 +464,7 @@
 		</div>
 		<PaginationControls data={labelData} onPage={(page) => (labelPage = page)} />
 	{:else}
-		<div class={canMutate ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
+		<div class={canMaintain ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
 			<div class="divide-y divide-[#252522] bg-[#141412]">
 				{#each filteredMilestones as milestone}
 					<div class="px-4 py-3">
@@ -485,7 +485,7 @@
 					</div>
 				{/each}
 			</div>
-			{#if canMutate}
+			{#if canMaintain}
 			<form class="grid h-fit gap-3 bg-[#141412] p-4" onsubmit={(event) => { event.preventDefault(); handleCreateMilestone(); }}>
 				<div class="text-sm font-medium text-[#eae9e4]">New milestone</div>
 				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Title" bind:value={milestoneTitle} />
@@ -498,10 +498,3 @@
 		<PaginationControls data={milestoneData} onPage={(page) => (milestonePage = page)} />
 	{/if}
 </div>
-
-<style>
-	.issue-search-input:focus,
-	.issue-search-input:focus-visible {
-		outline: none;
-	}
-</style>

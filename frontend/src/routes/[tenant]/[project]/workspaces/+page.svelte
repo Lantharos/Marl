@@ -10,9 +10,9 @@
 		type Paginated,
 		type WorkspaceStatus
 	} from '$lib/api';
-	import { appData } from '$lib/appState';
 	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import CircleDot from 'lucide-svelte/icons/circle-dot';
@@ -29,10 +29,12 @@
 	let error = $state('');
 	let filter = $state<'open' | 'ready' | 'merged' | 'all'>('open');
 	let workspacePage = $state(1);
-	let canMutate = $state(false);
+	let canWrite = $state(false);
+	let canMaintain = $state(false);
 
-	const unsubscribe = appData.subscribe((value) => {
-		canMutate = Boolean(value.me);
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canWrite = Boolean(value?.can_write);
+		canMaintain = Boolean(value?.can_maintain);
 	});
 
 	onDestroy(unsubscribe);
@@ -205,9 +207,9 @@
 						</div>
 						<ChevronRight class="mt-1 h-4 w-4 shrink-0 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
 					</button>
-					{#if canMutate && workspace.status !== 'merged'}
+					{#if (canWrite || canMaintain) && workspace.status !== 'merged'}
 						<div class="flex items-center pr-4">
-							{#if workspace.is_ready && workspace.mergeable}
+							{#if canMaintain && workspace.is_ready && workspace.mergeable}
 								<button
 									class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-60"
 									disabled={busy === workspace.name}
@@ -215,7 +217,7 @@
 								>
 									{busy === workspace.name ? 'Merging...' : 'Merge'}
 								</button>
-							{:else if !workspace.is_ready}
+							{:else if canWrite && !workspace.is_ready}
 								<button
 									class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36] disabled:opacity-60"
 									disabled={busy === workspace.name}
