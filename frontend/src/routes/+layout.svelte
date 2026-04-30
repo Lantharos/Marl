@@ -31,10 +31,13 @@
 	let loadDataPromise: Promise<void> | null = null;
 	let bootstrapDone = false;
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
-	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/') || $page.url.pathname.startsWith('/oauth/'));
+	const isDocsRoute = $derived($page.url.pathname === '/docs' || $page.url.pathname.startsWith('/docs/'));
+	const isPigRoute = $derived($page.url.pathname === '/pig' || $page.url.pathname.startsWith('/pig/'));
+	const isLegalRoute = $derived($page.url.pathname === '/privacy' || $page.url.pathname === '/terms');
+	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/') || $page.url.pathname.startsWith('/oauth/') || isDocsRoute || isPigRoute || isLegalRoute);
 	const isErrorPage = $derived($page.status >= 400);
 	const pathParts = $derived($page.url.pathname.split('/').filter(Boolean));
-	const reservedRoot = $derived(['auth', 'settings', 'verify', 'oauth'].includes(pathParts[0] ?? ''));
+	const reservedRoot = $derived(['auth', 'settings', 'verify', 'oauth', 'docs', 'pig', 'privacy', 'terms'].includes(pathParts[0] ?? ''));
 	const projectSection = $derived(pathParts[2] ?? '');
 	const isPublicProjectSection = $derived(!['settings', 'automation', 'protocol'].includes(projectSection));
 	const isLandingPage = $derived($page.url.pathname === '/');
@@ -194,8 +197,8 @@
 <span class="text-[#6f6b5f]"># sync to sty</span>
 <span class="text-[#eae9e4]">$ pig sync</span>
 
-<span class="text-[#6f6b5f]"># ship when ready</span>
-<span class="text-[#eae9e4]">$ pig ship</span></code></pre>
+<span class="text-[#6f6b5f]"># mark work ready</span>
+<span class="text-[#eae9e4]">$ pig work ready</span></code></pre>
 				</div>
 			</div>
 		</section>
@@ -203,7 +206,7 @@
 		<!-- Features -->
 		<section class="px-6 pb-20 md:px-12 lg:px-20">
 			<div class="mx-auto max-w-4xl">
-				<h2 class="text-center text-sm font-semibold uppercase tracking-wide text-[#6f6b5f]">Features</h2>
+				<h2 class="text-center text-lg font-semibold text-[#eae9e4]">What sty gives you</h2>
 				<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
 						<div class="text-lg font-semibold text-[#eae9e4]">Workspaces</div>

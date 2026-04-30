@@ -1,11 +1,70 @@
 # sty
 
-`sty` is the official hosted collaboration layer for PIG. PIG is the local VCS engine; sty owns identity, project hosting, a reference PIG remote API, and the browser dashboard.
+sty is a hosted collaboration service for PIG projects, operated by Lantharos. It adds identity, tenant/project hosting, permissions, issues, workspaces, releases, webhooks, API keys, OAuth apps, and the browser dashboard.
 
-The backend is a Cloudflare Worker in `server`. It uses D1 for project metadata, workspace heads, issues, history, settings, release metadata, and protocol records, and R2 for immutable object bytes and uploaded release artifacts.
-D1 also keeps a small `project_stats` row per project so dashboard counters stay cheap. R2-backed objects, code trees, file reads, and project overview responses return ETags and cache headers so browsers and Cloudflare can avoid re-fetching content until the relevant snapshot or project state changes.
+Most users do not run sty infrastructure. Run the installer, choose both tools, sign in, connect a repository, and use PIG normally.
 
 E2EE and CI are intentionally deferred.
+
+## Using sty
+
+Install sty and PIG. The installer asks whether you want both tools or just PIG:
+
+```powershell
+# macOS / Linux
+curl -fsSL https://sty.sh/install.sh | sh
+
+# Windows
+irm https://sty.sh/install.ps1 | iex
+```
+
+```powershell
+sty login
+sty init tenant/project
+pig save "describe the work"
+pig sync
+```
+
+Your account tenant is created automatically from your Ave handle. To create an organization tenant:
+
+```powershell
+sty tenant new tenant
+sty init tenant/project
+```
+
+`sty login` opens the browser sign-in flow, creates a sty session, and imports that session into PIG. `sty init tenant/project` creates or connects the hosted project and configures the PIG remote for the current repository.
+
+After that, use PIG from the repository:
+
+```powershell
+pig status
+pig save "describe the change"
+pig work new feature-name
+pig work ready
+pig sync
+```
+
+Use `--json` on PIG commands when agents or scripts need machine-readable output.
+
+## What sty Provides
+
+- Hosted PIG remotes under `tenant/project` namespaces
+- Private projects by default, with public project discovery when maintainers opt in
+- Tenant and project collaborators with viewer, contributor, and maintainer roles
+- Browser project pages with code, workspaces, issues, releases, history, and settings
+- Ready review for workspaces
+- Release notes, pinned source snapshots, uploaded artifacts, and optional public release downloads
+- Project API keys with granular scopes for agents and integrations
+- Webhooks for sync, snapshot, workspace, release, and issue events
+- OAuth-style developer apps that mint project-scoped tokens after maintainer approval
+- User-scoped signing keys and signed snapshot verification
+- Project archive state that keeps projects readable while blocking mutations
+
+## Developing From Source
+
+The hosted service is implemented in this repository. The backend is a Cloudflare Worker in `server`; the frontend is a SvelteKit app in `frontend`; the CLI lives in `client`.
+
+The Worker uses D1 for project metadata, workspace heads, issues, history, settings, release metadata, protocol records, API keys, webhooks, OAuth apps, and cached project stats. R2 stores immutable PIG object bytes and uploaded release artifacts. R2-backed objects, code trees, file reads, and project overview responses return ETags and cache headers so browsers and Cloudflare can avoid refetching content until the relevant snapshot or project state changes.
 
 ## Project Layout
 
@@ -30,7 +89,7 @@ rustup target add wasm32-unknown-unknown
 cargo install worker-build
 ```
 
-## Build The CLI
+## Build The CLI From Source
 
 Build the Rust workspace from the repo root:
 
@@ -46,7 +105,7 @@ target\debug\sty.exe whoami
 
 or add the debug output directory to your `PATH` while developing so `sty` works like a normal command.
 
-## Run The Worker Locally
+## Run The Worker Locally For Development
 
 From `server`, apply the D1 schema before using the API. Use local migrations for `wrangler dev`:
 
@@ -88,7 +147,7 @@ Optional Worker settings:
 - `STY_TOKEN_TTL_SECONDS` controls sty bearer token lifetime. The default is 30 days.
 - `STY_MAX_OBJECT_BYTES` controls the maximum raw object upload size. The default is 64 MiB.
 
-## Run The Frontend
+## Run The Frontend For Development
 
 From `frontend`:
 
@@ -104,34 +163,6 @@ http://localhost:5173/auth/callback
 ```
 
 If you use a different frontend origin, register that matching `/auth/callback` URL with the Ave app and set `PUBLIC_AVE_CLIENT_ID` if you are not using the default sty client id.
-
-## Normal User Flow
-
-Start the Worker, then sign in with the CLI:
-
-```powershell
-sty login
-sty init tenant/project
-pig sync
-```
-
-Your account tenant is created automatically from your Ave handle. To create an organization tenant first:
-
-```powershell
-sty tenant new tenant
-sty init tenant/project
-```
-
-`sty login` opens Ave, completes the OAuth callback locally, exchanges the Ave ID token with the sty Worker, and imports the returned sty bearer token into PIG. `sty init tenant/project` creates or connects the project and configures the PIG remote for the current repo.
-
-After that, use PIG normally:
-
-```powershell
-pig save "describe the work"
-pig work new feature-name
-pig work ready
-pig sync
-```
 
 ## Collaboration And Permissions
 
