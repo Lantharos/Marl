@@ -65,6 +65,28 @@ pub async fn put_bytes(bucket: &Bucket, key: &str, value: Vec<u8>) -> Result<()>
     Ok(())
 }
 
+pub async fn delete_prefix(bucket: &Bucket, prefix: &str) -> Result<()> {
+    let mut cursor = None;
+    loop {
+        let mut list = bucket.list().prefix(prefix).limit(1000);
+        if let Some(value) = cursor.take() {
+            list = list.cursor(value);
+        }
+        let objects = list.execute().await?;
+        let keys: Vec<String> = objects.objects().into_iter().map(|object| object.key()).collect();
+        if !keys.is_empty() {
+            bucket.delete_multiple(keys).await?;
+        }
+        if !objects.truncated() {
+            return Ok(());
+        }
+        let Some(next_cursor) = objects.cursor() else {
+            return Ok(());
+        };
+        cursor = Some(next_cursor);
+    }
+}
+
 pub fn json_error(status: u16, message: &str) -> Result<Response> {
     with_cors(Response::from_json(&json!({ "error": message }))?.with_status(status))
 }
@@ -114,6 +136,7 @@ fn status_for_error(message: &str) -> u16 {
         || lower.contains("forbidden")
         || lower.contains("control denied")
         || lower.contains("browser approval required")
+        || lower.contains("archived")
     {
         return 403;
     }
@@ -339,6 +362,7 @@ mod tests {
     fn maps_expected_errors_to_http_statuses() {
         assert_eq!(status_for_error("missing bearer token"), 401);
         assert_eq!(status_for_error("project access denied"), 403);
+        assert_eq!(status_for_error("project is archived and read-only"), 403);
         assert_eq!(status_for_error("object not found"), 404);
         assert_eq!(status_for_error("invalid object id"), 400);
         assert_eq!(status_for_error("workspace head changed"), 409);

@@ -67,7 +67,7 @@
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canWrite = Boolean(value?.can_write);
-		canMaintain = Boolean(value?.can_maintain);
+		canMaintain = Boolean(value?.can_maintain && !value?.archived);
 	});
 
 	onDestroy(unsubscribe);

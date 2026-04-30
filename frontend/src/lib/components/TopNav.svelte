@@ -248,9 +248,16 @@
 				</button>
 				{/if}
 				{#if settings && !settingsLoading}
-				<span class="ml-1.5 rounded border border-[#2a2a28] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#6f6b5f]">
-					{settings.visibility}
-				</span>
+				{#if settings.visibility === 'private'}
+					<span class="ml-1.5 rounded border border-[#2a2a28] px-1.5 py-0.5 text-[11px] text-[#6f6b5f]">
+						Private
+					</span>
+				{/if}
+				{#if settings.archived_at}
+					<span class="ml-1 rounded border border-[#2a2a28] px-1.5 py-0.5 text-[11px] text-[#8c887e]">
+						Archived
+					</span>
+				{/if}
 				{/if}
 			{/if}
 		</div>

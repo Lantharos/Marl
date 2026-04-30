@@ -59,6 +59,9 @@ export interface ProjectSettings {
 	visibility: 'public' | 'private';
 	follower_count: number;
 	is_following: boolean;
+	archived_at?: string | null;
+	archived_by?: string | null;
+	archived_by_profile?: UserProfile | null;
 	default_workspace: string;
 	navbar_items: NavbarItem[];
 	panels: PanelItem[];
@@ -223,6 +226,10 @@ export async function createOrg(name: string) {
 export async function getProject(tenant: string, project: string, options: ApiOptions = {}) {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}`, { signal: options.signal });
 	return (await response.json()) as ProjectDetail;
+}
+
+export async function deleteProject(tenant: string, project: string) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}`, { method: 'DELETE' });
 }
 
 export async function listLabelsPage(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<Label>> {
@@ -412,7 +419,7 @@ export async function getProjectStats(tenant: string, project: string, options: 
 	return (await response.json()) as ProjectStats;
 }
 
-export async function updateProjectSettings(tenant: string, project: string, settings: Partial<ProjectSettings>) {
+export async function updateProjectSettings(tenant: string, project: string, settings: Partial<ProjectSettings> & { archived?: boolean }) {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/settings`, {
 		method: 'PATCH',
 		headers: { 'content-type': 'application/json' },

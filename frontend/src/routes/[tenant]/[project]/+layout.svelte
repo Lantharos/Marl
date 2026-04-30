@@ -2,14 +2,17 @@
     import { page } from "$app/stores";
     import { onDestroy } from "svelte";
     import {
+        getProjectAccess,
         getProjectSettings,
         getProjectStats,
         isAbortError,
+        type AccessResponse,
         type ProjectOverview,
         type ProjectSettings,
         type ProjectStats,
     } from "$lib/api";
     import { appData } from "$lib/appState";
+    import { userDisplayName } from "$lib/identity";
     import { projectTabCount, projectTabs } from "$lib/projectChrome";
     import { startLogin } from "$lib/session";
     import ExternalLink from "lucide-svelte/icons/external-link";
@@ -19,6 +22,7 @@
     let signedIn = $state(false);
     let publicSettings = $state<ProjectSettings | null>(null);
     let publicStats = $state<ProjectStats | null>(null);
+    let publicAccess = $state<AccessResponse | null>(null);
     let publicChromeKey = "";
 
     const unsubscribe = appData.subscribe((value) => {
@@ -39,6 +43,7 @@
                 projectChrome?: {
                     settings: ProjectSettings | null;
                     stats: ProjectStats | null;
+                    access: AccessResponse | null;
                 };
             }
         ).projectChrome ?? null,
@@ -49,11 +54,18 @@
     const stats = $derived<ProjectStats | null>(
         publicStats ?? overview?.stats ?? layoutChrome?.stats ?? null,
     );
+    const access = $derived<AccessResponse | null>(
+        publicAccess ?? overview?.access ?? layoutChrome?.access ?? null,
+    );
     const tabs = $derived(() => projectTabs(settings?.navbar_items, "public"));
+    const archivedAt = $derived(access?.archived_at ?? settings?.archived_at ?? null);
+    const archivedBy = $derived(access?.archived_by ?? settings?.archived_by ?? null);
+    const archivedByProfile = $derived(access?.archived_by_profile ?? settings?.archived_by_profile ?? null);
+    const archivedByName = $derived(userDisplayName(archivedBy, archivedByProfile));
 
     $effect(() => {
-        const key = `${tenant}/${project}`;
-        if (signedIn || (settings && stats)) {
+        const key = `${tenant}/${project}/${signedIn ? "auth" : "public"}`;
+        if (settings && stats && access) {
             publicChromeKey = "";
             return;
         }
@@ -76,18 +88,25 @@
         signal: AbortSignal,
     ) {
         try {
-            const [loadedSettings, loadedStats] = await Promise.all([
-                getProjectSettings(tenant, project, { signal }),
-                getProjectStats(tenant, project, { signal }),
+            const [loadedSettings, loadedStats, loadedAccess] = await Promise.all([
+                getProjectSettings(tenant, project, { signal }).catch(() => null),
+                getProjectStats(tenant, project, { signal }).catch(() => null),
+                getProjectAccess(tenant, project, { signal }).catch(() => null),
             ]);
             if (signal.aborted) return;
             publicSettings = loadedSettings;
             publicStats = loadedStats;
+            publicAccess = loadedAccess;
         } catch (error) {
             if (isAbortError(error)) return;
             publicSettings = null;
             publicStats = null;
+            publicAccess = null;
         }
+    }
+
+    function archiveDate(value: string | null) {
+        return value ? new Date(value).toLocaleDateString() : "";
     }
 </script>
 
@@ -169,5 +188,10 @@
 {/if}
 
 <div class="px-4 py-6 md:px-48 lg:px-64 xl:px-80">
+    {#if archivedAt}
+        <div class="mb-4 rounded border border-[#2a2a28] bg-[#141412] px-4 py-3 text-sm text-[#a09d94]">
+            This project was archived by {archivedByName} on {archiveDate(archivedAt)}. It is read-only.
+        </div>
+    {/if}
     {@render children()}
 </div>

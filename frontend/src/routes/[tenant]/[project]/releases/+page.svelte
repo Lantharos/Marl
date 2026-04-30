@@ -45,7 +45,7 @@
 	let canMutate = $state(false);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
-		canMutate = Boolean(value?.can_maintain);
+		canMutate = Boolean(value?.can_maintain && !value?.archived);
 	});
 
 	onDestroy(unsubscribe);

@@ -17,9 +17,23 @@ pub(crate) async fn update_settings(mut req: Request, ctx: RouteContext<()>) -> 
     let database = db(&ctx.env)?;
     let principal = sty_protocol::TokenPrincipal { user: user.clone() };
     check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
-    let visibility = body.visibility.as_deref().unwrap_or("private");
-    let default_workspace = body.default_workspace.as_deref().unwrap_or("main");
-    let settings = d1::update_project_settings(&database, &tenant, &project, &principal, visibility, default_workspace, body.navbar_items, body.panels).await?;
+    let current = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
+    let visibility = body.visibility.unwrap_or(current.visibility);
+    let default_workspace = body
+        .default_workspace
+        .unwrap_or(current.default_workspace);
+    let settings = d1::update_project_settings(
+        &database,
+        &tenant,
+        &project,
+        &principal,
+        &visibility,
+        &default_workspace,
+        body.navbar_items,
+        body.panels,
+        body.archived,
+    )
+    .await?;
     Response::from_json(&settings)
 }
 

@@ -28,8 +28,8 @@ use protocol_ready::*;
 use releases::*;
 use support::{
     apply_cache_headers, apply_cors, bearer_token, bucket, db, frontend_origin, json_error,
-    not_modified_response, object_key, object_size_limit, paginate_vec, param, preflight_response,
-    project_params, put_bytes, r2_bytes, required_header, required_usize_header,
+    delete_prefix, not_modified_response, object_key, object_size_limit, paginate_vec, param,
+    preflight_response, project_params, put_bytes, r2_bytes, required_header, required_usize_header,
     response_for_error, validate_object_metadata,
 };
 
@@ -86,6 +86,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/tenants/:tenant/projects", tenant_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
+        .delete_async("/v1/tenants/:tenant/projects/:project", delete_project)
         .get_async(
             "/v1/tenants/:tenant/projects/:project/access",
             project_access,

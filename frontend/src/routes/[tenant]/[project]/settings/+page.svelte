@@ -12,7 +12,9 @@
 	} from '$lib/api';
 	import { DEFAULT_PROJECT_TABS, mergeProjectTabs } from '$lib/projectChrome';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
+	import ProjectDangerZone from '$lib/components/ProjectDangerZone.svelte';
 	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
+	import SettingsSection from '$lib/components/SettingsSection.svelte';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronUp from 'lucide-svelte/icons/chevron-up';
@@ -26,6 +28,9 @@
 		visibility: 'private',
 		follower_count: 0,
 		is_following: false,
+		archived_at: null,
+		archived_by: null,
+		archived_by_profile: null,
 		default_workspace: 'main',
 		navbar_items: [],
 		panels: []
@@ -172,19 +177,6 @@
 		return () => controller.abort();
 	});
 
-	async function handleVisibilityChange(next: 'public' | 'private') {
-		if (next === settings.visibility) return;
-		busy = true;
-		try {
-			const result = await updateProjectSettings(tenant, project, { visibility: next });
-			settings = { ...settings, visibility: result.visibility };
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
-	}
-
 	function setNewPanelType(type: PanelItem['type']) {
 		newPanel = { ...newPanel, type };
 	}
@@ -205,38 +197,37 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-				<div class="text-sm font-medium text-[#eae9e4]">Visibility</div>
-				<p class="mt-1 text-xs text-[#6f6b5f]">Control who can see this project.</p>
-				<div class="mt-3 flex gap-2">
-					<button
-						class="rounded px-3 py-1.5 text-xs font-medium {settings.visibility === 'public' ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#2a2a28] text-[#a09d94] hover:bg-[#3a3a36]'}"
-						disabled={busy}
-						onclick={() => handleVisibilityChange('public')}
-					>
-						Public
-					</button>
-					<button
-						class="rounded px-3 py-1.5 text-xs font-medium {settings.visibility === 'private' ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#2a2a28] text-[#a09d94] hover:bg-[#3a3a36]'}"
-						disabled={busy}
-						onclick={() => handleVisibilityChange('private')}
-					>
-						Private
-					</button>
-				</div>
-			</div>
-
-			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-				<div class="flex items-center justify-between">
-					<div class="min-w-0">
-						<div class="text-sm font-medium text-[#eae9e4]">Navigation</div>
-						<p class="mt-1 text-xs text-[#6f6b5f]">Customize the project navigation bar. Enable, disable, reorder, or add external links.</p>
-					</div>
-					<button class="ml-3 shrink-0 flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddNavbar = !showAddNavbar)}>
+			<SettingsSection title="Navigation" description="Enable, disable, reorder, or add external links.">
+				<div class="mb-3 flex justify-end">
+					<button class="flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddNavbar = !showAddNavbar)}>
 						<Plus class="h-3.5 w-3.5" /> Add
 					</button>
 				</div>
-				<div class="mt-3 grid gap-1">
+				{#if showAddNavbar}
+					<div class="mb-3 grid gap-2 rounded bg-[#0f0f0d] p-3">
+						<div class="grid grid-cols-2 gap-2">
+							<div>
+								<div class="text-[10px] text-[#6f6b5f] mb-1">ID</div>
+								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="docs" bind:value={newNavbar.id} />
+							</div>
+							<div>
+								<div class="text-[10px] text-[#6f6b5f] mb-1">Label</div>
+								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="Docs" bind:value={newNavbar.label} />
+							</div>
+						</div>
+						{#if newNavbar.type === 'link'}
+							<div>
+								<div class="text-[10px] text-[#6f6b5f] mb-1">URL</div>
+								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="https://docs.example.com" bind:value={newNavbar.url} />
+							</div>
+						{/if}
+						<div class="flex gap-2">
+							<button class="rounded bg-[#2a2a28] px-3 py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" disabled={busy} onclick={addNavbarItem}>Add</button>
+							<button class="rounded px-3 py-1 text-xs text-[#6f6b5f] hover:text-[#a09d94]" onclick={() => (showAddNavbar = false)}>Cancel</button>
+						</div>
+					</div>
+				{/if}
+				<div class="grid gap-1">
 					{#each navbarItems as item, i}
 						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
 							<div class="flex items-center gap-0.5 shrink-0">
@@ -275,80 +266,16 @@
 						</div>
 					{/each}
 				</div>
-				{#if showAddNavbar}
-					<div class="mt-2 rounded bg-[#0f0f0d] p-3 grid gap-2">
-						<div class="grid grid-cols-2 gap-2">
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">ID</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="docs" bind:value={newNavbar.id} />
-							</div>
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">Label</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="Docs" bind:value={newNavbar.label} />
-							</div>
-						</div>
-						{#if newNavbar.type === 'link'}
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">URL</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="https://docs.example.com" bind:value={newNavbar.url} />
-							</div>
-						{/if}
-						<div class="flex gap-2">
-							<button class="rounded bg-[#2a2a28] px-3 py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" disabled={busy} onclick={addNavbarItem}>Add</button>
-							<button class="rounded px-3 py-1 text-xs text-[#6f6b5f] hover:text-[#a09d94]" onclick={() => (showAddNavbar = false)}>Cancel</button>
-						</div>
-					</div>
-				{/if}
-			</div>
+			</SettingsSection>
 
-			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-				<div class="flex items-center justify-between">
-					<div class="min-w-0">
-						<div class="text-sm font-medium text-[#eae9e4]">Overview Panels</div>
-						<p class="mt-1 text-xs text-[#6f6b5f]">Customize the sidebar panels on the project overview page. Add text, buttons, links, or built-in panels.</p>
-					</div>
-					<button class="ml-3 shrink-0 flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddPanel = !showAddPanel)}>
+			<SettingsSection title="Overview panels" description="Add text, buttons, links, or built-in panels to the project overview.">
+				<div class="mb-3 flex justify-end">
+					<button class="flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddPanel = !showAddPanel)}>
 						<Plus class="h-3.5 w-3.5" /> Add
 					</button>
 				</div>
-				<div class="mt-3 grid gap-1">
-					{#each panelItems as item, i}
-						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
-							<div class="flex items-center gap-0.5 shrink-0">
-								<button
-									class="flex h-4 w-4 items-center justify-center rounded text-[#5c5c5a] hover:text-[#a09d94] disabled:opacity-30"
-									disabled={i === 0 || busy}
-									aria-label="Move up"
-									onclick={() => reorderPanel(i, -1)}
-								><ChevronUp class="h-3 w-3" /></button>
-								<button
-									class="flex h-4 w-4 items-center justify-center rounded text-[#5c5c5a] hover:text-[#a09d94] disabled:opacity-30"
-									disabled={i === panelItems.length - 1 || busy}
-									aria-label="Move down"
-									onclick={() => reorderPanel(i, 1)}
-								><ChevronDown class="h-3 w-3" /></button>
-							</div>
-							<div class="flex-1 min-w-0">
-								<div class="flex items-center gap-1.5">
-									<span class="text-xs font-medium text-[#eae9e4] truncate">{item.title}</span>
-									<span class="shrink-0 rounded bg-[#1e1e1c] px-1 py-0.5 text-[10px] text-[#6f6b5f] capitalize">{item.type}</span>
-								</div>
-							</div>
-							<button
-								class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium {item.enabled ? 'bg-[#7cb97c]/20 text-[#7cb97c]' : 'bg-[#d96c5a]/20 text-[#d96c5a]'}"
-								disabled={busy}
-								onclick={() => togglePanel(i)}
-							>
-								{item.enabled ? 'on' : 'off'}
-							</button>
-							{#if !['workspaces', 'releases', 'activity'].includes(item.id)}
-								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removePanel(i)}><X class="h-3.5 w-3.5" /></button>
-							{/if}
-						</div>
-					{/each}
-				</div>
 				{#if showAddPanel}
-					<div class="mt-2 rounded bg-[#0f0f0d] p-3 grid gap-2">
+					<div class="mb-3 grid gap-2 rounded bg-[#0f0f0d] p-3">
 						<div class="grid grid-cols-2 gap-2">
 							<div>
 								<div class="text-[10px] text-[#6f6b5f] mb-1">ID</div>
@@ -402,19 +329,58 @@
 						</div>
 					</div>
 				{/if}
-			</div>
-
-			<ProjectCollaboratorsSettings {tenant} {project} {access} />
-
-			<div class="rounded border border-[#d96c5a]/30 bg-[#141412] p-4">
-				<div class="text-sm font-medium text-[#d96c5a]">Danger Zone</div>
-				<p class="mt-1 text-xs text-[#6f6b5f]">Destructive actions cannot be undone.</p>
-				<div class="mt-3">
-					<button class="rounded border border-[#d96c5a] px-3 py-1.5 text-xs font-medium text-[#d96c5a] hover:bg-[#d96c5a] hover:text-[#0f0f0d]">
-						Delete project
-					</button>
+				<div class="grid gap-1">
+					{#each panelItems as item, i}
+						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
+							<div class="flex items-center gap-0.5 shrink-0">
+								<button
+									class="flex h-4 w-4 items-center justify-center rounded text-[#5c5c5a] hover:text-[#a09d94] disabled:opacity-30"
+									disabled={i === 0 || busy}
+									aria-label="Move up"
+									onclick={() => reorderPanel(i, -1)}
+								><ChevronUp class="h-3 w-3" /></button>
+								<button
+									class="flex h-4 w-4 items-center justify-center rounded text-[#5c5c5a] hover:text-[#a09d94] disabled:opacity-30"
+									disabled={i === panelItems.length - 1 || busy}
+									aria-label="Move down"
+									onclick={() => reorderPanel(i, 1)}
+								><ChevronDown class="h-3 w-3" /></button>
+							</div>
+							<div class="flex-1 min-w-0">
+								<div class="flex items-center gap-1.5">
+									<span class="text-xs font-medium text-[#eae9e4] truncate">{item.title}</span>
+									<span class="shrink-0 rounded bg-[#1e1e1c] px-1 py-0.5 text-[10px] text-[#6f6b5f] capitalize">{item.type}</span>
+								</div>
+							</div>
+							<button
+								class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium {item.enabled ? 'bg-[#7cb97c]/20 text-[#7cb97c]' : 'bg-[#d96c5a]/20 text-[#d96c5a]'}"
+								disabled={busy}
+								onclick={() => togglePanel(i)}
+							>
+								{item.enabled ? 'on' : 'off'}
+							</button>
+							{#if !['workspaces', 'releases', 'activity'].includes(item.id)}
+								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removePanel(i)}><X class="h-3.5 w-3.5" /></button>
+							{/if}
+						</div>
+					{/each}
 				</div>
-			</div>
+			</SettingsSection>
+
+			<SettingsSection title="Collaborators" description="Manage project and inherited tenant access.">
+				<div class="grid gap-3">
+					<ProjectCollaboratorsSettings {tenant} {project} {access} />
+				</div>
+			</SettingsSection>
+
+			<ProjectDangerZone
+				{tenant}
+				{project}
+				{settings}
+				{access}
+				onSettings={(updatedSettings) => (settings = updatedSettings)}
+				onError={(message) => (error = message)}
+			/>
 		</div>
 	{/if}
 </div>

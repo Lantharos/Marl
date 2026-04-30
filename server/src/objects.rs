@@ -30,7 +30,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
         return json_error(413, "object is larger than the configured upload limit");
     }
     let database = db(&ctx.env)?;
-    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
     if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
     }
@@ -232,4 +232,20 @@ pub(crate) async fn check_project_role(
     Err(Error::RustError(format!(
         "project {minimum} access denied"
     )))
+}
+
+pub(crate) async fn check_project_write_role(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    user: &str,
+    minimum: &str,
+) -> Result<()> {
+    check_project_role(db, tenant, project, user, minimum).await?;
+    if d1::project_is_archived(db, tenant, project).await? {
+        return Err(Error::RustError(
+            "project is archived and read-only".to_string(),
+        ));
+    }
+    Ok(())
 }

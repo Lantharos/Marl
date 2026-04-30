@@ -55,7 +55,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, and tenant/project collaborators.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, and project archive state.
 
 Then start the Worker:
 
@@ -144,6 +144,8 @@ sty has tenant-scoped and project-scoped collaborators.
 
 Tenant collaborators inherit access into every project in that tenant. Project collaborators apply only to one project. Tenant owners can manage tenant collaborators; project owners, tenant maintainers, and project maintainers can manage project collaborators.
 
+Project maintainers can archive a project from Settings. Archived projects stay readable, but code sync, object uploads, issues, comments, releases, ready actions, and other project mutations are rejected until a maintainer unarchives the project. Project owners can delete a project from Settings after confirming the action.
+
 CLI examples:
 
 ```powershell
@@ -170,6 +172,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - signed snapshot verification with user-scoped signing keys
 - profiles and account signing keys
 - permissions and collaborators for tenants and projects
+- archived project state and read-only enforcement
 
 Protocol list endpoints return the standard pagination envelope:
 

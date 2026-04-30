@@ -107,6 +107,19 @@ pub(crate) async fn project_detail(req: Request, ctx: RouteContext<()>) -> Resul
     })
 }
 
+pub(crate) async fn delete_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let user = require_auth(&req, &ctx.env).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx.env)?;
+    if !d1::project_exists(&database, &tenant, &project).await? {
+        return json_error(404, "project not found");
+    }
+    check_project_role(&database, &tenant, &project, &user, "owner").await?;
+    delete_prefix(&bucket(&ctx.env)?, &format!("projects/{tenant}/{project}/")).await?;
+    d1::delete_project(&database, &tenant, &project).await?;
+    Response::from_json(&OkResponse { ok: true })
+}
+
 pub(crate) async fn list_workspaces(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;

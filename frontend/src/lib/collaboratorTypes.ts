@@ -12,6 +12,10 @@ export type CollaboratorRole = 'owner' | 'maintainer' | 'contributor' | 'viewer'
 export interface AccessResponse {
 	role?: CollaboratorRole | string | null;
 	source?: string | null;
+	archived: boolean;
+	archived_at?: string | null;
+	archived_by?: string | null;
+	archived_by_profile?: UserProfile | null;
 	can_read: boolean;
 	can_write: boolean;
 	can_maintain: boolean;

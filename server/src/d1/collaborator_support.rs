@@ -178,13 +178,26 @@ pub async fn project_access_response(
         Some(user) => project_effective_role(db, tenant, project, user).await?,
         None => None,
     };
+    let archive = project_archive(db, tenant, project).await?;
+    let (archived_at, archived_by, archived_by_profile) = match archive {
+        Some((archived_at, archived_by)) => {
+            let profile = user_profile(db, &archived_by).await?;
+            (Some(archived_at), Some(archived_by), profile)
+        }
+        None => (None, None, None),
+    };
+    let archived = archived_at.is_some();
     let can_read = role.is_some() || public_visible;
     Ok(AccessResponse {
         source: role
             .as_ref()
             .map(|_| "collaborator".to_string())
             .or_else(|| public_visible.then(|| "public".to_string())),
-        can_write: role_allows(role.as_deref(), ROLE_CONTRIBUTOR),
+        archived,
+        archived_at,
+        archived_by,
+        archived_by_profile,
+        can_write: !archived && role_allows(role.as_deref(), ROLE_CONTRIBUTOR),
         can_maintain: role_allows(role.as_deref(), ROLE_MAINTAINER),
         can_admin: role_allows(role.as_deref(), ROLE_OWNER),
         role,
