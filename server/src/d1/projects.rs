@@ -36,6 +36,7 @@ pub async fn ensure_project(
         visibility: "private".to_string(),
         follower_count: 0,
         is_following: false,
+        public_releases: false,
         archived_at: None,
         archived_by: None,
         archived_by_profile: None,
@@ -131,7 +132,9 @@ pub async fn project_access(
     if !row.is_some_and(|row| row.count > 0) {
         return Ok(false);
     }
-    Ok(project_effective_role(db, tenant, project, user).await?.is_some())
+    Ok(project_effective_role(db, tenant, project, user)
+        .await?
+        .is_some())
 }
 
 pub async fn project_exists(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
@@ -151,6 +154,7 @@ pub async fn delete_project(db: &D1Database, tenant: &str, project: &str) -> Res
     if !project_exists(db, tenant, project).await? {
         return Ok(false);
     }
+    ensure_developer_schema(db).await?;
     for query in [
         "DELETE FROM comments WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM issues WHERE tenant = ?1 AND project = ?2",
@@ -162,6 +166,10 @@ pub async fn delete_project(db: &D1Database, tenant: &str, project: &str) -> Res
         "DELETE FROM project_follows WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM project_members WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM project_stats WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM project_api_keys WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM project_webhooks WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM project_integrations WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM oauth_codes WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM projects WHERE tenant = ?1 AND project = ?2",
     ] {
         db.prepare(query)

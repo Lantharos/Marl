@@ -113,7 +113,7 @@ pub async fn principal_for_token(db: &D1Database, token: &str) -> Result<Option<
         .first(None)
         .await?;
     let Some(row) = row else {
-        return Ok(None);
+        return principal_for_api_key(db, token).await;
     };
     if row.revoked_at.is_some() || row.expires_at <= now_rfc3339() {
         return Ok(None);

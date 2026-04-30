@@ -2,7 +2,7 @@ pub(crate) async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "objects:write").await?;
     let body: MissingRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
     let mut missing = Vec::new();
@@ -30,7 +30,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
         return json_error(413, "object is larger than the configured upload limit");
     }
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "objects:write").await?;
     if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
     }
@@ -53,7 +53,7 @@ pub(crate) async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Re
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "object")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "objects:read").await?;
     let public_cache = matches!(
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
@@ -234,6 +234,66 @@ pub(crate) async fn check_project_role(
     )))
 }
 
+pub(crate) async fn check_project_read_capability(
+    env: &Env,
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+    capability: &str,
+) -> Result<()> {
+    if let Some(user) = user.filter(|value| value.starts_with("api-key:")) {
+        ensure_project_target(db, tenant, project).await?;
+        if d1::project_api_key_allows(db, tenant, project, user, capability)
+            .await?
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        return Err(Error::RustError(format!(
+            "api key is missing `{capability}` permission"
+        )));
+    }
+    check_project_access(env, tenant, project, user).await
+}
+
+pub(crate) async fn check_project_capability(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    user: &str,
+    minimum: &str,
+    capability: &str,
+) -> Result<()> {
+    if user.starts_with("api-key:") {
+        ensure_project_target(db, tenant, project).await?;
+        if d1::project_api_key_allows(db, tenant, project, user, capability)
+            .await?
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        return Err(Error::RustError(format!(
+            "api key is missing `{capability}` permission"
+        )));
+    }
+    check_project_role(db, tenant, project, user, minimum).await
+}
+
+async fn ensure_project_target(db: &D1Database, tenant: &str, project: &str) -> Result<()> {
+    if !d1::tenant_exists(db, tenant).await? {
+        return Err(Error::RustError(format!(
+            "tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"
+        )));
+    }
+    if !d1::project_exists(db, tenant, project).await? {
+        return Err(Error::RustError(format!(
+            "project `{tenant}/{project}` does not exist; create it first with `sty init {tenant}/{project}`"
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) async fn check_project_write_role(
     db: &D1Database,
     tenant: &str,
@@ -248,4 +308,54 @@ pub(crate) async fn check_project_write_role(
         ));
     }
     Ok(())
+}
+
+pub(crate) async fn check_project_write_capability(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    user: &str,
+    minimum: &str,
+    capability: &str,
+) -> Result<()> {
+    check_project_capability(db, tenant, project, user, minimum, capability).await?;
+    if d1::project_is_archived(db, tenant, project).await? {
+        return Err(Error::RustError(
+            "project is archived and read-only".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) async fn check_workspace_read_capability(
+    env: &Env,
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+    workspace: &str,
+) -> Result<()> {
+    let capability = if workspace == "main" {
+        "main:read"
+    } else {
+        "workspaces:read"
+    };
+    check_project_read_capability(env, db, tenant, project, user, capability).await
+}
+
+pub(crate) async fn check_workspace_write_capability(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    user: &str,
+    workspace: &str,
+) -> Result<()> {
+    let capability = if workspace == "main" {
+        "main:write"
+    } else if d1::workspace_exists(db, tenant, project, workspace).await? {
+        "workspaces:write"
+    } else {
+        "workspaces:create"
+    };
+    check_project_write_capability(db, tenant, project, user, "contributor", capability).await
 }

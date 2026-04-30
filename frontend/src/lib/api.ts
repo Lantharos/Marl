@@ -3,15 +3,16 @@ import { authedFetch, notifyProjectStatsChanged, pageQuery, publicFetch } from '
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
 import type { AccessResponse, UserProfile } from './collaboratorTypes';
-import type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
 export * from './collaboratorApi';
+export * from './developerApi';
 export type { AccessResponse, Collaborator, CollaboratorRole, UserProfile } from './collaboratorTypes';
 export * from './issueApi';
 export * from './objectApi';
 export * from './projectDataApi';
-export type { AccountKey, CapabilityResponse, Label, Milestone, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+export type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -59,6 +60,7 @@ export interface ProjectSettings {
 	visibility: 'public' | 'private';
 	follower_count: number;
 	is_following: boolean;
+	public_releases: boolean;
 	archived_at?: string | null;
 	archived_by?: string | null;
 	archived_by_profile?: UserProfile | null;

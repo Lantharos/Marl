@@ -3,17 +3,20 @@ use sha2::{Digest, Sha256};
 use sty_protocol::TokenPrincipal;
 use worker::*;
 
+use crate::release_support::*;
 use crate::support::{
     apply_cache_headers, bucket, db, json_error, object_size_limit, paginate_vec, param,
     project_params,
 };
-use crate::{check_project_access, check_project_write_role, d1, optional_auth, require_auth};
+use crate::{
+    check_project_read_capability, check_project_write_capability, d1, optional_auth, require_auth,
+};
 
 pub async fn list_releases(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    release_public_cache(&ctx.env, &database, &tenant, &project, user.as_deref()).await?;
     let items = list_release_values(&database, &tenant, &project).await?;
     Response::from_json(&paginate_vec(req.url()?, items))
 }
@@ -27,7 +30,15 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
         return json_error(400, "release requires a tag");
     }
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "releases:write",
+    )
+    .await?;
 
     let principal = TokenPrincipal { user: user.clone() };
     let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
@@ -72,6 +83,14 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
     }
     upsert_release(&database, &tenant, &project, &id, body.clone()).await?;
     d1::recompute_project_stats(&database, &tenant, &project).await?;
+    let _ = crate::developer::emit_project_event(
+        &ctx.env,
+        &tenant,
+        &project,
+        "release.created",
+        json!({ "release": body.clone(), "actor": user }),
+    )
+    .await;
     Response::from_json(&body)
 }
 
@@ -80,7 +99,7 @@ pub async fn get_release(req: Request, ctx: RouteContext<()>) -> Result<Response
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    release_public_cache(&ctx.env, &database, &tenant, &project, user.as_deref()).await?;
     let Some(item) = release_item_by_id_or_tag(&database, &tenant, &project, &id).await? else {
         return json_error(404, "release not found");
     };
@@ -92,7 +111,15 @@ pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) ->
     let (tenant, project) = project_params(&ctx)?;
     let release_id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "releases:write",
+    )
+    .await?;
     let Some(mut release) =
         release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
     else {
@@ -174,6 +201,14 @@ pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) ->
         release.clone(),
     )
     .await?;
+    let _ = crate::developer::emit_project_event(
+        &ctx.env,
+        &tenant,
+        &project,
+        "release.artifact_uploaded",
+        json!({ "release": release.clone(), "actor": user }),
+    )
+    .await;
     Response::from_json(&release)
 }
 
@@ -183,11 +218,8 @@ pub async fn download_release_artifact(req: Request, ctx: RouteContext<()>) -> R
     let release_id = param(&ctx, "item_id")?;
     let artifact_id = param(&ctx, "artifact_id")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
-    let public_cache = matches!(
-        d1::project_visibility(&database, &tenant, &project).await?,
-        Some(visibility) if visibility == "public"
-    );
+    let public_cache =
+        release_public_cache(&ctx.env, &database, &tenant, &project, user.as_deref()).await?;
     let Some(release) =
         release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
     else {
@@ -227,254 +259,21 @@ pub async fn download_release_artifact(req: Request, ctx: RouteContext<()>) -> R
     Ok(response)
 }
 
-async fn ensure_tag(
+async fn release_public_cache(
+    env: &Env,
     database: &D1Database,
     tenant: &str,
     project: &str,
-    tag: &str,
-    user: &str,
-    snapshot: Option<&str>,
-) -> Result<serde_json::Value> {
-    if let Some(item) = list_protocol_values(database, tenant, project, "tag")
-        .await?
-        .into_iter()
-        .find(|item| {
-            item["tag"].as_str() == Some(tag)
-                || item["name"].as_str() == Some(tag)
-                || item["id"].as_str() == Some(tag)
-        })
-    {
-        return Ok(item);
+    user: Option<&str>,
+) -> Result<bool> {
+    let public_project = matches!(
+        d1::project_visibility(database, tenant, project).await?,
+        Some(visibility) if visibility == "public"
+    );
+    let public_releases = d1::project_public_releases(database, tenant, project).await?;
+    if public_project || public_releases {
+        return Ok(true);
     }
-    let now = now_iso();
-    let id = tag_id(tenant, project, tag);
-    let mut item = json!({
-        "id": id,
-        "tag": tag,
-        "name": tag,
-        "author": user,
-        "created_at": now,
-        "updated_at": now,
-    });
-    if let Some(snapshot) = snapshot {
-        item["snapshot"] = json!(snapshot);
-    }
-    upsert_protocol_item(
-        database,
-        tenant,
-        project,
-        "tag",
-        item["id"].as_str().unwrap(),
-        item.clone(),
-    )
-    .await?;
-    Ok(item)
-}
-
-async fn list_release_values(
-    database: &D1Database,
-    tenant: &str,
-    project: &str,
-) -> Result<Vec<serde_json::Value>> {
-    list_protocol_values(database, tenant, project, "release").await
-}
-
-async fn list_protocol_values(
-    database: &D1Database,
-    tenant: &str,
-    project: &str,
-    kind: &str,
-) -> Result<Vec<serde_json::Value>> {
-    let result = database
-        .prepare(
-            "SELECT data_json FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND kind = ?3 ORDER BY created_at DESC",
-        )
-        .bind(&[js_str(tenant), js_str(project), js_str(kind)])?
-        .all()
-        .await?;
-    #[derive(serde::Deserialize)]
-    struct Row {
-        data_json: String,
-    }
-    let rows: Vec<Row> = result.results()?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| serde_json::from_str::<serde_json::Value>(&row.data_json).ok())
-        .collect())
-}
-
-async fn release_item(
-    database: &D1Database,
-    tenant: &str,
-    project: &str,
-    id: &str,
-) -> Result<Option<serde_json::Value>> {
-    #[derive(serde::Deserialize)]
-    struct Row {
-        data_json: String,
-    }
-    let row: Option<Row> = database
-        .prepare(
-            "SELECT data_json FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND kind = 'release' AND id = ?3",
-        )
-        .bind(&[js_str(tenant), js_str(project), js_str(id)])?
-        .first(None)
-        .await?;
-    row.map(|row| {
-        serde_json::from_str(&row.data_json).map_err(|error| Error::RustError(error.to_string()))
-    })
-    .transpose()
-}
-
-async fn release_item_by_id_or_tag(
-    database: &D1Database,
-    tenant: &str,
-    project: &str,
-    id_or_tag: &str,
-) -> Result<Option<serde_json::Value>> {
-    if let Some(item) = release_item(database, tenant, project, id_or_tag).await? {
-        return Ok(Some(item));
-    }
-    Ok(list_release_values(database, tenant, project)
-        .await?
-        .into_iter()
-        .find(|item| item["tag"].as_str() == Some(id_or_tag)))
-}
-
-async fn upsert_release(
-    database: &D1Database,
-    tenant: &str,
-    project: &str,
-    id: &str,
-    item: serde_json::Value,
-) -> Result<()> {
-    upsert_protocol_item(database, tenant, project, "release", id, item).await
-}
-
-async fn upsert_protocol_item(
-    database: &D1Database,
-    tenant: &str,
-    project: &str,
-    kind: &str,
-    id: &str,
-    item: serde_json::Value,
-) -> Result<()> {
-    let now = now_iso();
-    let data_json =
-        serde_json::to_string(&item).map_err(|error| Error::RustError(error.to_string()))?;
-    database
-        .prepare(
-            "INSERT INTO protocol_items (id, tenant, project, kind, number, data_json, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?6)
-             ON CONFLICT(id) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at",
-        )
-        .bind(&[
-            js_str(id),
-            js_str(tenant),
-            js_str(project),
-            js_str(kind),
-            js_str(&data_json),
-            js_str(&now),
-        ])?
-        .run()
-        .await?;
-    Ok(())
-}
-
-fn release_artifact<'a>(
-    release: &'a serde_json::Value,
-    artifact_id: &str,
-) -> Option<&'a serde_json::Value> {
-    release["artifacts"]
-        .as_array()?
-        .iter()
-        .find(|artifact| artifact["id"].as_str() == Some(artifact_id))
-}
-
-fn release_id(tenant: &str, project: &str, tag: &str) -> String {
-    let digest = hex::encode(Sha256::digest(
-        format!("{tenant}/{project}:{tag}").as_bytes(),
-    ));
-    format!("release:{}", &digest[..24])
-}
-
-fn tag_id(tenant: &str, project: &str, tag: &str) -> String {
-    let digest = hex::encode(Sha256::digest(
-        format!("{tenant}/{project}:{tag}").as_bytes(),
-    ));
-    format!("tag:{}", &digest[..24])
-}
-
-fn release_artifact_key(
-    tenant: &str,
-    project: &str,
-    release_id: &str,
-    artifact_id: &str,
-    file_name: &str,
-) -> String {
-    let release_key = release_id.replace(['/', '\\'], "_");
-    format!(
-        "projects/{tenant}/{project}/releases/{release_key}/artifacts/{artifact_id}/{file_name}"
-    )
-}
-
-fn release_artifact_download_url(
-    tenant: &str,
-    project: &str,
-    release_id: &str,
-    artifact_id: &str,
-) -> String {
-    format!(
-        "/v1/tenants/{}/projects/{}/releases/{}/artifacts/{}/download",
-        tenant,
-        project,
-        percent_encode_component(release_id),
-        artifact_id
-    )
-}
-
-fn safe_file_name(value: &str) -> String {
-    let safe = value
-        .chars()
-        .map(|ch| match ch {
-            '/' | '\\' | '"' | '\0'..='\u{1f}' => '_',
-            ch => ch,
-        })
-        .collect::<String>();
-    if safe.trim().is_empty() {
-        "artifact.bin".to_string()
-    } else {
-        safe
-    }
-}
-
-fn normalize_content_type(value: &str) -> String {
-    if value.trim().is_empty() {
-        "application/octet-stream".to_string()
-    } else {
-        value.to_string()
-    }
-}
-
-fn percent_encode_component(value: &str) -> String {
-    value
-        .bytes()
-        .flat_map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                vec![byte as char]
-            }
-            byte => format!("%{byte:02X}").chars().collect(),
-        })
-        .collect()
-}
-
-fn now_iso() -> String {
-    js_sys::Date::new_0()
-        .to_iso_string()
-        .as_string()
-        .unwrap_or_default()
-}
-
-fn js_str(value: &str) -> wasm_bindgen::JsValue {
-    wasm_bindgen::JsValue::from_str(value)
+    check_project_read_capability(env, database, tenant, project, user, "releases:read").await?;
+    Ok(false)
 }

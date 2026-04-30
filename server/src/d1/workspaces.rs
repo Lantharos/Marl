@@ -17,6 +17,24 @@ pub async fn head(
     Ok(row.and_then(|r| r.head))
 }
 
+pub async fn workspace_exists(
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+) -> Result<bool> {
+    #[derive(Deserialize)]
+    struct Row {
+        exists: i64,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT 1 AS exists FROM workspace_states WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .first(None)
+        .await?;
+    Ok(row.is_some_and(|row| row.exists == 1))
+}
+
 pub async fn update_head(
     db: &D1Database,
     tenant: &str,

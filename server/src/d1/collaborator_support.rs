@@ -43,9 +43,11 @@ pub async fn ensure_collaboration_schema(db: &D1Database) -> Result<()> {
     )
     .run()
     .await?;
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_tenant_members_user ON tenant_members(user, tenant)")
-        .run()
-        .await?;
+    db.prepare(
+        "CREATE INDEX IF NOT EXISTS idx_tenant_members_user ON tenant_members(user, tenant)",
+    )
+    .run()
+    .await?;
     db.prepare(
         "CREATE TABLE IF NOT EXISTS project_members (
             tenant TEXT NOT NULL,
@@ -120,6 +122,9 @@ pub async fn project_effective_role(
     user: &str,
 ) -> Result<Option<String>> {
     ensure_collaboration_schema(db).await?;
+    if let Some(role) = project_api_key_role(db, tenant, project, user).await? {
+        return Ok(Some(role));
+    }
     #[derive(Deserialize)]
     struct Row {
         owner: String,

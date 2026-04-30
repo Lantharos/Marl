@@ -12,7 +12,9 @@
 			await hydrateSession();
 			await getStyToken();
 			await invalidateAll();
-			await goto('/', { replaceState: true, invalidateAll: true });
+			const next = localStorage.getItem('sty_post_login') || '/';
+			localStorage.removeItem('sty_post_login');
+			await goto(next, { replaceState: true, invalidateAll: true });
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Sign in failed';
 		}

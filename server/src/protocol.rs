@@ -4,7 +4,10 @@ use worker::*;
 
 use crate::protocol_profiles::profile_json;
 use crate::support::{db, json_error, paginate_vec, param, project_params};
-use crate::{check_project_access, check_project_write_role, d1, optional_auth, require_auth};
+use crate::{
+    check_project_capability, check_project_read_capability, check_project_write_capability, d1,
+    optional_auth, require_auth,
+};
 pub async fn list_labels(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     list_protocol_kind(req, ctx, "label").await
 }
@@ -37,14 +40,6 @@ pub async fn create_hook(req: Request, ctx: RouteContext<()>) -> Result<Response
     create_protocol_kind(req, ctx, "hook").await
 }
 
-pub async fn list_webhooks(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    list_protocol_kind(req, ctx, "webhook").await
-}
-
-pub async fn create_webhook(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    create_protocol_kind(req, ctx, "webhook").await
-}
-
 pub async fn list_tags(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     list_protocol_kind(req, ctx, "tag").await
 }
@@ -73,7 +68,15 @@ pub async fn search_project(req: Request, ctx: RouteContext<()>) -> Result<Respo
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "issues:read",
+    )
+    .await?;
     let url = req.url()?;
     let query = url
         .query_pairs()
@@ -118,7 +121,15 @@ pub async fn add_reaction(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "contributor",
+        "issues:write",
+    )
+    .await?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let emoji = body["emoji"].as_str().unwrap_or("+1");
     Response::from_json(&json!([{ "emoji": emoji, "count": 1, "reacted": true }]))
@@ -128,7 +139,15 @@ pub async fn delete_reaction(req: Request, ctx: RouteContext<()>) -> Result<Resp
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "contributor",
+        "issues:write",
+    )
+    .await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -137,7 +156,15 @@ pub async fn verify_snapshot(req: Request, ctx: RouteContext<()>) -> Result<Resp
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "main:read",
+    )
+    .await?;
     let result =
         crate::account_keys::verify_snapshot_id(&database, &ctx.env, &tenant, &project, &id)
             .await?;
@@ -148,7 +175,15 @@ pub async fn verify_all_snapshots(req: Request, ctx: RouteContext<()>) -> Result
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "main:read",
+    )
+    .await?;
     let mut snapshots = Vec::new();
     for id in d1::object_ids_by_kind(&database, &tenant, &project, "snapshot").await? {
         snapshots.push(
@@ -167,10 +202,19 @@ pub async fn get_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Re
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
     let Some(item) = protocol_item(&database, &tenant, &project, &id).await? else {
         return json_error(404, "item not found");
     };
+    let kind = item["kind"].as_str().unwrap_or_default();
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        read_scope_for_kind(kind),
+    )
+    .await?;
     Response::from_json(&item)
 }
 
@@ -179,8 +223,16 @@ pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
     let kind = protocol_item_kind(&database, &tenant, &project, &id).await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        write_scope_for_kind(kind.as_deref().unwrap_or_default()),
+    )
+    .await?;
     database
         .prepare("DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND id = ?3")
         .bind(&[
@@ -201,7 +253,15 @@ pub async fn close_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "issues:write",
+    )
+    .await?;
     let Some(mut item) = protocol_item(&database, &tenant, &project, &id).await? else {
         return json_error(404, "item not found");
     };
@@ -215,7 +275,15 @@ pub async fn test_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<R
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "webhooks:write",
+    )
+    .await?;
     Response::from_json(&json!({ "ok": true, "tested": id }))
 }
 
@@ -223,7 +291,15 @@ async fn list_protocol_kind(req: Request, ctx: RouteContext<()>, kind: &str) -> 
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        read_scope_for_kind(kind),
+    )
+    .await?;
     let result = database
         .prepare(
             "SELECT data_json FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND kind = ?3 ORDER BY created_at DESC",
@@ -256,8 +332,15 @@ async fn create_protocol_kind(
     let (tenant, project) = project_params(&ctx)?;
     let mut body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, minimum_role_for_kind(kind))
-        .await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        minimum_role_for_kind(kind),
+        write_scope_for_kind(kind),
+    )
+    .await?;
     let id = body["id"]
         .as_str()
         .map(ToOwned::to_owned)
@@ -291,6 +374,24 @@ fn minimum_role_for_kind(kind: &str) -> &'static str {
     match kind {
         "comment" => "contributor",
         _ => "maintainer",
+    }
+}
+
+fn read_scope_for_kind(kind: &str) -> &'static str {
+    match kind {
+        "comment" | "label" | "milestone" => "issues:read",
+        "release" | "tag" => "releases:read",
+        "hook" => "webhooks:read",
+        _ => "main:read",
+    }
+}
+
+fn write_scope_for_kind(kind: &str) -> &'static str {
+    match kind {
+        "comment" | "label" | "milestone" => "issues:write",
+        "release" | "tag" => "releases:write",
+        "hook" => "webhooks:write",
+        _ => "settings:write",
     }
 }
 

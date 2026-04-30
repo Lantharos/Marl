@@ -86,7 +86,7 @@ pub(crate) async fn project_detail(req: Request, ctx: RouteContext<()>) -> Resul
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "workspaces:read").await?;
     let project_info = d1::get_project(&database, &tenant, &project).await?;
     let owner = project_info.map(|p| p.owner).unwrap_or_default();
     let states = d1::workspace_states(&database, &tenant, &project).await?;
@@ -124,7 +124,7 @@ pub(crate) async fn list_workspaces(req: Request, ctx: RouteContext<()>) -> Resu
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "workspaces:read").await?;
     let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
     Response::from_json(&WorkspaceStateResponse { workspaces })
 }

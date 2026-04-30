@@ -2,17 +2,13 @@ use super::*;
 use std::collections::HashMap;
 use sty_protocol::Collaborator;
 
-pub async fn list_tenant_collaborators(
-    db: &D1Database,
-    tenant: &str,
-) -> Result<Vec<Collaborator>> {
+pub async fn list_tenant_collaborators(db: &D1Database, tenant: &str) -> Result<Vec<Collaborator>> {
     ensure_collaboration_schema(db).await?;
     let owner = tenant_owner(db, tenant).await?;
     let mut collaborators = Vec::new();
     if let Some(owner) = owner {
-        collaborators.push(
-            collaborator(db, owner, ROLE_OWNER, "owner", None, None, None, false).await?,
-        );
+        collaborators
+            .push(collaborator(db, owner, ROLE_OWNER, "owner", None, None, None, false).await?);
     }
 
     #[derive(Deserialize)]

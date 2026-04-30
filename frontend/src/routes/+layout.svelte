@@ -31,10 +31,10 @@
 	let loadDataPromise: Promise<void> | null = null;
 	let bootstrapDone = false;
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
-	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/'));
+	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/') || $page.url.pathname.startsWith('/oauth/'));
 	const isErrorPage = $derived($page.status >= 400);
 	const pathParts = $derived($page.url.pathname.split('/').filter(Boolean));
-	const reservedRoot = $derived(['auth', 'settings', 'verify'].includes(pathParts[0] ?? ''));
+	const reservedRoot = $derived(['auth', 'settings', 'verify', 'oauth'].includes(pathParts[0] ?? ''));
 	const projectSection = $derived(pathParts[2] ?? '');
 	const isPublicProjectSection = $derived(!['settings', 'automation', 'protocol'].includes(projectSection));
 	const isLandingPage = $derived($page.url.pathname === '/');

@@ -2,12 +2,20 @@ pub(crate) async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
     let url = req.url()?;
     let workspace = url
         .query_pairs()
         .find_map(|(k, v)| (k == "workspace").then(|| v.to_string()))
         .unwrap_or_else(|| "main".to_string());
+    check_workspace_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &workspace,
+    )
+    .await?;
     let snapshot_param = url
         .query_pairs()
         .find_map(|(k, v)| (k == "snapshot").then(|| v.to_string()));
@@ -64,7 +72,6 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
     let url = req.url()?;
     let path = param(&ctx, "path")
         .ok()
@@ -77,6 +84,15 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
     let workspace = url.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
+    check_workspace_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &workspace,
+    )
+    .await?;
     let snapshot_param = url
         .query_pairs()
         .find_map(|(k, v)| (k == "snapshot").then(|| v.to_string()));

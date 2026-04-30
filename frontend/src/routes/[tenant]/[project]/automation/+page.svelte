@@ -1,14 +1,22 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import {
-		createProtocolItem,
-		deleteProtocolItem,
+		createProjectApiKey,
+		createProjectWebhook,
+		deleteProjectApiKey,
+		deleteProjectIntegration,
+		deleteProjectWebhook,
 		isAbortError,
-		listProtocolItems,
-		type ProtocolItem
+		listProjectApiKeys,
+		listProjectIntegrations,
+		listProjectWebhooks,
+		testProjectWebhook,
+		type ProjectApiKey,
+		type ProjectIntegration,
+		type ProjectWebhook
 	} from '$lib/api';
-	import Spinner from '$lib/components/Spinner.svelte';
 	import SettingsAutomation from '$lib/components/SettingsAutomation.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import { onDestroy } from 'svelte';
 
@@ -18,12 +26,22 @@
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
-	let hooks = $state<ProtocolItem[]>([]);
-	let webhooks = $state<ProtocolItem[]>([]);
-	let hookEvent = $state('workspace.ready');
-	let hookUrl = $state('');
-	let webhookEvent = $state('snapshot.saved');
+	let apiKeys = $state<ProjectApiKey[]>([]);
+	let webhooks = $state<ProjectWebhook[]>([]);
+	let integrations = $state<ProjectIntegration[]>([]);
+	let keyName = $state('');
+	let keyScopes = $state<string[]>([
+		'workspaces:read',
+		'workspaces:create',
+		'workspaces:write',
+		'workspaces:ready'
+	]);
+	let generatedKey = $state<ProjectApiKey | null>(null);
+	let webhookName = $state('');
 	let webhookUrl = $state('');
+	let webhookEvents = $state<string[]>(['snapshot.shipped', 'release.created']);
+	let createdWebhook = $state<ProjectWebhook | null>(null);
+	let testMessage = $state('');
 	let canMaintain = $state(false);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
@@ -36,12 +54,14 @@
 		loading = true;
 		error = '';
 		try {
-			const [hookData, webhookData] = await Promise.all([
-				listProtocolItems(tenant, project, 'hook', signal ? { signal } : {}).catch(() => ({ items: [] })),
-				listProtocolItems(tenant, project, 'webhook', signal ? { signal } : {}).catch(() => ({ items: [] }))
+			const [keys, hooks, apps] = await Promise.all([
+				listProjectApiKeys(tenant, project, { all: true, signal }),
+				listProjectWebhooks(tenant, project, { all: true, signal }),
+				listProjectIntegrations(tenant, project, { all: true, signal })
 			]);
-			hooks = hookData.items;
-			webhooks = webhookData.items;
+			apiKeys = keys.items;
+			webhooks = hooks.items;
+			integrations = apps.items;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -57,15 +77,16 @@
 		return () => controller.abort();
 	});
 
-	async function addHook(kind: 'hook' | 'webhook') {
-		const event = kind === 'hook' ? hookEvent : webhookEvent;
-		const url = kind === 'hook' ? hookUrl : webhookUrl;
-		if (!event.trim() || !url.trim()) return;
+	async function addApiKey() {
+		if (!keyName.trim()) return;
 		busy = true;
+		error = '';
 		try {
-			await createProtocolItem(tenant, project, kind, { event: event.trim(), url: url.trim() });
-			if (kind === 'hook') hookUrl = '';
-			if (kind === 'webhook') webhookUrl = '';
+			generatedKey = await createProjectApiKey(tenant, project, {
+				name: keyName.trim(),
+				scopes: keyScopes
+			});
+			keyName = '';
 			await load();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -74,10 +95,73 @@
 		}
 	}
 
-	async function removeProtocolItem(kind: string, id: string) {
+	async function removeApiKey(id: string) {
 		busy = true;
+		error = '';
 		try {
-			await deleteProtocolItem(tenant, project, kind, id);
+			await deleteProjectApiKey(tenant, project, id);
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function addWebhook() {
+		if (!webhookName.trim() || !webhookUrl.trim()) return;
+		busy = true;
+		error = '';
+		testMessage = '';
+		try {
+			createdWebhook = await createProjectWebhook(tenant, project, {
+				name: webhookName.trim(),
+				url: webhookUrl.trim(),
+				events: webhookEvents
+			});
+			webhookName = '';
+			webhookUrl = '';
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function removeWebhook(id: string) {
+		busy = true;
+		error = '';
+		try {
+			await deleteProjectWebhook(tenant, project, id);
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function testWebhook(id: string) {
+		busy = true;
+		error = '';
+		testMessage = '';
+		try {
+			const result = await testProjectWebhook(tenant, project, id);
+			testMessage = result.ok ? `Webhook returned ${result.status}` : `Webhook failed with ${result.status || 'no response'}`;
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function removeIntegration(id: string) {
+		busy = true;
+		error = '';
+		try {
+			await deleteProjectIntegration(tenant, project, id);
 			await load();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -87,11 +171,13 @@
 	}
 </script>
 
-<div class="mx-auto max-w-xl">
+<div class="mx-auto max-w-3xl">
 	<h3 class="mb-4 text-sm font-semibold text-[#f0eee4]">Automation</h3>
 
 	{#if loading}
-		<Spinner />
+		<div class="flex min-h-[220px] items-center justify-center">
+			<Spinner />
+		</div>
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if !canMaintain}
@@ -100,15 +186,24 @@
 		</div>
 	{:else}
 		<SettingsAutomation
-			{hooks}
+			{apiKeys}
 			{webhooks}
+			{integrations}
 			{busy}
-			bind:hookEvent
-			bind:hookUrl
-			bind:webhookEvent
+			{generatedKey}
+			{createdWebhook}
+			bind:keyName
+			bind:keyScopes
+			bind:webhookName
 			bind:webhookUrl
-			{addHook}
-			{removeProtocolItem}
+			bind:webhookEvents
+			{testMessage}
+			{addApiKey}
+			{removeApiKey}
+			{addWebhook}
+			{removeWebhook}
+			{testWebhook}
+			{removeIntegration}
 		/>
 	{/if}
 </div>

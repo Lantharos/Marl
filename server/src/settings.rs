@@ -3,9 +3,7 @@ pub(crate) async fn get_settings(req: Request, ctx: RouteContext<()>) -> Result<
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     let principal = sty_protocol::TokenPrincipal { user: user.clone() };
-    if !d1::project_access(&database, &tenant, &project, &user).await? {
-        return json_error(403, "project access denied");
-    }
+    check_project_capability(&database, &tenant, &project, &user, "maintainer", "settings:read").await?;
     let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
     Response::from_json(&settings)
 }
@@ -16,7 +14,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: RouteContext<()>) -> 
     let body: UpdateSettingsRequest = req.json().await?;
     let database = db(&ctx.env)?;
     let principal = sty_protocol::TokenPrincipal { user: user.clone() };
-    check_project_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_capability(&database, &tenant, &project, &user, "maintainer", "settings:write").await?;
     let current = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
     let visibility = body.visibility.unwrap_or(current.visibility);
     let default_workspace = body
@@ -32,6 +30,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: RouteContext<()>) -> 
         body.navbar_items,
         body.panels,
         body.archived,
+        body.public_releases,
     )
     .await?;
     Response::from_json(&settings)

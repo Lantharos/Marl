@@ -2,7 +2,7 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "main:read").await?;
     let principal = user
         .as_ref()
         .map(|user| sty_protocol::TokenPrincipal { user: user.clone() });
@@ -72,7 +72,7 @@ pub(crate) async fn project_stats(req: Request, ctx: RouteContext<()>) -> Result
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "main:read").await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let etag = format!(
         "stats-{}-{}-{}-{}-{}",

@@ -28,6 +28,7 @@
 		visibility: 'private',
 		follower_count: 0,
 		is_following: false,
+		public_releases: false,
 		archived_at: null,
 		archived_by: null,
 		archived_by_profile: null,

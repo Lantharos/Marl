@@ -3,11 +3,14 @@
 	import { onDestroy } from 'svelte';
 	import {
 		createRelease,
+		getProjectSettings,
 		isAbortError,
 		listReleasesPage,
 		listTags,
+		updateProjectSettings,
 		uploadReleaseArtifact,
 		type Paginated,
+		type ProjectSettings,
 		type Release,
 		type ReleaseArtifact,
 		type TagInfo
@@ -43,6 +46,7 @@
 	let busy = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let canMutate = $state(false);
+	let settings = $state<ProjectSettings | null>(null);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canMutate = Boolean(value?.can_maintain && !value?.archived);
@@ -135,17 +139,34 @@
 		loading = true;
 		error = '';
 		try {
-			const [releaseResult, tagResult] = await Promise.all([
+			const [releaseResult, tagResult, settingsResult] = await Promise.all([
 				listReleasesPage(tenant, project, { page: releasePage, perPage: 25, signal }),
-				listTags(tenant, project, { page: 1, perPage: 100, signal }).catch(() => null)
+				listTags(tenant, project, { page: 1, perPage: 100, signal }).catch(() => null),
+				getProjectSettings(tenant, project, { signal }).catch(() => null)
 			]);
 			releaseData = releaseResult;
 			tags = tagResult?.items ?? [];
+			settings = settingsResult;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
 			if (!signal?.aborted) loading = false;
+		}
+	}
+
+	async function togglePublicReleases() {
+		if (!settings) return;
+		busy = true;
+		error = '';
+		try {
+			settings = await updateProjectSettings(tenant, project, {
+				public_releases: !settings.public_releases
+			});
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
 		}
 	}
 
@@ -193,11 +214,24 @@
 			<p class="mt-1 text-sm text-[#8c887e]">Changelogs, pinned source snapshots, and uploaded artifacts.</p>
 		</div>
 		{#if canMutate}
-			<button class="inline-flex items-center gap-1 rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showForm = !showForm)}>
-				<Plus class="h-3.5 w-3.5" /> New release
-			</button>
+			<div class="flex shrink-0 items-center gap-2">
+				{#if settings}
+					<button class="rounded border border-[#2a2a28] px-3 py-1.5 text-xs font-medium {settings.public_releases ? 'text-[#d9a66c]' : 'text-[#a09d94] hover:text-[#eae9e4]'}" disabled={busy} onclick={togglePublicReleases}>
+						{settings.public_releases ? 'Public downloads' : 'Private downloads'}
+					</button>
+				{/if}
+				<button class="inline-flex items-center gap-1 rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showForm = !showForm)}>
+					<Plus class="h-3.5 w-3.5" /> New release
+				</button>
+			</div>
 		{/if}
 	</div>
+
+	{#if settings?.public_releases}
+		<p class="mb-5 rounded border border-[#2a2a28] bg-[#141412] px-3 py-2 text-sm text-[#8c887e]">
+			Release metadata and artifact downloads are public. Code, issues, and history still follow the project visibility.
+		</p>
+	{/if}
 
 	{#if canMutate && showForm}
 		<div class="mb-5 grid gap-4 rounded border border-[#2a2a28] bg-[#141412] p-4">

@@ -3,13 +3,23 @@ use sty_protocol::OkResponse;
 use worker::*;
 
 use crate::support::{db, json_error, paginate_vec, param, project_params};
-use crate::{check_project_access, check_project_write_role, d1, optional_auth, require_auth};
+use crate::{
+    check_project_read_capability, check_project_write_capability, d1, optional_auth, require_auth,
+};
 
 pub async fn list_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "workspaces:read",
+    )
+    .await?;
     let ready = d1::workspace_states(&database, &tenant, &project)
         .await?
         .into_iter()
@@ -35,7 +45,15 @@ pub async fn get_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> 
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "workspaces:read",
+    )
+    .await?;
     let state = d1::workspace_states(&database, &tenant, &project)
         .await?
         .into_iter()
@@ -60,7 +78,15 @@ pub async fn unmark_ready(req: Request, ctx: RouteContext<()>) -> Result<Respons
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "workspaces:ready",
+    )
+    .await?;
     d1::unmark_workspace_ready(
         &database,
         &tenant,
@@ -76,7 +102,15 @@ pub async fn reject_ready(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     let user = require_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "workspaces:ready",
+    )
+    .await?;
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     d1::reject_workspace_ready(

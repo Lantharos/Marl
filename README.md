@@ -55,7 +55,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, and project archive state.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, and developer apps.
 
 Then start the Worker:
 
@@ -146,6 +146,10 @@ Tenant collaborators inherit access into every project in that tenant. Project c
 
 Project maintainers can archive a project from Settings. Archived projects stay readable, but code sync, object uploads, issues, comments, releases, ready actions, and other project mutations are rejected until a maintainer unarchives the project. Project owners can delete a project from Settings after confirming the action.
 
+Project API keys are maintainer-managed tokens for tools and agents. Keys are scoped to one project and use explicit permissions such as `main:read`, `main:write`, `workspaces:create`, `workspaces:write`, `issues:write`, `releases:write`, and `webhooks:write`. This lets an agent work in feature workspaces without being able to advance `main`. Webhooks are also project-scoped and can subscribe to sync, snapshot, workspace, release, and issue events. Webhook deliveries include `x-sty-event`, `x-sty-delivery`, and an HMAC-SHA256 `x-sty-signature-256` when a secret exists.
+
+Maintainers can make release metadata and release artifact downloads public even when the project itself is private. This is useful for auto-updaters or public download buttons while keeping code, issues, and history private.
+
 CLI examples:
 
 ```powershell
@@ -166,13 +170,22 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - issues, comments, labels, and milestones
 - ready queues and workspace merge metadata
 - hooks and webhooks
+- granular project API keys and developer app integrations
 - search
 - private project follows, home feed, public project discovery, paginated tenant project pages, and project settings
-- releases, tags, changelog notes, pinned source snapshots, and uploaded artifacts
+- releases, tags, changelog notes, pinned source snapshots, uploaded artifacts, and optional public release downloads
 - signed snapshot verification with user-scoped signing keys
 - profiles and account signing keys
 - permissions and collaborators for tenants and projects
 - archived project state and read-only enforcement
+
+Developer apps live in User Settings. They receive a client id and a one-time client secret, then can start an OAuth-style authorization by sending users to:
+
+```text
+/oauth/authorize?client_id=...&redirect_uri=...&tenant=tenant&project=project&scope=workspaces:create%20workspaces:write%20webhooks:write
+```
+
+After approval, the app exchanges the returned code with `POST /v1/oauth/token` and receives a project-scoped bearer token. Sty requires the approving user to be a maintainer of the selected project.
 
 Protocol list endpoints return the standard pagination envelope:
 

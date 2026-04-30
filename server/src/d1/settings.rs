@@ -50,6 +50,7 @@ pub async fn project_settings(
                 visibility: "private".to_string(),
                 follower_count: 0,
                 is_following: false,
+                public_releases: false,
                 archived_at: None,
                 archived_by: None,
                 archived_by_profile: None,
@@ -73,6 +74,12 @@ pub async fn project_settings(
     settings.archived_by = archived_by;
 
     Ok(settings)
+}
+
+pub async fn project_public_releases(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
+    Ok(project_settings(db, tenant, project, None)
+        .await?
+        .public_releases)
 }
 
 pub async fn project_archive(
@@ -107,10 +114,14 @@ pub async fn update_project_settings(
     navbar_items: Option<Vec<NavbarItem>>,
     panels: Option<Vec<PanelItem>>,
     archived: Option<bool>,
+    public_releases: Option<bool>,
 ) -> Result<ProjectSettings> {
     let mut settings = project_settings(db, tenant, project, Some(principal)).await?;
     settings.visibility = visibility.to_string();
     settings.default_workspace = default_workspace.to_string();
+    if let Some(public) = public_releases {
+        settings.public_releases = public;
+    }
     if let Some(items) = navbar_items {
         settings.navbar_items = items;
     }

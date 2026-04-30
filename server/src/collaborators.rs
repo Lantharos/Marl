@@ -18,9 +18,14 @@ pub(crate) async fn project_access(req: Request, ctx: RouteContext<()>) -> Resul
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
     );
-    let access =
-        d1::project_access_response(&database, &tenant, &project, user.as_deref(), public_visible)
-            .await?;
+    let access = d1::project_access_response(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        public_visible,
+    )
+    .await?;
     if !access.can_read {
         return json_error(403, "project access denied");
     }
@@ -120,12 +125,7 @@ pub(crate) async fn add_project_collaborator(
     let database = db(&ctx.env)?;
     require_project_maintainer(&database, &tenant, &project, &user).await?;
     let item = d1::upsert_project_collaborator(
-        &database,
-        &tenant,
-        &project,
-        &body.user,
-        &body.role,
-        &user,
+        &database, &tenant, &project, &body.user, &body.role, &user,
     )
     .await?;
     Response::from_json(&item)
@@ -141,15 +141,9 @@ pub(crate) async fn update_project_collaborator(
     let body: CollaboratorUpdateRequest = req.json().await?;
     let database = db(&ctx.env)?;
     require_project_maintainer(&database, &tenant, &project, &user).await?;
-    let item = d1::upsert_project_collaborator(
-        &database,
-        &tenant,
-        &project,
-        &target,
-        &body.role,
-        &user,
-    )
-    .await?;
+    let item =
+        d1::upsert_project_collaborator(&database, &tenant, &project, &target, &body.role, &user)
+            .await?;
     Response::from_json(&item)
 }
 
@@ -171,7 +165,9 @@ async fn require_tenant_owner(db: &D1Database, tenant: &str, user: &str) -> Resu
         return Err(Error::RustError("tenant not found".to_string()));
     }
     if d1::role_allows(
-        d1::tenant_effective_role(db, tenant, user).await?.as_deref(),
+        d1::tenant_effective_role(db, tenant, user)
+            .await?
+            .as_deref(),
         "owner",
     ) {
         return Ok(());
@@ -194,7 +190,9 @@ async fn require_project_maintainer(
     if d1::project_role_allows(db, tenant, project, user, "maintainer").await? {
         return Ok(());
     }
-    Err(Error::RustError("project maintainer access denied".to_string()))
+    Err(Error::RustError(
+        "project maintainer access denied".to_string(),
+    ))
 }
 
 fn tenant_param(ctx: &RouteContext<()>) -> Result<String> {

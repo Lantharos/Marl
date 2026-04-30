@@ -2,8 +2,16 @@ pub(crate) async fn get_head(req: Request, ctx: RouteContext<()>) -> Result<Resp
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
     let workspace = param(&ctx, "workspace")?;
+    check_workspace_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &workspace,
+    )
+    .await?;
     let head = d1::head(&database, &tenant, &project, &workspace).await?;
     Response::from_json(&HeadResponse { head })
 }
@@ -13,10 +21,18 @@ pub(crate) async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Resu
     let (tenant, project) = project_params(&ctx)?;
     let body: HeadUpdateRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
     let workspace = param(&ctx, "workspace")?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
     if ok {
+        let _ = crate::developer::emit_project_event(
+            &ctx.env,
+            &tenant,
+            &project,
+            "sync",
+            serde_json::json!({ "workspace": workspace, "head": body.new_head, "actor": user }),
+        )
+        .await;
         Response::from_json(&OkResponse { ok: true })
     } else {
         json_error(409, "workspace head changed")
@@ -28,7 +44,15 @@ pub(crate) async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Re
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_workspace_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &workspace,
+    )
+    .await?;
     let mut entries = d1::workspace_history(&database, &tenant, &project, &workspace).await?;
     enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
@@ -38,7 +62,7 @@ pub(crate) async fn project_history(req: Request, ctx: RouteContext<()>) -> Resu
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "history:read").await?;
     let mut entries = d1::project_history(&database, &tenant, &project).await?;
     enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
@@ -49,7 +73,7 @@ pub(crate) async fn history_entry(req: Request, ctx: RouteContext<()>) -> Result
     let (tenant, project) = project_params(&ctx)?;
     let entry_id = param(&ctx, "entry_id")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "history:read").await?;
     let mut entry = d1::get_history_entry(&database, &tenant, &project, &entry_id).await?;
     if let Some(entry) = &mut entry {
         enrich_history_entry(&ctx.env, &tenant, &project, entry).await?;
@@ -112,12 +136,32 @@ async fn enrich_history_entry(
 
 pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
+    let actor = user.clone();
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let body: LogHistoryRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message, body.snapshot_id.as_deref()).await?;
+    let event = match body.kind.as_str() {
+        "ship" => "snapshot.shipped",
+        "cram" => "snapshot.crammed",
+        _ => "snapshot.saved",
+    };
+    let _ = crate::developer::emit_project_event(
+        &ctx.env,
+        &tenant,
+        &project,
+        event,
+        serde_json::json!({
+            "workspace": workspace,
+            "kind": body.kind,
+            "message": body.message,
+            "snapshot": body.snapshot_id,
+            "actor": actor
+        }),
+    )
+    .await;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -126,8 +170,16 @@ pub(crate) async fn mark_ready(req: Request, ctx: RouteContext<()>) -> Result<Re
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:ready").await?;
     d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
+    let _ = crate::developer::emit_project_event(
+        &ctx.env,
+        &tenant,
+        &project,
+        "workspace.ready",
+        serde_json::json!({ "workspace": workspace }),
+    )
+    .await;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -136,8 +188,16 @@ pub(crate) async fn merge_workspace(req: Request, ctx: RouteContext<()>) -> Resu
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "maintainer").await?;
+    check_project_write_capability(&database, &tenant, &project, &user, "maintainer", "workspaces:merge").await?;
     d1::merge_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
+    let _ = crate::developer::emit_project_event(
+        &ctx.env,
+        &tenant,
+        &project,
+        "workspace.merged",
+        serde_json::json!({ "workspace": workspace }),
+    )
+    .await;
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -146,7 +206,15 @@ pub(crate) async fn merge_preview(req: Request, ctx: RouteContext<()>) -> Result
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx.env)?;
-    check_project_access(&ctx.env, &tenant, &project, user.as_deref()).await?;
+    check_workspace_read_capability(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &workspace,
+    )
+    .await?;
     let states = d1::workspace_states(&database, &tenant, &project).await?;
     let ws = states.into_iter().find(|s| s.name == workspace)
         .ok_or_else(|| Error::RustError("workspace not found".to_string()))?;
@@ -193,7 +261,7 @@ pub(crate) async fn set_parent(mut req: Request, ctx: RouteContext<()>) -> Resul
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await?;
     let database = db(&ctx.env)?;
-    check_project_write_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:write").await?;
     let parent = body["parent_workspace"].as_str();
     d1::set_parent_workspace(&database, &tenant, &project, &workspace, parent).await?;
     Response::from_json(&OkResponse { ok: true })
@@ -205,7 +273,7 @@ pub(crate) async fn compare(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let workspace = param(&ctx, "workspace")?;
     let body: CompareRequest = req.json().await?;
     let database = db(&ctx.env)?;
-    check_project_role(&database, &tenant, &project, &user, "contributor").await?;
+    check_workspace_read_capability(&ctx.env, &database, &tenant, &project, Some(&user), &workspace).await?;
     let remote_head = d1::head(&database, &tenant, &project, &workspace).await?;
     let relation = compare_relation(&ctx.env, &tenant, &project, body.local_head.as_deref(), remote_head.as_deref()).await?;
     Response::from_json(&CompareResponse { remote_head, relation })

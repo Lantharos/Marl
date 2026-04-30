@@ -93,3 +93,60 @@ export interface TagInfo {
 	author?: string;
 	created_at?: string;
 }
+
+export interface ProjectApiKey {
+	id: string;
+	prefix: string;
+	tenant: string;
+	project: string;
+	name: string;
+	scopes: string[];
+	created_by: string;
+	created_at: string;
+	last_used_at?: string | null;
+	expires_at?: string | null;
+	revoked_at?: string | null;
+	token?: string;
+}
+
+export interface ProjectWebhook {
+	id: string;
+	tenant: string;
+	project: string;
+	name: string;
+	url: string;
+	events: string[];
+	created_by: string;
+	created_at: string;
+	updated_at: string;
+	last_delivery_at?: string | null;
+	last_delivery_status?: number | null;
+	active: boolean;
+	secret?: string;
+}
+
+export interface DeveloperApp {
+	id: string;
+	owner: string;
+	name: string;
+	description?: string | null;
+	homepage_url?: string | null;
+	redirect_uri: string;
+	client_id: string;
+	created_at: string;
+	updated_at: string;
+	revoked_at?: string | null;
+	client_secret?: string;
+}
+
+export interface ProjectIntegration {
+	id: string;
+	tenant: string;
+	project: string;
+	app_id: string;
+	app_name: string;
+	scopes: string[];
+	installed_by: string;
+	created_at: string;
+	revoked_at?: string | null;
+}

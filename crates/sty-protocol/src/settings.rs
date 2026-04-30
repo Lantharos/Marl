@@ -45,6 +45,8 @@ pub struct ProjectSettings {
     pub follower_count: u64,
     #[serde(default)]
     pub is_following: bool,
+    #[serde(default)]
+    pub public_releases: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -61,6 +63,7 @@ pub struct ProjectSettings {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateSettingsRequest {
     pub visibility: Option<String>,
+    pub public_releases: Option<bool>,
     pub archived: Option<bool>,
     pub default_workspace: Option<String>,
     pub navbar_items: Option<Vec<NavbarItem>>,

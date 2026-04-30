@@ -73,7 +73,11 @@ pub async fn delete_prefix(bucket: &Bucket, prefix: &str) -> Result<()> {
             list = list.cursor(value);
         }
         let objects = list.execute().await?;
-        let keys: Vec<String> = objects.objects().into_iter().map(|object| object.key()).collect();
+        let keys: Vec<String> = objects
+            .objects()
+            .into_iter()
+            .map(|object| object.key())
+            .collect();
         if !keys.is_empty() {
             bucket.delete_multiple(keys).await?;
         }

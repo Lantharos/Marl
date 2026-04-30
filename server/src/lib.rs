@@ -14,23 +14,26 @@ mod account_keys;
 mod auth;
 mod collaborators;
 pub(crate) mod d1;
+mod developer;
 mod protocol;
 mod protocol_profiles;
 mod protocol_ready;
+mod release_support;
 mod releases;
 mod support;
 
 use account_keys::*;
 use auth::verify_ave_id_token;
 use collaborators::*;
+use developer::*;
 use protocol::*;
 use protocol_ready::*;
 use releases::*;
 use support::{
-    apply_cache_headers, apply_cors, bearer_token, bucket, db, frontend_origin, json_error,
-    delete_prefix, not_modified_response, object_key, object_size_limit, paginate_vec, param,
-    preflight_response, project_params, put_bytes, r2_bytes, required_header, required_usize_header,
-    response_for_error, validate_object_metadata,
+    apply_cache_headers, apply_cors, bearer_token, bucket, db, delete_prefix, frontend_origin,
+    json_error, not_modified_response, object_key, object_size_limit, paginate_vec, param,
+    preflight_response, project_params, put_bytes, r2_bytes, required_header,
+    required_usize_header, response_for_error, validate_object_metadata,
 };
 
 include!("code.rs");
@@ -68,6 +71,12 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/account/ssh-keys", list_account_ssh_keys)
         .post_async("/v1/account/ssh-keys", create_account_ssh_key)
         .delete_async("/v1/account/ssh-keys/:key_id", delete_account_ssh_key)
+        .get_async("/v1/developer/apps", list_developer_apps)
+        .post_async("/v1/developer/apps", create_developer_app)
+        .delete_async("/v1/developer/apps/:app_id", delete_developer_app)
+        .get_async("/v1/oauth/apps/:client_id", oauth_app)
+        .post_async("/v1/oauth/authorize", oauth_authorize)
+        .post_async("/v1/oauth/token", oauth_token)
         .post_async("/v1/orgs", create_org)
         .get_async("/v1/tenants/:tenant/collaborators", list_tenant_collaborators)
         .post_async("/v1/tenants/:tenant/collaborators", add_tenant_collaborator)
@@ -236,20 +245,40 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             test_protocol_item,
         )
         .get_async(
+            "/v1/tenants/:tenant/projects/:project/api-keys",
+            list_project_api_keys,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/api-keys",
+            create_project_api_key,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/api-keys/:item_id",
+            delete_project_api_key,
+        )
+        .get_async(
             "/v1/tenants/:tenant/projects/:project/webhooks",
-            list_webhooks,
+            list_project_webhooks,
         )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/webhooks",
-            create_webhook,
+            create_project_webhook,
         )
         .delete_async(
             "/v1/tenants/:tenant/projects/:project/webhooks/:item_id",
-            delete_protocol_item,
+            delete_project_webhook,
         )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/test",
-            test_protocol_item,
+            test_project_webhook,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/integrations",
+            list_project_integrations,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/integrations/:item_id",
+            delete_project_integration,
         )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/search",
