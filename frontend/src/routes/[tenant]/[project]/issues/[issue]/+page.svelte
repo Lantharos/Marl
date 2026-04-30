@@ -14,6 +14,7 @@
 	} from '$lib/api';
 	import { appData } from '$lib/appState';
 	import CommentThread from '$lib/components/CommentThread.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
@@ -131,7 +132,7 @@
 
 <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_260px]">
 	{#if loading}
-		<div class="text-sm text-[#6f6b5f]">Loading issue...</div>
+		<Spinner />
 	{:else if error && !issue}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if issue}

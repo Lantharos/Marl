@@ -167,7 +167,7 @@
 				</div>
 				<div class="flex-1 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
 					{#if fileLoading}
-						<div class="p-4 text-sm text-[#6f6b5f]">Loading diff...</div>
+						<Spinner />
 					{:else if selectedPath}
 						<FileDiffCard
 							path={selectedPath}

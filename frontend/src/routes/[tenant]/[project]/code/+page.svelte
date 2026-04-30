@@ -3,6 +3,7 @@
 	import { getProjectTree, getProjectFile, isAbortError, type ProjectTree, type ProjectFile } from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -55,7 +56,7 @@
 </script>
 
 {#if loading}
-	<div class="text-sm text-[#6f6b5f]">Loading files...</div>
+	<Spinner />
 {:else if error}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
 {:else}
