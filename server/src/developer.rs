@@ -4,6 +4,7 @@ use serde_json::json;
 use sha2::Sha256;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use sty_protocol::OkResponse;
+use wasm_bindgen::{JsCast, closure::Closure};
 use worker::*;
 
 use crate::support::{db, json_error, paginate_vec, param, project_params};
@@ -57,6 +58,8 @@ struct OAuthTokenRequest {
     #[serde(rename = "grantType")]
     grant_type_camel: Option<String>,
 }
+
+const WEBHOOK_TIMEOUT_MS: i32 = 5_000;
 
 pub async fn list_project_api_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let user = require_auth(&req, &ctx.env).await?;
@@ -434,7 +437,25 @@ async fn send_webhook(
         .with_headers(headers)
         .with_body(Some(wasm_bindgen::JsValue::from_str(&payload_text)));
     let request = Request::new_with_init(&hook.url, &init)?;
-    let response = Fetch::Request(request).send().await?;
+    let controller = AbortController::default();
+    let signal = controller.signal();
+    let timeout = {
+        let callback = Closure::once(move || {
+            controller.abort_with_reason("webhook request timed out");
+        });
+        let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
+        let timeout = global
+            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                callback.as_ref().unchecked_ref(),
+                WEBHOOK_TIMEOUT_MS,
+            )
+            .map_err(|error| Error::RustError(format!("{error:?}")))?;
+        callback.forget();
+        (global, timeout)
+    };
+    let response = Fetch::Request(request).send_with_signal(&signal).await;
+    timeout.0.clear_timeout_with_handle(timeout.1);
+    let response = response?;
     Ok(response.status_code() as i64)
 }
 
