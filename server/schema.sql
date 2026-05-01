@@ -116,7 +116,10 @@ CREATE TABLE IF NOT EXISTS object_index (
 CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
 CREATE INDEX IF NOT EXISTS idx_history_project_time ON history(tenant, project, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
+CREATE INDEX IF NOT EXISTS idx_workspace_states_ready ON workspace_states(is_ready, tenant, project, workspace);
+CREATE INDEX IF NOT EXISTS idx_issues_status_updated ON issues(status, updated_at DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);
+CREATE INDEX IF NOT EXISTS idx_comments_created ON comments(created_at DESC);
 CREATE TABLE IF NOT EXISTS remote_approvals (
     id TEXT PRIMARY KEY,
     user TEXT NOT NULL,

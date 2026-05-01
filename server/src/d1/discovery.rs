@@ -4,6 +4,7 @@ use sty_protocol::{ProjectDiscoveryItem, ProjectReleaseFeedItem};
 pub async fn dashboard_project_cards(
     db: &D1Database,
     principal: &TokenPrincipal,
+    limit: usize,
 ) -> Result<Vec<ProjectDiscoveryItem>> {
     ensure_collaboration_schema(db).await?;
     let result = db
@@ -14,7 +15,7 @@ pub async fn dashboard_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
-                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project AND h.kind IN ('ready', 'merge', 'ship')) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM projects p
              JOIN tenants t ON t.name = p.tenant
@@ -23,9 +24,13 @@ pub async fn dashboard_project_cards(
                 OR p.owner = ?1
                 OR EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant = t.name AND tm.user = ?1)
                 OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.tenant = p.tenant AND pm.project = p.project AND pm.user = ?1))
-             ORDER BY last_activity_at DESC, p.tenant, p.project",
+             ORDER BY last_activity_at DESC, p.tenant, p.project
+             LIMIT ?2",
         )
-        .bind(&[js_str(&principal.user)])?
+        .bind(&[
+            js_str(&principal.user),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
@@ -45,7 +50,7 @@ pub async fn followed_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
-                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project AND h.kind IN ('ready', 'merge', 'ship')) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM project_follows f
              JOIN projects p ON p.tenant = f.tenant AND p.project = f.project
@@ -80,7 +85,7 @@ pub async fn public_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
-                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project AND h.kind IN ('ready', 'merge', 'ship')) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM projects p
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
@@ -116,7 +121,7 @@ pub async fn tenant_public_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
-                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project AND h.kind IN ('ready', 'merge', 'ship')) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM projects p
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
@@ -154,7 +159,7 @@ pub async fn tenant_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
-                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project AND h.kind IN ('ready', 'merge', 'ship')) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM projects p
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project

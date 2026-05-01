@@ -2,14 +2,21 @@ pub(crate) async fn home(req: Request, ctx: RouteContext<()>) -> Result<Response
     let user = require_auth(&req, &ctx.env).await?;
     let database = db(&ctx.env)?;
     let principal = sty_protocol::TokenPrincipal { user };
-    let projects = d1::dashboard_project_cards(&database, &principal).await?;
+    let projects = d1::dashboard_project_cards(&database, &principal, 15).await?;
     let following = d1::followed_project_cards(&database, &principal, 25).await?;
     let releases = d1::followed_release_feed(&database, &principal, 25).await?;
+    let attention = d1::home_attention(&database, &principal).await?;
+    let project_activity = d1::project_activity(&database, &principal, 40).await?;
+    let followed_activity = d1::followed_activity(&database, &principal, 40).await?;
     Response::from_json(&sty_protocol::HomeResponse {
         projects,
         following,
         releases,
         discover: vec![],
+        attention,
+        activity: followed_activity.clone(),
+        project_activity,
+        followed_activity,
     })
 }
 

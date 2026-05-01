@@ -3,6 +3,7 @@ import { authedFetch, notifyProjectStatsChanged, pageQuery, publicFetch } from '
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
 import type { AccessResponse, UserProfile } from './collaboratorTypes';
+import type { Issue } from './issueApi';
 import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
@@ -124,11 +125,65 @@ export interface ProjectReleaseFeedItem {
 	released_at: string;
 }
 
+export interface HomeReadyWorkspace {
+	tenant: string;
+	project: string;
+	workspace: string;
+	head: string | null;
+	parent_workspace: string | null;
+	mergeable: boolean;
+	marked_at: string | null;
+	author: string;
+	author_profile?: UserProfile | null;
+}
+
+export interface HomeIssueItem {
+	tenant: string;
+	project: string;
+	issue: Issue;
+}
+
+export interface HomeMentionItem {
+	tenant: string;
+	project: string;
+	issue_id: string;
+	issue_number: number;
+	issue_title: string;
+	source: 'issue' | 'comment' | string;
+	author: string;
+	author_profile?: UserProfile | null;
+	body: string;
+	created_at: string;
+}
+
+export interface HomeActivityItem {
+	tenant: string;
+	project: string;
+	kind: string;
+	title: string;
+	detail?: string | null;
+	href: string;
+	timestamp: string;
+	actor?: string | null;
+	actor_profile?: UserProfile | null;
+	workspace?: string | null;
+}
+
+export interface HomeAttention {
+	ready_workspaces: HomeReadyWorkspace[];
+	assigned_issues: HomeIssueItem[];
+	mentions: HomeMentionItem[];
+}
+
 export interface HomeResponse {
 	projects: ProjectDiscoveryItem[];
 	following: ProjectDiscoveryItem[];
 	releases: ProjectReleaseFeedItem[];
 	discover: ProjectDiscoveryItem[];
+	attention: HomeAttention;
+	activity: HomeActivityItem[];
+	project_activity: HomeActivityItem[];
+	followed_activity: HomeActivityItem[];
 }
 
 export interface FollowResponse {

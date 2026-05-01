@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::{Issue, UserProfile};
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProjectMetadata {
     pub tenant: String,
@@ -94,11 +96,76 @@ pub struct ProjectReleaseFeedItem {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HomeReadyWorkspace {
+    pub tenant: String,
+    pub project: String,
+    pub workspace: String,
+    pub head: Option<String>,
+    pub parent_workspace: Option<String>,
+    pub mergeable: bool,
+    pub marked_at: Option<String>,
+    pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_profile: Option<UserProfile>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HomeIssueItem {
+    pub tenant: String,
+    pub project: String,
+    pub issue: Issue,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HomeMentionItem {
+    pub tenant: String,
+    pub project: String,
+    pub issue_id: String,
+    pub issue_number: u64,
+    pub issue_title: String,
+    pub source: String,
+    pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_profile: Option<UserProfile>,
+    pub body: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HomeActivityItem {
+    pub tenant: String,
+    pub project: String,
+    pub kind: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    pub href: String,
+    pub timestamp: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_profile: Option<UserProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct HomeAttention {
+    pub ready_workspaces: Vec<HomeReadyWorkspace>,
+    pub assigned_issues: Vec<HomeIssueItem>,
+    pub mentions: Vec<HomeMentionItem>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HomeResponse {
     pub projects: Vec<ProjectDiscoveryItem>,
     pub following: Vec<ProjectDiscoveryItem>,
     pub releases: Vec<ProjectReleaseFeedItem>,
     pub discover: Vec<ProjectDiscoveryItem>,
+    pub attention: HomeAttention,
+    pub activity: Vec<HomeActivityItem>,
+    pub project_activity: Vec<HomeActivityItem>,
+    pub followed_activity: Vec<HomeActivityItem>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
