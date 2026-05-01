@@ -37,6 +37,8 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "permissions",
             "collaborators",
             "project_archive",
+            "forks",
+            "sendwork",
         ]
         .into_iter()
         .map(ToOwned::to_owned)

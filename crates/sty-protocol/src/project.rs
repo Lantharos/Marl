@@ -43,6 +43,42 @@ pub struct ProjectDetailResponse {
     pub workspaces: Vec<WorkspaceSummary>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ForkProjectRequest {
+    pub source_tenant: String,
+    pub source_project: String,
+    pub target_tenant: String,
+    pub target_project: String,
+    pub mode: String,
+    pub workspace: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ForkProjectResponse {
+    pub source: ProjectSummary,
+    pub target: ProjectSummary,
+    pub mode: String,
+    pub workspace: Option<String>,
+    pub linked: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SendWorkRequest {
+    pub workspace: String,
+    pub title: String,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SendWorkResponse {
+    pub source: ProjectSummary,
+    pub fork: ProjectSummary,
+    pub workspace: String,
+    pub title: String,
+    pub message: String,
+    pub head: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ProjectStats {
     pub workspace_count: u64,

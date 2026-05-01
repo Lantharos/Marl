@@ -35,6 +35,26 @@ sty tenant new --name tenant
 sty project create --tenant tenant --project project
 ```
 
+To start from a public project, fork it:
+
+```powershell
+sty fork source-tenant/source-project
+```
+
+The command asks whether the fork should stay linked for a future contribution or become an independent project. A linked fork creates a private project in your tenant, creates a contribution workspace, and can connect and sync the current directory. For non-interactive use:
+
+```powershell
+sty fork source-tenant/source-project --tenant tenant --project project --mode contribute --yes
+sty fork source-tenant/source-project --tenant tenant --project project --mode detached --yes --no-sync
+```
+
+When work in a linked fork is ready, send the current workspace back to the parent:
+
+```powershell
+sty sendwork
+sty sw --title "Fix parser edge case" --message "Keeps empty segments stable" --yes
+```
+
 Your account tenant is created automatically from your Ave handle. To create an organization tenant:
 
 ```powershell
@@ -219,6 +239,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - profiles and account signing keys
 - permissions and collaborators for tenants and projects
 - archived project state and read-only enforcement
+- public project forks and linked `sendwork` contributions
 
 Developer apps live in User Settings. They receive a client id and a one-time client secret, then can start an OAuth-style authorization by sending users to:
 

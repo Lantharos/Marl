@@ -2,7 +2,7 @@ use std::env;
 use std::io::{self, IsTerminal};
 
 use anyhow::{Result, bail};
-use dialoguer::{Input, Select, theme::ColorfulTheme};
+use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 use sty_protocol::{TenantSummary, validate_segment};
 
 pub(crate) enum TenantChoice {
@@ -42,8 +42,52 @@ pub(crate) fn choose_tenant(tenants: &[TenantSummary]) -> Result<TenantChoice> {
     Ok(TenantChoice::Existing(tenants[index].name.clone()))
 }
 
+pub(crate) fn choose_existing_tenant(tenants: &[TenantSummary]) -> Result<String> {
+    require_prompt("missing tenant; pass --tenant")?;
+    if tenants.is_empty() {
+        bail!("no tenants available");
+    }
+    let items = tenants.iter().map(tenant_label).collect::<Vec<String>>();
+    let index = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Tenant")
+        .items(&items)
+        .default(0)
+        .interact()?;
+    Ok(tenants[index].name.clone())
+}
+
+pub(crate) fn select(label: &str, items: &[&str], default: usize) -> Result<usize> {
+    require_prompt(label)?;
+    Ok(Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(label)
+        .items(items)
+        .default(default.min(items.len().saturating_sub(1)))
+        .interact()?)
+}
+
+pub(crate) fn confirm(label: &str, default: bool) -> Result<bool> {
+    require_prompt(label)?;
+    Ok(Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(label)
+        .default(default)
+        .interact()?)
+}
+
+pub(crate) fn prompt_text(label: &str, default: Option<String>) -> Result<String> {
+    require_prompt(label)?;
+    let theme = ColorfulTheme::default();
+    let mut input = Input::<String>::with_theme(&theme).with_prompt(label);
+    if let Some(default) = default {
+        input = input.default(default);
+    }
+    Ok(input.interact_text()?.trim().to_string())
+}
+
 pub(crate) fn prompt_project_name() -> Result<String> {
-    let default = default_project_name();
+    prompt_project_name_with_default(default_project_name())
+}
+
+pub(crate) fn prompt_project_name_with_default(default: String) -> Result<String> {
     prompt_segment("Project name", Some(default), "project")
 }
 

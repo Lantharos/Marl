@@ -22,6 +22,7 @@ use crate::collaborator_commands::{
     ProjectCollaboratorCommands, TenantCollaboratorCommands, project_collaborators,
     tenant_collaborators,
 };
+use crate::fork_commands::{self, ForkModeArg};
 use crate::http::{RequestBuilderExt, response_error};
 use crate::project_commands;
 use crate::spinner;
@@ -59,6 +60,42 @@ enum Commands {
         project: Option<String>,
         #[arg(long)]
         new_tenant: Option<String>,
+        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
+        remote_url: String,
+        #[arg(long, default_value = "pig")]
+        pig: String,
+    },
+    Fork {
+        source: String,
+        #[arg(long = "target", value_name = "TARGET")]
+        target: Option<String>,
+        #[arg(long)]
+        tenant: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long, value_enum)]
+        mode: Option<ForkModeArg>,
+        #[arg(long)]
+        workspace: Option<String>,
+        #[arg(long)]
+        yes: bool,
+        #[arg(long)]
+        no_sync: bool,
+        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
+        remote_url: String,
+        #[arg(long, default_value = "pig")]
+        pig: String,
+    },
+    #[command(alias = "sw")]
+    Sendwork {
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        message: Option<String>,
+        #[arg(long)]
+        workspace: Option<String>,
+        #[arg(long)]
+        yes: bool,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
         #[arg(long, default_value = "pig")]
@@ -143,6 +180,28 @@ pub fn run() -> Result<()> {
             remote_url,
             pig,
         ),
+        Commands::Fork {
+            source,
+            target,
+            tenant,
+            project,
+            mode,
+            workspace,
+            yes,
+            no_sync,
+            remote_url,
+            pig,
+        } => fork_commands::fork(
+            source, target, tenant, project, mode, workspace, yes, no_sync, remote_url, pig,
+        ),
+        Commands::Sendwork {
+            title,
+            message,
+            workspace,
+            yes,
+            remote_url,
+            pig,
+        } => fork_commands::sendwork(title, message, workspace, yes, remote_url, pig),
         Commands::Whoami => whoami(),
         Commands::Project { command } => match command {
             ProjectCommands::Create {

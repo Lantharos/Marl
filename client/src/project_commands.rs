@@ -193,7 +193,7 @@ fn resolve_optional_pair(
     }
 }
 
-fn fetch_tenants(remote_url: &str) -> Result<Vec<TenantSummary>> {
+pub(crate) fn fetch_tenants(remote_url: &str) -> Result<Vec<TenantSummary>> {
     let config = load_config()?;
     let url = format!("{}/v1/me", remote_url.trim_end_matches('/'));
     let response = Client::new()

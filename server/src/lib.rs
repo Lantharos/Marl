@@ -15,6 +15,7 @@ mod auth;
 mod collaborators;
 pub(crate) mod d1;
 mod developer;
+mod forks;
 mod protocol;
 mod protocol_profiles;
 mod protocol_ready;
@@ -26,6 +27,7 @@ use account_keys::*;
 use auth::verify_ave_id_token;
 use collaborators::*;
 use developer::*;
+use forks::*;
 use protocol::*;
 use protocol_ready::*;
 use releases::*;
@@ -91,6 +93,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/v1/home", home)
         .get_async("/v1/follows", follows)
         .get_async("/v1/discover/projects", discover_projects)
+        .post_async("/v1/forks", fork_project)
         .get_async("/v1/projects", list_projects)
         .get_async("/v1/tenants/:tenant/projects", tenant_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
@@ -387,6 +390,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare",
             compare,
         )
+        .post_async("/v1/tenants/:tenant/projects/:project/sendwork", send_work)
         .get_async(
             "/v1/tenants/:tenant/projects/:project/settings",
             get_settings,
