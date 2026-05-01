@@ -14,7 +14,7 @@ pub struct RemoteApproval {
 }
 
 pub async fn create_remote_approval(
-    db: &D1Database,
+    db: &Database,
     user: &str,
     action: &str,
     summary: &str,
@@ -51,7 +51,7 @@ pub async fn create_remote_approval(
     Ok(approval)
 }
 
-pub async fn remote_approval(db: &D1Database, id: &str) -> Result<Option<RemoteApproval>> {
+pub async fn remote_approval(db: &Database, id: &str) -> Result<Option<RemoteApproval>> {
     ensure_remote_approvals_schema(db).await?;
     expire_remote_approvals(db).await?;
     db.prepare(
@@ -65,7 +65,7 @@ pub async fn remote_approval(db: &D1Database, id: &str) -> Result<Option<RemoteA
 }
 
 pub async fn approve_remote_approval(
-    db: &D1Database,
+    db: &Database,
     id: &str,
     user: &str,
 ) -> Result<Option<RemoteApproval>> {
@@ -89,7 +89,7 @@ pub async fn approve_remote_approval(
 }
 
 pub async fn consume_remote_approval(
-    db: &D1Database,
+    db: &Database,
     id: &str,
     user: &str,
     action: &str,
@@ -117,7 +117,7 @@ pub async fn consume_remote_approval(
     }))
 }
 
-async fn expire_remote_approvals(db: &D1Database) -> Result<()> {
+async fn expire_remote_approvals(db: &Database) -> Result<()> {
     db.prepare(
         "UPDATE remote_approvals SET status = 'expired'
          WHERE status = 'pending' AND expires_at <= ?1",
@@ -128,7 +128,7 @@ async fn expire_remote_approvals(db: &D1Database) -> Result<()> {
     Ok(())
 }
 
-async fn ensure_remote_approvals_schema(db: &D1Database) -> Result<()> {
+async fn ensure_remote_approvals_schema(db: &Database) -> Result<()> {
     db.prepare(
         "CREATE TABLE IF NOT EXISTS remote_approvals (
             id TEXT PRIMARY KEY,

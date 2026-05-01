@@ -1,7 +1,7 @@
 use super::*;
 
 pub async fn create_developer_app(
-    db: &D1Database,
+    db: &Database,
     owner: &str,
     name: &str,
     redirect_uri: &str,
@@ -46,7 +46,7 @@ pub async fn create_developer_app(
     })
 }
 
-pub async fn list_developer_apps(db: &D1Database, owner: &str) -> Result<Vec<DeveloperApp>> {
+pub async fn list_developer_apps(db: &Database, owner: &str) -> Result<Vec<DeveloperApp>> {
     ensure_developer_schema(db).await?;
     let result = db
         .prepare(
@@ -63,7 +63,7 @@ pub async fn list_developer_apps(db: &D1Database, owner: &str) -> Result<Vec<Dev
 }
 
 pub async fn developer_app_by_client_id(
-    db: &D1Database,
+    db: &Database,
     client_id: &str,
 ) -> Result<Option<DeveloperApp>> {
     ensure_developer_schema(db).await?;
@@ -79,7 +79,7 @@ pub async fn developer_app_by_client_id(
     Ok(row.map(app_from_row))
 }
 
-pub async fn revoke_developer_app(db: &D1Database, owner: &str, id: &str) -> Result<bool> {
+pub async fn revoke_developer_app(db: &Database, owner: &str, id: &str) -> Result<bool> {
     ensure_developer_schema(db).await?;
     let result = db
         .prepare(
@@ -92,7 +92,7 @@ pub async fn revoke_developer_app(db: &D1Database, owner: &str, id: &str) -> Res
 }
 
 pub async fn create_oauth_code(
-    db: &D1Database,
+    db: &Database,
     client_id: &str,
     user: &str,
     tenant: &str,
@@ -134,7 +134,7 @@ pub async fn create_oauth_code(
 }
 
 pub async fn exchange_oauth_code(
-    db: &D1Database,
+    db: &Database,
     client_id: &str,
     client_secret: &str,
     code: &str,
@@ -223,7 +223,7 @@ pub async fn exchange_oauth_code(
 }
 
 pub async fn list_project_integrations(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<ProjectIntegration>> {
@@ -243,7 +243,7 @@ pub async fn list_project_integrations(
 }
 
 pub async fn revoke_project_integration(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -260,7 +260,7 @@ pub async fn revoke_project_integration(
 }
 
 async fn create_project_integration(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     app_id: &str,
@@ -302,7 +302,7 @@ async fn create_project_integration(
 }
 
 async fn developer_app_for_secret(
-    db: &D1Database,
+    db: &Database,
     client_id: &str,
     client_secret: &str,
 ) -> Result<Option<DeveloperApp>> {

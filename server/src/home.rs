@@ -1,6 +1,6 @@
-pub(crate) async fn home(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let database = db(&ctx.env)?;
+pub(crate) async fn home(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
     let principal = sty_protocol::TokenPrincipal { user };
     let projects = d1::dashboard_project_cards(&database, &principal, 15).await?;
     let following = d1::followed_project_cards(&database, &principal, 25).await?;
@@ -20,19 +20,19 @@ pub(crate) async fn home(req: Request, ctx: RouteContext<()>) -> Result<Response
     })
 }
 
-pub(crate) async fn discover_projects(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let _ = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn discover_projects(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let _ = optional_auth(&req, &ctx).await?;
     let url = req.url()?;
     let query = url
         .query_pairs()
         .find_map(|(key, value)| (key == "q").then(|| value.to_string()))
         .unwrap_or_default();
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let projects = d1::public_project_cards(&database, &query, 200).await?;
     Response::from_json(&paginate_vec(url, projects))
 }
 
-pub(crate) async fn tenant_projects(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub(crate) async fn tenant_projects(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
     let tenant = param(&ctx, "tenant")?;
     validate_segment(&tenant).map_err(|error| Error::RustError(error.to_string()))?;
     let url = req.url()?;
@@ -40,11 +40,11 @@ pub(crate) async fn tenant_projects(req: Request, ctx: RouteContext<()>) -> Resu
         .query_pairs()
         .find_map(|(key, value)| (key == "q").then(|| value.to_string()))
         .unwrap_or_default();
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     if !d1::tenant_exists(&database, &tenant).await? {
         return json_error(404, "tenant not found");
     }
-    let user = optional_auth(&req, &ctx.env).await?;
+    let user = optional_auth(&req, &ctx).await?;
     let can_access = match user.as_deref() {
         Some(user) => d1::tenant_access(&database, &tenant, user).await?,
         None => false,
@@ -76,10 +76,10 @@ pub(crate) async fn tenant_projects(req: Request, ctx: RouteContext<()>) -> Resu
     }))
 }
 
-pub(crate) async fn follows(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn follows(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let url = req.url()?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let principal = sty_protocol::TokenPrincipal { user };
     let projects = d1::followed_project_cards(&database, &principal, 200).await?;
     Response::from_json(&paginate_vec(url, projects))

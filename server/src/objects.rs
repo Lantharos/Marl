@@ -1,7 +1,7 @@
-pub(crate) async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn missing(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "objects:write").await?;
     let body: MissingRequest = req.json().await?;
     let store = bucket(&ctx.env)?;
@@ -19,8 +19,8 @@ pub(crate) async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<R
     Response::from_json(&MissingResponse { missing })
 }
 
-pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn put_object(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "object")?;
     let kind = required_header(&req, "x-pig-object-kind")?;
@@ -30,7 +30,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
     if size > size_limit {
         return json_error(413, "object is larger than the configured upload limit");
     }
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "objects:write").await?;
     if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
         return Response::from_json(&OkResponse { ok: true });
@@ -50,13 +50,13 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub(crate) async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn get_object(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "object")?;
     validate_object_id(&id)?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "objects:read").await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "objects:read").await?;
     let public_cache = matches!(
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
@@ -131,18 +131,24 @@ fn default_snapshot_kind() -> String {
     "save".to_string()
 }
 
-pub(crate) async fn require_auth(req: &Request, env: &Env) -> Result<String> {
+pub(crate) async fn require_auth(
+    req: &Request,
+    ctx: &crate::request_context::AppRouteContext,
+) -> Result<String> {
     let token = bearer_token_from_request(req)?;
-    let database = db(env)?;
+    let database = db(ctx)?;
     match d1::principal_for_token(&database, &token).await? {
         Some(principal) => Ok(principal.user),
         None => Err(Error::RustError("invalid bearer token".to_string())),
     }
 }
 
-pub(crate) async fn require_web_auth(req: &Request, env: &Env) -> Result<String> {
+pub(crate) async fn require_web_auth(
+    req: &Request,
+    ctx: &crate::request_context::AppRouteContext,
+) -> Result<String> {
     let token = bearer_token_from_request(req)?;
-    let database = db(env)?;
+    let database = db(ctx)?;
     let principal = d1::principal_for_token(&database, &token)
         .await?
         .ok_or_else(|| Error::RustError("invalid bearer token".to_string()))?;
@@ -162,14 +168,17 @@ fn bearer_token_from_request(req: &Request) -> Result<String> {
     Ok(token.to_string())
 }
 
-pub(crate) async fn optional_auth(req: &Request, env: &Env) -> Result<Option<String>> {
+pub(crate) async fn optional_auth(
+    req: &Request,
+    ctx: &crate::request_context::AppRouteContext,
+) -> Result<Option<String>> {
     let Some(value) = req.headers().get("authorization")? else {
         return Ok(None);
     };
     let Some(token) = value.strip_prefix("Bearer ") else {
         return Ok(None);
     };
-    let database = db(env)?;
+    let database = db(ctx)?;
     match d1::principal_for_token(&database, token).await? {
         Some(principal) => Ok(Some(principal.user)),
         None => Err(Error::RustError("invalid bearer token".to_string())),
@@ -177,26 +186,25 @@ pub(crate) async fn optional_auth(req: &Request, env: &Env) -> Result<Option<Str
 }
 
 pub(crate) async fn check_project_access(
-    env: &Env,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: Option<&str>,
 ) -> Result<()> {
-    let database = db(env)?;
-    if !d1::tenant_exists(&database, tenant).await? {
+    if !d1::tenant_exists(db, tenant).await? {
         return Err(Error::RustError(format!(
             "tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"
         )));
     }
-    if !d1::project_exists(&database, tenant, project).await? {
+    if !d1::project_exists(db, tenant, project).await? {
         return Err(Error::RustError(format!(
             "project `{tenant}/{project}` does not exist; create it first with `sty init {tenant}/{project}`"
         )));
     }
     if let Some(u) = user {
-        if d1::project_access(&database, tenant, project, u).await?
+        if d1::project_access(db, tenant, project, u).await?
             || matches!(
-                d1::project_visibility(&database, tenant, project).await?,
+                d1::project_visibility(db, tenant, project).await?,
                 Some(v) if v == "public"
             )
         {
@@ -205,7 +213,7 @@ pub(crate) async fn check_project_access(
             Err(Error::RustError("project access denied".to_string()))
         }
     } else {
-        match d1::project_visibility(&database, tenant, project).await? {
+        match d1::project_visibility(db, tenant, project).await? {
             Some(v) if v == "public" => Ok(()),
             _ => Err(Error::RustError("sign in required".to_string())),
         }
@@ -213,7 +221,7 @@ pub(crate) async fn check_project_access(
 }
 
 pub(crate) async fn check_project_role(
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -238,8 +246,7 @@ pub(crate) async fn check_project_role(
 }
 
 pub(crate) async fn check_project_read_capability(
-    env: &Env,
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: Option<&str>,
@@ -257,11 +264,11 @@ pub(crate) async fn check_project_read_capability(
             "api key is missing `{capability}` permission"
         )));
     }
-    check_project_access(env, tenant, project, user).await
+    check_project_access(db, tenant, project, user).await
 }
 
 pub(crate) async fn check_project_capability(
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -283,7 +290,7 @@ pub(crate) async fn check_project_capability(
     check_project_role(db, tenant, project, user, minimum).await
 }
 
-async fn ensure_project_target(db: &D1Database, tenant: &str, project: &str) -> Result<()> {
+async fn ensure_project_target(db: &crate::request_context::Database, tenant: &str, project: &str) -> Result<()> {
     if !d1::tenant_exists(db, tenant).await? {
         return Err(Error::RustError(format!(
             "tenant `{tenant}` does not exist; create it first with `sty tenant new {tenant}`"
@@ -298,7 +305,7 @@ async fn ensure_project_target(db: &D1Database, tenant: &str, project: &str) -> 
 }
 
 pub(crate) async fn check_project_write_role(
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -314,7 +321,7 @@ pub(crate) async fn check_project_write_role(
 }
 
 pub(crate) async fn check_project_write_capability(
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -331,8 +338,7 @@ pub(crate) async fn check_project_write_capability(
 }
 
 pub(crate) async fn check_workspace_read_capability(
-    env: &Env,
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: Option<&str>,
@@ -343,11 +349,11 @@ pub(crate) async fn check_workspace_read_capability(
     } else {
         "workspaces:read"
     };
-    check_project_read_capability(env, db, tenant, project, user, capability).await
+    check_project_read_capability(db, tenant, project, user, capability).await
 }
 
 pub(crate) async fn check_workspace_write_capability(
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: &str,

@@ -21,6 +21,7 @@ mod protocol_profiles;
 mod protocol_ready;
 mod release_support;
 mod releases;
+mod request_context;
 mod support;
 
 use account_keys::*;
@@ -31,12 +32,14 @@ use forks::*;
 use protocol::*;
 use protocol_ready::*;
 use releases::*;
+use request_context::AppContext;
 use support::{
-    apply_cache_headers, apply_cors, bearer_token, bucket, db, delete_prefix, frontend_origin,
-    json_error, not_modified_response, object_key, object_size_limit, paginate_vec, param,
-    preflight_response, project_params, put_bytes, query_limit, r2_bytes, required_header,
-    required_usize_header, response_for_error, validate_object_id, validate_object_metadata,
-    validate_object_payload, validate_tree_entry_name, MAX_TREE_DEPTH, MAX_TREE_ENTRIES,
+    MAX_TREE_DEPTH, MAX_TREE_ENTRIES, apply_cache_headers, apply_cors, bearer_token, bucket, db,
+    delete_prefix, frontend_origin, json_error, not_modified_response, object_key,
+    object_size_limit, paginate_vec, param, preflight_response, project_params, put_bytes,
+    query_limit, r2_bytes, required_header, required_usize_header, response_for_error,
+    validate_object_id, validate_object_metadata, validate_object_payload,
+    validate_tree_entry_name,
 };
 
 include!("code.rs");
@@ -55,7 +58,8 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         return preflight_response(&req, &env);
     }
     let request = req.clone()?;
-    let response = Router::new()
+    let app_context = AppContext::new(&request, &env)?;
+    let response = Router::with_data(app_context.clone())
         .post_async("/v1/auth/check", auth_check)
         .get_async("/v1/capabilities", capabilities)
         .post_async("/v1/session/exchange", exchange_session)
@@ -434,6 +438,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         Ok(response) => response,
         Err(error) => response_for_error(error)?,
     };
+    app_context.apply_bookmark(&mut response)?;
     apply_cors(&request, &env, &mut response)?;
     Ok(response)
 }

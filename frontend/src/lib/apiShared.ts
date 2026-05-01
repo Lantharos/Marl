@@ -1,4 +1,5 @@
 import { apiBase, currentStyToken, getStyToken } from './session';
+import { d1Fetch } from './d1Session';
 
 export interface ApiOptions {
 	signal?: AbortSignal;
@@ -35,7 +36,7 @@ export async function authedFetch(path: string, init: RequestInit = {}) {
 	}
 	const headers = new Headers(init.headers);
 	headers.set('authorization', `Bearer ${token}`);
-	const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
+	const response = await d1Fetch(`${apiBase()}${path}`, { ...init, headers });
 	if (!response.ok) {
 		throw new Error(await response.text());
 	}
@@ -48,7 +49,7 @@ export async function publicFetch(path: string, init: RequestInit = {}) {
 	if (token) {
 		headers.set('authorization', `Bearer ${token}`);
 	}
-	const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
+	const response = await d1Fetch(`${apiBase()}${path}`, { ...init, headers });
 	if (!response.ok) {
 		throw new Error(await response.text());
 	}

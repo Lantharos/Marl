@@ -61,10 +61,13 @@ struct OAuthTokenRequest {
 
 const WEBHOOK_TIMEOUT_MS: i32 = 5_000;
 
-pub async fn list_project_api_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn list_project_api_keys(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_capability(
         &database,
         &tenant,
@@ -78,15 +81,18 @@ pub async fn list_project_api_keys(req: Request, ctx: RouteContext<()>) -> Resul
     Response::from_json(&paginate_vec(req.url()?, items))
 }
 
-pub async fn create_project_api_key(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn create_project_api_key(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let body: ApiKeyRequest = req.json().await?;
     let name = body.name.trim();
     if name.is_empty() {
         return json_error(400, "api key name is required");
     }
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -109,11 +115,14 @@ pub async fn create_project_api_key(mut req: Request, ctx: RouteContext<()>) -> 
     Response::from_json(&item)
 }
 
-pub async fn delete_project_api_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn delete_project_api_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -129,10 +138,13 @@ pub async fn delete_project_api_key(req: Request, ctx: RouteContext<()>) -> Resu
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn list_project_webhooks(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn list_project_webhooks(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_capability(
         &database,
         &tenant,
@@ -146,8 +158,11 @@ pub async fn list_project_webhooks(req: Request, ctx: RouteContext<()>) -> Resul
     Response::from_json(&paginate_vec(req.url()?, items))
 }
 
-pub async fn create_project_webhook(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn create_project_webhook(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let body: WebhookRequest = req.json().await?;
     let name = body.name.trim();
@@ -155,7 +170,7 @@ pub async fn create_project_webhook(mut req: Request, ctx: RouteContext<()>) -> 
         return json_error(400, "webhook name and url are required");
     }
     validate_webhook_url(&body.url)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -178,11 +193,14 @@ pub async fn create_project_webhook(mut req: Request, ctx: RouteContext<()>) -> 
     Response::from_json(&item)
 }
 
-pub async fn delete_project_webhook(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn delete_project_webhook(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -198,11 +216,14 @@ pub async fn delete_project_webhook(req: Request, ctx: RouteContext<()>) -> Resu
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn test_project_webhook(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn test_project_webhook(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -228,10 +249,13 @@ pub async fn test_project_webhook(req: Request, ctx: RouteContext<()>) -> Result
     Response::from_json(&json!({ "ok": (200..300).contains(&status), "status": status }))
 }
 
-pub async fn list_project_integrations(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn list_project_integrations(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_capability(
         &database,
         &tenant,
@@ -245,11 +269,14 @@ pub async fn list_project_integrations(req: Request, ctx: RouteContext<()>) -> R
     Response::from_json(&paginate_vec(req.url()?, items))
 }
 
-pub async fn delete_project_integration(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn delete_project_integration(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -265,15 +292,21 @@ pub async fn delete_project_integration(req: Request, ctx: RouteContext<()>) -> 
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn list_developer_apps(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let database = db(&ctx.env)?;
+pub async fn list_developer_apps(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
     let items = d1::list_developer_apps(&database, &user).await?;
     Response::from_json(&paginate_vec(req.url()?, items))
 }
 
-pub async fn create_developer_app(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn create_developer_app(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let body: DeveloperAppRequest = req.json().await?;
     let name = body.name.trim();
     if name.is_empty() {
@@ -287,7 +320,7 @@ pub async fn create_developer_app(mut req: Request, ctx: RouteContext<()>) -> Re
     {
         validate_callback_url(homepage)?;
     }
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let item = d1::create_developer_app(
         &database,
         &user,
@@ -300,34 +333,43 @@ pub async fn create_developer_app(mut req: Request, ctx: RouteContext<()>) -> Re
     Response::from_json(&item)
 }
 
-pub async fn delete_developer_app(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn delete_developer_app(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let id = param(&ctx, "app_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     if !d1::revoke_developer_app(&database, &user, &id).await? {
         return json_error(404, "developer app not found");
     }
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn oauth_app(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn oauth_app(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     let _ = req;
     let client_id = param(&ctx, "client_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let Some(app) = d1::developer_app_by_client_id(&database, &client_id).await? else {
         return json_error(404, "developer app not found");
     };
     Response::from_json(&app)
 }
 
-pub async fn oauth_authorize(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn oauth_authorize(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     if user.starts_with("api-key:") {
         return json_error(403, "browser sign-in required");
     }
     let body: OAuthAuthorizeRequest = req.json().await?;
     validate_callback_url(&body.redirect_uri)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_role(&database, &body.tenant, &body.project, &user, "maintainer").await?;
     let scopes = oauth_scopes(body.scope.as_deref(), body.scopes.as_deref());
     let code = d1::create_oauth_code(
@@ -345,13 +387,16 @@ pub async fn oauth_authorize(mut req: Request, ctx: RouteContext<()>) -> Result<
     Response::from_json(&json!({ "code": code, "redirect_url": redirect_url }))
 }
 
-pub async fn oauth_token(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn oauth_token(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     let body: OAuthTokenRequest = req.json().await?;
     let grant_type = body.grant_type.or(body.grant_type_camel);
     if grant_type.as_deref().unwrap_or("authorization_code") != "authorization_code" {
         return json_error(400, "unsupported grant type");
     }
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let Some(grant) = d1::exchange_oauth_code(
         &database,
         &body.client_id,
@@ -375,21 +420,20 @@ pub async fn oauth_token(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
 }
 
 pub async fn emit_project_event(
-    env: &Env,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     event: &str,
     data: serde_json::Value,
 ) -> Result<()> {
-    let database = db(env)?;
-    let hooks = d1::active_project_webhooks(&database, tenant, project, event).await?;
+    let hooks = d1::active_project_webhooks(database, tenant, project, event).await?;
     if hooks.is_empty() {
         return Ok(());
     }
     let payload = event_payload(tenant, project, event, data);
     for hook in hooks {
         let status = send_webhook(&hook, event, &payload).await.unwrap_or(0);
-        d1::record_webhook_delivery(&database, tenant, project, &hook.id, status).await?;
+        d1::record_webhook_delivery(database, tenant, project, &hook.id, status).await?;
     }
     Ok(())
 }
@@ -504,9 +548,7 @@ fn is_restricted_webhook_host(host: &str) -> bool {
     if lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") {
         return true;
     }
-    lower
-        .parse::<IpAddr>()
-        .is_ok_and(is_restricted_webhook_ip)
+    lower.parse::<IpAddr>().is_ok_and(is_restricted_webhook_ip)
 }
 
 fn is_restricted_webhook_ip(ip: IpAddr) -> bool {

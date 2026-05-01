@@ -1,6 +1,6 @@
 use super::*;
 pub async fn object_kind(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -18,7 +18,7 @@ pub async fn object_kind(
 }
 
 pub async fn object_ids_by_kind(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     kind: &str,
@@ -39,7 +39,7 @@ pub async fn object_ids_by_kind(
 }
 
 pub async fn record_object(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,

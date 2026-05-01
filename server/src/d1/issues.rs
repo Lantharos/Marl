@@ -1,5 +1,5 @@
 use super::*;
-pub async fn list_issues(db: &D1Database, tenant: &str, project: &str) -> Result<Vec<Issue>> {
+pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<Vec<Issue>> {
     #[derive(Deserialize)]
     struct Row {
         id: String,
@@ -67,7 +67,7 @@ pub async fn list_issues(db: &D1Database, tenant: &str, project: &str) -> Result
 }
 
 pub async fn create_issue(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,
@@ -123,7 +123,7 @@ pub async fn create_issue(
 }
 
 pub async fn update_issue_status(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     issue_id: &str,
@@ -153,7 +153,7 @@ pub async fn update_issue_status(
 // -- Comments ---------------------------------------------
 
 pub async fn add_issue_assignees(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     issue_id: &str,
@@ -188,7 +188,7 @@ pub async fn add_issue_assignees(
 }
 
 pub async fn add_issue_labels(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     issue_id: &str,
@@ -222,7 +222,7 @@ pub async fn add_issue_labels(
     Ok(issue)
 }
 pub async fn list_comments(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     issue_id: &str,
@@ -274,7 +274,7 @@ pub async fn list_comments(
 }
 
 pub async fn create_comment(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     issue_id: &str,

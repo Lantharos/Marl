@@ -1,11 +1,9 @@
-pub(crate) async fn get_head(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn get_head(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    check_workspace_read_capability(
-        &ctx.env,
-        &database,
+    check_workspace_read_capability(&database,
         &tenant,
         &project,
         user.as_deref(),
@@ -16,11 +14,11 @@ pub(crate) async fn get_head(req: Request, ctx: RouteContext<()>) -> Result<Resp
     Response::from_json(&HeadResponse { head })
 }
 
-pub(crate) async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn update_head(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let body: HeadUpdateRequest = req.json().await?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     if let Some(expected) = body.expected_head.as_deref() {
@@ -35,8 +33,7 @@ pub(crate) async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Resu
     ensure_snapshot_refs_uploaded(&ctx.env, &database, &tenant, &project, &body.new_head).await?;
     let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
     if ok {
-        let _ = crate::developer::emit_project_event(
-            &ctx.env,
+        let _ = crate::developer::emit_project_event(&database,
             &tenant,
             &project,
             "sync",
@@ -49,14 +46,12 @@ pub(crate) async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Resu
     }
 }
 
-pub(crate) async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn workspace_history(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
-    check_workspace_read_capability(
-        &ctx.env,
-        &database,
+    let database = db(&ctx)?;
+    check_workspace_read_capability(&database,
         &tenant,
         &project,
         user.as_deref(),
@@ -71,23 +66,23 @@ pub(crate) async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Re
     Response::from_json(&HistoryResponse { entries })
 }
 
-pub(crate) async fn project_history(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn project_history(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "history:read").await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "history:read").await?;
     let limit = query_limit(&req, 100, 500)?;
     let mut entries = d1::project_history_with_limit(&database, &tenant, &project, Some(limit)).await?;
     enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
-pub(crate) async fn history_entry(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn history_entry(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let entry_id = param(&ctx, "entry_id")?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "history:read").await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "history:read").await?;
     let mut entry = d1::get_history_entry(&database, &tenant, &project, &entry_id).await?;
     if let Some(entry) = &mut entry {
         enrich_history_entry(&ctx.env, &tenant, &project, entry).await?;
@@ -148,13 +143,13 @@ async fn enrich_history_entry(
     Ok(())
 }
 
-pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn log_history(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let actor = user.clone();
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let body: LogHistoryRequest = req.json().await?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     if let Some(snapshot_id) = body.snapshot_id.as_deref() {
         validate_object_id(snapshot_id)?;
@@ -170,8 +165,7 @@ pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Resu
         "cram" => "snapshot.crammed",
         _ => "snapshot.saved",
     };
-    let _ = crate::developer::emit_project_event(
-        &ctx.env,
+    let _ = crate::developer::emit_project_event(&database,
         &tenant,
         &project,
         event,
@@ -187,15 +181,14 @@ pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Resu
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub(crate) async fn mark_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:ready").await?;
     d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
-    let _ = crate::developer::emit_project_event(
-        &ctx.env,
+    let _ = crate::developer::emit_project_event(&database,
         &tenant,
         &project,
         "workspace.ready",
@@ -205,15 +198,14 @@ pub(crate) async fn mark_ready(req: Request, ctx: RouteContext<()>) -> Result<Re
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub(crate) async fn merge_workspace(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "maintainer", "workspaces:merge").await?;
     d1::merge_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
-    let _ = crate::developer::emit_project_event(
-        &ctx.env,
+    let _ = crate::developer::emit_project_event(&database,
         &tenant,
         &project,
         "workspace.merged",
@@ -223,14 +215,12 @@ pub(crate) async fn merge_workspace(req: Request, ctx: RouteContext<()>) -> Resu
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub(crate) async fn merge_preview(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn merge_preview(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
-    check_workspace_read_capability(
-        &ctx.env,
-        &database,
+    let database = db(&ctx)?;
+    check_workspace_read_capability(&database,
         &tenant,
         &project,
         user.as_deref(),
@@ -277,25 +267,25 @@ pub(crate) async fn merge_preview(req: Request, ctx: RouteContext<()>) -> Result
     Response::from_json(&sty_protocol::MergePreviewResponse { files })
 }
 
-pub(crate) async fn set_parent(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn set_parent(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:write").await?;
     let parent = body["parent_workspace"].as_str();
     d1::set_parent_workspace(&database, &tenant, &project, &workspace, parent).await?;
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub(crate) async fn compare(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn compare(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let body: CompareRequest = req.json().await?;
-    let database = db(&ctx.env)?;
-    check_workspace_read_capability(&ctx.env, &database, &tenant, &project, Some(&user), &workspace).await?;
+    let database = db(&ctx)?;
+    check_workspace_read_capability(&database, &tenant, &project, Some(&user), &workspace).await?;
     let remote_head = d1::head(&database, &tenant, &project, &workspace).await?;
     let relation = compare_relation(&ctx.env, &tenant, &project, body.local_head.as_deref(), remote_head.as_deref()).await?;
     Response::from_json(&CompareResponse { remote_head, relation })
@@ -303,7 +293,7 @@ pub(crate) async fn compare(mut req: Request, ctx: RouteContext<()>) -> Result<R
 
 async fn ensure_snapshot_refs_uploaded(
     env: &Env,
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     snapshot_id: &str,

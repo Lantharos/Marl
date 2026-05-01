@@ -5,8 +5,9 @@ use sty_protocol::{
     ProjectSummary, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
 };
 use uuid::Uuid;
-use worker::D1Database;
 use worker::*;
+
+use crate::request_context::Database;
 
 fn token_hash(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))

@@ -8,75 +8,113 @@ use crate::{
     check_project_capability, check_project_read_capability, check_project_write_capability, d1,
     optional_auth, require_auth,
 };
-pub async fn list_labels(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_labels(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "label").await
 }
 
-pub async fn create_label(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_label(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "label").await
 }
 
-pub async fn list_milestones(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_milestones(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "milestone").await
 }
 
-pub async fn create_milestone(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_milestone(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "milestone").await
 }
 
-pub async fn list_protocol_comments(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_protocol_comments(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "comment").await
 }
 
-pub async fn create_protocol_comment(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_protocol_comment(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "comment").await
 }
 
-pub async fn list_hooks(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_hooks(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "hook").await
 }
 
-pub async fn create_hook(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_hook(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "hook").await
 }
 
-pub async fn list_tags(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_tags(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "tag").await
 }
 
-pub async fn create_tag(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_tag(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "tag").await
 }
 
-pub async fn list_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_keys(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "signing_key").await
 }
 
-pub async fn create_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "signing_key").await
 }
 
-pub async fn list_ssh_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_ssh_keys(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_protocol_kind(req, ctx, "ssh_key").await
 }
 
-pub async fn create_ssh_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_ssh_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_protocol_kind(req, ctx, "ssh_key").await
 }
 
-pub async fn search_project(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn search_project(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(
-        &ctx.env,
-        &database,
-        &tenant,
-        &project,
-        user.as_deref(),
-        "issues:read",
-    )
-    .await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "issues:read")
+        .await?;
     let url = req.url()?;
     let query = url
         .query_pairs()
@@ -99,28 +137,40 @@ pub async fn search_project(req: Request, ctx: RouteContext<()>) -> Result<Respo
     Response::from_json(&paginate_vec(url, results))
 }
 
-pub async fn profile_me(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let database = db(&ctx.env)?;
+pub async fn profile_me(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
     profile_json(&database, &user).await
 }
 
-pub async fn profile_user(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let _ = optional_auth(&req, &ctx.env).await?;
-    let database = db(&ctx.env)?;
+pub async fn profile_user(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let _ = optional_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
     let user = param(&ctx, "item_id")?;
     profile_json(&database, &user).await
 }
 
-pub async fn list_reactions(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let _ = optional_auth(&req, &ctx.env).await?;
+pub async fn list_reactions(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let _ = optional_auth(&req, &ctx).await?;
     Response::from_json(&Vec::<serde_json::Value>::new())
 }
 
-pub async fn add_reaction(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn add_reaction(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -135,10 +185,13 @@ pub async fn add_reaction(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     Response::from_json(&json!([{ "emoji": emoji, "count": 1, "reacted": true }]))
 }
 
-pub async fn delete_reaction(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn delete_reaction(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -151,39 +204,31 @@ pub async fn delete_reaction(req: Request, ctx: RouteContext<()>) -> Result<Resp
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn verify_snapshot(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn verify_snapshot(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(
-        &ctx.env,
-        &database,
-        &tenant,
-        &project,
-        user.as_deref(),
-        "main:read",
-    )
-    .await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read")
+        .await?;
     let result =
         crate::account_keys::verify_snapshot_id(&database, &ctx.env, &tenant, &project, &id)
             .await?;
     Response::from_json(&result)
 }
 
-pub async fn verify_all_snapshots(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn verify_all_snapshots(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(
-        &ctx.env,
-        &database,
-        &tenant,
-        &project,
-        user.as_deref(),
-        "main:read",
-    )
-    .await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read")
+        .await?;
     let mut snapshots = Vec::new();
     for id in d1::object_ids_by_kind(&database, &tenant, &project, "snapshot").await? {
         snapshots.push(
@@ -197,17 +242,19 @@ pub async fn verify_all_snapshots(req: Request, ctx: RouteContext<()>) -> Result
     Response::from_json(&json!({ "verified": verified, "snapshots": snapshots }))
 }
 
-pub async fn get_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn get_protocol_item(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let Some(item) = protocol_item(&database, &tenant, &project, &id).await? else {
         return json_error(404, "item not found");
     };
     let kind = item["kind"].as_str().unwrap_or_default();
     check_project_read_capability(
-        &ctx.env,
         &database,
         &tenant,
         &project,
@@ -218,11 +265,14 @@ pub async fn get_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Re
     Response::from_json(&item)
 }
 
-pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn delete_protocol_item(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let kind = protocol_item_kind(&database, &tenant, &project, &id).await?;
     check_project_write_capability(
         &database,
@@ -248,11 +298,14 @@ pub async fn delete_protocol_item(req: Request, ctx: RouteContext<()>) -> Result
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn close_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn close_protocol_item(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -270,11 +323,14 @@ pub async fn close_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<
     Response::from_json(&item)
 }
 
-pub async fn test_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn test_protocol_item(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_capability(
         &database,
         &tenant,
@@ -287,12 +343,15 @@ pub async fn test_protocol_item(req: Request, ctx: RouteContext<()>) -> Result<R
     Response::from_json(&json!({ "ok": true, "tested": id }))
 }
 
-async fn list_protocol_kind(req: Request, ctx: RouteContext<()>, kind: &str) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+async fn list_protocol_kind(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+    kind: &str,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_read_capability(
-        &ctx.env,
         &database,
         &tenant,
         &project,
@@ -325,13 +384,13 @@ async fn list_protocol_kind(req: Request, ctx: RouteContext<()>, kind: &str) -> 
 
 async fn create_protocol_kind(
     mut req: Request,
-    ctx: RouteContext<()>,
+    ctx: crate::request_context::AppRouteContext,
     kind: &str,
 ) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let mut body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -396,7 +455,7 @@ fn write_scope_for_kind(kind: &str) -> &'static str {
 }
 
 async fn protocol_item_kind(
-    database: &worker::D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -418,7 +477,7 @@ async fn protocol_item_kind(
 }
 
 async fn protocol_item(
-    database: &worker::D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -443,7 +502,7 @@ async fn protocol_item(
 }
 
 async fn upsert_protocol_item(
-    database: &worker::D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     kind: &str,

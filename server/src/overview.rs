@@ -1,8 +1,8 @@
-pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "main:read").await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read").await?;
     let principal = user
         .as_ref()
         .map(|user| sty_protocol::TokenPrincipal { user: user.clone() });
@@ -68,11 +68,11 @@ pub(crate) async fn project_overview(req: Request, ctx: RouteContext<()>) -> Res
     Ok(response)
 }
 
-pub(crate) async fn project_stats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn project_stats(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "main:read").await?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read").await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let etag = format!(
         "stats-{}-{}-{}-{}-{}",
@@ -96,7 +96,7 @@ pub(crate) async fn project_stats(req: Request, ctx: RouteContext<()>) -> Result
 
 async fn project_readme_text(
     env: &Env,
-    db: &D1Database,
+    db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -147,7 +147,7 @@ fn overview_etag(
 }
 
 async fn latest_releases(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     limit: usize,

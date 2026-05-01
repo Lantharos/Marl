@@ -2,7 +2,7 @@ use super::*;
 use sty_protocol::{ProjectDiscoveryItem, ProjectReleaseFeedItem};
 
 pub async fn dashboard_project_cards(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<ProjectDiscoveryItem>> {
@@ -38,7 +38,7 @@ pub async fn dashboard_project_cards(
 }
 
 pub async fn followed_project_cards(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<ProjectDiscoveryItem>> {
@@ -71,7 +71,7 @@ pub async fn followed_project_cards(
 }
 
 pub async fn public_project_cards(
-    db: &D1Database,
+    db: &Database,
     query: &str,
     limit: usize,
 ) -> Result<Vec<ProjectDiscoveryItem>> {
@@ -106,7 +106,7 @@ pub async fn public_project_cards(
 }
 
 pub async fn tenant_public_project_cards(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     query: &str,
     limit: usize,
@@ -144,7 +144,7 @@ pub async fn tenant_public_project_cards(
 }
 
 pub async fn tenant_project_cards(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     query: &str,
     limit: usize,
@@ -181,7 +181,7 @@ pub async fn tenant_project_cards(
 }
 
 pub async fn followed_release_feed(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<ProjectReleaseFeedItem>> {

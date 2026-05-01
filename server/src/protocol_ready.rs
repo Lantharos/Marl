@@ -7,12 +7,14 @@ use crate::{
     check_project_read_capability, check_project_write_capability, d1, optional_auth, require_auth,
 };
 
-pub async fn list_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn list_ready(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_read_capability(
-        &ctx.env,
         &database,
         &tenant,
         &project,
@@ -40,13 +42,15 @@ pub async fn list_ready(req: Request, ctx: RouteContext<()>) -> Result<Response>
     Response::from_json(&paginate_vec(req.url()?, ready))
 }
 
-pub async fn get_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn get_ready(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_read_capability(
-        &ctx.env,
         &database,
         &tenant,
         &project,
@@ -73,11 +77,14 @@ pub async fn get_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> 
     }
 }
 
-pub async fn unmark_ready(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn unmark_ready(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -98,10 +105,13 @@ pub async fn unmark_ready(req: Request, ctx: RouteContext<()>) -> Result<Respons
     Response::from_json(&OkResponse { ok: true })
 }
 
-pub async fn reject_ready(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn reject_ready(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,

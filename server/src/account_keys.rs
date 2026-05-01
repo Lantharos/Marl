@@ -14,39 +14,60 @@ use crate::support::{
 };
 use crate::{d1, require_auth, require_web_auth};
 
-pub async fn list_account_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_account_keys(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_account_key_kind(req, ctx, "signing_key").await
 }
 
-pub async fn create_account_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_account_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_account_key_kind(req, ctx, "signing_key").await
 }
 
-pub async fn delete_account_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn delete_account_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     delete_account_key_kind(req, ctx, "signing_key").await
 }
 
-pub async fn list_account_ssh_keys(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_account_ssh_keys(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     list_account_key_kind(req, ctx, "ssh_key").await
 }
 
-pub async fn create_account_ssh_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn create_account_ssh_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     create_account_key_kind(req, ctx, "ssh_key").await
 }
 
-pub async fn delete_account_ssh_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn delete_account_ssh_key(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
     delete_account_key_kind(req, ctx, "ssh_key").await
 }
 
-pub async fn create_remote_approval(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn create_remote_approval(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let body: RemoteApprovalRequest = req.json().await?;
     if body.action.trim().is_empty() || body.summary.trim().is_empty() {
         return json_error(400, "approval action and summary are required");
     }
     let payload_json = serde_json::to_string(&body.payload)
         .map_err(|error| Error::RustError(error.to_string()))?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let expires_at = approval_expires_at();
     let approval = d1::create_remote_approval(
         &database,
@@ -60,10 +81,13 @@ pub async fn create_remote_approval(mut req: Request, ctx: RouteContext<()>) -> 
     Response::from_json(&approval_response(&req, &ctx.env, approval))
 }
 
-pub async fn get_remote_approval(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn get_remote_approval(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let id = param(&ctx, "approval_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let Some(approval) = d1::remote_approval(&database, &id).await? else {
         return json_error(404, "approval not found");
     };
@@ -80,10 +104,13 @@ pub async fn get_remote_approval(req: Request, ctx: RouteContext<()>) -> Result<
     })
 }
 
-pub async fn approve_remote_approval(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_web_auth(&req, &ctx.env).await?;
+pub async fn approve_remote_approval(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_web_auth(&req, &ctx).await?;
     let id = param(&ctx, "approval_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let Some(approval) = d1::approve_remote_approval(&database, &id, &user).await? else {
         return json_error(404, "approval not found");
     };
@@ -99,21 +126,21 @@ pub async fn approve_remote_approval(req: Request, ctx: RouteContext<()>) -> Res
 
 async fn list_account_key_kind(
     req: Request,
-    ctx: RouteContext<()>,
+    ctx: crate::request_context::AppRouteContext,
     kind: &str,
 ) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
-    let database = db(&ctx.env)?;
+    let user = require_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
     let items = d1::list_user_keys(&database, &user, kind).await?;
     Response::from_json(&paginate_vec(req.url()?, items))
 }
 
 async fn create_account_key_kind(
     mut req: Request,
-    ctx: RouteContext<()>,
+    ctx: crate::request_context::AppRouteContext,
     kind: &str,
 ) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+    let user = require_auth(&req, &ctx).await?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let public_key = body["public_key"]
         .as_str()
@@ -143,9 +170,9 @@ async fn create_account_key_kind(
         .to_string();
     if kind == "signing_key" {
         decode_ed25519_public_key(&public_key)?;
-        require_signing_key_approval(&req, &ctx.env, &user, &body).await?;
+        require_signing_key_approval(&req, &ctx, &user, &body).await?;
     }
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let item = d1::UserKey {
         id,
         user,
@@ -166,11 +193,11 @@ async fn create_account_key_kind(
 
 async fn require_signing_key_approval(
     req: &Request,
-    env: &Env,
+    ctx: &crate::request_context::AppRouteContext,
     user: &str,
     body: &serde_json::Value,
 ) -> Result<()> {
-    let database = db(env)?;
+    let database = db(ctx)?;
     let token = bearer_token(req)?;
     if matches!(
         d1::token_kind(&database, &token).await?.as_deref(),
@@ -222,12 +249,12 @@ fn approval_expires_at() -> String {
 
 async fn delete_account_key_kind(
     req: Request,
-    ctx: RouteContext<()>,
+    ctx: crate::request_context::AppRouteContext,
     kind: &str,
 ) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+    let user = require_auth(&req, &ctx).await?;
     let id = param(&ctx, "key_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let Some(item) = d1::user_key_by_id(&database, &user, &id).await? else {
         return json_error(404, "key not found");
     };
@@ -253,7 +280,7 @@ struct SnapshotSignature {
 }
 
 pub async fn verify_snapshot_id(
-    database: &worker::D1Database,
+    database: &crate::request_context::Database,
     env: &Env,
     tenant: &str,
     project: &str,

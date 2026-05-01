@@ -3,7 +3,10 @@ use worker::*;
 
 use crate::d1;
 
-pub(crate) async fn profile_json(database: &D1Database, user: &str) -> Result<Response> {
+pub(crate) async fn profile_json(
+    database: &crate::request_context::Database,
+    user: &str,
+) -> Result<Response> {
     let profile = d1::user_profile(database, user).await?;
     let fallback = json!({
         "user": user,

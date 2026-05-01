@@ -12,24 +12,30 @@ use crate::{
     check_project_read_capability, check_project_write_capability, d1, optional_auth, require_auth,
 };
 
-pub async fn list_releases(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn list_releases(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
-    release_public_cache(&ctx.env, &database, &tenant, &project, user.as_deref()).await?;
+    let database = db(&ctx)?;
+    release_public_cache(&database, &tenant, &project, user.as_deref()).await?;
     let items = list_release_values(&database, &tenant, &project).await?;
     Response::from_json(&paginate_vec(req.url()?, items))
 }
 
-pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn create_release(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let mut body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let tag = body["tag"].as_str().unwrap_or_default().trim().to_string();
     if tag.is_empty() {
         return json_error(400, "release requires a tag");
     }
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -84,7 +90,7 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
     upsert_release(&database, &tenant, &project, &id, body.clone()).await?;
     d1::recompute_project_stats(&database, &tenant, &project).await?;
     let _ = crate::developer::emit_project_event(
-        &ctx.env,
+        &database,
         &tenant,
         &project,
         "release.created",
@@ -94,23 +100,29 @@ pub async fn create_release(mut req: Request, ctx: RouteContext<()>) -> Result<R
     Response::from_json(&body)
 }
 
-pub async fn get_release(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn get_release(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
-    release_public_cache(&ctx.env, &database, &tenant, &project, user.as_deref()).await?;
+    let database = db(&ctx)?;
+    release_public_cache(&database, &tenant, &project, user.as_deref()).await?;
     let Some(item) = release_item_by_id_or_tag(&database, &tenant, &project, &id).await? else {
         return json_error(404, "release not found");
     };
     Response::from_json(&item)
 }
 
-pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub async fn upload_release_artifact(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let release_id = param(&ctx, "item_id")?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -202,7 +214,7 @@ pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) ->
     )
     .await?;
     let _ = crate::developer::emit_project_event(
-        &ctx.env,
+        &database,
         &tenant,
         &project,
         "release.artifact_uploaded",
@@ -212,14 +224,16 @@ pub async fn upload_release_artifact(mut req: Request, ctx: RouteContext<()>) ->
     Response::from_json(&release)
 }
 
-pub async fn download_release_artifact(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub async fn download_release_artifact(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let release_id = param(&ctx, "item_id")?;
     let artifact_id = param(&ctx, "artifact_id")?;
-    let database = db(&ctx.env)?;
-    let public_cache =
-        release_public_cache(&ctx.env, &database, &tenant, &project, user.as_deref()).await?;
+    let database = db(&ctx)?;
+    let public_cache = release_public_cache(&database, &tenant, &project, user.as_deref()).await?;
     let Some(release) =
         release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
     else {
@@ -260,8 +274,7 @@ pub async fn download_release_artifact(req: Request, ctx: RouteContext<()>) -> R
 }
 
 async fn release_public_cache(
-    env: &Env,
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     user: Option<&str>,
@@ -274,6 +287,6 @@ async fn release_public_cache(
     if public_project || public_releases {
         return Ok(true);
     }
-    check_project_read_capability(env, database, tenant, project, user, "releases:read").await?;
+    check_project_read_capability(database, tenant, project, user, "releases:read").await?;
     Ok(false)
 }

@@ -1,4 +1,4 @@
-import { apiBase, getStyToken } from './session';
+import { getStyToken } from './session';
 import { authedFetch, notifyProjectStatsChanged, pageQuery, publicFetch } from './apiShared';
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
@@ -223,13 +223,7 @@ export async function listProjects(options: ApiOptions = {}) {
 	if (!token) {
 		return [];
 	}
-	const response = await fetch(`${apiBase()}/v1/projects`, {
-		headers: { authorization: `Bearer ${token}` },
-		signal: options.signal
-	});
-	if (!response.ok) {
-		throw new Error(await response.text());
-	}
+	const response = await authedFetch('/v1/projects', { signal: options.signal });
 	const body = (await response.json()) as { projects: ProjectSummary[] };
 	return body.projects;
 }

@@ -141,7 +141,7 @@ pub(super) struct ProjectIntegrationRow {
     pub revoked_at: Option<String>,
 }
 
-pub async fn ensure_developer_schema(db: &D1Database) -> Result<()> {
+pub async fn ensure_developer_schema(db: &Database) -> Result<()> {
     db.prepare("CREATE TABLE IF NOT EXISTS project_api_keys (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, prefix TEXT NOT NULL, tenant TEXT NOT NULL, project TEXT NOT NULL, name TEXT NOT NULL, scopes_json TEXT NOT NULL DEFAULT '[]', created_by TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT, expires_at TEXT, revoked_at TEXT)").run().await?;
     db.prepare("CREATE INDEX IF NOT EXISTS idx_project_api_keys_project ON project_api_keys(tenant, project, revoked_at)").run().await?;
     db.prepare(

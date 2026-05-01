@@ -1,7 +1,7 @@
 use super::*;
 
 pub async fn create_project_api_key(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -52,7 +52,7 @@ pub async fn create_project_api_key(
 }
 
 pub async fn list_project_api_keys(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<ProjectApiKey>> {
@@ -72,7 +72,7 @@ pub async fn list_project_api_keys(
 }
 
 pub async fn revoke_project_api_key(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -88,7 +88,7 @@ pub async fn revoke_project_api_key(
     Ok(result.meta()?.and_then(|meta| meta.changes).unwrap_or(0) > 0)
 }
 
-pub async fn principal_for_api_key(db: &D1Database, token: &str) -> Result<Option<TokenPrincipal>> {
+pub async fn principal_for_api_key(db: &Database, token: &str) -> Result<Option<TokenPrincipal>> {
     ensure_developer_schema(db).await?;
     let hash = token_hash(token);
     let row: Option<ApiKeyRow> = db
@@ -116,7 +116,7 @@ pub async fn principal_for_api_key(db: &D1Database, token: &str) -> Result<Optio
 }
 
 pub async fn project_api_key_role(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &str,
@@ -144,7 +144,7 @@ pub async fn project_api_key_role(
 }
 
 pub async fn project_api_key_allows(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &str,

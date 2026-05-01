@@ -2,6 +2,8 @@ use serde_json::json;
 use sty_protocol::validate_segment;
 use worker::*;
 
+use crate::request_context::{AppRouteContext, D1_BOOKMARK_HEADER, Database};
+
 pub const MAX_TREE_DEPTH: usize = 128;
 pub const MAX_TREE_ENTRIES: usize = 200_000;
 
@@ -9,11 +11,11 @@ pub fn bucket(env: &Env) -> Result<Bucket> {
     env.bucket("STY_OBJECTS")
 }
 
-pub fn db(env: &Env) -> Result<D1Database> {
-    env.d1("STY_DB")
+pub fn db(ctx: &AppRouteContext) -> Result<&Database> {
+    Ok(ctx.data.database())
 }
 
-pub fn project_params(ctx: &RouteContext<()>) -> Result<(String, String)> {
+pub fn project_params(ctx: &AppRouteContext) -> Result<(String, String)> {
     let tenant = param(ctx, "tenant")?;
     let project = param(ctx, "project")?;
     validate_segment(&tenant).map_err(|e| Error::RustError(e.to_string()))?;
@@ -21,7 +23,7 @@ pub fn project_params(ctx: &RouteContext<()>) -> Result<(String, String)> {
     Ok((tenant, project))
 }
 
-pub fn param(ctx: &RouteContext<()>, name: &str) -> Result<String> {
+pub fn param(ctx: &AppRouteContext, name: &str) -> Result<String> {
     ctx.param(name)
         .map(ToOwned::to_owned)
         .ok_or_else(|| Error::RustError(format!("missing route param {name}")))
@@ -287,11 +289,11 @@ fn set_cors_headers(headers: &mut Headers) -> Result<()> {
     )?;
     headers.set(
         "access-control-allow-headers",
-        "authorization,content-type,x-pig-object-kind,x-pig-object-size,x-pig-chunk-count,x-pig-total-size",
+        &format!("authorization,content-type,{D1_BOOKMARK_HEADER},x-pig-object-kind,x-pig-object-size,x-pig-chunk-count,x-pig-total-size"),
     )?;
     headers.set(
         "access-control-expose-headers",
-        "etag,x-pig-object-kind,x-pig-object-size",
+        &format!("etag,{D1_BOOKMARK_HEADER},x-pig-object-kind,x-pig-object-size"),
     )?;
     headers.set("access-control-max-age", "86400")?;
     Ok(())
@@ -448,7 +450,15 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_tree_names() {
-        for name in ["", ".", "..", "../secret", "dir/file", r"dir\file", "C:secret"] {
+        for name in [
+            "",
+            ".",
+            "..",
+            "../secret",
+            "dir/file",
+            r"dir\file",
+            "C:secret",
+        ] {
             assert!(validate_tree_entry_name(name).is_err());
         }
         assert!(validate_tree_entry_name("README.md").is_ok());

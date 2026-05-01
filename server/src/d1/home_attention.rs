@@ -1,7 +1,7 @@
 use super::*;
 use sty_protocol::{HomeAttention, HomeIssueItem, HomeMentionItem, HomeReadyWorkspace};
 
-pub async fn home_attention(db: &D1Database, principal: &TokenPrincipal) -> Result<HomeAttention> {
+pub async fn home_attention(db: &Database, principal: &TokenPrincipal) -> Result<HomeAttention> {
     Ok(HomeAttention {
         ready_workspaces: home_ready_workspaces(db, principal, 25).await?,
         assigned_issues: home_assigned_issues(db, principal, 25).await?,
@@ -10,7 +10,7 @@ pub async fn home_attention(db: &D1Database, principal: &TokenPrincipal) -> Resu
 }
 
 async fn home_ready_workspaces(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeReadyWorkspace>> {
@@ -98,7 +98,7 @@ async fn home_ready_workspaces(
 }
 
 async fn home_assigned_issues(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeIssueItem>> {
@@ -153,7 +153,7 @@ async fn home_assigned_issues(
 }
 
 async fn home_mentions(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeMentionItem>> {

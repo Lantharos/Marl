@@ -36,6 +36,11 @@
 		<CodeBlock code={paginationJson} />
 	</section>
 
+	<section>
+		<h2 class="text-lg font-semibold text-[#eae9e4]">Session consistency</h2>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">API responses may include <code>x-d1-bookmark</code>. Clients can send that value on later requests to continue from the same database session and keep reads consistent when database read replicas are enabled.</p>
+	</section>
+
 	<section class="grid gap-4 md:grid-cols-2">
 		<div>
 			<h2 class="text-lg font-semibold text-[#eae9e4]">Errors</h2>

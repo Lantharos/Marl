@@ -26,7 +26,7 @@ struct HistoryRow {
     snapshot_id: Option<String>,
 }
 
-pub async fn ensure_fork_schema(db: &D1Database) -> Result<()> {
+pub async fn ensure_fork_schema(db: &Database) -> Result<()> {
     db.prepare(
         "CREATE TABLE IF NOT EXISTS project_forks (
             tenant TEXT NOT NULL,
@@ -54,7 +54,7 @@ pub async fn ensure_fork_schema(db: &D1Database) -> Result<()> {
 }
 
 pub async fn project_objects(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<ProjectObjectRow>> {
@@ -86,7 +86,7 @@ pub async fn project_objects(
 }
 
 pub async fn create_fork_project(
-    db: &D1Database,
+    db: &Database,
     source_tenant: &str,
     source_project: &str,
     target_tenant: &str,
@@ -116,14 +116,7 @@ pub async fn create_fork_project(
     )
     .await?;
     if let Some(workspace) = workspace {
-        create_contribution_workspace(
-            db,
-            target_tenant,
-            target_project,
-            workspace,
-            "main",
-        )
-        .await?;
+        create_contribution_workspace(db, target_tenant, target_project, workspace, "main").await?;
         db.prepare(
             "INSERT INTO project_forks
              (tenant, project, source_tenant, source_project, workspace, created_by, created_at)
@@ -146,7 +139,7 @@ pub async fn create_fork_project(
 }
 
 pub async fn project_fork(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Option<ProjectForkRow>> {
@@ -178,7 +171,7 @@ pub async fn project_fork(
 }
 
 pub async fn publish_fork_workspace(
-    db: &D1Database,
+    db: &Database,
     fork: &ProjectForkRow,
     title: &str,
     message: &str,
@@ -250,7 +243,7 @@ pub async fn publish_fork_workspace(
 }
 
 async fn insert_fork_shell(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,
@@ -284,7 +277,7 @@ async fn insert_fork_shell(
 }
 
 async fn copy_main_workspace(
-    db: &D1Database,
+    db: &Database,
     source_tenant: &str,
     source_project: &str,
     target_tenant: &str,
@@ -319,7 +312,7 @@ async fn copy_main_workspace(
 }
 
 async fn copy_main_history(
-    db: &D1Database,
+    db: &Database,
     source_tenant: &str,
     source_project: &str,
     target_tenant: &str,
@@ -380,7 +373,7 @@ async fn copy_main_history(
 }
 
 async fn create_contribution_workspace(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,

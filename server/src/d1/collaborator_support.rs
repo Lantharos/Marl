@@ -29,7 +29,7 @@ pub fn role_allows(role: Option<&str>, minimum: &str) -> bool {
     role.map(role_rank).unwrap_or(0) >= role_rank(minimum)
 }
 
-pub async fn ensure_collaboration_schema(db: &D1Database) -> Result<()> {
+pub async fn ensure_collaboration_schema(db: &Database) -> Result<()> {
     db.prepare(
         "CREATE TABLE IF NOT EXISTS tenant_members (
             tenant TEXT NOT NULL,
@@ -78,7 +78,7 @@ pub async fn ensure_collaboration_schema(db: &D1Database) -> Result<()> {
 }
 
 pub async fn tenant_effective_role(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     user: &str,
 ) -> Result<Option<String>> {
@@ -116,7 +116,7 @@ pub async fn tenant_effective_role(
 }
 
 pub async fn project_effective_role(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -158,7 +158,7 @@ pub async fn project_effective_role(
 }
 
 pub async fn project_role_allows(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -173,7 +173,7 @@ pub async fn project_role_allows(
 }
 
 pub async fn project_access_response(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user: Option<&str>,
@@ -210,7 +210,7 @@ pub async fn project_access_response(
     })
 }
 
-pub async fn search_users(db: &D1Database, query: &str, limit: usize) -> Result<Vec<UserProfile>> {
+pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Vec<UserProfile>> {
     let trimmed = query.trim().trim_start_matches('@').to_ascii_lowercase();
     if trimmed.is_empty() {
         return Ok(Vec::new());
@@ -257,7 +257,7 @@ pub async fn search_users(db: &D1Database, query: &str, limit: usize) -> Result<
         .collect())
 }
 
-pub(super) async fn resolve_user(db: &D1Database, input: &str) -> Result<String> {
+pub(super) async fn resolve_user(db: &Database, input: &str) -> Result<String> {
     let value = input.trim().trim_start_matches('@');
     if value.is_empty() {
         return Err(err("user is required"));
@@ -281,7 +281,7 @@ pub(super) async fn resolve_user(db: &D1Database, input: &str) -> Result<String>
         .ok_or_else(|| err("user not found; they need to sign in once first"))
 }
 
-pub(super) async fn tenant_owner(db: &D1Database, tenant: &str) -> Result<Option<String>> {
+pub(super) async fn tenant_owner(db: &Database, tenant: &str) -> Result<Option<String>> {
     #[derive(Deserialize)]
     struct Row {
         owner: String,
@@ -295,7 +295,7 @@ pub(super) async fn tenant_owner(db: &D1Database, tenant: &str) -> Result<Option
 }
 
 pub(super) async fn project_owner(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Option<String>> {
@@ -312,7 +312,7 @@ pub(super) async fn project_owner(
 }
 
 pub(super) async fn collaborator(
-    db: &D1Database,
+    db: &Database,
     user: String,
     role: &str,
     source: &str,
@@ -348,7 +348,7 @@ pub(super) fn insert_highest(
     }
 }
 
-pub(super) async fn rewrite_tenant_members_json(db: &D1Database, tenant: &str) -> Result<()> {
+pub(super) async fn rewrite_tenant_members_json(db: &Database, tenant: &str) -> Result<()> {
     #[derive(Deserialize)]
     struct Row {
         user: String,

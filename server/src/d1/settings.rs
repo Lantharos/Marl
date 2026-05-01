@@ -1,6 +1,6 @@
 use super::*;
 pub async fn project_visibility(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Option<String>> {
@@ -22,7 +22,7 @@ pub async fn project_visibility(
 }
 
 pub async fn project_settings(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: Option<&TokenPrincipal>,
@@ -76,14 +76,14 @@ pub async fn project_settings(
     Ok(settings)
 }
 
-pub async fn project_public_releases(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
+pub async fn project_public_releases(db: &Database, tenant: &str, project: &str) -> Result<bool> {
     Ok(project_settings(db, tenant, project, None)
         .await?
         .public_releases)
 }
 
 pub async fn project_archive(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Option<(String, String)>> {
@@ -100,12 +100,12 @@ pub async fn project_archive(
     Ok(row.and_then(|row| row.archived_at.zip(row.archived_by)))
 }
 
-pub async fn project_is_archived(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
+pub async fn project_is_archived(db: &Database, tenant: &str, project: &str) -> Result<bool> {
     Ok(project_archive(db, tenant, project).await?.is_some())
 }
 
 pub async fn update_project_settings(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,
@@ -140,7 +140,7 @@ pub async fn update_project_settings(
 }
 
 async fn set_project_archived(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,

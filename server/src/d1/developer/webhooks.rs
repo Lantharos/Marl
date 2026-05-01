@@ -1,7 +1,7 @@
 use super::*;
 
 pub async fn create_project_webhook(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -51,7 +51,7 @@ pub async fn create_project_webhook(
 }
 
 pub async fn list_project_webhooks(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<ProjectWebhook>> {
@@ -71,7 +71,7 @@ pub async fn list_project_webhooks(
 }
 
 pub async fn active_project_webhooks(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     event: &str,
@@ -97,7 +97,7 @@ pub async fn active_project_webhooks(
 }
 
 pub async fn project_webhook_by_id(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -116,7 +116,7 @@ pub async fn project_webhook_by_id(
 }
 
 pub async fn revoke_project_webhook(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -133,7 +133,7 @@ pub async fn revoke_project_webhook(
 }
 
 pub async fn record_webhook_delivery(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     id: &str,

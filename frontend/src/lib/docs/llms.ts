@@ -57,6 +57,7 @@ Authentication:
 - User sessions use Authorization: Bearer <sty-token>.
 - Project API keys use the same bearer header and are scoped to one tenant/project.
 - OAuth developer apps create project-scoped bearer tokens after a maintainer approves access.
+- API responses may include x-d1-bookmark. Send it back as x-d1-bookmark on later requests to continue a consistent database session.
 
 Pagination envelope:
 - items, page, per_page, total, total_pages, next, prev.

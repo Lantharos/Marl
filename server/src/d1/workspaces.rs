@@ -1,6 +1,6 @@
 use super::*;
 pub async fn head(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -18,7 +18,7 @@ pub async fn head(
 }
 
 pub async fn workspace_exists(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -36,7 +36,7 @@ pub async fn workspace_exists(
 }
 
 pub async fn update_head(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -98,7 +98,7 @@ pub async fn update_head(
 // -- Workspace state --------------------------------------
 
 pub async fn workspace_states(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<WorkspaceState>> {
@@ -151,7 +151,7 @@ pub async fn workspace_states(
 }
 
 pub async fn set_parent_workspace(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -165,7 +165,7 @@ pub async fn set_parent_workspace(
 }
 
 pub async fn mark_workspace_ready(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -190,7 +190,7 @@ pub async fn mark_workspace_ready(
 }
 
 pub async fn unmark_workspace_ready(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -215,7 +215,7 @@ pub async fn unmark_workspace_ready(
 }
 
 pub async fn reject_workspace_ready(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -238,7 +238,7 @@ pub async fn reject_workspace_ready(
 }
 
 pub async fn merge_workspace(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,

@@ -1,7 +1,7 @@
 use super::*;
 
 pub async fn follow_project(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,
@@ -21,7 +21,7 @@ pub async fn follow_project(
 }
 
 pub async fn unfollow_project(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,
@@ -34,7 +34,7 @@ pub async fn unfollow_project(
 }
 
 pub async fn is_following(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: Option<&TokenPrincipal>,
@@ -56,7 +56,7 @@ pub async fn is_following(
     Ok(row.map(|r| r.count as u64).unwrap_or(0) > 0)
 }
 
-pub async fn follower_count(db: &D1Database, tenant: &str, project: &str) -> Result<u64> {
+pub async fn follower_count(db: &Database, tenant: &str, project: &str) -> Result<u64> {
     #[derive(Deserialize)]
     struct CountRow {
         count: f64,

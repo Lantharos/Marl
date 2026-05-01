@@ -1,6 +1,6 @@
 use super::*;
 pub async fn workspace_history_with_limit(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -76,7 +76,7 @@ pub async fn workspace_history_with_limit(
 }
 
 pub async fn project_history(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<HistoryEntry>> {
@@ -84,7 +84,7 @@ pub async fn project_history(
 }
 
 pub async fn project_history_with_limit(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     limit: Option<usize>,
@@ -158,7 +158,7 @@ pub async fn project_history_with_limit(
 }
 
 pub async fn log_history(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     workspace: &str,
@@ -191,7 +191,7 @@ pub async fn log_history(
 }
 
 pub async fn get_history_entry(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     entry_id: &str,

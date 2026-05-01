@@ -2,7 +2,7 @@ use super::*;
 use sty_protocol::HomeActivityItem;
 
 pub async fn followed_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -16,7 +16,7 @@ pub async fn followed_activity(
 }
 
 pub async fn project_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -30,7 +30,7 @@ pub async fn project_activity(
 }
 
 async fn followed_history_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -75,7 +75,7 @@ async fn followed_history_activity(
 }
 
 async fn followed_issue_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -121,7 +121,7 @@ async fn followed_issue_activity(
 }
 
 async fn project_history_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -163,7 +163,7 @@ async fn project_history_activity(
 }
 
 async fn project_issue_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -206,7 +206,7 @@ async fn project_issue_activity(
 }
 
 async fn project_release_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {
@@ -245,7 +245,7 @@ async fn project_release_activity(
 }
 
 async fn followed_release_activity(
-    db: &D1Database,
+    db: &Database,
     principal: &TokenPrincipal,
     limit: usize,
 ) -> Result<Vec<HomeActivityItem>> {

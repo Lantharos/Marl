@@ -1,6 +1,6 @@
 use super::*;
 pub async fn ensure_project(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     principal: &TokenPrincipal,
@@ -62,7 +62,7 @@ pub async fn ensure_project(
 }
 
 pub async fn get_project(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Option<ProjectSummary>> {
@@ -83,7 +83,7 @@ pub async fn get_project(
     }))
 }
 
-pub async fn projects(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>> {
+pub async fn projects(db: &Database, principal: &TokenPrincipal) -> Result<Vec<ProjectSummary>> {
     ensure_collaboration_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
@@ -115,7 +115,7 @@ pub async fn projects(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec
 }
 
 pub async fn project_access(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user: &str,
@@ -137,7 +137,7 @@ pub async fn project_access(
         .is_some())
 }
 
-pub async fn project_exists(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
+pub async fn project_exists(db: &Database, tenant: &str, project: &str) -> Result<bool> {
     #[derive(Deserialize)]
     struct Row {
         count: i64,
@@ -150,7 +150,7 @@ pub async fn project_exists(db: &D1Database, tenant: &str, project: &str) -> Res
     Ok(row.is_some_and(|row| row.count > 0))
 }
 
-pub async fn delete_project(db: &D1Database, tenant: &str, project: &str) -> Result<bool> {
+pub async fn delete_project(db: &Database, tenant: &str, project: &str) -> Result<bool> {
     if !project_exists(db, tenant, project).await? {
         return Ok(false);
     }
@@ -180,7 +180,7 @@ pub async fn delete_project(db: &D1Database, tenant: &str, project: &str) -> Res
     Ok(true)
 }
 
-pub async fn tenants(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>> {
+pub async fn tenants(db: &Database, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>> {
     ensure_collaboration_schema(db).await?;
     let account_tenant = ensure_account_tenant(db, &principal.user).await?;
     #[derive(Deserialize)]
@@ -214,7 +214,7 @@ pub async fn tenants(db: &D1Database, principal: &TokenPrincipal) -> Result<Vec<
 }
 
 pub async fn create_org(
-    db: &D1Database,
+    db: &Database,
     name: &str,
     principal: &TokenPrincipal,
 ) -> Result<TenantSummary> {
@@ -235,21 +235,21 @@ pub async fn create_org(
     })
 }
 
-pub async fn tenant_control(db: &D1Database, tenant: &str, user: &str) -> Result<bool> {
+pub async fn tenant_control(db: &Database, tenant: &str, user: &str) -> Result<bool> {
     Ok(role_allows(
         tenant_effective_role(db, tenant, user).await?.as_deref(),
         "maintainer",
     ))
 }
 
-pub async fn tenant_access(db: &D1Database, tenant: &str, user: &str) -> Result<bool> {
+pub async fn tenant_access(db: &Database, tenant: &str, user: &str) -> Result<bool> {
     Ok(role_allows(
         tenant_effective_role(db, tenant, user).await?.as_deref(),
         "viewer",
     ))
 }
 
-pub async fn ensure_account_tenant(db: &D1Database, user: &str) -> Result<String> {
+pub async fn ensure_account_tenant(db: &Database, user: &str) -> Result<String> {
     let tenant = account_tenant_name(db, user).await?;
     let members = serde_json::to_string(&vec![user.to_string()]).map_err(|e| err(e.to_string()))?;
     db.prepare(
@@ -271,7 +271,7 @@ pub async fn ensure_account_tenant(db: &D1Database, user: &str) -> Result<String
     Ok(tenant)
 }
 
-pub(crate) async fn account_tenant_name(db: &D1Database, user: &str) -> Result<String> {
+pub(crate) async fn account_tenant_name(db: &Database, user: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct Row {
         handle: Option<String>,
@@ -292,7 +292,7 @@ pub(crate) async fn account_tenant_name(db: &D1Database, user: &str) -> Result<S
     Ok(handle)
 }
 
-pub async fn tenant_exists(db: &D1Database, tenant: &str) -> Result<bool> {
+pub async fn tenant_exists(db: &Database, tenant: &str) -> Result<bool> {
     #[derive(Deserialize)]
     struct Row {
         count: i64,

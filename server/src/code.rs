@@ -1,15 +1,13 @@
-pub(crate) async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn project_tree(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let url = req.url()?;
     let workspace = url
         .query_pairs()
         .find_map(|(k, v)| (k == "workspace").then(|| v.to_string()))
         .unwrap_or_else(|| "main".to_string());
-    check_workspace_read_capability(
-        &ctx.env,
-        &database,
+    check_workspace_read_capability(&database,
         &tenant,
         &project,
         user.as_deref(),
@@ -69,10 +67,10 @@ pub(crate) async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<
     Ok(response)
 }
 
-pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = optional_auth(&req, &ctx.env).await?;
+pub(crate) async fn project_file(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let url = req.url()?;
     let path = param(&ctx, "path")
         .ok()
@@ -85,9 +83,7 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
     let workspace = url.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
-    check_workspace_read_capability(
-        &ctx.env,
-        &database,
+    check_workspace_read_capability(&database,
         &tenant,
         &project,
         user.as_deref(),

@@ -2,7 +2,7 @@ use super::*;
 use std::collections::HashMap;
 use sty_protocol::Collaborator;
 
-pub async fn list_tenant_collaborators(db: &D1Database, tenant: &str) -> Result<Vec<Collaborator>> {
+pub async fn list_tenant_collaborators(db: &Database, tenant: &str) -> Result<Vec<Collaborator>> {
     ensure_collaboration_schema(db).await?;
     let owner = tenant_owner(db, tenant).await?;
     let mut collaborators = Vec::new();
@@ -49,7 +49,7 @@ pub async fn list_tenant_collaborators(db: &D1Database, tenant: &str) -> Result<
 }
 
 pub async fn upsert_tenant_collaborator(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     user_input: &str,
     role: &str,
@@ -94,7 +94,7 @@ pub async fn upsert_tenant_collaborator(
 }
 
 pub async fn delete_tenant_collaborator(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     user_input: &str,
 ) -> Result<bool> {
@@ -110,7 +110,7 @@ pub async fn delete_tenant_collaborator(
 }
 
 pub async fn list_project_collaborators(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<Collaborator>> {
@@ -167,7 +167,7 @@ pub async fn list_project_collaborators(
 }
 
 pub async fn upsert_project_collaborator(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user_input: &str,
@@ -213,7 +213,7 @@ pub async fn upsert_project_collaborator(
 }
 
 pub async fn delete_project_collaborator(
-    db: &D1Database,
+    db: &Database,
     tenant: &str,
     project: &str,
     user_input: &str,

@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import { AveSession, createLocalStorageAdapter } from '@ave-id/sdk';
 import { completeOAuthCallback, startPkceLogin } from '@ave-id/sdk/client';
+import { clearD1Bookmark, d1Fetch } from './d1Session';
 
 export type AveProfile = {
 	sub: string;
@@ -66,7 +67,7 @@ export async function finishLogin() {
 export async function signOut() {
 	const token = browser ? localStorage.getItem('sty_token') : null;
 	if (token) {
-		await fetch(`${apiBase()}/v1/session`, {
+		await d1Fetch(`${apiBase()}/v1/session`, {
 			method: 'DELETE',
 			headers: { authorization: `Bearer ${token}` }
 		}).catch(() => {});
@@ -75,6 +76,7 @@ export async function signOut() {
 	if (browser) {
 		localStorage.removeItem('sty_token');
 	}
+	clearD1Bookmark();
 }
 
 export async function getAveProfile() {
@@ -101,6 +103,7 @@ export function clearStyToken() {
 	if (browser) {
 		localStorage.removeItem('sty_token');
 	}
+	clearD1Bookmark();
 }
 
 export async function getStyToken() {
@@ -125,7 +128,7 @@ async function exchangeStyToken() {
 	if (!idToken) {
 		return null;
 	}
-	const response = await fetch(`${apiBase()}/v1/session/exchange`, {
+	const response = await d1Fetch(`${apiBase()}/v1/session/exchange`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ id_token: idToken, client: 'web' })

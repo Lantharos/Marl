@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use worker::*;
 
 pub(crate) async fn ensure_tag(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     tag: &str,
@@ -47,7 +47,7 @@ pub(crate) async fn ensure_tag(
 }
 
 pub(crate) async fn list_release_values(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
 ) -> Result<Vec<serde_json::Value>> {
@@ -55,7 +55,7 @@ pub(crate) async fn list_release_values(
 }
 
 pub(crate) async fn list_protocol_values(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     kind: &str,
@@ -79,7 +79,7 @@ pub(crate) async fn list_protocol_values(
 }
 
 pub(crate) async fn release_item_by_id_or_tag(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     id_or_tag: &str,
@@ -94,7 +94,7 @@ pub(crate) async fn release_item_by_id_or_tag(
 }
 
 pub(crate) async fn upsert_release(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -179,7 +179,7 @@ pub(crate) fn now_iso() -> String {
 }
 
 async fn release_item(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     id: &str,
@@ -202,7 +202,7 @@ async fn release_item(
 }
 
 async fn upsert_protocol_item(
-    database: &D1Database,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     kind: &str,

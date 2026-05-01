@@ -6,11 +6,14 @@ use worker::*;
 use crate::support::{bucket, db, json_error, object_key, project_params, put_bytes, r2_bytes};
 use crate::{check_project_write_capability, d1, require_auth};
 
-pub(crate) async fn fork_project(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn fork_project(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let body: ForkProjectRequest = req.json().await?;
     validate_fork_request(&body)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     let principal = sty_protocol::TokenPrincipal { user: user.clone() };
     let visibility = d1::project_visibility(&database, &body.source_tenant, &body.source_project)
         .await?
@@ -55,12 +58,15 @@ pub(crate) async fn fork_project(mut req: Request, ctx: RouteContext<()>) -> Res
     })
 }
 
-pub(crate) async fn send_work(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let user = require_auth(&req, &ctx.env).await?;
+pub(crate) async fn send_work(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let body: SendWorkRequest = req.json().await?;
     validate_send_work_request(&body)?;
-    let database = db(&ctx.env)?;
+    let database = db(&ctx)?;
     check_project_write_capability(
         &database,
         &tenant,
@@ -115,7 +121,7 @@ pub(crate) async fn send_work(mut req: Request, ctx: RouteContext<()>) -> Result
 
 async fn copy_project_objects(
     env: &Env,
-    database: &D1Database,
+    database: &crate::request_context::Database,
     source_tenant: &str,
     source_project: &str,
     target_tenant: &str,
@@ -127,10 +133,17 @@ async fn copy_project_objects(
             .await?
             .is_none()
         {
-            let bytes = r2_bytes(&store, &object_key(source_tenant, source_project, &object.id))
-                .await?;
-            put_bytes(&store, &object_key(target_tenant, target_project, &object.id), bytes)
-                .await?;
+            let bytes = r2_bytes(
+                &store,
+                &object_key(source_tenant, source_project, &object.id),
+            )
+            .await?;
+            put_bytes(
+                &store,
+                &object_key(target_tenant, target_project, &object.id),
+                bytes,
+            )
+            .await?;
             d1::record_object(
                 database,
                 target_tenant,
@@ -148,10 +161,9 @@ async fn copy_project_objects(
 fn contribution_workspace(body: &ForkProjectRequest, user: &str) -> Result<Option<String>> {
     match body.mode.as_str() {
         "contribute" => {
-            let workspace = body
-                .workspace
-                .clone()
-                .unwrap_or_else(|| default_workspace(&body.target_tenant, &body.target_project, user));
+            let workspace = body.workspace.clone().unwrap_or_else(|| {
+                default_workspace(&body.target_tenant, &body.target_project, user)
+            });
             sty_protocol::validate_segment(&workspace)
                 .map_err(|error| Error::RustError(error.to_string()))?;
             Ok(Some(workspace))

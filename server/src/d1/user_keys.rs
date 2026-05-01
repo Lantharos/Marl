@@ -13,7 +13,7 @@ pub struct UserKey {
     pub revoked_at: Option<String>,
 }
 
-pub async fn list_user_keys(db: &D1Database, user: &str, kind: &str) -> Result<Vec<UserKey>> {
+pub async fn list_user_keys(db: &Database, user: &str, kind: &str) -> Result<Vec<UserKey>> {
     ensure_user_keys_schema(db).await?;
     let result = db
         .prepare(
@@ -28,7 +28,7 @@ pub async fn list_user_keys(db: &D1Database, user: &str, kind: &str) -> Result<V
     result.results()
 }
 
-pub async fn user_key_by_id(db: &D1Database, user: &str, id: &str) -> Result<Option<UserKey>> {
+pub async fn user_key_by_id(db: &Database, user: &str, id: &str) -> Result<Option<UserKey>> {
     ensure_user_keys_schema(db).await?;
     db.prepare(
         "SELECT id, user, kind, name, public_key, fingerprint, algorithm, created_at, revoked_at
@@ -41,7 +41,7 @@ pub async fn user_key_by_id(db: &D1Database, user: &str, id: &str) -> Result<Opt
 }
 
 pub async fn active_signing_key(
-    db: &D1Database,
+    db: &Database,
     user: &str,
     key_id: &str,
 ) -> Result<Option<UserKey>> {
@@ -56,7 +56,7 @@ pub async fn active_signing_key(
     .await
 }
 
-pub async fn upsert_user_key(db: &D1Database, key: &UserKey) -> Result<()> {
+pub async fn upsert_user_key(db: &Database, key: &UserKey) -> Result<()> {
     ensure_user_keys_schema(db).await?;
     db.prepare(
         "INSERT INTO user_keys (id, user, kind, name, public_key, fingerprint, algorithm, created_at, revoked_at)
@@ -83,7 +83,7 @@ pub async fn upsert_user_key(db: &D1Database, key: &UserKey) -> Result<()> {
     Ok(())
 }
 
-pub async fn revoke_user_key(db: &D1Database, user: &str, id: &str) -> Result<bool> {
+pub async fn revoke_user_key(db: &Database, user: &str, id: &str) -> Result<bool> {
     ensure_user_keys_schema(db).await?;
     let existing = user_key_by_id(db, user, id).await?;
     if existing.is_none() {
@@ -96,7 +96,7 @@ pub async fn revoke_user_key(db: &D1Database, user: &str, id: &str) -> Result<bo
     Ok(true)
 }
 
-async fn ensure_user_keys_schema(db: &D1Database) -> Result<()> {
+async fn ensure_user_keys_schema(db: &Database) -> Result<()> {
     db.prepare(
         "CREATE TABLE IF NOT EXISTS user_keys (
             id TEXT PRIMARY KEY,

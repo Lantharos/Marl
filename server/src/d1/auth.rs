@@ -1,10 +1,5 @@
 use super::*;
-pub async fn add_token(
-    db: &D1Database,
-    user: &str,
-    expires_at: &str,
-    kind: &str,
-) -> Result<String> {
+pub async fn add_token(db: &Database, user: &str, expires_at: &str, kind: &str) -> Result<String> {
     ensure_token_schema(db).await?;
     let token = format!("sty_{}", Uuid::new_v4().simple());
     let hash = token_hash(&token);
@@ -16,7 +11,7 @@ pub async fn add_token(
     Ok(token)
 }
 
-pub async fn revoke_token(db: &D1Database, token: &str) -> Result<bool> {
+pub async fn revoke_token(db: &Database, token: &str) -> Result<bool> {
     ensure_token_schema(db).await?;
     let hash = token_hash(token);
     let revoked_at = now_rfc3339();
@@ -28,7 +23,7 @@ pub async fn revoke_token(db: &D1Database, token: &str) -> Result<bool> {
     Ok(result.meta()?.and_then(|meta| meta.changes).unwrap_or(0) > 0)
 }
 
-pub async fn prune_expired_tokens(db: &D1Database) -> Result<()> {
+pub async fn prune_expired_tokens(db: &Database) -> Result<()> {
     ensure_token_schema(db).await?;
     let now = now_rfc3339();
     db.prepare("DELETE FROM tokens WHERE expires_at <= ?1 OR revoked_at IS NOT NULL")
@@ -38,7 +33,7 @@ pub async fn prune_expired_tokens(db: &D1Database) -> Result<()> {
     Ok(())
 }
 
-pub async fn upsert_user_profile(db: &D1Database, profile: &UserProfile) -> Result<UserProfile> {
+pub async fn upsert_user_profile(db: &Database, profile: &UserProfile) -> Result<UserProfile> {
     let updated_at = now_rfc3339();
     let display_name = profile.display_name.trim();
     let display_name = if display_name.is_empty() {
@@ -73,7 +68,7 @@ pub async fn upsert_user_profile(db: &D1Database, profile: &UserProfile) -> Resu
     })
 }
 
-pub async fn user_profile(db: &D1Database, user: &str) -> Result<Option<UserProfile>> {
+pub async fn user_profile(db: &Database, user: &str) -> Result<Option<UserProfile>> {
     #[derive(Deserialize)]
     struct Row {
         user: String,
@@ -98,7 +93,7 @@ pub async fn user_profile(db: &D1Database, user: &str) -> Result<Option<UserProf
     }))
 }
 
-pub async fn principal_for_token(db: &D1Database, token: &str) -> Result<Option<TokenPrincipal>> {
+pub async fn principal_for_token(db: &Database, token: &str) -> Result<Option<TokenPrincipal>> {
     ensure_token_schema(db).await?;
     let hash = token_hash(token);
     #[derive(Deserialize)]
@@ -125,7 +120,7 @@ pub async fn principal_for_token(db: &D1Database, token: &str) -> Result<Option<
     Ok(Some(TokenPrincipal { user: row.user }))
 }
 
-pub async fn token_kind(db: &D1Database, token: &str) -> Result<Option<String>> {
+pub async fn token_kind(db: &Database, token: &str) -> Result<Option<String>> {
     ensure_token_schema(db).await?;
     let hash = token_hash(token);
     #[derive(Deserialize)]
@@ -148,7 +143,7 @@ pub async fn token_kind(db: &D1Database, token: &str) -> Result<Option<String>> 
     Ok(Some(row.kind))
 }
 
-async fn ensure_token_schema(db: &D1Database) -> Result<()> {
+async fn ensure_token_schema(db: &Database) -> Result<()> {
     db.prepare("ALTER TABLE tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'cli'")
         .run()
         .await
