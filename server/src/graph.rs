@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 pub(crate) async fn compare_relation(
     env: &Env,
     tenant: &str,
@@ -52,17 +54,49 @@ pub(crate) async fn walk_tree(
     root_tree: &str,
     output: &mut Vec<TreeEntryInfo>,
 ) -> Result<()> {
-    let mut stack = vec![(prefix.to_string(), root_tree.to_string())];
-    while let Some((prefix, tree_id)) = stack.pop() {
+    validate_object_id(root_tree)?;
+    let mut stack = vec![(
+        prefix.to_string(),
+        root_tree.to_string(),
+        0usize,
+        BTreeSet::new(),
+    )];
+    let mut visited_entries = 0usize;
+    while let Some((prefix, tree_id, depth, mut ancestors)) = stack.pop() {
+        validate_object_id(&tree_id)?;
+        if depth > MAX_TREE_DEPTH {
+            return Err(Error::RustError("tree depth limit exceeded".to_string()));
+        }
+        if !ancestors.insert(tree_id.clone()) {
+            return Err(Error::RustError("tree cycle detected".to_string()));
+        }
         let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
         let tree: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| Error::RustError(e.to_string()))?;
         let Some(entries) = tree["entries"].as_array() else {
-            continue;
+            return Err(Error::RustError("malformed tree object".to_string()));
         };
         for entry in entries.iter().rev() {
-            let name = entry["name"].as_str().unwrap_or_default().to_string();
-            let id = entry["id"].as_str().unwrap_or_default().to_string();
-            let entry_type = entry["entry_type"].as_str().unwrap_or_default().to_string();
+            visited_entries += 1;
+            if visited_entries > MAX_TREE_ENTRIES {
+                return Err(Error::RustError("tree entry limit exceeded".to_string()));
+            }
+            let name = entry["name"]
+                .as_str()
+                .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
+                .to_string();
+            let id = entry["id"]
+                .as_str()
+                .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
+                .to_string();
+            let entry_type = entry["entry_type"]
+                .as_str()
+                .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
+                .to_string();
+            validate_tree_entry_name(&name)?;
+            validate_object_id(&id)?;
+            if !matches!(entry_type.as_str(), "blob" | "tree") {
+                return Err(Error::RustError("unknown tree entry type".to_string()));
+            }
             let path = if prefix.is_empty() {
                 name.clone()
             } else {
@@ -75,7 +109,7 @@ pub(crate) async fn walk_tree(
                 entry_type: entry_type.clone(),
             });
             if entry_type == "tree" {
-                stack.push((path, id));
+                stack.push((path, id, depth + 1, ancestors.clone()));
             }
         }
     }
@@ -90,6 +124,7 @@ pub(crate) async fn resolve_tree_path(
     root_tree: &str,
     path: &str,
 ) -> Result<Option<TreeEntryInfo>> {
+    validate_object_id(root_tree)?;
     let parts = path
         .split('/')
         .filter(|part| !part.is_empty())
@@ -97,19 +132,39 @@ pub(crate) async fn resolve_tree_path(
     if parts.is_empty() {
         return Ok(None);
     }
+    if parts.len() > MAX_TREE_DEPTH {
+        return Err(Error::RustError("tree path depth limit exceeded".to_string()));
+    }
+    for part in &parts {
+        validate_tree_entry_name(part)?;
+    }
     let mut tree_id = root_tree.to_string();
     let mut prefix = String::new();
     for (index, part) in parts.iter().enumerate() {
+        validate_object_id(&tree_id)?;
         let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
         let tree: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| Error::RustError(e.to_string()))?;
         let Some(entries) = tree["entries"].as_array() else {
+            return Err(Error::RustError("malformed tree object".to_string()));
+        };
+        let Some(entry) = entries
+            .iter()
+            .find(|entry| entry["name"].as_str() == Some(*part))
+        else {
             return Ok(None);
         };
-        let Some(entry) = entries.iter().find(|entry| entry["name"].as_str() == Some(*part)) else {
-            return Ok(None);
-        };
-        let id = entry["id"].as_str().unwrap_or_default().to_string();
-        let entry_type = entry["entry_type"].as_str().unwrap_or_default().to_string();
+        let id = entry["id"]
+            .as_str()
+            .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
+            .to_string();
+        let entry_type = entry["entry_type"]
+            .as_str()
+            .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
+            .to_string();
+        validate_object_id(&id)?;
+        if !matches!(entry_type.as_str(), "blob" | "tree") {
+            return Err(Error::RustError("unknown tree entry type".to_string()));
+        }
         let current_path = if prefix.is_empty() {
             (*part).to_string()
         } else {

@@ -2,6 +2,9 @@ use serde_json::json;
 use sty_protocol::validate_segment;
 use worker::*;
 
+pub const MAX_TREE_DEPTH: usize = 128;
+pub const MAX_TREE_ENTRIES: usize = 200_000;
+
 pub fn bucket(env: &Env) -> Result<Bucket> {
     env.bucket("STY_OBJECTS")
 }
@@ -32,10 +35,39 @@ pub fn validate_object_metadata(id: &str, kind: &str) -> Result<()> {
     if !matches!(kind, "blob" | "tree" | "snapshot") {
         return Err(Error::RustError("unknown object kind".to_string()));
     }
-    if id.len() != 64 || !id.chars().all(|ch| ch.is_ascii_hexdigit()) {
-        return Err(Error::RustError("invalid object id".to_string()));
+    validate_object_id(id)?;
+    Ok(())
+}
+
+pub fn validate_object_id(id: &str) -> Result<()> {
+    if id.len() == 64 && id.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Ok(());
+    }
+    Err(Error::RustError("invalid object id".to_string()))
+}
+
+pub fn validate_tree_entry_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains(':')
+        || name.contains('\0')
+        || name.chars().any(char::is_control)
+    {
+        return Err(Error::RustError("unsafe tree entry name".to_string()));
     }
     Ok(())
+}
+
+pub fn validate_object_payload(kind: &str, bytes: &[u8]) -> Result<()> {
+    match kind {
+        "blob" => Ok(()),
+        "tree" => validate_tree_payload(bytes),
+        "snapshot" => validate_snapshot_payload(bytes),
+        _ => Err(Error::RustError("unknown object kind".to_string())),
+    }
 }
 
 pub fn required_header(req: &Request, name: &str) -> Result<String> {
@@ -152,8 +184,11 @@ fn status_for_error(message: &str) -> u16 {
     }
     if lower.contains("invalid")
         || lower.contains("missing route param")
+        || lower.contains("missing field")
         || lower.contains("missing x-")
         || lower.contains("account handle")
+        || lower.contains("malformed")
+        || lower.contains("unsafe tree")
         || lower.contains("unknown object kind")
     {
         return 400;
@@ -348,6 +383,55 @@ fn query_usize(url: &Url, key: &str) -> Option<usize> {
         .find_map(|(name, value)| (name == key).then(|| value.parse().ok()).flatten())
 }
 
+pub(crate) fn query_limit(req: &Request, default: usize, max: usize) -> Result<usize> {
+    let url = req.url()?;
+    Ok(query_usize(&url, "limit").unwrap_or(default).clamp(1, max))
+}
+
+#[derive(serde::Deserialize)]
+struct TreePayload {
+    entries: Vec<TreePayloadEntry>,
+}
+
+#[derive(serde::Deserialize)]
+struct TreePayloadEntry {
+    name: String,
+    id: String,
+    entry_type: String,
+}
+
+#[derive(serde::Deserialize)]
+struct SnapshotPayload {
+    parents: Vec<String>,
+    root_tree: String,
+}
+
+fn validate_tree_payload(bytes: &[u8]) -> Result<()> {
+    let tree: TreePayload =
+        serde_json::from_slice(bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    if tree.entries.len() > MAX_TREE_ENTRIES {
+        return Err(Error::RustError("tree has too many entries".to_string()));
+    }
+    for entry in tree.entries {
+        validate_tree_entry_name(&entry.name)?;
+        validate_object_id(&entry.id)?;
+        if !matches!(entry.entry_type.as_str(), "blob" | "tree") {
+            return Err(Error::RustError("unknown tree entry type".to_string()));
+        }
+    }
+    Ok(())
+}
+
+fn validate_snapshot_payload(bytes: &[u8]) -> Result<()> {
+    let snapshot: SnapshotPayload =
+        serde_json::from_slice(bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    validate_object_id(&snapshot.root_tree)?;
+    for parent in snapshot.parents {
+        validate_object_id(&parent)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,6 +444,14 @@ mod tests {
         assert!(validate_object_metadata(id, "snapshot").is_ok());
         assert!(validate_object_metadata(id, "commit").is_err());
         assert!(validate_object_metadata("abc", "blob").is_err());
+    }
+
+    #[test]
+    fn rejects_unsafe_tree_names() {
+        for name in ["", ".", "..", "../secret", "dir/file", r"dir\file", "C:secret"] {
+            assert!(validate_tree_entry_name(name).is_err());
+        }
+        assert!(validate_tree_entry_name("README.md").is_ok());
     }
 
     #[test]

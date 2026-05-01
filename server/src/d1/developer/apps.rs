@@ -152,12 +152,11 @@ pub async fn exchange_oauth_code(
         scopes_json: String,
         redirect_uri: String,
         expires_at: String,
-        consumed_at: Option<String>,
     }
     let code_hash = token_hash(code);
     let row: Option<CodeRow> = db
         .prepare(
-            "SELECT user, tenant, project, scopes_json, redirect_uri, expires_at, consumed_at
+            "SELECT user, tenant, project, scopes_json, redirect_uri, expires_at
              FROM oauth_codes
              WHERE code_hash = ?1 AND app_id = ?2",
         )
@@ -167,14 +166,31 @@ pub async fn exchange_oauth_code(
     let Some(row) = row else {
         return Ok(None);
     };
-    if row.consumed_at.is_some() || is_expired(&row.expires_at) || row.redirect_uri != redirect_uri
-    {
+    if is_expired(&row.expires_at) || row.redirect_uri != redirect_uri {
         return Ok(None);
     }
-    db.prepare("UPDATE oauth_codes SET consumed_at = ?1 WHERE code_hash = ?2")
-        .bind(&[js_str(&now_rfc3339()), js_str(&code_hash)])?
+    let now = now_rfc3339();
+    let result = db
+        .prepare(
+            "UPDATE oauth_codes
+             SET consumed_at = ?1
+             WHERE code_hash = ?2
+               AND app_id = ?3
+               AND consumed_at IS NULL
+               AND expires_at > ?1
+               AND redirect_uri = ?4",
+        )
+        .bind(&[
+            js_str(&now),
+            js_str(&code_hash),
+            js_str(&app.id),
+            js_str(redirect_uri),
+        ])?
         .run()
         .await?;
+    if result.meta()?.and_then(|meta| meta.changes).unwrap_or(0) != 1 {
+        return Ok(None);
+    }
     let scopes = json_vec(&row.scopes_json);
     let key = create_project_api_key(
         db,

@@ -43,32 +43,44 @@ pub async fn update_head(
     expected_head: Option<&str>,
     new_head: &str,
 ) -> Result<bool> {
-    #[derive(Deserialize)]
-    struct Row {
-        head: Option<String>,
-    }
-    let current: Option<Row> = db
-        .prepare("SELECT head FROM workspace_heads WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
-        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
-        .first(None)
+    let result = db
+        .prepare(
+            "UPDATE workspace_heads
+             SET head = ?4
+             WHERE tenant = ?1 AND project = ?2 AND workspace = ?3
+               AND ((?5 IS NULL AND head IS NULL) OR head = ?5)",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(project),
+            js_str(workspace),
+            js_str(new_head),
+            js_opt(expected_head),
+        ])?
+        .run()
         .await?;
+    let mut changed = result.meta()?.and_then(|meta| meta.changes).unwrap_or(0);
 
-    if current.as_ref().and_then(|r| r.head.as_deref()) != expected_head {
+    if changed == 0 && expected_head.is_none() {
+        let result = db
+            .prepare(
+                "INSERT OR IGNORE INTO workspace_heads (tenant, project, workspace, head)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )
+            .bind(&[
+                js_str(tenant),
+                js_str(project),
+                js_str(workspace),
+                js_str(new_head),
+            ])?
+            .run()
+            .await?;
+        changed = result.meta()?.and_then(|meta| meta.changes).unwrap_or(0);
+    }
+
+    if changed == 0 {
         return Ok(false);
     }
-
-    db.prepare(
-        "INSERT INTO workspace_heads (tenant, project, workspace, head) VALUES (?1, ?2, ?3, ?4) \
-         ON CONFLICT(tenant, project, workspace) DO UPDATE SET head = excluded.head",
-    )
-    .bind(&[
-        js_str(tenant),
-        js_str(project),
-        js_str(workspace),
-        js_str(new_head),
-    ])?
-    .run()
-    .await?;
 
     db.prepare(
         "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable) \

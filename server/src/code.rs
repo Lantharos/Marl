@@ -40,6 +40,7 @@ pub(crate) async fn project_tree(req: Request, ctx: RouteContext<()>) -> Result<
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
     );
+    validate_object_id(&head_id)?;
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =
         not_modified_response(&req, &head_id, public_cache, cache_seconds, pinned_snapshot)?
@@ -107,6 +108,7 @@ pub(crate) async fn project_file(req: Request, ctx: RouteContext<()>) -> Result<
         }
     };
     let store = bucket(&ctx.env)?;
+    validate_object_id(&head_id)?;
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
     let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();

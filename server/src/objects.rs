@@ -7,6 +7,7 @@ pub(crate) async fn missing(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let store = bucket(&ctx.env)?;
     let mut missing = Vec::new();
     for id in body.ids {
+        validate_object_id(&id)?;
         if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
             continue;
         }
@@ -42,6 +43,7 @@ pub(crate) async fn put_object(mut req: Request, ctx: RouteContext<()>) -> Resul
     if digest != id {
         return json_error(400, "object id does not match SHA-256 digest");
     }
+    validate_object_payload(&kind, &bytes)?;
     let store = bucket(&ctx.env)?;
     put_bytes(&store, &object_key(&tenant, &project, &id), bytes).await?;
     d1::record_object(&database, &tenant, &project, &id, &kind, size).await?;
@@ -52,6 +54,7 @@ pub(crate) async fn get_object(req: Request, ctx: RouteContext<()>) -> Result<Re
     let user = optional_auth(&req, &ctx.env).await?;
     let (tenant, project) = project_params(&ctx)?;
     let id = param(&ctx, "object")?;
+    validate_object_id(&id)?;
     let database = db(&ctx.env)?;
     check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "objects:read").await?;
     let public_cache = matches!(

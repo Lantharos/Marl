@@ -2,6 +2,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::Sha256;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use sty_protocol::OkResponse;
 use worker::*;
 
@@ -150,7 +151,7 @@ pub async fn create_project_webhook(mut req: Request, ctx: RouteContext<()>) -> 
     if name.is_empty() || body.url.trim().is_empty() {
         return json_error(400, "webhook name and url are required");
     }
-    validate_callback_url(&body.url)?;
+    validate_webhook_url(&body.url)?;
     let database = db(&ctx.env)?;
     check_project_write_capability(
         &database,
@@ -411,6 +412,7 @@ async fn send_webhook(
     event: &str,
     payload: &serde_json::Value,
 ) -> Result<i64> {
+    validate_webhook_url(&hook.url)?;
     let payload_text =
         serde_json::to_string(payload).map_err(|e| Error::RustError(e.to_string()))?;
     let headers = Headers::new();
@@ -456,6 +458,65 @@ fn validate_callback_url(value: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+fn validate_webhook_url(value: &str) -> Result<()> {
+    let url = Url::parse(value.trim()).map_err(|_| Error::RustError("invalid url".to_string()))?;
+    if url.scheme() != "https" {
+        return Err(Error::RustError("webhook url must use https".to_string()));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| Error::RustError("webhook url must include a host".to_string()))?;
+    if is_restricted_webhook_host(host) {
+        return Err(Error::RustError(
+            "webhook url must not target localhost or private networks".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_restricted_webhook_host(host: &str) -> bool {
+    let lower = host
+        .trim_matches(|ch| ch == '[' || ch == ']')
+        .to_ascii_lowercase();
+    if lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") {
+        return true;
+    }
+    lower
+        .parse::<IpAddr>()
+        .is_ok_and(is_restricted_webhook_ip)
+}
+
+fn is_restricted_webhook_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(value) => is_restricted_ipv4(value),
+        IpAddr::V6(value) => is_restricted_ipv6(value),
+    }
+}
+
+fn is_restricted_ipv4(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    ip.is_private()
+        || ip.is_loopback()
+        || ip.is_link_local()
+        || ip.is_unspecified()
+        || ip.is_broadcast()
+        || ip.is_multicast()
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        || (octets[0] == 198 && matches!(octets[1], 18 | 19))
+}
+
+fn is_restricted_ipv6(ip: Ipv6Addr) -> bool {
+    if let Some(mapped) = ip.to_ipv4_mapped() {
+        return is_restricted_ipv4(mapped);
+    }
+    let first = ip.segments()[0];
+    ip.is_loopback()
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || (first & 0xfe00) == 0xfc00
+        || (first & 0xffc0) == 0xfe80
 }
 
 fn oauth_redirect(redirect_uri: &str, code: &str, state: Option<&str>) -> Result<String> {

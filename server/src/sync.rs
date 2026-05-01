@@ -23,6 +23,16 @@ pub(crate) async fn update_head(mut req: Request, ctx: RouteContext<()>) -> Resu
     let database = db(&ctx.env)?;
     let workspace = param(&ctx, "workspace")?;
     check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
+    if let Some(expected) = body.expected_head.as_deref() {
+        validate_object_id(expected)?;
+    }
+    validate_object_id(&body.new_head)?;
+    match d1::object_kind(&database, &tenant, &project, &body.new_head).await? {
+        Some(kind) if kind == "snapshot" => {}
+        Some(_) => return json_error(400, "workspace head must point to a snapshot object"),
+        None => return json_error(400, "workspace head object is missing"),
+    }
+    ensure_snapshot_refs_uploaded(&ctx.env, &database, &tenant, &project, &body.new_head).await?;
     let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
     if ok {
         let _ = crate::developer::emit_project_event(
@@ -53,7 +63,10 @@ pub(crate) async fn workspace_history(req: Request, ctx: RouteContext<()>) -> Re
         &workspace,
     )
     .await?;
-    let mut entries = d1::workspace_history(&database, &tenant, &project, &workspace).await?;
+    let limit = query_limit(&req, 100, 500)?;
+    let mut entries =
+        d1::workspace_history_with_limit(&database, &tenant, &project, &workspace, Some(limit))
+            .await?;
     enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
@@ -63,7 +76,8 @@ pub(crate) async fn project_history(req: Request, ctx: RouteContext<()>) -> Resu
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx.env)?;
     check_project_read_capability(&ctx.env, &database, &tenant, &project, user.as_deref(), "history:read").await?;
-    let mut entries = d1::project_history(&database, &tenant, &project).await?;
+    let limit = query_limit(&req, 100, 500)?;
+    let mut entries = d1::project_history_with_limit(&database, &tenant, &project, Some(limit)).await?;
     enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
@@ -142,6 +156,14 @@ pub(crate) async fn log_history(mut req: Request, ctx: RouteContext<()>) -> Resu
     let body: LogHistoryRequest = req.json().await?;
     let database = db(&ctx.env)?;
     check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
+    if let Some(snapshot_id) = body.snapshot_id.as_deref() {
+        validate_object_id(snapshot_id)?;
+        match d1::object_kind(&database, &tenant, &project, snapshot_id).await? {
+            Some(kind) if kind == "snapshot" => {}
+            Some(_) => return json_error(400, "history snapshot must point to a snapshot object"),
+            None => return json_error(400, "history snapshot object is missing"),
+        }
+    }
     d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message, body.snapshot_id.as_deref()).await?;
     let event = match body.kind.as_str() {
         "ship" => "snapshot.shipped",
@@ -277,4 +299,41 @@ pub(crate) async fn compare(mut req: Request, ctx: RouteContext<()>) -> Result<R
     let remote_head = d1::head(&database, &tenant, &project, &workspace).await?;
     let relation = compare_relation(&ctx.env, &tenant, &project, body.local_head.as_deref(), remote_head.as_deref()).await?;
     Response::from_json(&CompareResponse { remote_head, relation })
+}
+
+async fn ensure_snapshot_refs_uploaded(
+    env: &Env,
+    db: &D1Database,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+) -> Result<()> {
+    let store = bucket(env)?;
+    let snapshot_bytes = r2_bytes(&store, &object_key(tenant, project, snapshot_id)).await?;
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
+    let root_tree = snapshot["root_tree"]
+        .as_str()
+        .ok_or_else(|| Error::RustError("snapshot root_tree is missing".to_string()))?;
+    validate_object_id(root_tree)?;
+    match d1::object_kind(db, tenant, project, root_tree).await? {
+        Some(kind) if kind == "tree" => {}
+        Some(_) => return Err(Error::RustError("snapshot root_tree is not a tree".to_string())),
+        None => return Err(Error::RustError("snapshot root_tree is missing".to_string())),
+    }
+    let Some(parents) = snapshot["parents"].as_array() else {
+        return Err(Error::RustError("snapshot parents are missing".to_string()));
+    };
+    for parent in parents {
+        let parent_id = parent
+            .as_str()
+            .ok_or_else(|| Error::RustError("snapshot parent is invalid".to_string()))?;
+        validate_object_id(parent_id)?;
+        match d1::object_kind(db, tenant, project, parent_id).await? {
+            Some(kind) if kind == "snapshot" => {}
+            Some(_) => return Err(Error::RustError("snapshot parent is not a snapshot".to_string())),
+            None => return Err(Error::RustError("snapshot parent is missing".to_string())),
+        }
+    }
+    Ok(())
 }

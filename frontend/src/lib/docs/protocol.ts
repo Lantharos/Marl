@@ -61,7 +61,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Code, objects, and sync',
-		note: 'Object ids are immutable. Workspace heads are mutable refs guarded by compare and expected-head checks.',
+		note: 'Object ids are immutable. Uploaded trees must use safe path segments. Workspace heads are mutable refs guarded by atomic expected-head checks.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/tree',
 			'GET /v1/tenants/:tenant/projects/:project/files/:path',
@@ -76,7 +76,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. History is paginated and grouped by day in the UI.',
+		note: 'Ready review lives on workspaces. History list endpoints return a bounded window by default and accept a limit query parameter.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',

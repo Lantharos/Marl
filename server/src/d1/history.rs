@@ -1,9 +1,10 @@
 use super::*;
-pub async fn workspace_history(
+pub async fn workspace_history_with_limit(
     db: &D1Database,
     tenant: &str,
     project: &str,
     workspace: &str,
+    limit: Option<usize>,
 ) -> Result<Vec<HistoryEntry>> {
     #[derive(Deserialize)]
     struct Row {
@@ -20,17 +21,34 @@ pub async fn workspace_history(
         workspace: String,
         snapshot_id: Option<String>,
     }
-    let result = db
-        .prepare(
+    let result = if let Some(limit) = limit {
+        db.prepare(
             "SELECT h.id, h.kind, h.message, h.author, u.display_name, u.handle, u.avatar_url, u.email, u.updated_at, \
              h.timestamp, h.workspace, h.snapshot_id FROM history h \
              LEFT JOIN user_profiles u ON u.user = h.author \
              WHERE h.tenant = ?1 AND h.project = ?2 AND h.workspace = ?3 \
-             ORDER BY h.timestamp DESC"
+             ORDER BY h.timestamp DESC LIMIT ?4",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(project),
+            js_str(workspace),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
+        .all()
+        .await?
+    } else {
+        db.prepare(
+            "SELECT h.id, h.kind, h.message, h.author, u.display_name, u.handle, u.avatar_url, u.email, u.updated_at, \
+             h.timestamp, h.workspace, h.snapshot_id FROM history h \
+             LEFT JOIN user_profiles u ON u.user = h.author \
+             WHERE h.tenant = ?1 AND h.project = ?2 AND h.workspace = ?3 \
+             ORDER BY h.timestamp DESC",
         )
         .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
         .all()
-        .await?;
+        .await?
+    };
     let rows: Vec<Row> = result.results()?;
     Ok(rows
         .into_iter()

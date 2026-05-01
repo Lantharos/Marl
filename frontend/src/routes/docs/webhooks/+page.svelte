@@ -26,7 +26,7 @@ if (expected !== request.headers.get("x-sty-signature-256")) {
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Delivery</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Each delivery is a JSON POST. If a webhook has a secret, sty signs the raw payload with HMAC-SHA256 and sends the result in <code>x-sty-signature-256</code>.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Each delivery is a JSON POST to a public HTTPS endpoint. Localhost, private network, and link-local targets are rejected. If a webhook has a secret, sty signs the raw payload with HMAC-SHA256 and sends the result in <code>x-sty-signature-256</code>.</p>
 		<div class="mt-4 grid gap-4 lg:grid-cols-2">
 			<CodeBlock code={headers} />
 			<CodeBlock code={webhookPayloadJson} />
