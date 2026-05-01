@@ -6,7 +6,7 @@
 	const html = $derived(marked.parse(source, { gfm: true, breaks: true }) as string);
 </script>
 
-<div class="markdown-body text-sm leading-relaxed text-[#eae9e4]">
+<div class="markdown-body min-w-0 text-sm leading-relaxed text-[#eae9e4]">
 	{@html html}
 </div>
 
@@ -71,13 +71,16 @@
 		border: 1px solid #2a2a28;
 		border-radius: 6px;
 		padding: 0.75rem 1rem;
+		max-width: 100%;
 		overflow-x: auto;
 		margin: 0.75rem 0;
 	}
 	:global(.markdown-body pre code) {
+		display: block;
 		background: transparent;
 		padding: 0;
 		font-size: 0.8em;
+		white-space: pre;
 	}
 	:global(.markdown-body blockquote) {
 		border-left: 3px solid #2a2a28;

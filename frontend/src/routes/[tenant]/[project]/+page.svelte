@@ -104,10 +104,10 @@
 {#if loading}
 	<Spinner />
 {:else if overview}
-	<div class="grid gap-6 lg:grid-cols-[1fr_300px]">
-		<div>
+	<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+		<div class="min-w-0">
 			{#if readme}
-				<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
+				<div class="min-w-0 rounded border border-[#2a2a28] bg-[#141412] p-5">
 					<Markdown source={readme} />
 				</div>
 			{:else}
