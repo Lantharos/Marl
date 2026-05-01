@@ -21,6 +21,17 @@ export interface ProjectTree {
 	head: string | null;
 	root_tree: string | null;
 	entries: TreeEntryInfo[];
+	prefix?: string | null;
+	next_cursor?: string | null;
+	truncated?: boolean;
+}
+
+export interface ProjectTreeOptions extends ApiOptions {
+	path?: string;
+	prefix?: string;
+	cursor?: string;
+	depth?: number;
+	limit?: number;
 }
 
 export interface ProjectFile {
@@ -77,9 +88,14 @@ export interface ChangedFile {
 	new_id: string | null;
 }
 
-export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string, options: ApiOptions = {}) {
+export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string, options: ProjectTreeOptions = {}) {
 	let url = `/v1/tenants/${tenant}/projects/${project}/tree?workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
+	if (options.path) url += `&path=${encodeURIComponent(options.path)}`;
+	if (options.prefix) url += `&prefix=${encodeURIComponent(options.prefix)}`;
+	if (options.cursor) url += `&cursor=${encodeURIComponent(options.cursor)}`;
+	if (options.depth !== undefined) url += `&depth=${encodeURIComponent(String(options.depth))}`;
+	if (options.limit !== undefined) url += `&limit=${encodeURIComponent(String(options.limit))}`;
 	const response = await publicFetch(url, { signal: options.signal });
 	return (await response.json()) as ProjectTree;
 }

@@ -380,7 +380,7 @@ pub(crate) fn paginate_vec<T: serde::Serialize>(
     }
 }
 
-fn query_usize(url: &Url, key: &str) -> Option<usize> {
+pub(crate) fn query_usize(url: &Url, key: &str) -> Option<usize> {
     url.query_pairs()
         .find_map(|(name, value)| (name == key).then(|| value.parse().ok()).flatten())
 }

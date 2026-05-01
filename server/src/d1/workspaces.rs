@@ -184,6 +184,7 @@ pub async fn mark_workspace_ready(
         "ready",
         &format!("marked workspace {workspace} as ready"),
         None,
+        None,
     )
     .await?;
     Ok(())
@@ -209,6 +210,7 @@ pub async fn unmark_workspace_ready(
         "ready",
         &format!("unmarked workspace {workspace} as ready"),
         None,
+        None,
     )
     .await?;
     Ok(())
@@ -231,7 +233,7 @@ pub async fn reject_workspace_ready(
         .map(|value| format!("rejected workspace {workspace}: {value}"))
         .unwrap_or_else(|| format!("rejected workspace {workspace}"));
     log_history(
-        db, tenant, project, workspace, principal, "ready", &message, None,
+        db, tenant, project, workspace, principal, "ready", &message, None, None,
     )
     .await?;
     Ok(())
@@ -256,6 +258,7 @@ pub async fn merge_workspace(
         principal,
         "merge",
         &format!("merged workspace {workspace}"),
+        None,
         None,
     )
     .await?;

@@ -61,9 +61,9 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Code, objects, and sync',
-		note: 'Object ids are immutable. Uploaded trees must use safe path segments. Workspace heads are mutable refs guarded by atomic expected-head checks.',
+		note: 'Object ids are immutable. Uploaded trees must use safe path segments and workspace heads are accepted only when their tree objects are complete. Tree listing supports path, depth, limit, and cursor query parameters for bounded browsing.',
 		endpoints: [
-			'GET /v1/tenants/:tenant/projects/:project/tree',
+			'GET /v1/tenants/:tenant/projects/:project/tree?workspace=main&path=src&depth=1&limit=500',
 			'GET /v1/tenants/:tenant/projects/:project/files/:path',
 			'GET /v1/tenants/:tenant/projects/:project/workspaces',
 			'GET /v1/tenants/:tenant/projects/:project/workspaces/:workspace/head',

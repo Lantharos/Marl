@@ -102,6 +102,12 @@ pub struct ProjectTreeResponse {
     pub head: Option<String>,
     pub root_tree: Option<String>,
     pub entries: Vec<TreeEntryInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

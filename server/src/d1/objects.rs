@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeMap;
 pub async fn object_kind(
     db: &Database,
     tenant: &str,
@@ -36,6 +37,40 @@ pub async fn object_ids_by_kind(
         .await?;
     let rows: Vec<Row> = result.results()?;
     Ok(rows.into_iter().map(|row| row.id).collect())
+}
+
+pub async fn object_kinds(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    ids: &[String],
+) -> Result<BTreeMap<String, String>> {
+    if ids.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    #[derive(Deserialize)]
+    struct Row {
+        id: String,
+        kind: String,
+    }
+    let mut kinds = BTreeMap::new();
+    for chunk in ids.chunks(100) {
+        let placeholders = (0..chunk.len())
+            .map(|index| format!("?{}", index + 3))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let query = format!(
+            "SELECT id, kind FROM object_index WHERE tenant = ?1 AND project = ?2 AND id IN ({placeholders})"
+        );
+        let mut bindings = Vec::with_capacity(chunk.len() + 2);
+        bindings.push(js_str(tenant));
+        bindings.push(js_str(project));
+        bindings.extend(chunk.iter().map(|id| js_str(id)));
+        let result = db.prepare(&query).bind(&bindings)?.all().await?;
+        let rows: Vec<Row> = result.results()?;
+        kinds.extend(rows.into_iter().map(|row| (row.id, row.kind)));
+    }
+    Ok(kinds)
 }
 
 pub async fn record_object(

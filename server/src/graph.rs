@@ -1,5 +1,39 @@
 use std::collections::BTreeSet;
 
+use serde::Deserialize;
+
+#[derive(Clone)]
+struct ParsedTreeEntry {
+    name: String,
+    id: String,
+    entry_type: String,
+}
+
+#[derive(Deserialize)]
+struct TreePayload {
+    entries: Vec<ParsedTreeEntryPayload>,
+}
+
+#[derive(Deserialize)]
+struct ParsedTreeEntryPayload {
+    name: String,
+    id: String,
+    entry_type: String,
+}
+
+pub(crate) struct TreeWalkOptions {
+    pub prefix: String,
+    pub max_depth: usize,
+    pub limit: usize,
+    pub cursor: Option<String>,
+}
+
+pub(crate) struct TreePage {
+    pub entries: Vec<TreeEntryInfo>,
+    pub next_cursor: Option<String>,
+    pub truncated: bool,
+}
+
 pub(crate) async fn compare_relation(
     env: &Env,
     tenant: &str,
@@ -54,14 +88,51 @@ pub(crate) async fn walk_tree(
     root_tree: &str,
     output: &mut Vec<TreeEntryInfo>,
 ) -> Result<()> {
+    let page = walk_tree_page(
+        store,
+        tenant,
+        project,
+        root_tree,
+        TreeWalkOptions {
+            prefix: prefix.to_string(),
+            max_depth: MAX_TREE_DEPTH,
+            limit: MAX_TREE_ENTRIES,
+            cursor: None,
+        },
+    )
+    .await?;
+    output.extend(page.entries);
+    output.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(())
+}
+
+pub(crate) async fn walk_tree_page(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    root_tree: &str,
+    options: TreeWalkOptions,
+) -> Result<TreePage> {
     validate_object_id(root_tree)?;
+    let Some((prefix, start_tree)) =
+        resolve_tree_prefix(store, tenant, project, root_tree, &options.prefix).await?
+    else {
+        return Ok(TreePage {
+            entries: Vec::new(),
+            next_cursor: None,
+            truncated: false,
+        });
+    };
     let mut stack = vec![(
-        prefix.to_string(),
-        root_tree.to_string(),
+        prefix,
+        start_tree,
         0usize,
         BTreeSet::new(),
     )];
     let mut visited_entries = 0usize;
+    let mut output: Vec<TreeEntryInfo> = Vec::new();
+    let mut next_cursor = None;
+    let mut after_cursor = options.cursor.is_none();
     while let Some((prefix, tree_id, depth, mut ancestors)) = stack.pop() {
         validate_object_id(&tree_id)?;
         if depth > MAX_TREE_DEPTH {
@@ -71,49 +142,92 @@ pub(crate) async fn walk_tree(
             return Err(Error::RustError("tree cycle detected".to_string()));
         }
         let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
-        let tree: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| Error::RustError(e.to_string()))?;
-        let Some(entries) = tree["entries"].as_array() else {
-            return Err(Error::RustError("malformed tree object".to_string()));
-        };
-        for entry in entries.iter().rev() {
+        let mut entries = parse_tree_entries(&bytes)?;
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        for entry in entries.into_iter().rev() {
             visited_entries += 1;
             if visited_entries > MAX_TREE_ENTRIES {
                 return Err(Error::RustError("tree entry limit exceeded".to_string()));
             }
-            let name = entry["name"]
-                .as_str()
-                .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
-                .to_string();
-            let id = entry["id"]
-                .as_str()
-                .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
-                .to_string();
-            let entry_type = entry["entry_type"]
-                .as_str()
-                .ok_or_else(|| Error::RustError("malformed tree entry".to_string()))?
-                .to_string();
-            validate_tree_entry_name(&name)?;
-            validate_object_id(&id)?;
-            if !matches!(entry_type.as_str(), "blob" | "tree") {
-                return Err(Error::RustError("unknown tree entry type".to_string()));
-            }
             let path = if prefix.is_empty() {
-                name.clone()
+                entry.name.clone()
             } else {
-                format!("{prefix}/{name}")
+                format!("{prefix}/{}", entry.name)
             };
-            output.push(TreeEntryInfo {
-                path: path.clone(),
-                name,
-                id: id.clone(),
-                entry_type: entry_type.clone(),
-            });
-            if entry_type == "tree" {
-                stack.push((path, id, depth + 1, ancestors.clone()));
+            if after_cursor {
+                if output.len() >= options.limit {
+                    next_cursor = output.last().map(|entry| entry.path.clone());
+                    return Ok(TreePage {
+                        entries: output,
+                        next_cursor,
+                        truncated: true,
+                    });
+                }
+                output.push(TreeEntryInfo {
+                    path: path.clone(),
+                    name: entry.name.clone(),
+                    id: entry.id.clone(),
+                    entry_type: entry.entry_type.clone(),
+                });
+            } else if options.cursor.as_deref() == Some(path.as_str()) {
+                after_cursor = true;
+            }
+            if entry.entry_type == "tree" && depth < options.max_depth {
+                stack.push((path, entry.id, depth + 1, ancestors.clone()));
             }
         }
     }
-    output.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(TreePage {
+        entries: output,
+        next_cursor: next_cursor.take(),
+        truncated: false,
+    })
+}
+
+pub(crate) async fn validate_tree_closure(
+    store: &Bucket,
+    db: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    root_tree: &str,
+) -> Result<()> {
+    validate_object_id(root_tree)?;
+    let mut stack = vec![(root_tree.to_string(), 0usize, BTreeSet::new())];
+    let mut visited_entries = 0usize;
+    while let Some((tree_id, depth, mut ancestors)) = stack.pop() {
+        validate_object_id(&tree_id)?;
+        if depth > MAX_TREE_DEPTH {
+            return Err(Error::RustError("tree depth limit exceeded".to_string()));
+        }
+        if !ancestors.insert(tree_id.clone()) {
+            return Err(Error::RustError("tree cycle detected".to_string()));
+        }
+        let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
+        let entries = parse_tree_entries(&bytes)?;
+        visited_entries += entries.len();
+        if visited_entries > MAX_TREE_ENTRIES {
+            return Err(Error::RustError("tree entry limit exceeded".to_string()));
+        }
+        let ids = entries
+            .iter()
+            .map(|entry| entry.id.clone())
+            .collect::<Vec<_>>();
+        let kinds = d1::object_kinds(db, tenant, project, &ids).await?;
+        for entry in entries {
+            match kinds.get(&entry.id) {
+                Some(kind) if kind == &entry.entry_type => {}
+                Some(_) => {
+                    return Err(Error::RustError(
+                        "tree entry object kind mismatch".to_string(),
+                    ))
+                }
+                None => return Err(Error::RustError("tree entry object is missing".to_string())),
+            }
+            if entry.entry_type == "tree" {
+                stack.push((entry.id, depth + 1, ancestors.clone()));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -185,4 +299,57 @@ pub(crate) async fn resolve_tree_path(
         tree_id = id;
     }
     Ok(None)
+}
+
+async fn resolve_tree_prefix(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    root_tree: &str,
+    prefix: &str,
+) -> Result<Option<(String, String)>> {
+    let prefix = normalize_tree_prefix(prefix)?;
+    if prefix.is_empty() {
+        return Ok(Some((String::new(), root_tree.to_string())));
+    }
+    match resolve_tree_path(store, tenant, project, root_tree, &prefix).await? {
+        Some(entry) if entry.entry_type == "tree" => Ok(Some((prefix, entry.id))),
+        Some(_) => Err(Error::RustError("tree prefix must be a directory".to_string())),
+        None => Ok(None),
+    }
+}
+
+pub(crate) fn normalize_tree_prefix(prefix: &str) -> Result<String> {
+    let parts = prefix
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() > MAX_TREE_DEPTH {
+        return Err(Error::RustError("tree path depth limit exceeded".to_string()));
+    }
+    for part in &parts {
+        validate_tree_entry_name(part)?;
+    }
+    Ok(parts.join("/"))
+}
+
+fn parse_tree_entries(bytes: &[u8]) -> Result<Vec<ParsedTreeEntry>> {
+    let payload: TreePayload =
+        serde_json::from_slice(bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    payload
+        .entries
+        .into_iter()
+        .map(|entry| {
+            validate_tree_entry_name(&entry.name)?;
+            validate_object_id(&entry.id)?;
+            if !matches!(entry.entry_type.as_str(), "blob" | "tree") {
+                return Err(Error::RustError("unknown tree entry type".to_string()));
+            }
+            Ok(ParsedTreeEntry {
+                name: entry.name,
+                id: entry.id,
+                entry_type: entry.entry_type,
+            })
+        })
+        .collect()
 }

@@ -90,13 +90,12 @@ pub async fn create_release(
     upsert_release(&database, &tenant, &project, &id, body.clone()).await?;
     d1::recompute_project_stats(&database, &tenant, &project).await?;
     let _ = crate::developer::emit_project_event(
-        &database,
+        &ctx,
         &tenant,
         &project,
         "release.created",
         json!({ "release": body.clone(), "actor": user }),
-    )
-    .await;
+    );
     Response::from_json(&body)
 }
 
@@ -214,13 +213,12 @@ pub async fn upload_release_artifact(
     )
     .await?;
     let _ = crate::developer::emit_project_event(
-        &database,
+        &ctx,
         &tenant,
         &project,
         "release.artifact_uploaded",
         json!({ "release": release.clone(), "actor": user }),
-    )
-    .await;
+    );
     Response::from_json(&release)
 }
 

@@ -419,7 +419,24 @@ pub async fn oauth_token(
     }))
 }
 
-pub async fn emit_project_event(
+pub fn emit_project_event(
+    ctx: &crate::request_context::AppRouteContext,
+    tenant: &str,
+    project: &str,
+    event: &str,
+    data: serde_json::Value,
+) -> Result<()> {
+    let database = ctx.data.database_handle();
+    let tenant = tenant.to_string();
+    let project = project.to_string();
+    let event = event.to_string();
+    ctx.data.wait_until(async move {
+        let _ = deliver_project_event(&database, &tenant, &project, &event, data).await;
+    });
+    Ok(())
+}
+
+async fn deliver_project_event(
     database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
@@ -432,7 +449,7 @@ pub async fn emit_project_event(
     }
     let payload = event_payload(tenant, project, event, data);
     for hook in hooks {
-        let status = send_webhook(&hook, event, &payload).await.unwrap_or(0);
+        let status = send_webhook_with_retries(&hook, event, &payload).await;
         d1::record_webhook_delivery(database, tenant, project, &hook.id, status).await?;
     }
     Ok(())
@@ -501,6 +518,21 @@ async fn send_webhook(
     timeout.0.clear_timeout_with_handle(timeout.1);
     let response = response?;
     Ok(response.status_code() as i64)
+}
+
+async fn send_webhook_with_retries(
+    hook: &d1::ProjectWebhook,
+    event: &str,
+    payload: &serde_json::Value,
+) -> i64 {
+    let mut status = 0;
+    for _ in 0..3 {
+        status = send_webhook(hook, event, payload).await.unwrap_or(0);
+        if (200..300).contains(&status) || (400..500).contains(&status) {
+            break;
+        }
+    }
+    status
 }
 
 fn webhook_signature(secret: &str, payload: &str) -> Result<String> {

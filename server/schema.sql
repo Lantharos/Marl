@@ -57,7 +57,10 @@ CREATE TABLE IF NOT EXISTS history (
     message TEXT NOT NULL,
     author TEXT NOT NULL,
     timestamp TEXT NOT NULL,
-    snapshot_id TEXT
+    snapshot_id TEXT,
+    agent TEXT,
+    model TEXT,
+    signature_json TEXT
 );
 CREATE TABLE IF NOT EXISTS issues (
     id TEXT PRIMARY KEY,
@@ -114,6 +117,7 @@ CREATE TABLE IF NOT EXISTS object_index (
     PRIMARY KEY (tenant, project, id)
 );
 CREATE INDEX IF NOT EXISTS idx_history_workspace ON history(tenant, project, workspace);
+CREATE INDEX IF NOT EXISTS idx_history_workspace_time ON history(tenant, project, workspace, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_history_project_time ON history(tenant, project, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
 CREATE INDEX IF NOT EXISTS idx_workspace_states_ready ON workspace_states(is_ready, tenant, project, workspace);

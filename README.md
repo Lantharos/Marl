@@ -95,7 +95,7 @@ Use `--json` on PIG commands when agents or scripts need machine-readable output
 
 The hosted service is implemented in this repository. The backend is a Cloudflare Worker in `server`; the frontend is a SvelteKit app in `frontend`; the CLI lives in `client`.
 
-The Worker uses D1 for project metadata, workspace heads, issues, history, settings, release metadata, protocol records, API keys, webhooks, OAuth apps, and cached project stats. R2 stores immutable PIG object bytes and uploaded release artifacts. R2-backed objects, code trees, file reads, and project overview responses return ETags and cache headers so browsers and Cloudflare can avoid refetching content until the relevant snapshot or project state changes.
+The Worker uses D1 for project metadata, workspace heads, issues, history, settings, release metadata, protocol records, API keys, webhooks, OAuth apps, and cached project stats. R2 stores immutable PIG object bytes and uploaded release artifacts. R2-backed objects, bounded code trees, file reads, and project overview responses return ETags and cache headers so browsers and Cloudflare can avoid refetching content until the relevant snapshot or project state changes.
 
 ## Project Layout
 
@@ -145,7 +145,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, and fork contribution links.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, fork contribution links, and history metadata columns.
 
 Then start the Worker:
 
@@ -208,7 +208,7 @@ Tenant collaborators inherit access into every project in that tenant. Project c
 
 Project maintainers can archive a project from Settings. Archived projects stay readable, but code sync, object uploads, issues, comments, releases, ready actions, and other project mutations are rejected until a maintainer unarchives the project. Project owners can delete a project from Settings after confirming the action.
 
-Project API keys are maintainer-managed tokens for tools and agents. Keys are scoped to one project and use explicit permissions such as `main:read`, `main:write`, `workspaces:create`, `workspaces:write`, `issues:write`, `releases:write`, and `webhooks:write`. This lets an agent work in feature workspaces without being able to advance `main`. Webhooks are also project-scoped and can subscribe to sync, snapshot, workspace, release, and issue events. Webhook deliveries include `x-sty-event`, `x-sty-delivery`, and an HMAC-SHA256 `x-sty-signature-256` when a secret exists.
+Project API keys are maintainer-managed tokens for tools and agents. Keys are scoped to one project and use explicit permissions such as `main:read`, `main:write`, `workspaces:create`, `workspaces:write`, `issues:write`, `releases:write`, and `webhooks:write`. This lets an agent work in feature workspaces without being able to advance `main`. Webhooks are also project-scoped and can subscribe to sync, snapshot, workspace, release, and issue events. Event webhooks are delivered after the project mutation response, and deliveries include `x-sty-event`, `x-sty-delivery`, and an HMAC-SHA256 `x-sty-signature-256` when a secret exists.
 
 Maintainers can make release metadata and release artifact downloads public even when the project itself is private. This is useful for auto-updaters or public download buttons while keeping code, issues, and history private.
 

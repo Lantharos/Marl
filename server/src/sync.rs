@@ -33,13 +33,12 @@ pub(crate) async fn update_head(mut req: Request, ctx: crate::request_context::A
     ensure_snapshot_refs_uploaded(&ctx.env, &database, &tenant, &project, &body.new_head).await?;
     let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
     if ok {
-        let _ = crate::developer::emit_project_event(&database,
+        let _ = crate::developer::emit_project_event(&ctx,
             &tenant,
             &project,
             "sync",
             serde_json::json!({ "workspace": workspace, "head": body.new_head, "actor": user }),
-        )
-        .await;
+        );
         Response::from_json(&OkResponse { ok: true })
     } else {
         json_error(409, "workspace head changed")
@@ -59,10 +58,9 @@ pub(crate) async fn workspace_history(req: Request, ctx: crate::request_context:
     )
     .await?;
     let limit = query_limit(&req, 100, 500)?;
-    let mut entries =
+    let entries =
         d1::workspace_history_with_limit(&database, &tenant, &project, &workspace, Some(limit))
             .await?;
-    enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -72,8 +70,7 @@ pub(crate) async fn project_history(req: Request, ctx: crate::request_context::A
     let database = db(&ctx)?;
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "history:read").await?;
     let limit = query_limit(&req, 100, 500)?;
-    let mut entries = d1::project_history_with_limit(&database, &tenant, &project, Some(limit)).await?;
-    enrich_history_entries(&ctx.env, &tenant, &project, &mut entries).await?;
+    let entries = d1::project_history_with_limit(&database, &tenant, &project, Some(limit)).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -93,18 +90,6 @@ pub(crate) async fn history_entry(req: Request, ctx: crate::request_context::App
     }
 }
 
-async fn enrich_history_entries(
-    env: &Env,
-    tenant: &str,
-    project: &str,
-    entries: &mut [HistoryEntry],
-) -> Result<()> {
-    for entry in entries {
-        enrich_history_entry(env, tenant, project, entry).await?;
-    }
-    Ok(())
-}
-
 async fn enrich_history_entry(
     env: &Env,
     tenant: &str,
@@ -121,26 +106,48 @@ async fn enrich_history_entry(
     };
     let snapshot: serde_json::Value =
         serde_json::from_slice(&bytes).map_err(|error| Error::RustError(error.to_string()))?;
-    entry.agent = snapshot["agent"].as_str().map(ToOwned::to_owned);
-    entry.model = snapshot["agent_model"].as_str().map(ToOwned::to_owned);
-    entry.signature = snapshot["signature"].as_object().map(|signature| HistorySignature {
-        user: signature
-            .get("user")
-            .and_then(|value| value.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        key_id: signature
-            .get("key_id")
-            .and_then(|value| value.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        algorithm: signature
-            .get("algorithm")
-            .and_then(|value| value.as_str())
-            .unwrap_or("ed25519")
-            .to_string(),
-    });
+    let metadata = history_metadata_from_snapshot(&snapshot);
+    entry.agent = metadata.agent;
+    entry.model = metadata.model;
+    entry.signature = metadata.signature;
     Ok(())
+}
+
+async fn snapshot_history_metadata(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+) -> Result<d1::HistorySnapshotMetadata> {
+    let store = bucket(env)?;
+    let bytes = r2_bytes(&store, &object_key(tenant, project, snapshot_id)).await?;
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    Ok(history_metadata_from_snapshot(&snapshot))
+}
+
+fn history_metadata_from_snapshot(snapshot: &serde_json::Value) -> d1::HistorySnapshotMetadata {
+    d1::HistorySnapshotMetadata {
+        agent: snapshot["agent"].as_str().map(ToOwned::to_owned),
+        model: snapshot["agent_model"].as_str().map(ToOwned::to_owned),
+        signature: snapshot["signature"].as_object().map(|signature| HistorySignature {
+            user: signature
+                .get("user")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            key_id: signature
+                .get("key_id")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            algorithm: signature
+                .get("algorithm")
+                .and_then(|value| value.as_str())
+                .unwrap_or("ed25519")
+                .to_string(),
+        }),
+    }
 }
 
 pub(crate) async fn log_history(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
@@ -159,13 +166,29 @@ pub(crate) async fn log_history(mut req: Request, ctx: crate::request_context::A
             None => return json_error(400, "history snapshot object is missing"),
         }
     }
-    d1::log_history(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, &body.kind, &body.message, body.snapshot_id.as_deref()).await?;
+    let metadata = if let Some(snapshot_id) = body.snapshot_id.as_deref() {
+        Some(snapshot_history_metadata(&ctx.env, &tenant, &project, snapshot_id).await?)
+    } else {
+        None
+    };
+    d1::log_history(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        &sty_protocol::TokenPrincipal { user },
+        &body.kind,
+        &body.message,
+        body.snapshot_id.as_deref(),
+        metadata.as_ref(),
+    )
+    .await?;
     let event = match body.kind.as_str() {
         "ship" => "snapshot.shipped",
         "cram" => "snapshot.crammed",
         _ => "snapshot.saved",
     };
-    let _ = crate::developer::emit_project_event(&database,
+    let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
         event,
@@ -176,8 +199,7 @@ pub(crate) async fn log_history(mut req: Request, ctx: crate::request_context::A
             "snapshot": body.snapshot_id,
             "actor": actor
         }),
-    )
-    .await;
+    );
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -188,13 +210,12 @@ pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRou
     let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:ready").await?;
     d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
-    let _ = crate::developer::emit_project_event(&database,
+    let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
         "workspace.ready",
         serde_json::json!({ "workspace": workspace }),
-    )
-    .await;
+    );
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -205,13 +226,12 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
     let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "maintainer", "workspaces:merge").await?;
     d1::merge_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
-    let _ = crate::developer::emit_project_event(&database,
+    let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
         "workspace.merged",
         serde_json::json!({ "workspace": workspace }),
-    )
-    .await;
+    );
     Response::from_json(&OkResponse { ok: true })
 }
 
@@ -311,6 +331,7 @@ async fn ensure_snapshot_refs_uploaded(
         Some(_) => return Err(Error::RustError("snapshot root_tree is not a tree".to_string())),
         None => return Err(Error::RustError("snapshot root_tree is missing".to_string())),
     }
+    validate_tree_closure(&store, db, tenant, project, root_tree).await?;
     let Some(parents) = snapshot["parents"].as_array() else {
         return Err(Error::RustError("snapshot parents are missing".to_string()));
     };

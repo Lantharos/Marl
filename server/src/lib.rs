@@ -53,12 +53,12 @@ include!("settings.rs");
 include!("sync.rs");
 
 #[event(fetch)]
-pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
     if req.method() == Method::Options {
         return preflight_response(&req, &env);
     }
     let request = req.clone()?;
-    let app_context = AppContext::new(&request, &env)?;
+    let app_context = AppContext::new(&request, &env, ctx)?;
     let response = Router::with_data(app_context.clone())
         .post_async("/v1/auth/check", auth_check)
         .get_async("/v1/capabilities", capabilities)

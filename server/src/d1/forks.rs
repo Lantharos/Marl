@@ -222,6 +222,7 @@ pub async fn publish_fork_workspace(
         "ready",
         &history_message,
         Some(head),
+        None,
     )
     .await?;
     db.prepare(

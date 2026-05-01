@@ -19,13 +19,12 @@ pub(crate) async fn create_issue(mut req: Request, ctx: crate::request_context::
     let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "issues:write").await?;
     let issue = d1::create_issue(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user: user.clone() }, &body.title, &body.body, &body.labels, body.assignee.as_deref()).await?;
-    let _ = crate::developer::emit_project_event(&database,
+    let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
         "issue.created",
         serde_json::json!({ "issue": &issue, "actor": user }),
-    )
-    .await;
+    );
     Response::from_json(&issue)
 }
 
@@ -54,13 +53,12 @@ pub(crate) async fn update_issue(mut req: Request, ctx: crate::request_context::
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "issues:write").await?;
     let status = body.state.or(body.status).unwrap_or_else(|| "open".to_string());
     let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, &status).await?;
-    let _ = crate::developer::emit_project_event(&database,
+    let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
         "issue.updated",
         serde_json::json!({ "issue": &issue, "actor": user }),
-    )
-    .await;
+    );
     Response::from_json(&issue)
 }
 
@@ -79,13 +77,12 @@ pub(crate) async fn set_issue_state(req: Request, ctx: crate::request_context::A
     let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "issues:write").await?;
     let issue = d1::update_issue_status(&database, &tenant, &project, &issue_id, state).await?;
-    let _ = crate::developer::emit_project_event(&database,
+    let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
         "issue.updated",
         serde_json::json!({ "issue": &issue, "actor": user }),
-    )
-    .await;
+    );
     Response::from_json(&issue)
 }
 
