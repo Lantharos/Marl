@@ -266,11 +266,14 @@
 
 		<div class="relative">
 			<button
-				class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
+				class="group flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border text-[11px] font-medium text-[#eae9e4] transition {showProfile ? 'border-[#3a3a36] bg-[#1e1e1c]' : 'border-transparent bg-[#2a2a28] hover:border-[#3a3a36] hover:bg-[#3a3a36]'} focus-visible:border-[#d9a66c] focus-visible:outline-none"
+				aria-label="Open user menu"
+				aria-expanded={showProfile}
+				title="User menu"
 				onclick={() => (showProfile = !showProfile)}
 			>
 				{#if avatarUrl}
-					<img src={avatarUrl} alt="" class="h-full w-full object-cover" />
+					<img src={avatarUrl} alt="" class="h-full w-full object-cover transition group-hover:opacity-80" />
 				{:else}
 					{avatarInitials}
 				{/if}
