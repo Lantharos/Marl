@@ -13,8 +13,7 @@ use reqwest::blocking::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    AuthCheckResponse, DEFAULT_AVE_CLIENT_ID, ProjectsResponse, StyConfig, TokenResponse,
-    UserProfile, validate_segment, validate_target,
+    AuthCheckResponse, DEFAULT_AVE_CLIENT_ID, StyConfig, TokenResponse, UserProfile,
 };
 use url::Url;
 use uuid::Uuid;
@@ -24,6 +23,7 @@ use crate::collaborator_commands::{
     tenant_collaborators,
 };
 use crate::http::{RequestBuilderExt, response_error};
+use crate::project_commands;
 use crate::spinner;
 
 pub(crate) const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:8787";
@@ -49,7 +49,16 @@ enum Commands {
         pig: String,
     },
     Init {
-        target: String,
+        #[arg(value_name = "TARGET")]
+        target: Option<String>,
+        #[arg(long = "target", value_name = "TARGET")]
+        target_flag: Option<String>,
+        #[arg(long)]
+        tenant: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        new_tenant: Option<String>,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
         #[arg(long, default_value = "pig")]
@@ -69,7 +78,16 @@ enum Commands {
 #[derive(Subcommand)]
 enum ProjectCommands {
     Create {
-        target: String,
+        #[arg(value_name = "TARGET")]
+        target: Option<String>,
+        #[arg(long = "target", value_name = "TARGET")]
+        target_flag: Option<String>,
+        #[arg(long)]
+        tenant: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        new_tenant: Option<String>,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
     },
@@ -86,7 +104,10 @@ enum ProjectCommands {
 #[derive(Subcommand)]
 enum TenantCommands {
     New {
-        name: String,
+        #[arg(value_name = "NAME")]
+        name: Option<String>,
+        #[arg(long = "name", value_name = "NAME")]
+        name_flag: Option<String>,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
     },
@@ -107,17 +128,47 @@ pub fn run() -> Result<()> {
         } => login(token, callback_port, remote_url, pig),
         Commands::Init {
             target,
+            target_flag,
+            tenant,
+            project,
+            new_tenant,
             remote_url,
             pig,
-        } => init(target, remote_url, pig),
+        } => project_commands::init(
+            target,
+            target_flag,
+            tenant,
+            project,
+            new_tenant,
+            remote_url,
+            pig,
+        ),
         Commands::Whoami => whoami(),
         Commands::Project { command } => match command {
-            ProjectCommands::Create { target, remote_url } => create_project(&target, &remote_url),
-            ProjectCommands::List { remote_url } => list_projects(&remote_url),
+            ProjectCommands::Create {
+                target,
+                target_flag,
+                tenant,
+                project,
+                new_tenant,
+                remote_url,
+            } => project_commands::create_project_command(
+                target,
+                target_flag,
+                tenant,
+                project,
+                new_tenant,
+                remote_url,
+            ),
+            ProjectCommands::List { remote_url } => project_commands::list_projects(&remote_url),
             ProjectCommands::Collaborators { command } => project_collaborators(command),
         },
         Commands::Tenant { command } => match command {
-            TenantCommands::New { name, remote_url } => create_tenant(&name, &remote_url),
+            TenantCommands::New {
+                name,
+                name_flag,
+                remote_url,
+            } => project_commands::create_tenant_command(name, name_flag, remote_url),
             TenantCommands::Collaborators { command } => tenant_collaborators(command),
         },
     }
@@ -278,87 +329,6 @@ fn auth_user(remote_url: &str, token: &str) -> Result<String> {
 
 fn pkce_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
-}
-
-fn init(target: String, remote_url: String, pig: String) -> Result<()> {
-    validate_target(&target)?;
-    create_project(&target, &remote_url)?;
-    let status = Command::new(&pig)
-        .args(["remote", "add", &target, "--remote-url", &remote_url])
-        .status()
-        .with_context(|| format!("failed to run `{pig} remote add`"))?;
-    if !status.success() {
-        bail!("`{pig} remote add` failed");
-    }
-    println!("Connected this repo to {target}");
-    Ok(())
-}
-
-fn create_project(target: &str, remote_url: &str) -> Result<()> {
-    let (tenant, project) = validate_target(target)?;
-    let config = load_config()?;
-    let url = format!(
-        "{}/v1/tenants/{}/projects/{}",
-        remote_url.trim_end_matches('/'),
-        tenant,
-        project
-    );
-    let response = Client::new()
-        .post(url)
-        .bearer_auth(config.token)
-        .json(&serde_json::json!({}))
-        .send_request("Creating project")?;
-    if !response.status().is_success() {
-        bail!(
-            "project create failed with status {}",
-            response_error(response)
-        );
-    }
-    println!("Project ready: {target}");
-    Ok(())
-}
-
-fn create_tenant(name: &str, remote_url: &str) -> Result<()> {
-    validate_segment(name)?;
-    let config = load_config()?;
-    let url = format!("{}/v1/orgs", remote_url.trim_end_matches('/'));
-    let response = Client::new()
-        .post(url)
-        .bearer_auth(config.token)
-        .json(&serde_json::json!({ "name": name }))
-        .send_request("Creating tenant")?;
-    if !response.status().is_success() {
-        bail!(
-            "tenant create failed with status {}",
-            response_error(response)
-        );
-    }
-    println!("Tenant ready: {name}");
-    Ok(())
-}
-
-fn list_projects(remote_url: &str) -> Result<()> {
-    let config = load_config()?;
-    let url = format!("{}/v1/projects", remote_url.trim_end_matches('/'));
-    let response = Client::new()
-        .get(url)
-        .bearer_auth(config.token)
-        .send_request("Fetching projects")?;
-    if !response.status().is_success() {
-        bail!(
-            "project list failed with status {}",
-            response_error(response)
-        );
-    }
-    let body = response.json::<ProjectsResponse>()?;
-    if body.projects.is_empty() {
-        println!("No projects");
-        return Ok(());
-    }
-    for project in body.projects {
-        println!("{}/{}", project.tenant, project.project);
-    }
-    Ok(())
 }
 
 fn whoami() -> Result<()> {

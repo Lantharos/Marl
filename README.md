@@ -20,19 +20,29 @@ irm https://sty.sh/install.ps1 | iex
 
 ```powershell
 sty login
-sty init tenant/project
+sty init
 pig save "describe the work"
 pig sync
+```
+
+`sty init` fetches the tenants your account can use, lets you choose one or create an organization tenant, asks for the project name, and defaults that name to the current folder. For scripts and agents, pass the same values explicitly:
+
+```powershell
+sty init --tenant tenant --project project
+sty init --new-tenant tenant --project project
+sty init --target tenant/project
+sty tenant new --name tenant
+sty project create --tenant tenant --project project
 ```
 
 Your account tenant is created automatically from your Ave handle. To create an organization tenant:
 
 ```powershell
-sty tenant new tenant
-sty init tenant/project
+sty tenant new
+sty init --tenant tenant --project project
 ```
 
-`sty login` opens the browser sign-in flow, creates a sty session, and imports that session into PIG. `sty init tenant/project` creates or connects the hosted project and configures the PIG remote for the current repository.
+`sty login` opens the browser sign-in flow, creates a sty session, and imports that session into PIG. `sty init` creates or connects the hosted project and configures the PIG remote for the current repository.
 
 After that, use PIG from the repository:
 
