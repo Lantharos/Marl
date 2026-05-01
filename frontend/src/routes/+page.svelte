@@ -165,7 +165,7 @@
 <span class="text-[#eae9e4]">$ sty login</span>
 
 <span class="text-[#6f6b5f]"># connect this repo</span>
-<span class="text-[#eae9e4]">$ sty init tenant/project</span>
+<span class="text-[#eae9e4]">$ sty init</span>
 
 <span class="text-[#6f6b5f]"># create a workspace</span>
 <span class="text-[#eae9e4]">$ pig work new feature-x</span>

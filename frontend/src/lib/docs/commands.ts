@@ -17,10 +17,23 @@ export const styCommandGroups: CommandGroup[] = [
 			{ command: 'sty login', description: 'Sign in through Ave, create a sty session, and import the token into PIG.' },
 			{ command: 'sty login --remote-url <url>', description: 'Advanced: sign in against an alternate compatible sty remote.' },
 			{ command: 'sty whoami', description: 'Show the signed-in handle and configured remote.' },
-			{ command: 'sty tenant new <tenant>', description: 'Create an organization tenant before initializing projects under it.' },
-			{ command: 'sty init <tenant>/<project>', description: 'Create or connect a project and add the PIG remote for the current repo.' },
+			{ command: 'sty tenant new', description: 'Create an organization tenant interactively.' },
+			{ command: 'sty tenant new --name <tenant>', description: 'Create an organization tenant without prompts.' },
+			{ command: 'sty init', description: 'Choose a tenant, name the project, create or connect it, and add the PIG remote for the current repo.' },
+			{ command: 'sty init --tenant <tenant> --project <project>', description: 'Create or connect a project without prompts.' },
 			{ command: 'sty project list', description: 'List projects visible to the signed-in user.' },
-			{ command: 'sty project create <tenant>/<project>', description: 'Create the project without changing the current PIG remote.' }
+			{ command: 'sty project create --tenant <tenant> --project <project>', description: 'Create the project without changing the current PIG remote.' }
+		]
+	},
+	{
+		title: 'Forks and contributions',
+		intro: 'Fork public projects into your account, either as linked contribution forks or independent project copies.',
+		rows: [
+			{ command: 'sty fork <tenant>/<project>', description: 'Fork a public project interactively, choose linked or independent mode, and optionally sync this directory.' },
+			{ command: 'sty fork <tenant>/<project> --tenant <tenant> --project <project> --mode contribute --yes', description: 'Create a linked contribution fork without prompts.' },
+			{ command: 'sty fork <tenant>/<project> --tenant <tenant> --project <project> --mode detached --yes --no-sync', description: 'Copy a public project into your tenant and break the contribution link.' },
+			{ command: 'sty sendwork', description: 'Sync the current fork workspace, prompt for title and message, and publish it to the parent project as ready work.' },
+			{ command: 'sty sw --title "title" --message "message" --yes', description: 'Short form for sendwork without prompts.' }
 		]
 	},
 	{

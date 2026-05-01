@@ -18,4 +18,4 @@ bun run check
 bun run build
 ```
 
-Project creation is done from the sty CLI, not from the web UI.
+Project creation, project forks, and sending work back from linked forks are done from the sty CLI, not from the web UI.

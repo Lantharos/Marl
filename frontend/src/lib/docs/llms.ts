@@ -44,9 +44,14 @@ Human setup:
 1. Install sty. macOS/Linux: ${unixInstallCommand}. Windows: ${windowsInstallCommand}.
 2. The installer asks whether to install both sty and pig, or pig only. For non-interactive installs, set STY_INSTALL_COMPONENTS to both or pig.
 3. Run sty login when sty was installed.
-4. Run sty tenant new <tenant> when creating an organization tenant.
-5. Run sty init <tenant>/<project> from the repository.
+4. Run sty tenant new when creating an organization tenant, or sty tenant new --name <tenant> in non-interactive contexts.
+5. Run sty init from the repository for prompts, or sty init --tenant <tenant> --project <project> in non-interactive contexts.
 6. Use pig save, pig work new, pig work ready, and pig sync.
+
+Forking:
+- sty fork <tenant>/<project> forks a public project into the signed-in account.
+- Use --mode contribute to keep a link for future sty sendwork, or --mode detached to copy the project and break the contribution link.
+- sty sendwork, alias sty sw, syncs the current fork workspace and publishes it to the parent project as ready work with a title and message.
 
 Authentication:
 - User sessions use Authorization: Bearer <sty-token>.

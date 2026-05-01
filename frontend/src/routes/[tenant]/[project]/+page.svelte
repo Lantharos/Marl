@@ -114,7 +114,7 @@
 				<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
 					<h3 class="text-sm font-semibold text-[#f0eee4]">About</h3>
 					<p class="mt-2 text-sm leading-relaxed text-[#a09d94]">
-						PIG project hosted on sty. Use <code class="rounded bg-[#1e1e1c] px-1 py-0.5 text-xs">sty init {tenant}/{project}</code> to sync.
+						PIG project hosted on sty. Use <code class="rounded bg-[#1e1e1c] px-1 py-0.5 text-xs">sty init --target {tenant}/{project}</code> to sync.
 					</p>
 					<p class="mt-1 text-xs text-[#6f6b5f]">Add a README.md to show project documentation here.</p>
 				</div>

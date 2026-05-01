@@ -83,6 +83,7 @@ Use `--json` on PIG commands when agents or scripts need machine-readable output
 - Tenant and project collaborators with viewer, contributor, and maintainer roles
 - Browser project pages with code, workspaces, issues, releases, history, and settings
 - Ready review for workspaces
+- Public project forks, linked contribution forks, detached project copies, and `sendwork`
 - Release notes, pinned source snapshots, uploaded artifacts, and optional public release downloads
 - Project API keys with granular scopes for agents and integrations
 - Webhooks for sync, snapshot, workspace, release, and issue events
@@ -144,7 +145,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, and developer apps.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, and fork contribution links.
 
 Then start the Worker:
 
@@ -211,6 +212,8 @@ Project API keys are maintainer-managed tokens for tools and agents. Keys are sc
 
 Maintainers can make release metadata and release artifact downloads public even when the project itself is private. This is useful for auto-updaters or public download buttons while keeping code, issues, and history private.
 
+Public projects can be forked from the CLI. A linked fork remembers its parent, keeps the contribution workspace private in the fork, and only creates ready work in the parent when `sty sendwork` runs. A detached fork copies the project history into the chosen tenant and breaks the parent link.
+
 CLI examples:
 
 ```powershell
@@ -220,6 +223,9 @@ sty project collaborators list tenant/project
 sty project collaborators add tenant/project ave --role contributor
 sty project collaborators update tenant/project ave --role viewer
 sty project collaborators remove tenant/project ave
+sty fork source/project --tenant tenant --project project --mode contribute --yes
+sty fork source/project --tenant tenant --project project --mode detached --yes --no-sync
+sty sw --title "Fix parser edge case" --message "Keeps empty segments stable" --yes
 ```
 
 The dashboard exposes tenant collaborators on the tenant page and project collaborators in project settings.
@@ -234,6 +240,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 - granular project API keys and developer app integrations
 - search
 - private project follows, home feed, public project discovery, paginated tenant project pages, and project settings
+- public project forks, detached copies, linked contribution forks, and `sendwork`
 - releases, tags, changelog notes, pinned source snapshots, uploaded artifacts, and optional public release downloads
 - signed snapshot verification with user-scoped signing keys
 - profiles and account signing keys
@@ -262,6 +269,15 @@ Protocol list endpoints return the standard pagination envelope:
   "prev": null
 }
 ```
+
+Fork endpoints:
+
+```text
+POST /v1/forks
+POST /v1/tenants/:tenant/projects/:project/sendwork
+```
+
+`POST /v1/forks` accepts a source project, target project, and mode. `mode: "contribute"` stores a parent link and creates a contribution workspace in the fork. `mode: "detached"` copies the project into the target tenant without a parent link. `sendwork` is only valid for linked forks; it publishes the fork workspace head and title/message back to the parent project as ready work.
 
 The dashboard keeps ready review inside the Workspaces view. It uses `GET /v1/tenants/:tenant/projects/:project/stats` for tab counters, and those counts are maintained in D1 when workspaces, issues, releases, and history change, so the UI does not need to fetch every list just to show navigation totals.
 

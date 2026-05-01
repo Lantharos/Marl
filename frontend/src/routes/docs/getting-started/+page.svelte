@@ -15,10 +15,15 @@ sty --help
 pig --help`;
 
 	const firstProject = `sty login
-sty tenant new acme
-sty init acme/website
+sty tenant new --name acme
+sty init
 pig save "initial import"
 pig sync`;
+
+	const forkProject = `sty fork lantharos/example
+pig save "my change"
+pig sync
+sty sendwork`;
 
 	const daily = `pig status
 pig work new feature-name
@@ -46,9 +51,17 @@ pig sync`;
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Connect a repository</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Run this from the repository you want to host. Your account already has a tenant named by your handle; create an organization tenant only when the project should live in a shared namespace.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Run this from the repository you want to host. Your account already has a tenant named by your handle; create an organization tenant only when the project should live in a shared namespace. The init command asks for the tenant and project name; use <code>sty init --tenant acme --project website</code> when prompts are not available.</p>
 		<div class="mt-4">
 			<CodeBlock code={firstProject} />
+		</div>
+	</section>
+
+	<section>
+		<h2 class="text-lg font-semibold text-[#eae9e4]">Fork a public project</h2>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Forks can stay linked for a contribution or become independent copies in your tenant. Linked forks keep the parent hidden from your workspace until you send the work back.</p>
+		<div class="mt-4">
+			<CodeBlock code={forkProject} />
 		</div>
 	</section>
 
@@ -74,6 +87,10 @@ pig sync`;
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Workspace</h3>
 				<p class="text-sm leading-6 text-[#8c887e]">A named line of work. Use isolated workspaces when multiple agents or features need separate folders.</p>
+			</div>
+			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
+				<h3 class="text-sm font-medium text-[#f0eee4]">Fork</h3>
+				<p class="text-sm leading-6 text-[#8c887e]">A copy of a public project in your tenant. Contribution forks remember the parent so <code>sty sendwork</code> can publish your workspace back for review.</p>
 			</div>
 			<div class="grid gap-2 px-4 py-3 md:grid-cols-[150px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Save and cram</h3>

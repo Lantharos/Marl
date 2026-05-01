@@ -47,6 +47,7 @@ export const endpointGroups: EndpointGroup[] = [
 		note: 'Projects are private by default. A user account is also a tenant named by the public handle.',
 		endpoints: [
 			'POST /v1/orgs',
+			'POST /v1/forks',
 			'GET /v1/projects',
 			'GET /v1/tenants/:tenant/projects',
 			'POST /v1/tenants/:tenant/projects/:project',
@@ -83,6 +84,7 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/history',
 			'GET /v1/tenants/:tenant/projects/:project/ready',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready',
+			'POST /v1/tenants/:tenant/projects/:project/sendwork',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject'
 		]
