@@ -1,11 +1,24 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { getHistoryEntryDetail, isAbortError, type HistoryEntry } from '$lib/api';
+	import { onDestroy } from 'svelte';
+	import {
+		createReviewComment,
+		deleteReviewComment,
+		getHistoryEntryDetail,
+		isAbortError,
+		listReviewComments,
+		updateReviewComment,
+		type HistoryEntry,
+		type ReviewComment
+	} from '$lib/api';
+	import { appData } from '$lib/appState';
 	import { downloadObjectText } from '$lib/objectApi';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
+	import ReviewThread from '$lib/components/ReviewThread.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
+	import { currentProjectAccess } from '$lib/projectAccessStore';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
@@ -18,15 +31,39 @@
 	let selectedOldText = $state<string | null>(null);
 	let selectedNewText = $state<string | null>(null);
 	let fileLoading = $state(false);
+	let reviewComments = $state<ReviewComment[]>([]);
+	let selectedReviewRange = $state<{ file: string; startLine: number; endLine: number; side?: 'old' | 'new' } | null>(null);
 	let fileController: AbortController | null = null;
+	let canWrite = $state(false);
+	let canMaintain = $state(false);
+	let currentUser = $state<string | null>(null);
+
+	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		canWrite = Boolean(value?.can_write);
+		canMaintain = Boolean(value?.can_maintain && !value?.archived);
+	});
+	const unsubscribeAppData = appData.subscribe((value) => {
+		currentUser = value.me?.user ?? null;
+	});
+
+	onDestroy(() => {
+		unsubscribe();
+		unsubscribeAppData();
+	});
 
 	async function load(signal: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			detail = await getHistoryEntryDetail(tenant, project, entryId, { signal });
+			const [entryDetail, comments] = await Promise.all([
+				getHistoryEntryDetail(tenant, project, entryId, { signal }),
+				listReviewComments(tenant, project, { history_entry_id: entryId }, { signal })
+			]);
+			detail = entryDetail;
+			reviewComments = comments.items;
 			if (detail.files.length > 0) {
 				selectedPath = detail.files[0].path;
+				selectedReviewRange = null;
 			}
 		} catch (e) {
 			if (isAbortError(e)) return;
@@ -111,6 +148,80 @@
 	function displayMessage(entry: HistoryEntry) {
 		return withoutOpaqueUserIds(entry.message) || entry.kind;
 	}
+
+	function selectPath(path: string) {
+		selectedPath = path;
+		selectedReviewRange = null;
+	}
+
+	function selectLineReview(startLine: number, endLine: number, side: 'old' | 'new' = 'new') {
+		if (!selectedPath) return;
+		selectedReviewRange = { file: selectedPath, startLine, endLine, side };
+	}
+
+	async function submitReviewComment(body: string) {
+		if (!detail) return;
+		const target = selectedReviewRange
+			? {
+				target_type: 'line',
+				history_entry_id: entryId,
+				snapshot_id: detail.snapshot_id,
+				workspace: detail.workspace,
+				file: selectedReviewRange.file,
+				line: selectedReviewRange.startLine,
+				start_line: selectedReviewRange.startLine,
+				end_line: selectedReviewRange.endLine,
+				side: selectedReviewRange.side
+			}
+			: selectedPath
+			? {
+				target_type: 'file',
+				history_entry_id: entryId,
+				snapshot_id: detail.snapshot_id,
+				workspace: detail.workspace,
+				file: selectedPath
+			}
+			: {
+				target_type: 'save',
+				history_entry_id: entryId,
+				snapshot_id: detail.snapshot_id,
+				workspace: detail.workspace
+			};
+		await createReviewComment(tenant, project, target, body);
+		const comments = await listReviewComments(tenant, project, { history_entry_id: entryId });
+		reviewComments = comments.items;
+		selectedReviewRange = null;
+	}
+
+	async function refreshReviewComments() {
+		const comments = await listReviewComments(tenant, project, { history_entry_id: entryId });
+		reviewComments = comments.items;
+	}
+
+	async function editReviewComment(comment: ReviewComment, body: string) {
+		await updateReviewComment(tenant, project, comment.id, body);
+		await refreshReviewComments();
+	}
+
+	async function removeReviewComment(comment: ReviewComment) {
+		await deleteReviewComment(tenant, project, comment.id);
+		await refreshReviewComments();
+	}
+
+	const activeReviewComments = $derived(
+		reviewComments.filter((comment) => comment.target_type === 'save')
+	);
+
+	const fileReviewComments = $derived(
+		reviewComments.filter((comment) => comment.file === selectedPath && comment.target_type === 'line')
+	);
+
+	const commentCountsByFile = $derived(
+		reviewComments.reduce<Record<string, number>>((counts, comment) => {
+			if (comment.file) counts[comment.file] = (counts[comment.file] ?? 0) + 1;
+			return counts;
+		}, {})
+	);
 </script>
 
 <div class="flex flex-col gap-4 overflow-hidden" style="height: calc(100vh - 180px);">
@@ -154,29 +265,67 @@
 		{#if detail.files.length === 0}
 			<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
 				<p class="text-sm text-[#8c887e]">No file changes for this entry.</p>
+				<div class="mx-auto mt-6 max-w-lg text-left">
+					<ReviewThread
+						title="Save"
+						comments={activeReviewComments}
+						onSubmit={submitReviewComment}
+						onUpdate={editReviewComment}
+						onDelete={removeReviewComment}
+						readonly={!canWrite && !canMaintain}
+						{currentUser}
+						{canMaintain}
+					/>
+				</div>
 			</div>
 		{:else}
-			<div class="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden min-h-0">
-				<div class="h-48 md:h-auto md:w-64 shrink-0 flex flex-col rounded border border-[#2a2a28] bg-[#141412]">
-					<div class="shrink-0 border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#6f6b5f]">
-						{detail.files.length} changed {detail.files.length === 1 ? 'file' : 'files'}
+			<div class="flex flex-col gap-4 overflow-hidden min-h-0">
+				<div class="flex flex-col md:flex-row gap-4 overflow-hidden min-h-0">
+					<div class="h-48 md:h-auto md:w-64 shrink-0 flex flex-col rounded border border-[#2a2a28] bg-[#141412]">
+						<div class="shrink-0 border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#6f6b5f]">
+							{detail.files.length} changed {detail.files.length === 1 ? 'file' : 'files'}
+						</div>
+						<div class="flex-1 overflow-auto min-h-0 py-1.5">
+							<FileTreePane entries={treeEntries} {selectedPath} {gitStatus} commentCounts={commentCountsByFile} initialExpansion="open" flattenEmptyDirectories={true} onSelect={selectPath} />
+						</div>
 					</div>
-					<div class="flex-1 overflow-auto min-h-0 py-1.5">
-						<FileTreePane entries={treeEntries} {selectedPath} {gitStatus} initialExpansion="open" flattenEmptyDirectories={true} onSelect={(p) => { selectedPath = p; }} />
+					<div class="flex-1 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
+						{#if fileLoading}
+							<Spinner />
+						{:else if selectedPath}
+							<FileDiffCard
+								path={selectedPath}
+								oldText={selectedOldText}
+								newText={selectedNewText}
+								entry={detail}
+								reviewComments={fileReviewComments}
+								activeRange={selectedReviewRange}
+								readonly={!canWrite && !canMaintain}
+								onLineComment={selectLineReview}
+								onSubmitInline={submitReviewComment}
+								onCancelInline={() => (selectedReviewRange = null)}
+								onUpdateComment={editReviewComment}
+								onDeleteComment={removeReviewComment}
+								{currentUser}
+								{canMaintain}
+							/>
+						{/if}
 					</div>
 				</div>
-				<div class="flex-1 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
-					{#if fileLoading}
-						<Spinner />
-					{:else if selectedPath}
-						<FileDiffCard
-							path={selectedPath}
-							oldText={selectedOldText}
-							newText={selectedNewText}
-							entry={detail}
+				{#if activeReviewComments.length}
+					<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
+						<ReviewThread
+							title="Save"
+							comments={activeReviewComments}
+							onSubmit={submitReviewComment}
+							onUpdate={editReviewComment}
+							onDelete={removeReviewComment}
+							readonly={true}
+							{currentUser}
+							{canMaintain}
 						/>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	{/if}

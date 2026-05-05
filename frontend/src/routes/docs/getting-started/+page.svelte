@@ -67,7 +67,7 @@ pig sync`;
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Work after setup</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Once the remote is configured, most of your time is in PIG. Save whenever work reaches a meaningful point, mark a workspace ready when it should be reviewed, then sync.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Once the remote is configured, most of your time is in PIG. Save whenever work reaches a meaningful point, mark a workspace ready when it should be reviewed, then sync. Reviewers use the Workspaces and History views to comment on saves, files, and lines, then merge the work or request changes.</p>
 		<div class="mt-4">
 			<CodeBlock code={daily} />
 		</div>

@@ -85,7 +85,7 @@ Use `--json` on PIG commands when agents or scripts need machine-readable output
 - Private projects by default, with public project discovery when maintainers opt in
 - Tenant and project collaborators with viewer, contributor, and maintainer roles
 - Browser project pages with code, workspaces, issues, releases, history, and settings
-- Ready review for workspaces
+- Ready review for workspaces, saves, files, and line comments
 - Public project forks, linked contribution forks, detached project copies, and `sendwork`
 - Release notes, pinned source snapshots, uploaded artifacts, and optional public release downloads
 - Project API keys with granular scopes for agents and integrations
@@ -211,11 +211,13 @@ Tenant collaborators inherit access into every project in that tenant. Project c
 
 Project maintainers can archive a project from Settings. Archived projects stay readable, but code sync, object uploads, issues, comments, releases, ready actions, and other project mutations are rejected until a maintainer unarchives the project. Project owners can delete a project from Settings after confirming the action.
 
-Project API keys are maintainer-managed tokens for tools and agents. Keys are scoped to one project and use explicit permissions such as `main:read`, `main:write`, `workspaces:create`, `workspaces:write`, `issues:write`, `releases:write`, and `webhooks:write`. This lets an agent work in feature workspaces without being able to advance `main`. Webhooks are also project-scoped and can subscribe to sync, snapshot, workspace, release, and issue events. Event webhooks are delivered after the project mutation response, and deliveries include `x-sty-event`, `x-sty-delivery`, and an HMAC-SHA256 `x-sty-signature-256` when a secret exists.
+Project API keys are maintainer-managed tokens for tools and agents. Keys are scoped to one project and use explicit permissions such as `main:read`, `main:write`, `workspaces:create`, `workspaces:write`, `issues:write`, `releases:write`, and `webhooks:write`. This lets an agent work in feature workspaces without being able to advance `main`; add `issues:write` when the agent should leave review comments. Webhooks are also project-scoped and can subscribe to sync, snapshot, workspace, release, and issue events. Event webhooks are delivered after the project mutation response, and deliveries include `x-sty-event`, `x-sty-delivery`, and an HMAC-SHA256 `x-sty-signature-256` when a secret exists.
 
 Maintainers can make release metadata and release artifact downloads public even when the project itself is private. This is useful for auto-updaters or public download buttons while keeping code, issues, and history private.
 
 Public projects can be forked from the CLI. A linked fork remembers its parent, keeps the contribution workspace private in the fork, and only creates ready work in the parent when `sty sendwork` runs. A detached fork copies the project history into the chosen tenant and breaks the parent link.
+
+Workspace review happens in the browser. Reviewers can comment on the whole workspace, a save in history, a file, an individual line, or a dragged line range in the code and diff panes. Maintainers can request changes on a ready workspace, which moves it out of the ready queue and records the reason in the review thread.
 
 CLI examples:
 
@@ -238,7 +240,7 @@ The dashboard exposes tenant collaborators on the tenant page and project collab
 The Worker exposes `/v1/capabilities` and advertises the implemented PIG protocol features:
 
 - issues, comments, labels, and milestones
-- ready queues and workspace merge metadata
+- ready queues, workspace merge metadata, and targeted review comments
 - hooks and webhooks
 - granular project API keys and developer app integrations
 - search
@@ -282,7 +284,7 @@ POST /v1/tenants/:tenant/projects/:project/sendwork
 
 `POST /v1/forks` accepts a source project, target project, and mode. `mode: "contribute"` stores a parent link and creates a contribution workspace in the fork. `mode: "detached"` copies the project into the target tenant without a parent link. `sendwork` is only valid for linked forks; it publishes the fork workspace head and title/message back to the parent project as ready work.
 
-The dashboard keeps ready review inside the Workspaces view. It uses `GET /v1/tenants/:tenant/projects/:project/stats` for tab counters, and those counts are maintained in D1 when workspaces, issues, releases, and history change, so the UI does not need to fetch every list just to show navigation totals.
+The dashboard keeps ready review inside the Workspaces view. It uses `GET /v1/tenants/:tenant/projects/:project/stats` for tab counters, and those counts are maintained in D1 when workspaces, issues, releases, and history change, so the UI does not need to fetch every list just to show navigation totals. Project comments can be filtered by `target_type`, `workspace`, `history_entry_id`, `file`, and `line` so review panes only load the discussion for the active save or file position.
 
 ## Verification
 

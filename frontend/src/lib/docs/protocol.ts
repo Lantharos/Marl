@@ -79,7 +79,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. History list endpoints return a bounded window by default and accept a limit query parameter.',
+		note: 'Ready review lives on workspaces. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',
@@ -89,12 +89,16 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready',
 			'POST /v1/tenants/:tenant/projects/:project/sendwork',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge',
-			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject'
+			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject',
+			'GET /v1/tenants/:tenant/projects/:project/comments?workspace=feature&file=src/app.ts&line=42',
+			'POST /v1/tenants/:tenant/projects/:project/comments',
+			'PATCH /v1/tenants/:tenant/projects/:project/comments/:comment_id',
+			'DELETE /v1/tenants/:tenant/projects/:project/comments/:comment_id'
 		]
 	},
 	{
 		title: 'Issues and project records',
-		note: 'Labels, milestones, comments, hooks, and tags use standard paginated protocol collections.',
+		note: 'Labels, milestones, comments, hooks, and tags use standard paginated protocol collections. Comments also carry review target fields when they belong to code review.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/issues',
 			'POST /v1/tenants/:tenant/projects/:project/issues',

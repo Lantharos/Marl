@@ -220,6 +220,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/comments",
             create_protocol_comment,
         )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/comments/:item_id",
+            update_protocol_comment,
+        )
         .delete_async(
             "/v1/tenants/:tenant/projects/:project/comments/:item_id",
             delete_protocol_item,

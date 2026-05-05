@@ -6,12 +6,17 @@
 		getWorkspaceDetail,
 		getProjectFile,
 		isAbortError,
+		listReviewComments,
 		mergeWorkspace,
 		markWorkspaceReady,
+		requestWorkspaceChanges,
+		createReviewComment,
+		type ReviewComment,
 		type ProjectFile
 	} from '$lib/api';
 	import FileTreePane from '$lib/FileTreePane.svelte';
 	import CodePane from '$lib/CodePane.svelte';
+	import ReviewThread from '$lib/components/ReviewThread.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
@@ -25,6 +30,11 @@
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
+	let reviewBusy = $state(false);
+	let changeReason = $state('');
+	let reviewComments = $state<ReviewComment[]>([]);
+	let selectedReviewFile = $state<string | null>(null);
+	let selectedReviewRange = $state<{ file: string; startLine: number; endLine: number } | null>(null);
 	let fileController: AbortController | null = null;
 	let canWrite = $state(false);
 	let canMaintain = $state(false);
@@ -40,7 +50,12 @@
 		loading = true;
 		error = '';
 		try {
-			detail = await getWorkspaceDetail(tenant, project, workspaceName, signal ? { signal } : {});
+			const [workspaceDetail, comments] = await Promise.all([
+				getWorkspaceDetail(tenant, project, workspaceName, signal ? { signal } : {}),
+				listReviewComments(tenant, project, { workspace: workspaceName }, signal ? { signal } : {})
+			]);
+			detail = workspaceDetail;
+			reviewComments = comments.items;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -62,6 +77,8 @@
 	async function openFile(path: string) {
 		const entry = detail?.files.entries.find((e) => e.path === path);
 		if (entry?.entry_type !== 'blob') return;
+		selectedReviewFile = path;
+		selectedReviewRange = null;
 		fileController?.abort();
 		const controller = new AbortController();
 		fileController = controller;
@@ -97,6 +114,67 @@
 			busy = false;
 		}
 	}
+
+	async function submitReviewComment(body: string) {
+		const target = selectedReviewRange
+			? {
+				target_type: 'line',
+				workspace: workspaceName,
+				file: selectedReviewRange.file,
+				line: selectedReviewRange.startLine,
+				start_line: selectedReviewRange.startLine,
+				end_line: selectedReviewRange.endLine
+			}
+			: selectedReviewFile
+			? {
+				target_type: 'file',
+				workspace: workspaceName,
+				file: selectedReviewFile
+			}
+			: { target_type: 'workspace', workspace: workspaceName };
+		await createReviewComment(tenant, project, target, body);
+		const comments = await listReviewComments(tenant, project, { workspace: workspaceName });
+		reviewComments = comments.items;
+		selectedReviewRange = null;
+	}
+
+	async function handleRequestChanges() {
+		const reason = changeReason.trim();
+		if (!reason) return;
+		reviewBusy = true;
+		error = '';
+		try {
+			await requestWorkspaceChanges(tenant, project, workspaceName, reason);
+			await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, reason);
+			changeReason = '';
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Request changes failed';
+		} finally {
+			reviewBusy = false;
+		}
+	}
+
+	function selectLineReview(startLine: number, endLine: number) {
+		if (!file) return;
+		selectedReviewFile = file.path;
+		selectedReviewRange = { file: file.path, startLine, endLine };
+	}
+
+	const activeReviewComments = $derived(
+		reviewComments.filter((comment) => comment.target_type === 'workspace')
+	);
+
+	const fileReviewComments = $derived(
+		reviewComments.filter((comment) => comment.file === file?.path && comment.target_type === 'line')
+	);
+
+	const commentCountsByFile = $derived(
+		reviewComments.reduce<Record<string, number>>((counts, comment) => {
+			if (comment.file) counts[comment.file] = (counts[comment.file] ?? 0) + 1;
+			return counts;
+		}, {})
+	);
 
 	function historyMessage(entry: { message: string; kind: string }) {
 		return withoutOpaqueUserIds(entry.message) || entry.kind;
@@ -148,16 +226,55 @@
 				<div class="flex flex-col md:flex-row gap-0 overflow-hidden" style="height: calc(100vh - 220px);">
 					<div class="h-48 md:h-auto md:w-[260px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-[#2a2a28]">
 						<div class="flex-1 overflow-auto min-h-0 pr-3">
-							<FileTreePane entries={detail.files.entries} selectedPath={file?.path ?? ''} onSelect={openFile} />
+							<FileTreePane entries={detail.files.entries} selectedPath={file?.path ?? ''} onSelect={openFile} commentCounts={commentCountsByFile} />
 						</div>
 					</div>
 					<div class="min-w-0 flex-1 overflow-auto pl-0 md:pl-4 pt-3 md:pt-0">
-						<CodePane {file} />
+						<CodePane
+							{file}
+							reviewComments={fileReviewComments}
+							activeRange={selectedReviewRange}
+							readonly={!canWrite && !canMaintain}
+							onLineComment={selectLineReview}
+							onSubmitInline={submitReviewComment}
+							onCancelInline={() => (selectedReviewRange = null)}
+						/>
 					</div>
 				</div>
 			</div>
 
 			<div class="grid gap-5">
+				<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
+					<ReviewThread
+						title={detail.name}
+						comments={activeReviewComments}
+						onSubmit={async (body: string) => {
+							selectedReviewFile = null;
+							selectedReviewRange = null;
+							await submitReviewComment(body);
+						}}
+						readonly={!canWrite && !canMaintain}
+					/>
+					{#if canMaintain && detail.is_ready && detail.status !== 'merged'}
+						<form class="mt-4 grid gap-2 border-t border-[#2a2a28] pt-4" onsubmit={(event) => { event.preventDefault(); handleRequestChanges(); }}>
+							<textarea
+								class="min-h-[76px] resize-y rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#5f5b52] focus:outline-[#4a4942]"
+								placeholder="Explain what needs to change..."
+								bind:value={changeReason}
+							></textarea>
+							<div class="flex justify-end">
+								<button
+									type="submit"
+									class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36] disabled:opacity-60"
+									disabled={reviewBusy || !changeReason.trim()}
+								>
+									{reviewBusy ? 'Sending...' : 'Request changes'}
+								</button>
+							</div>
+						</form>
+					{/if}
+				</div>
+
 				{#if detail.child_workspaces.length}
 					<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
 						<h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Child workspaces</h4>

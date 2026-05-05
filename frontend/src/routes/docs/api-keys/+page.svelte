@@ -43,7 +43,7 @@ Content-Type: application/json`;
 		<div class="mt-4 grid gap-3">
 			<div class="border-l border-[#3a3a36] pl-4">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Feature agent</h3>
-				<p class="mt-1 text-sm leading-6 text-[#8c887e]"><code>workspaces:read</code>, <code>workspaces:create</code>, <code>workspaces:write</code>, <code>workspaces:ready</code>, <code>issues:read</code>. This can create work without touching main.</p>
+				<p class="mt-1 text-sm leading-6 text-[#8c887e]"><code>workspaces:read</code>, <code>workspaces:create</code>, <code>workspaces:write</code>, <code>workspaces:ready</code>, <code>issues:read</code>, <code>issues:write</code>. This can create work and leave review comments without touching main.</p>
 			</div>
 			<div class="border-l border-[#3a3a36] pl-4">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Release bot</h3>

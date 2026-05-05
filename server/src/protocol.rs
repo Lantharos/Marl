@@ -50,6 +50,41 @@ pub async fn create_protocol_comment(
     create_protocol_kind(req, ctx, "comment").await
 }
 
+pub async fn update_protocol_comment(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let id = param(&ctx, "item_id")?;
+    let database = db(&ctx)?;
+    let Some(mut item) = protocol_item(&database, &tenant, &project, &id).await? else {
+        return json_error(404, "item not found");
+    };
+    if item["kind"].as_str() != Some("comment") {
+        return json_error(404, "item not found");
+    }
+    if item["author"].as_str() != Some(user.as_str()) {
+        return json_error(403, "only the comment author can edit this comment");
+    }
+    if d1::project_is_archived(&database, &tenant, &project).await? {
+        return json_error(403, "project is archived and read-only");
+    }
+    let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
+    let Some(next_body) = body["body"].as_str().map(str::trim).filter(|value| !value.is_empty()) else {
+        return json_error(400, "missing body");
+    };
+    let now = js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default();
+    item["body"] = json!(next_body);
+    item["updated_at"] = json!(now);
+    upsert_protocol_item(&database, &tenant, &project, "comment", &id, item.clone()).await?;
+    enrich_protocol_comment_profiles(&database, std::slice::from_mut(&mut item)).await?;
+    Response::from_json(&item)
+}
+
 pub async fn list_hooks(
     req: Request,
     ctx: crate::request_context::AppRouteContext,
@@ -274,15 +309,39 @@ pub async fn delete_protocol_item(
     let id = param(&ctx, "item_id")?;
     let database = db(&ctx)?;
     let kind = protocol_item_kind(&database, &tenant, &project, &id).await?;
-    check_project_write_capability(
-        &database,
-        &tenant,
-        &project,
-        &user,
-        "maintainer",
-        write_scope_for_kind(kind.as_deref().unwrap_or_default()),
-    )
-    .await?;
+    if kind.is_none() {
+        return json_error(404, "item not found");
+    }
+    if kind.as_deref() == Some("comment") {
+        let Some(item) = protocol_item(&database, &tenant, &project, &id).await? else {
+            return json_error(404, "item not found");
+        };
+        if item["author"].as_str() == Some(user.as_str()) {
+            if d1::project_is_archived(&database, &tenant, &project).await? {
+                return json_error(403, "project is archived and read-only");
+            }
+        } else {
+            check_project_write_capability(
+                &database,
+                &tenant,
+                &project,
+                &user,
+                "maintainer",
+                write_scope_for_kind("comment"),
+            )
+            .await?;
+        }
+    } else {
+        check_project_write_capability(
+            &database,
+            &tenant,
+            &project,
+            &user,
+            "maintainer",
+            write_scope_for_kind(kind.as_deref().unwrap_or_default()),
+        )
+        .await?;
+    }
     database
         .prepare("DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND id = ?3")
         .bind(&[
@@ -375,11 +434,64 @@ async fn list_protocol_kind(
         data_json: String,
     }
     let rows: Vec<Row> = result.results()?;
-    let items = rows
+    let filters = protocol_item_filters(&req.url()?, kind);
+    let mut items = rows
         .into_iter()
         .filter_map(|row| serde_json::from_str::<serde_json::Value>(&row.data_json).ok())
+        .filter(|item| filters.iter().all(|(key, expected)| protocol_item_matches(item, key, expected)))
         .collect::<Vec<_>>();
+    if kind == "comment" {
+        enrich_protocol_comment_profiles(&database, &mut items).await?;
+    }
     Response::from_json(&paginate_vec(req.url()?, items))
+}
+
+async fn enrich_protocol_comment_profiles(
+    database: &crate::request_context::Database,
+    items: &mut [serde_json::Value],
+) -> Result<()> {
+    for item in items {
+        let Some(author) = item["author"].as_str().map(ToOwned::to_owned) else {
+            continue;
+        };
+        if let Some(profile) = d1::user_profile(database, &author).await? {
+            item["author_profile"] = json!(profile);
+        }
+    }
+    Ok(())
+}
+
+fn protocol_item_filters(url: &Url, kind: &str) -> Vec<(String, String)> {
+    if kind != "comment" {
+        return Vec::new();
+    }
+    let filter_keys = [
+        "target_type",
+        "target_id",
+        "workspace",
+        "snapshot_id",
+        "history_entry_id",
+        "file",
+        "line",
+        "start_line",
+        "end_line",
+    ];
+    url.query_pairs()
+        .filter_map(|(key, value)| {
+            filter_keys
+                .contains(&key.as_ref())
+                .then(|| (key.to_string(), value.to_string()))
+        })
+        .filter(|(_, value)| !value.trim().is_empty())
+        .collect()
+}
+
+fn protocol_item_matches(item: &serde_json::Value, key: &str, expected: &str) -> bool {
+    match item.get(key) {
+        Some(value) if value.is_number() => value.to_string() == expected,
+        Some(value) => value.as_str().is_some_and(|actual| actual == expected),
+        None => false,
+    }
 }
 
 async fn create_protocol_kind(
@@ -413,7 +525,7 @@ async fn create_protocol_kind(
     body["id"] = json!(id.clone());
     body["kind"] = json!(kind);
     if body["author"].is_null() {
-        body["author"] = json!(user);
+        body["author"] = json!(user.clone());
     }
     if body["created_at"].is_null() {
         body["created_at"] = json!(now.clone());
@@ -425,6 +537,9 @@ async fn create_protocol_kind(
     upsert_protocol_item(&database, &tenant, &project, kind, &id, body.clone()).await?;
     if kind == "release" {
         d1::recompute_project_stats(&database, &tenant, &project).await?;
+    }
+    if kind == "comment" {
+        enrich_protocol_comment_profiles(&database, std::slice::from_mut(&mut body)).await?;
     }
     Response::from_json(&body)
 }

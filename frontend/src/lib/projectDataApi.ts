@@ -2,9 +2,11 @@ import {
 	authedFetch,
 	isAbortError,
 	notifyProjectStatsChanged,
+	pageQuery,
 	publicFetch,
 	type ApiOptions
 } from './apiShared';
+import type { PageOptions, Paginated } from './apiShared';
 import type { Comment } from './issueApi';
 import { downloadObjects } from './objectApi';
 import type { UserProfile } from './api';
@@ -88,6 +90,40 @@ export interface ChangedFile {
 	new_id: string | null;
 }
 
+export interface ReviewComment {
+	id: string;
+	kind: 'comment' | string;
+	body: string;
+	author: string;
+	author_profile?: UserProfile | null;
+	created_at: string;
+	updated_at?: string;
+	target_type: 'workspace' | 'save' | 'file' | 'line' | string;
+	target_id?: string;
+	workspace?: string;
+	snapshot_id?: string | null;
+	history_entry_id?: string;
+	file?: string | null;
+	line?: number | null;
+	start_line?: number | null;
+	end_line?: number | null;
+	side?: 'old' | 'new' | string;
+	state?: 'open' | 'resolved' | string;
+}
+
+export interface ReviewCommentTarget {
+	target_type: ReviewComment['target_type'];
+	target_id?: string;
+	workspace?: string;
+	snapshot_id?: string | null;
+	history_entry_id?: string;
+	file?: string | null;
+	line?: number | null;
+	start_line?: number | null;
+	end_line?: number | null;
+	side?: 'old' | 'new' | string;
+}
+
 export async function getProjectTree(tenant: string, project: string, workspace = 'main', snapshot?: string, options: ProjectTreeOptions = {}) {
 	let url = `/v1/tenants/${tenant}/projects/${project}/tree?workspace=${encodeURIComponent(workspace)}`;
 	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
@@ -138,6 +174,89 @@ export async function getReadyWorkspaceDetail(tenant: string, project: string, w
 	const ws = workspaces.find((w) => w.name === workspace);
 	if (!ws) throw new Error('Workspace not found');
 	return { ...ws, comments: [] };
+}
+
+export async function listReviewComments(
+	tenant: string,
+	project: string,
+	target: Partial<ReviewCommentTarget> = {},
+	options: PageOptions = {}
+): Promise<Paginated<ReviewComment>> {
+	const params = new URLSearchParams(pageQuery(options).replace(/^\?/, ''));
+	for (const [key, value] of Object.entries(target)) {
+		if (value !== undefined && value !== null && String(value).trim() !== '') {
+			params.set(key, String(value));
+		}
+	}
+	const query = params.toString();
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/comments${query ? `?${query}` : ''}`, {
+		signal: options.signal
+	});
+	return (await response.json()) as Paginated<ReviewComment>;
+}
+
+export async function createReviewComment(
+	tenant: string,
+	project: string,
+	target: ReviewCommentTarget,
+	body: string
+): Promise<ReviewComment> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/comments`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			...target,
+			body,
+			state: 'open',
+			target_id: target.target_id ?? reviewTargetId(target)
+		})
+	});
+	return (await response.json()) as ReviewComment;
+}
+
+export async function updateReviewComment(
+	tenant: string,
+	project: string,
+	commentId: string,
+	body: string
+): Promise<ReviewComment> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/comments/${encodeURIComponent(commentId)}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ body })
+	});
+	return (await response.json()) as ReviewComment;
+}
+
+export async function deleteReviewComment(tenant: string, project: string, commentId: string) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/comments/${encodeURIComponent(commentId)}`, {
+		method: 'DELETE'
+	});
+}
+
+export async function requestWorkspaceChanges(tenant: string, project: string, workspace: string, reason: string) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/reject`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ reason })
+	});
+	notifyProjectStatsChanged(tenant, project);
+}
+
+function reviewTargetId(target: ReviewCommentTarget) {
+	return [
+		target.target_type,
+		target.workspace,
+		target.snapshot_id,
+		target.history_entry_id,
+		target.file,
+		target.side,
+		target.start_line ?? target.line,
+		target.end_line
+	]
+		.filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+		.map(String)
+		.join(':');
 }
 
 export async function mergeWorkspace(tenant: string, project: string, workspace: string) {
