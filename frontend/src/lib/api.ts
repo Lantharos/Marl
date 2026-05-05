@@ -19,6 +19,7 @@ export interface ProjectSummary {
 	tenant: string;
 	project: string;
 	owner?: string;
+	folder?: string | null;
 }
 
 export interface TenantSummary {
@@ -112,9 +113,16 @@ export interface ProjectDiscoveryItem {
 	tenant: string;
 	project: string;
 	owner: string;
+	folder?: string | null;
 	stats: ProjectStats;
 	last_activity_at?: string | null;
 	latest_release?: Release | null;
+}
+
+export interface TenantFolder {
+	tenant: string;
+	path: string;
+	parent?: string | null;
 }
 
 export interface ProjectReleaseFeedItem {
@@ -263,6 +271,49 @@ export async function listTenantProjectCards(
 	if (query.trim()) params.set('q', query.trim());
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects?${params}`, { signal: options.signal });
 	return (await response.json()) as Paginated<ProjectDiscoveryItem>;
+}
+
+export async function listAccessibleTenantProjectCards(
+	tenant: string,
+	query: string,
+	options: PageOptions = {}
+): Promise<Paginated<ProjectDiscoveryItem>> {
+	const params = new URLSearchParams();
+	params.set('page', String(options.page ?? 1));
+	params.set('per_page', String(options.perPage ?? 30));
+	if (query.trim()) params.set('q', query.trim());
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects?${params}`, { signal: options.signal });
+	return (await response.json()) as Paginated<ProjectDiscoveryItem>;
+}
+
+export async function listTenantFolders(tenant: string, options: ApiOptions = {}): Promise<TenantFolder[]> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/folders`, { signal: options.signal });
+	const body = (await response.json()) as { folders: TenantFolder[] };
+	return body.folders;
+}
+
+export async function listAccessibleTenantFolders(tenant: string, options: ApiOptions = {}): Promise<TenantFolder[]> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/folders`, { signal: options.signal });
+	const body = (await response.json()) as { folders: TenantFolder[] };
+	return body.folders;
+}
+
+export async function createTenantFolder(tenant: string, path: string): Promise<TenantFolder> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/folders`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ path })
+	});
+	return (await response.json()) as TenantFolder;
+}
+
+export async function moveProjectToFolder(tenant: string, project: string, folder: string | null): Promise<ProjectSummary> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/folder`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ folder })
+	});
+	return (await response.json()) as ProjectSummary;
 }
 
 export async function createOrg(name: string) {

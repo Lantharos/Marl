@@ -42,6 +42,7 @@
               )
             : [],
     );
+    const filteredProjectGroups = $derived(groupProjects(filteredProjects.slice(0, 12)));
     const attentionCount = $derived(
         (home?.attention.ready_workspaces.length ?? 0) +
             (home?.attention.assigned_issues.length ?? 0) +
@@ -93,7 +94,27 @@
     }
 
     function projectLabel(project: ProjectDiscoveryItem | HomeReadyWorkspace | HomeIssueItem | HomeMentionItem | HomeActivityItem) {
+        if ("folder" in project && project.folder) {
+            return `${project.tenant}/${project.folder}/${project.project}`;
+        }
         return `${project.tenant}/${project.project}`;
+    }
+
+    function groupProjects(items: ProjectDiscoveryItem[]) {
+        const groups = new Map<string, { folder: string | null; items: ProjectDiscoveryItem[] }>();
+        for (const project of items) {
+            const folder = project.folder?.trim() || null;
+            const key = folder ?? "";
+            const group = groups.get(key) ?? { folder, items: [] };
+            group.items.push(project);
+            groups.set(key, group);
+        }
+        return [...groups.values()].sort((a, b) => {
+            if (a.folder === b.folder) return 0;
+            if (!a.folder) return -1;
+            if (!b.folder) return 1;
+            return a.folder.localeCompare(b.folder);
+        });
     }
 
     function workspacePath(item: HomeReadyWorkspace) {
@@ -328,20 +349,27 @@
                             />
                         </div>
                         <div class="overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
-                            {#each filteredProjects.slice(0, 12) as project}
-                                <button
-                                    class="block w-full border-b border-[#252522] px-4 py-3 text-left last:border-b-0 hover:bg-[#1a1a18]"
-                                    onclick={() => goto(projectPath(project))}
-                                >
-                                    <div class="truncate text-sm font-medium text-[#f0eee4]">{projectLabel(project)}</div>
-                                    <div class="mt-1 flex gap-2 text-xs text-[#6f6b5f]">
-                                        <span>{project.stats.ready_count} ready</span>
-                                        <span>{project.stats.open_issue_count} issues</span>
-                                    </div>
-                                </button>
+                            {#if filteredProjectGroups.length > 0}
+                                {#each filteredProjectGroups as group}
+                                    {#if group.folder}
+                                        <div class="border-b border-[#252522] px-4 py-2 text-xs text-[#8c887e]">{group.folder}</div>
+                                    {/if}
+                                    {#each group.items as project}
+                                        <button
+                                            class="block w-full border-b border-[#252522] px-4 py-3 text-left last:border-b-0 hover:bg-[#1a1a18]"
+                                            onclick={() => goto(projectPath(project))}
+                                        >
+                                            <div class="truncate text-sm font-medium text-[#f0eee4]">{projectLabel(project)}</div>
+                                            <div class="mt-1 flex gap-2 text-xs text-[#6f6b5f]">
+                                                <span>{project.stats.ready_count} ready</span>
+                                                <span>{project.stats.open_issue_count} issues</span>
+                                            </div>
+                                        </button>
+                                    {/each}
+                                {/each}
                             {:else}
                                 <p class="px-4 py-8 text-center text-sm text-[#6f6b5f]">No projects match that search.</p>
-                            {/each}
+                            {/if}
                         </div>
                     </aside>
                 </div>

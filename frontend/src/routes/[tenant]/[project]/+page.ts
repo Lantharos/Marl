@@ -1,11 +1,14 @@
 import { error } from '@sveltejs/kit';
 import type { ProjectOverview } from '$lib/api';
-import { apiUrl } from '$lib/loadApi';
+import { loadApiFetch } from '$lib/loadApi';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, params }) => {
 	const target = `${params.tenant}/${params.project}`;
-	const response = await fetch(apiUrl(`/v1/tenants/${encodeURIComponent(params.tenant)}/projects/${encodeURIComponent(params.project)}/overview`));
+	const response = await loadApiFetch(
+		fetch,
+		`/v1/tenants/${encodeURIComponent(params.tenant)}/projects/${encodeURIComponent(params.project)}/overview`
+	);
 	if (!response.ok) {
 		if (response.status === 404) {
 			error(404, 'Project not found');

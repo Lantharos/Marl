@@ -21,8 +21,9 @@ export const styCommandGroups: CommandGroup[] = [
 			{ command: 'sty tenant new --name <tenant>', description: 'Create an organization tenant without prompts.' },
 			{ command: 'sty init', description: 'Choose a tenant, name the project, create or connect it, and add the PIG remote for the current repo.' },
 			{ command: 'sty init --tenant <tenant> --project <project>', description: 'Create or connect a project without prompts.' },
+			{ command: 'sty init --tenant <tenant> --project mobile --folder product', description: 'Connect a repository and group it under a project folder in sty.' },
 			{ command: 'sty project list', description: 'List projects visible to the signed-in user.' },
-			{ command: 'sty project create --tenant <tenant> --project <project>', description: 'Create the project without changing the current PIG remote.' }
+			{ command: 'sty project create --tenant <tenant> --project website --folder product', description: 'Create a grouped project without changing the current PIG remote.' }
 		]
 	},
 	{
@@ -91,6 +92,8 @@ export const pigCommandGroups: CommandGroup[] = [
 			{ command: 'pig auth import <url> --token-stdin', description: 'Import a token from another tool without printing it.' },
 			{ command: 'pig auth logout', description: 'Remove stored remote auth.' },
 			{ command: 'pig sync', description: 'Upload missing objects, compare heads, push or pull, and resolve conflicts when needed.' },
+			{ command: 'pig repos list', description: 'List cached top-level child repositories when the current folder is a repo group.' },
+			{ command: 'pig repos refresh', description: 'Refresh the top-level child repository cache stored in the root .pig directory.' },
 			{ command: 'pig capabilities', description: 'Show the features advertised by the connected remote.' }
 		]
 	},

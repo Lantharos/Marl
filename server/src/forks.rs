@@ -48,6 +48,7 @@ pub(crate) async fn fork_project(
         tenant: body.target_tenant,
         project: body.target_project,
         owner: user,
+        folder: None,
     };
     Response::from_json(&ForkProjectResponse {
         source,
@@ -108,6 +109,7 @@ pub(crate) async fn send_work(
         tenant,
         project,
         owner: user,
+        folder: None,
     };
     Response::from_json(&SendWorkResponse {
         source,

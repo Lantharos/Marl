@@ -3,6 +3,7 @@ pub async fn ensure_project(
     db: &Database,
     tenant: &str,
     project: &str,
+    folder: Option<&str>,
     principal: &TokenPrincipal,
 ) -> Result<()> {
     ensure_account_tenant(db, &principal.user).await?;
@@ -29,6 +30,9 @@ pub async fn ensure_project(
         if existing.owner != principal.user && !tenant_control(db, tenant, &principal.user).await? {
             return Err(err("tenant control denied"));
         }
+        if let Some(folder) = folder {
+            set_project_folder(db, tenant, project, Some(folder)).await?;
+        }
         return Ok(());
     }
 
@@ -46,12 +50,13 @@ pub async fn ensure_project(
     })
     .map_err(|e| err(e.to_string()))?;
     db.prepare(
-        "INSERT INTO projects (tenant, project, owner, settings_json) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO projects (tenant, project, owner, folder, settings_json) VALUES (?1, ?2, ?3, ?4, ?5)",
     )
     .bind(&[
         js_str(tenant),
         js_str(project),
         js_str(&principal.user),
+        js_opt(folder),
         js_str(&settings),
     ])?
     .run()
@@ -70,9 +75,10 @@ pub async fn get_project(
     struct Row {
         tenant: String,
         project: String,
+        folder: Option<String>,
     }
     let row: Option<Row> = db
-        .prepare("SELECT tenant, project FROM projects WHERE tenant = ?1 AND project = ?2")
+        .prepare("SELECT tenant, project, folder FROM projects WHERE tenant = ?1 AND project = ?2")
         .bind(&[js_str(tenant), js_str(project)])?
         .first(None)
         .await?;
@@ -80,6 +86,7 @@ pub async fn get_project(
         owner: r.tenant.clone(),
         tenant: r.tenant,
         project: r.project,
+        folder: r.folder,
     }))
 }
 
@@ -89,16 +96,17 @@ pub async fn projects(db: &Database, principal: &TokenPrincipal) -> Result<Vec<P
     struct Row {
         tenant: String,
         project: String,
+        folder: Option<String>,
     }
     let result = db
         .prepare(
-            "SELECT p.tenant, p.project FROM projects p \
+            "SELECT p.tenant, p.project, p.folder FROM projects p \
              JOIN tenants t ON t.name = p.tenant \
              WHERE (t.owner = ?1 \
                 OR p.owner = ?1 \
                 OR EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant = t.name AND tm.user = ?1) \
                 OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.tenant = p.tenant AND pm.project = p.project AND pm.user = ?1)) \
-             ORDER BY p.tenant, p.project",
+             ORDER BY p.tenant, COALESCE(p.folder, ''), p.project",
         )
         .bind(&[js_str(&principal.user)])?
         .all()
@@ -110,6 +118,7 @@ pub async fn projects(db: &Database, principal: &TokenPrincipal) -> Result<Vec<P
             owner: r.tenant.clone(),
             tenant: r.tenant,
             project: r.project,
+            folder: r.folder,
         })
         .collect())
 }
@@ -178,6 +187,96 @@ pub async fn delete_project(db: &Database, tenant: &str, project: &str) -> Resul
             .await?;
     }
     Ok(true)
+}
+
+pub async fn set_project_folder(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    folder: Option<&str>,
+) -> Result<()> {
+    db.prepare("UPDATE projects SET folder = ?1 WHERE tenant = ?2 AND project = ?3")
+        .bind(&[js_opt(folder), js_str(tenant), js_str(project)])?
+        .run()
+        .await?;
+    Ok(())
+}
+
+pub async fn ensure_project_folder(
+    db: &Database,
+    tenant: &str,
+    path: &str,
+    principal: &TokenPrincipal,
+) -> Result<()> {
+    let mut current = String::new();
+    for part in path.split('/') {
+        if !current.is_empty() {
+            current.push('/');
+        }
+        current.push_str(part);
+        db.prepare(
+            "INSERT OR IGNORE INTO project_folders (tenant, path, created_by, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(&current),
+            js_str(&principal.user),
+            js_str(&now_rfc3339()),
+        ])?
+        .run()
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn tenant_folders(
+    db: &Database,
+    tenant: &str,
+    public_only: bool,
+) -> Result<Vec<sty_protocol::TenantFolder>> {
+    #[derive(Deserialize)]
+    struct Row {
+        path: String,
+    }
+    let result = if public_only {
+        db.prepare(
+            "SELECT folder AS path FROM projects
+             WHERE tenant = ?1
+             AND folder IS NOT NULL
+             AND folder != ''
+             AND COALESCE(json_extract(settings_json, '$.visibility'), 'private') = 'public'
+             ORDER BY path",
+        )
+        .bind(&[js_str(tenant)])?
+        .all()
+        .await?
+    } else {
+        db.prepare(
+            "SELECT path FROM project_folders WHERE tenant = ?1
+             UNION
+             SELECT folder AS path FROM projects WHERE tenant = ?1 AND folder IS NOT NULL AND folder != ''
+             ORDER BY path",
+        )
+        .bind(&[js_str(tenant)])?
+        .all()
+        .await?
+    };
+    let rows: Vec<Row> = result.results()?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let parent = row
+                .path
+                .rsplit_once('/')
+                .map(|(parent, _)| parent.to_string());
+            sty_protocol::TenantFolder {
+                tenant: tenant.to_string(),
+                path: row.path,
+                parent,
+            }
+        })
+        .collect())
 }
 
 pub async fn tenants(db: &Database, principal: &TokenPrincipal) -> Result<Vec<TenantSummary>> {

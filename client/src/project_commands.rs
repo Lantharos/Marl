@@ -3,7 +3,8 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use reqwest::blocking::Client;
 use sty_protocol::{
-    MeResponse, ProjectsResponse, TenantSummary, validate_segment, validate_target,
+    MeResponse, ProjectsResponse, TenantSummary, normalize_folder, validate_segment,
+    validate_target,
 };
 
 use crate::cli::load_config;
@@ -28,6 +29,7 @@ pub(crate) fn init(
     tenant: Option<String>,
     project: Option<String>,
     new_tenant: Option<String>,
+    folder: Option<String>,
     remote_url: String,
     pig: String,
 ) -> Result<()> {
@@ -43,7 +45,8 @@ pub(crate) fn init(
         create_tenant(&target.tenant, &remote_url)?;
     }
     let target = target.target();
-    create_project(&target, &remote_url)?;
+    let folder = normalize_folder(folder.as_deref())?;
+    create_project(&target, folder.as_deref(), &remote_url)?;
     let status = Command::new(&pig)
         .args(["remote", "add", &target, "--remote-url", &remote_url])
         .status()
@@ -61,6 +64,7 @@ pub(crate) fn create_project_command(
     tenant: Option<String>,
     project: Option<String>,
     new_tenant: Option<String>,
+    folder: Option<String>,
     remote_url: String,
 ) -> Result<()> {
     let target = resolve_project_target(
@@ -74,7 +78,8 @@ pub(crate) fn create_project_command(
     if target.create_tenant {
         create_tenant(&target.tenant, &remote_url)?;
     }
-    create_project(&target.target(), &remote_url)
+    let folder = normalize_folder(folder.as_deref())?;
+    create_project(&target.target(), folder.as_deref(), &remote_url)
 }
 
 pub(crate) fn create_tenant_command(
@@ -111,7 +116,10 @@ pub(crate) fn list_projects(remote_url: &str) -> Result<()> {
         return Ok(());
     }
     for project in body.projects {
-        println!("{}/{}", project.tenant, project.project);
+        match project.folder.as_deref() {
+            Some(folder) => println!("{}/{}/{}", project.tenant, folder, project.project),
+            None => println!("{}/{}", project.tenant, project.project),
+        }
     }
     Ok(())
 }
@@ -209,7 +217,7 @@ pub(crate) fn fetch_tenants(remote_url: &str) -> Result<Vec<TenantSummary>> {
     Ok(response.json::<MeResponse>()?.tenants)
 }
 
-fn create_project(target: &str, remote_url: &str) -> Result<()> {
+fn create_project(target: &str, folder: Option<&str>, remote_url: &str) -> Result<()> {
     let (tenant, project) = validate_target(target)?;
     let config = load_config()?;
     let url = format!(
@@ -221,7 +229,7 @@ fn create_project(target: &str, remote_url: &str) -> Result<()> {
     let response = Client::new()
         .post(url)
         .bearer_auth(config.token)
-        .json(&serde_json::json!({}))
+        .json(&serde_json::json!({ "folder": folder }))
         .send_request("Creating project")?;
     if !response.status().is_success() {
         bail!(
@@ -229,7 +237,10 @@ fn create_project(target: &str, remote_url: &str) -> Result<()> {
             response_error(response)
         );
     }
-    println!("Project ready: {target}");
+    match folder {
+        Some(folder) => println!("Project ready: {target} in {folder}"),
+        None => println!("Project ready: {target}"),
+    }
     Ok(())
 }
 

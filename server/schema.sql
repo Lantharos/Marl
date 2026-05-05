@@ -28,9 +28,19 @@ CREATE TABLE IF NOT EXISTS projects (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
     owner TEXT NOT NULL,
+    folder TEXT,
     settings_json TEXT NOT NULL DEFAULT '{}',
     PRIMARY KEY (tenant, project)
 );
+CREATE INDEX IF NOT EXISTS idx_projects_tenant_folder ON projects(tenant, folder, project);
+CREATE TABLE IF NOT EXISTS project_folders (
+    tenant TEXT NOT NULL,
+    path TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (tenant, path)
+);
+CREATE INDEX IF NOT EXISTS idx_project_folders_tenant ON project_folders(tenant, path);
 CREATE TABLE IF NOT EXISTS workspace_heads (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,

@@ -30,10 +30,13 @@ pig sync
 ```powershell
 sty init --tenant tenant --project project
 sty init --new-tenant tenant --project project
+sty init --tenant tenant --project mobile --folder product
 sty init --target tenant/project
 sty tenant new --name tenant
-sty project create --tenant tenant --project project
+sty project create --tenant tenant --project website --folder product
 ```
+
+Use project folders when a product is split across separate repositories. The remote for each repository is still `tenant/project`; the folder is organization metadata used by sty lists and dashboards. In the tenant home, maintainers can create nested folders and drag projects into them.
 
 To start from a public project, fork it:
 

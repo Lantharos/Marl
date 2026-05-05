@@ -4,8 +4,8 @@ use sty_protocol::{
     AuthCheckResponse, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
     CreateIssueRequest, HeadResponse, HeadUpdateRequest, HistoryEntry, HistoryResponse,
     HistorySignature, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
-    ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary, ProjectTreeResponse,
-    SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
+    CreateProjectRequest, ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
+    ProjectTreeResponse, SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
     UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary, validate_segment,
 };
 use worker::*;
@@ -100,10 +100,16 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async("/v1/discover/projects", discover_projects)
         .post_async("/v1/forks", fork_project)
         .get_async("/v1/projects", list_projects)
+        .get_async("/v1/tenants/:tenant/folders", list_tenant_folders)
+        .post_async("/v1/tenants/:tenant/folders", create_tenant_folder)
         .get_async("/v1/tenants/:tenant/projects", tenant_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
         .delete_async("/v1/tenants/:tenant/projects/:project", delete_project)
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/folder",
+            move_project_folder,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/access",
             project_access,

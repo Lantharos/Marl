@@ -320,6 +320,9 @@ async fn ensure_snapshot_refs_uploaded(
 ) -> Result<()> {
     let store = bucket(env)?;
     let snapshot_bytes = r2_bytes(&store, &object_key(tenant, project, snapshot_id)).await?;
+    validate_snapshot_signature(db, &snapshot_bytes)
+        .await
+        .map_err(|reason| Error::RustError(format!("invalid snapshot signature: {reason}")))?;
     let snapshot: serde_json::Value =
         serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
     let root_tree = snapshot["root_tree"]

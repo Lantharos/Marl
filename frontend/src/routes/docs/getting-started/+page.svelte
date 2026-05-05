@@ -51,7 +51,7 @@ pig sync`;
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Connect a repository</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Run this from the repository you want to host. Your account already has a tenant named by your handle; create an organization tenant only when the project should live in a shared namespace. The init command asks for the tenant and project name; use <code>sty init --tenant acme --project website</code> when prompts are not available.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Run this from the repository you want to host. Your account already has a tenant named by your handle; create an organization tenant only when the project should live in a shared namespace. The init command asks for the tenant and project name; use <code>sty init --tenant acme --project website</code> when prompts are not available. Add <code>--folder product</code> when separate repositories belong together.</p>
 		<div class="mt-4">
 			<CodeBlock code={firstProject} />
 		</div>
@@ -83,6 +83,10 @@ pig sync`;
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Project</h3>
 				<p class="text-sm leading-6 text-[#8c887e]">A hosted PIG repository under a tenant. New projects are private by default.</p>
+			</div>
+			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
+				<h3 class="text-sm font-medium text-[#f0eee4]">Folder</h3>
+				<p class="text-sm leading-6 text-[#8c887e]">A tenant-level grouping for related projects, useful when a mobile app, website, and service live in separate repositories. Tenant maintainers can create nested folders and move projects between them from the tenant home.</p>
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Workspace</h3>

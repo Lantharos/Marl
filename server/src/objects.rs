@@ -44,6 +44,11 @@ pub(crate) async fn put_object(mut req: Request, ctx: crate::request_context::Ap
         return json_error(400, "object id does not match SHA-256 digest");
     }
     validate_object_payload(&kind, &bytes)?;
+    if kind == "snapshot" {
+        if let Err(reason) = validate_snapshot_signature(&database, &bytes).await {
+            return json_error(400, &format!("invalid snapshot signature: {reason}"));
+        }
+    }
     let store = bucket(&ctx.env)?;
     put_bytes(&store, &object_key(&tenant, &project, &id), bytes).await?;
     d1::record_object(&database, &tenant, &project, &id, &kind, size).await?;

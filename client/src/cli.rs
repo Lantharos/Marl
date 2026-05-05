@@ -60,6 +60,8 @@ enum Commands {
         project: Option<String>,
         #[arg(long)]
         new_tenant: Option<String>,
+        #[arg(long)]
+        folder: Option<String>,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
         #[arg(long, default_value = "pig")]
@@ -125,6 +127,8 @@ enum ProjectCommands {
         project: Option<String>,
         #[arg(long)]
         new_tenant: Option<String>,
+        #[arg(long)]
+        folder: Option<String>,
         #[arg(long, default_value = DEFAULT_REMOTE_URL)]
         remote_url: String,
     },
@@ -169,6 +173,7 @@ pub fn run() -> Result<()> {
             tenant,
             project,
             new_tenant,
+            folder,
             remote_url,
             pig,
         } => project_commands::init(
@@ -177,6 +182,7 @@ pub fn run() -> Result<()> {
             tenant,
             project,
             new_tenant,
+            folder,
             remote_url,
             pig,
         ),
@@ -210,6 +216,7 @@ pub fn run() -> Result<()> {
                 tenant,
                 project,
                 new_tenant,
+                folder,
                 remote_url,
             } => project_commands::create_project_command(
                 target,
@@ -217,6 +224,7 @@ pub fn run() -> Result<()> {
                 tenant,
                 project,
                 new_tenant,
+                folder,
                 remote_url,
             ),
             ProjectCommands::List { remote_url } => project_commands::list_projects(&remote_url),

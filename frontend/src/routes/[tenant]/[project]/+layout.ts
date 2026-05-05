@@ -1,10 +1,10 @@
 import { error } from '@sveltejs/kit';
 import type { AccessResponse, ProjectSettings, ProjectStats } from '$lib/api';
-import { apiUrl } from '$lib/loadApi';
+import { loadApiFetch } from '$lib/loadApi';
 import type { LayoutLoad } from './$types';
 
 async function loadProjectChromeItem<T>(fetch: typeof globalThis.fetch, path: string) {
-	const response = await fetch(apiUrl(path));
+	const response = await loadApiFetch(fetch, path);
 	if (response.status === 404) {
 		error(404, 'Project not found');
 	}

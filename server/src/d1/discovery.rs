@@ -10,6 +10,7 @@ pub async fn dashboard_project_cards(
     let result = db
         .prepare(
             "SELECT p.tenant, p.project, p.owner,
+                    p.folder,
                     COALESCE(ps.workspace_count, 0) AS workspace_count,
                     COALESCE(ps.open_issue_count, 0) AS open_issue_count,
                     COALESCE(ps.ready_count, 0) AS ready_count,
@@ -24,7 +25,7 @@ pub async fn dashboard_project_cards(
                 OR p.owner = ?1
                 OR EXISTS (SELECT 1 FROM tenant_members tm WHERE tm.tenant = t.name AND tm.user = ?1)
                 OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.tenant = p.tenant AND pm.project = p.project AND pm.user = ?1))
-             ORDER BY last_activity_at DESC, p.tenant, p.project
+             ORDER BY last_activity_at DESC, p.tenant, COALESCE(p.folder, ''), p.project
              LIMIT ?2",
         )
         .bind(&[
@@ -45,6 +46,7 @@ pub async fn followed_project_cards(
     let result = db
         .prepare(
             "SELECT p.tenant, p.project, p.owner,
+                    p.folder,
                     COALESCE(ps.workspace_count, 0) AS workspace_count,
                     COALESCE(ps.open_issue_count, 0) AS open_issue_count,
                     COALESCE(ps.ready_count, 0) AS ready_count,
@@ -80,6 +82,7 @@ pub async fn public_project_cards(
     let result = db
         .prepare(
             "SELECT p.tenant, p.project, p.owner,
+                    p.folder,
                     COALESCE(ps.workspace_count, 0) AS workspace_count,
                     COALESCE(ps.open_issue_count, 0) AS open_issue_count,
                     COALESCE(ps.ready_count, 0) AS ready_count,
@@ -90,8 +93,8 @@ pub async fn public_project_cards(
              FROM projects p
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
              WHERE COALESCE(json_extract(p.settings_json, '$.visibility'), 'private') = 'public'
-             AND (?1 = '' OR LOWER(p.tenant || '/' || p.project) LIKE ?2)
-             ORDER BY last_activity_at DESC, p.tenant, p.project
+             AND (?1 = '' OR LOWER(p.tenant || '/' || COALESCE(p.folder || '/', '') || p.project) LIKE ?2)
+             ORDER BY last_activity_at DESC, p.tenant, COALESCE(p.folder, ''), p.project
              LIMIT ?3",
         )
         .bind(&[
@@ -116,6 +119,7 @@ pub async fn tenant_public_project_cards(
     let result = db
         .prepare(
             "SELECT p.tenant, p.project, p.owner,
+                    p.folder,
                     COALESCE(ps.workspace_count, 0) AS workspace_count,
                     COALESCE(ps.open_issue_count, 0) AS open_issue_count,
                     COALESCE(ps.ready_count, 0) AS ready_count,
@@ -127,8 +131,8 @@ pub async fn tenant_public_project_cards(
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
              WHERE p.tenant = ?1
              AND COALESCE(json_extract(p.settings_json, '$.visibility'), 'private') = 'public'
-             AND (?2 = '' OR LOWER(p.project) LIKE ?3 OR LOWER(p.tenant || '/' || p.project) LIKE ?3)
-             ORDER BY last_activity_at DESC, p.project
+             AND (?2 = '' OR LOWER(p.project) LIKE ?3 OR LOWER(COALESCE(p.folder, '')) LIKE ?3 OR LOWER(p.tenant || '/' || COALESCE(p.folder || '/', '') || p.project) LIKE ?3)
+             ORDER BY last_activity_at DESC, COALESCE(p.folder, ''), p.project
              LIMIT ?4",
         )
         .bind(&[
@@ -154,6 +158,7 @@ pub async fn tenant_project_cards(
     let result = db
         .prepare(
             "SELECT p.tenant, p.project, p.owner,
+                    p.folder,
                     COALESCE(ps.workspace_count, 0) AS workspace_count,
                     COALESCE(ps.open_issue_count, 0) AS open_issue_count,
                     COALESCE(ps.ready_count, 0) AS ready_count,
@@ -164,8 +169,8 @@ pub async fn tenant_project_cards(
              FROM projects p
              LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
              WHERE p.tenant = ?1
-             AND (?2 = '' OR LOWER(p.project) LIKE ?3 OR LOWER(p.tenant || '/' || p.project) LIKE ?3)
-             ORDER BY last_activity_at DESC, p.project
+             AND (?2 = '' OR LOWER(p.project) LIKE ?3 OR LOWER(COALESCE(p.folder, '')) LIKE ?3 OR LOWER(p.tenant || '/' || COALESCE(p.folder || '/', '') || p.project) LIKE ?3)
+             ORDER BY last_activity_at DESC, COALESCE(p.folder, ''), p.project
              LIMIT ?4",
         )
         .bind(&[
@@ -224,6 +229,7 @@ struct ProjectCardRow {
     tenant: String,
     project: String,
     owner: String,
+    folder: Option<String>,
     workspace_count: f64,
     open_issue_count: f64,
     ready_count: f64,
@@ -247,6 +253,7 @@ fn project_card_item(row: ProjectCardRow) -> ProjectDiscoveryItem {
         tenant: row.tenant,
         project: row.project,
         owner: row.owner,
+        folder: row.folder,
         stats: ProjectStats {
             workspace_count: row.workspace_count as u64,
             open_issue_count: row.open_issue_count as u64,

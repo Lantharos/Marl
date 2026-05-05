@@ -62,6 +62,7 @@
 	const currentProject = $derived(accountSettings ? null : (pathParts[1] ?? null));
 	const selectedTenant = $derived(homePage || accountSettings ? '' : currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
+	const currentProjectSummary = $derived(projects.find((p) => p.tenant === currentTenant && p.project === currentProject));
 	const displayName = $derived(profile?.preferredUsername || profile?.name || 'Signed in');
 	const profileHandle = $derived(profile?.preferredUsername ? `@${profile.preferredUsername}` : profile?.email);
 	const profileDetail = $derived(profileHandle || '');
@@ -163,6 +164,10 @@
 		return (parts[0] ?? value).slice(0, 2).toUpperCase();
 	}
 
+	function projectMenuLabel(project: ProjectSummary) {
+		return project.folder ? `${project.folder}/${project.project}` : project.project;
+	}
+
 	async function createOrgFromModal() {
 		if (!newOrgName.trim()) return;
 		const name = newOrgName.trim();
@@ -217,7 +222,7 @@
 						class="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium text-[#eae9e4] hover:bg-[#1e1e1c] hover:text-[#d9a66c]"
 						onclick={() => (showProjectMenu = !showProjectMenu)}
 					>
-						{currentProject}
+						{currentProjectSummary ? projectMenuLabel(currentProjectSummary) : currentProject}
 						<ChevronDown class="h-3.5 w-3.5 text-[#6f6b5f]" />
 					</button>
 					{#if showProjectMenu}
@@ -229,7 +234,7 @@
 									class="block px-3 py-1.5 text-sm {currentProject === p.project ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
 									onclick={() => (showProjectMenu = false)}
 								>
-									{p.project}
+									{projectMenuLabel(p)}
 								</a>
 							{/each}
 							{#if tenantProjects.length === 0}

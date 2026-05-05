@@ -309,39 +309,62 @@ pub async fn verify_snapshot_id(
             "reason": "snapshot is unsigned",
         }));
     };
-    if signature.algorithm != "ed25519" {
+    if let Err(reason) = validate_snapshot_signature(database, &bytes).await {
         return Ok(json!({
             "snapshot": id,
             "verified": false,
             "known": true,
             "signer": signature.user,
             "key_id": signature.key_id,
-            "reason": "unsupported signing algorithm",
+            "reason": reason,
         }));
     }
-    let Some(key) = d1::active_signing_key(database, &signature.user, &signature.key_id).await?
-    else {
-        return Ok(json!({
-            "snapshot": id,
-            "verified": false,
-            "known": true,
-            "signer": signature.user,
-            "key_id": signature.key_id,
-            "reason": "signing key is not registered",
-        }));
-    };
-    let public_key = decode_ed25519_public_key(&key.public_key)?;
-    let signature_bytes = decode_signature(&signature.signature)?;
-    let verified = public_key.verify(id.as_bytes(), &signature_bytes).is_ok();
     Ok(json!({
         "snapshot": id,
-        "verified": verified,
+        "verified": true,
         "known": true,
         "signer": signature.user,
         "key_id": signature.key_id,
         "algorithm": signature.algorithm,
-        "reason": if verified { serde_json::Value::Null } else { json!("signature mismatch") },
+        "reason": serde_json::Value::Null,
     }))
+}
+
+pub async fn validate_snapshot_signature(
+    database: &crate::request_context::Database,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let snapshot: SignedSnapshot =
+        serde_json::from_slice(bytes).map_err(|_| "snapshot signature payload is invalid".to_string())?;
+    let Some(signature) = snapshot.signature else {
+        return Ok(());
+    };
+    if signature.algorithm != "ed25519" {
+        return Err("unsupported signing algorithm".to_string());
+    }
+    let key = d1::active_signing_key(database, &signature.user, &signature.key_id)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "signing key is not registered".to_string())?;
+    let public_key =
+        decode_ed25519_public_key(&key.public_key).map_err(|error| error.to_string())?;
+    let signature_bytes = decode_signature(&signature.signature).map_err(|error| error.to_string())?;
+    let id = snapshot_id_without_signature(bytes).map_err(|error| error.to_string())?;
+    if public_key.verify(id.as_bytes(), &signature_bytes).is_err() {
+        return Err("signature mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn snapshot_id_without_signature(bytes: &[u8]) -> Result<String> {
+    let mut snapshot: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    if let Some(object) = snapshot.as_object_mut() {
+        object.insert("id".to_string(), serde_json::Value::String(String::new()));
+        object.remove("signature");
+    }
+    let canonical = serde_json::to_vec(&snapshot).map_err(|error| Error::RustError(error.to_string()))?;
+    Ok(hex::encode(Sha256::digest(canonical)))
 }
 
 fn decode_ed25519_public_key(value: &str) -> Result<VerifyingKey> {

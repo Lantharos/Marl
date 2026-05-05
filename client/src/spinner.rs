@@ -4,11 +4,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+static ACTIVE: AtomicBool = AtomicBool::new(false);
+
 pub fn run<T, F>(message: impl Into<String>, f: F) -> T
 where
     F: FnOnce() -> T,
 {
-    if !io::stderr().is_terminal() {
+    if !io::stderr().is_terminal() || ACTIVE.swap(true, Ordering::Relaxed) {
         return f();
     }
 
@@ -16,7 +18,7 @@ where
     let done = Arc::new(AtomicBool::new(false));
     let spinner_done = Arc::clone(&done);
     let handle = thread::spawn(move || {
-        let frames = ["/", "\\"];
+        let frames = ["/", "-", "\\", "|"];
         let mut index = 0usize;
         while !spinner_done.load(Ordering::Relaxed) {
             let _ = write!(
@@ -37,5 +39,6 @@ where
     let result = f();
     done.store(true, Ordering::Relaxed);
     let _ = handle.join();
+    ACTIVE.store(false, Ordering::Relaxed);
     result
 }

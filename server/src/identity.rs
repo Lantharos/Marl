@@ -74,12 +74,85 @@ pub(crate) async fn list_projects(req: Request, ctx: crate::request_context::App
     Response::from_json(&json!({ "projects": projects }))
 }
 
-pub(crate) async fn create_project(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+pub(crate) async fn create_project(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
     let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
+    let body: CreateProjectRequest = req.json().await.unwrap_or_default();
+    let folder = sty_protocol::normalize_folder(body.folder.as_deref())
+        .map_err(|error| Error::RustError(error.to_string()))?;
     let database = db(&ctx)?;
-    d1::ensure_project(&database, &tenant, &project, &sty_protocol::TokenPrincipal { user }).await?;
+    d1::ensure_project(
+        &database,
+        &tenant,
+        &project,
+        folder.as_deref(),
+        &sty_protocol::TokenPrincipal { user },
+    )
+    .await?;
     Response::from_json(&OkResponse { ok: true })
+}
+
+pub(crate) async fn list_tenant_folders(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let tenant = param(&ctx, "tenant")?;
+    sty_protocol::validate_segment(&tenant).map_err(|e| Error::RustError(e.to_string()))?;
+    let database = db(&ctx)?;
+    if !d1::tenant_exists(&database, &tenant).await? {
+        return json_error(404, "tenant not found");
+    }
+    let user = optional_auth(&req, &ctx).await?;
+    let can_access = match user.as_deref() {
+        Some(user) => d1::tenant_access(&database, &tenant, user).await?,
+        None => false,
+    };
+    let folders = d1::tenant_folders(&database, &tenant, !can_access).await?;
+    Response::from_json(&sty_protocol::TenantFoldersResponse { folders })
+}
+
+pub(crate) async fn create_tenant_folder(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let tenant = param(&ctx, "tenant")?;
+    sty_protocol::validate_segment(&tenant).map_err(|e| Error::RustError(e.to_string()))?;
+    let body: sty_protocol::CreateTenantFolderRequest = req.json().await?;
+    let Some(path) = sty_protocol::normalize_folder_path(Some(&body.path))
+        .map_err(|e| Error::RustError(e.to_string()))?
+    else {
+        return json_error(400, "folder path is required");
+    };
+    let database = db(&ctx)?;
+    if !d1::tenant_exists(&database, &tenant).await? {
+        return json_error(404, "tenant not found");
+    }
+    if !d1::tenant_control(&database, &tenant, &user).await? {
+        return json_error(403, "tenant control denied");
+    }
+    let principal = sty_protocol::TokenPrincipal { user };
+    d1::ensure_project_folder(&database, &tenant, &path, &principal).await?;
+    let parent = path.rsplit_once('/').map(|(parent, _)| parent.to_string());
+    Response::from_json(&sty_protocol::TenantFolder { tenant, path, parent })
+}
+
+pub(crate) async fn move_project_folder(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let body: sty_protocol::MoveProjectFolderRequest = req.json().await?;
+    let folder = sty_protocol::normalize_folder_path(body.folder.as_deref())
+        .map_err(|e| Error::RustError(e.to_string()))?;
+    let database = db(&ctx)?;
+    if !d1::project_exists(&database, &tenant, &project).await? {
+        return json_error(404, "project not found");
+    }
+    if !d1::tenant_control(&database, &tenant, &user).await? {
+        return json_error(403, "tenant control denied");
+    }
+    let principal = sty_protocol::TokenPrincipal { user };
+    if let Some(folder) = folder.as_deref() {
+        d1::ensure_project_folder(&database, &tenant, folder, &principal).await?;
+    }
+    d1::set_project_folder(&database, &tenant, &project, folder.as_deref()).await?;
+    let Some(project) = d1::get_project(&database, &tenant, &project).await? else {
+        return json_error(404, "project not found");
+    };
+    Response::from_json(&project)
 }
 
 pub(crate) async fn project_detail(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
@@ -87,8 +160,14 @@ pub(crate) async fn project_detail(req: Request, ctx: crate::request_context::Ap
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "workspaces:read").await?;
-    let project_info = d1::get_project(&database, &tenant, &project).await?;
-    let owner = project_info.map(|p| p.owner).unwrap_or_default();
+    let project_info = d1::get_project(&database, &tenant, &project)
+        .await?
+        .unwrap_or_else(|| ProjectSummary {
+            tenant: tenant.clone(),
+            project: project.clone(),
+            owner: String::new(),
+            folder: None,
+        });
     let states = d1::workspace_states(&database, &tenant, &project).await?;
     let workspaces: Vec<WorkspaceSummary> = states
         .into_iter()
@@ -98,11 +177,7 @@ pub(crate) async fn project_detail(req: Request, ctx: crate::request_context::Ap
         })
         .collect();
     Response::from_json(&ProjectDetailResponse {
-        project: ProjectSummary {
-            tenant: tenant.clone(),
-            project: project.clone(),
-            owner,
-        },
+        project: project_info,
         workspaces,
     })
 }

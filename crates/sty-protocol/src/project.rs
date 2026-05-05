@@ -29,6 +29,8 @@ pub struct ProjectSummary {
     pub tenant: String,
     pub project: String,
     pub owner: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -41,6 +43,36 @@ pub struct WorkspaceSummary {
 pub struct ProjectDetailResponse {
     pub project: ProjectSummary,
     pub workspaces: Vec<WorkspaceSummary>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct CreateProjectRequest {
+    #[serde(default)]
+    pub folder: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TenantFolder {
+    pub tenant: String,
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TenantFoldersResponse {
+    pub folders: Vec<TenantFolder>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateTenantFolderRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MoveProjectFolderRequest {
+    #[serde(default)]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -123,6 +155,8 @@ pub struct ProjectDiscoveryItem {
     pub tenant: String,
     pub project: String,
     pub owner: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     pub stats: ProjectStats,
     pub last_activity_at: Option<String>,
     pub latest_release: Option<serde_json::Value>,
