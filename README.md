@@ -115,12 +115,24 @@ The Worker uses D1 for project metadata, workspace heads, issues, history, setti
 rustup target add wasm32-unknown-unknown
 ```
 
+If you are using Fedora's system Rust packages instead of Rustup, install the packaged target:
+
+```powershell
+sudo dnf install rust-std-static-wasm32-unknown-unknown
+```
+
 - Bun for frontend and Wrangler commands.
 - Wrangler, run with `bunx wrangler ...`.
 - `worker-build` for the Rust Worker build step:
 
 ```powershell
 cargo install worker-build
+```
+
+Make sure Cargo's binary directory is on your PATH:
+
+```powershell
+export PATH="$HOME/.cargo/bin:$PATH"
 ```
 
 ## Build The CLI From Source
@@ -148,7 +160,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, fork contribution links, and history metadata columns.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, fork contribution links, history metadata columns, project folders, and user profile pins.
 
 Then start the Worker:
 

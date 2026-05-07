@@ -177,6 +177,38 @@ export interface HomeActivityItem {
 	workspace?: string | null;
 }
 
+export interface ProfileContributionDay {
+	date: string;
+	count: number;
+}
+
+export interface ProfileTenant {
+	name: string;
+	kind: string;
+	public_project_count: number;
+}
+
+export interface ProfileStats {
+	public_project_count: number;
+	contribution_count: number;
+	tenant_count: number;
+}
+
+export interface UserProfilePage {
+	tenant: string;
+	owner: string;
+	profile: UserProfile;
+	is_self: boolean;
+	stats: ProfileStats;
+	projects: ProjectDiscoveryItem[];
+	pinned_projects: ProjectDiscoveryItem[];
+	pin_candidates: ProjectDiscoveryItem[];
+	following: ProjectDiscoveryItem[];
+	tenants: ProfileTenant[];
+	contributions: ProfileContributionDay[];
+	activity: HomeActivityItem[];
+}
+
 export interface HomeAttention {
 	ready_workspaces: HomeReadyWorkspace[];
 	assigned_issues: HomeIssueItem[];
@@ -296,6 +328,28 @@ export async function listAccessibleTenantFolders(tenant: string, options: ApiOp
 	const response = await authedFetch(`/v1/tenants/${tenant}/folders`, { signal: options.signal });
 	const body = (await response.json()) as { folders: TenantFolder[] };
 	return body.folders;
+}
+
+export async function getUserProfilePage(tenant: string, options: ApiOptions = {}): Promise<UserProfilePage | null> {
+	try {
+		const response = await publicFetch(`/v1/profiles/${encodeURIComponent(tenant)}`, { signal: options.signal });
+		return (await response.json()) as UserProfilePage;
+	} catch (error) {
+		if (error instanceof Error && error.message.includes('profile not found')) return null;
+		throw error;
+	}
+}
+
+export async function updateUserProfilePins(
+	tenant: string,
+	projects: { tenant: string; project: string }[]
+): Promise<UserProfilePage> {
+	const response = await authedFetch(`/v1/profiles/${encodeURIComponent(tenant)}/pins`, {
+		method: 'PUT',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ projects })
+	});
+	return (await response.json()) as UserProfilePage;
 }
 
 export async function createTenantFolder(tenant: string, path: string): Promise<TenantFolder> {

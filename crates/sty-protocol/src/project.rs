@@ -225,6 +225,53 @@ pub struct HomeActivityItem {
     pub workspace: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProfileContributionDay {
+    pub date: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProfileTenant {
+    pub name: String,
+    pub kind: String,
+    pub public_project_count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProfileStats {
+    pub public_project_count: u64,
+    pub contribution_count: u64,
+    pub tenant_count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UserProfilePage {
+    pub tenant: String,
+    pub owner: String,
+    pub profile: UserProfile,
+    pub is_self: bool,
+    pub stats: ProfileStats,
+    pub projects: Vec<ProjectDiscoveryItem>,
+    pub pinned_projects: Vec<ProjectDiscoveryItem>,
+    pub pin_candidates: Vec<ProjectDiscoveryItem>,
+    pub following: Vec<ProjectDiscoveryItem>,
+    pub tenants: Vec<ProfileTenant>,
+    pub contributions: Vec<ProfileContributionDay>,
+    pub activity: Vec<HomeActivityItem>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UpdateProfilePinsRequest {
+    pub projects: Vec<ProjectPinRequest>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProjectPinRequest {
+    pub tenant: String,
+    pub project: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HomeAttention {
     pub ready_workspaces: Vec<HomeReadyWorkspace>,

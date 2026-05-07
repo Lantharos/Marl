@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import {
 		createTenantFolder,
+		getUserProfilePage,
 		isAbortError,
 		listAccessibleTenantFolders,
 		listAccessibleTenantProjectCards,
@@ -12,6 +13,7 @@
 		type TenantFolder
 	} from '$lib/api';
 	import { appData } from '$lib/appState';
+	import UserProfileOverview from '$lib/components/UserProfileOverview.svelte';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import Folder from 'lucide-svelte/icons/folder';
 	import FolderPlus from 'lucide-svelte/icons/folder-plus';
@@ -21,6 +23,7 @@
 	let { data }: PageProps = $props();
 	let authedProjects = $state<Paginated<ProjectDiscoveryItem> | null>(null);
 	let localProjects = $state<Paginated<ProjectDiscoveryItem> | null>(null);
+	let profilePage = $state<typeof data.profile>(null);
 	let folders = $state<TenantFolder[]>([]);
 	let signedInTenantNames = $state<string[]>([]);
 	let authedLoadKey = '';
@@ -34,6 +37,7 @@
 	let expandedFolders = $state<string[]>([]);
 
 	const projects = $derived(localProjects ?? authedProjects ?? data.projects);
+	const visibleProfilePage = $derived(profilePage ?? data.profile);
 	const canAccessTenant = $derived(signedInTenantNames.includes(data.tenant));
 	const projectScope = $derived(projects.scope === 'all' || canAccessTenant ? 'all' : 'public');
 	const rootProjects = $derived(projects.items.filter((project) => !normalizeFolderPath(project.folder)));
@@ -48,6 +52,7 @@
 	$effect(() => {
 		if (folderLoadTenant === data.tenant) return;
 		folders = data.folders;
+		profilePage = data.profile;
 		folderLoadTenant = data.tenant;
 	});
 
@@ -73,7 +78,10 @@
 					perPage: data.projects.per_page,
 					signal
 				}),
-				listAccessibleTenantFolders(data.tenant, { signal })
+				listAccessibleTenantFolders(data.tenant, { signal }),
+				getUserProfilePage(data.tenant, { signal }).then((profile) => {
+					profilePage = profile;
+				})
 			]);
 			authedProjects = projectPage;
 			folders = tenantFolders;
@@ -282,6 +290,10 @@
 
 <div class="p-8">
 	<div class="mx-auto max-w-5xl">
+		{#if visibleProfilePage}
+			<UserProfileOverview profile={visibleProfilePage} />
+		{/if}
+		{#if !visibleProfilePage}
 		<div class="mb-4">
 			<h2 class="text-2xl font-semibold text-[#f0eee4]">{data.tenant}</h2>
 			<div class="mt-3 flex flex-wrap items-center gap-2">
@@ -481,6 +493,7 @@
 			{/if}
 		{/if}
 		</div>
+		{/if}
 
 	</div>
 </div>

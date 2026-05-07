@@ -4,6 +4,10 @@
 server/worker/target
 server/worker/build
 server/worker/.wrangler
+server/target
+server/build
+server/.wrangler
+server/.dev.vars
 frontend/node_modules
 frontend/.svelte-kit
 frontend/build

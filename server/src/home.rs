@@ -76,6 +76,31 @@ pub(crate) async fn tenant_projects(req: Request, ctx: crate::request_context::A
     }))
 }
 
+pub(crate) async fn user_profile(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let tenant = param(&ctx, "tenant")?;
+    validate_segment(&tenant).map_err(|error| Error::RustError(error.to_string()))?;
+    let user = optional_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
+    let Some(profile) = d1::user_profile_page(&database, &tenant, user.as_deref()).await? else {
+        return json_error(404, "profile not found");
+    };
+    Response::from_json(&profile)
+}
+
+pub(crate) async fn update_user_profile_pins(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let tenant = param(&ctx, "tenant")?;
+    validate_segment(&tenant).map_err(|error| Error::RustError(error.to_string()))?;
+    let user = require_auth(&req, &ctx).await?;
+    let body: sty_protocol::UpdateProfilePinsRequest = req.json().await?;
+    let database = db(&ctx)?;
+    let principal = sty_protocol::TokenPrincipal { user };
+    let profile = d1::set_user_profile_pins(&database, &tenant, &principal, body.projects).await?;
+    Response::from_json(&profile)
+}
+
 pub(crate) async fn follows(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
     let user = require_auth(&req, &ctx).await?;
     let url = req.url()?;

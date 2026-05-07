@@ -100,6 +100,8 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async("/v1/discover/projects", discover_projects)
         .post_async("/v1/forks", fork_project)
         .get_async("/v1/projects", list_projects)
+        .get_async("/v1/profiles/:tenant", user_profile)
+        .put_async("/v1/profiles/:tenant/pins", update_user_profile_pins)
         .get_async("/v1/tenants/:tenant/folders", list_tenant_folders)
         .post_async("/v1/tenants/:tenant/folders", create_tenant_folder)
         .get_async("/v1/tenants/:tenant/projects", tenant_projects)
