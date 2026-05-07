@@ -13,10 +13,9 @@
 		listMilestonesPage,
 		type Issue,
 		type Label,
-		type Milestone,
-		type Paginated
+		type Milestone
 	} from '$lib/api';
-	import PaginationControls from '$lib/components/PaginationControls.svelte';
+	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
@@ -30,19 +29,20 @@
 
 	type Tab = 'issues' | 'labels' | 'milestones';
 	type IssueState = 'open' | 'closed' | 'all';
+	const chunkSize = 25;
 
 	let activeTab = $state<Tab>('issues');
-	let issuePage = $state(1);
-	let labelPage = $state(1);
-	let milestonePage = $state(1);
 	let filter = $state<IssueState>('open');
 	let query = $state('');
 	let labelQuery = $state('');
 	let milestoneQuery = $state('');
 	let selectedLabel = $state('');
-	let issueData = $state<Paginated<Issue> | null>(null);
-	let labelData = $state<Paginated<Label> | null>(null);
-	let milestoneData = $state<Paginated<Milestone> | null>(null);
+	let issueItems = $state<Issue[]>([]);
+	let labelItems = $state<Label[]>([]);
+	let milestoneItems = $state<Milestone[]>([]);
+	let visibleIssues = $state(chunkSize);
+	let visibleLabels = $state(chunkSize);
+	let visibleMilestones = $state(chunkSize);
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
@@ -72,9 +72,9 @@
 
 	onDestroy(unsubscribe);
 
-	const issues = $derived(issueData?.items ?? []);
-	const labels = $derived(labelData?.items ?? []);
-	const milestones = $derived(milestoneData?.items ?? []);
+	const issues = $derived(issueItems);
+	const labels = $derived(labelItems);
+	const milestones = $derived(milestoneItems);
 	const filteredLabels = $derived(
 		labels.filter((label) => {
 			const haystack = `${label.name} ${label.description ?? ''} ${label.color}`.toLowerCase();
@@ -93,6 +93,9 @@
 			return haystack.includes(query.trim().toLowerCase());
 		})
 	);
+	const shownIssues = $derived(filteredIssues.slice(0, visibleIssues));
+	const shownLabels = $derived(filteredLabels.slice(0, visibleLabels));
+	const shownMilestones = $derived(filteredMilestones.slice(0, visibleMilestones));
 	const people = $derived(() => {
 		const names = new Set<string>();
 		if (currentUser) names.add(currentUser);
@@ -135,19 +138,19 @@
 		try {
 			const [issuesResult, labelsResult, milestonesResult, me] = await Promise.all([
 				listIssuesPage(tenant, project, {
-					page: issuePage,
-					perPage: 25,
+					page: 1,
+					perPage: 500,
 					state: filter,
 					label: selectedLabel || undefined,
 					signal
 				}),
-				listLabelsPage(tenant, project, { page: labelPage, perPage: 25, signal }).catch(() => null),
-				listMilestonesPage(tenant, project, { page: milestonePage, perPage: 25, signal }).catch(() => null),
+				listLabelsPage(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null),
+				listMilestonesPage(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null),
 				getMe({ signal }).catch(() => null)
 			]);
-			issueData = issuesResult;
-			labelData = labelsResult;
-			milestoneData = milestonesResult;
+			issueItems = issuesResult.items;
+			labelItems = labelsResult?.items ?? [];
+			milestoneItems = milestonesResult?.items ?? [];
 			currentUser = me?.profile?.handle ?? currentUser;
 		} catch (e) {
 			if (isAbortError(e)) return;
@@ -164,13 +167,20 @@
 		return () => controller.abort();
 	});
 
+	$effect(() => { assignee = exactDraftAssignee ?? ''; });
+
 	$effect(() => {
-		assignee = exactDraftAssignee ?? '';
+		filter;
+		query;
+		selectedLabel;
+		visibleIssues = chunkSize;
 	});
 
-	async function reloadCurrent() {
-		await load();
-	}
+	$effect(() => { labelQuery; visibleLabels = chunkSize; });
+
+	$effect(() => { milestoneQuery; visibleMilestones = chunkSize; });
+
+	async function reloadCurrent() { await load(); }
 
 	async function handleCreateIssue() {
 		if (!canCreateIssue) return;
@@ -194,7 +204,6 @@
 			assignee = '';
 			assigneeDraft = '';
 			showIssueForm = false;
-			issuePage = 1;
 			await reloadCurrent();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -214,7 +223,6 @@
 			});
 			labelName = '';
 			labelDescription = '';
-			labelPage = 1;
 			await reloadCurrent();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -236,7 +244,6 @@
 			milestoneTitle = '';
 			milestoneDescription = '';
 			milestoneDue = '';
-			milestonePage = 1;
 			await reloadCurrent();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -245,16 +252,10 @@
 		}
 	}
 
-	function setFilter(next: IssueState) {
-		filter = next;
-		issuePage = 1;
-	}
-
-	function setLabelFilter(name: string) {
-		selectedLabel = selectedLabel === name ? '' : name;
-		issuePage = 1;
-		activeTab = 'issues';
-	}
+	function setFilter(next: IssueState) { filter = next; }
+	function setLabelFilter(name: string) { selectedLabel = selectedLabel === name ? '' : name; activeTab = 'issues'; }
+	function removeIssueLabel(name: string) { selectedIssueLabels = selectedIssueLabels.filter((label) => label !== name); }
+	function chooseAssignee(name: string) { assignee = name; assigneeDraft = name; }
 
 	function addIssueLabel(name: string) {
 		if (!name || selectedIssueLabels.includes(name)) return;
@@ -262,20 +263,15 @@
 		labelDraft = '';
 	}
 
-	function removeIssueLabel(name: string) {
-		selectedIssueLabels = selectedIssueLabels.filter((label) => label !== name);
-	}
-
-	function chooseAssignee(name: string) {
-		assignee = name;
-		assigneeDraft = name;
-	}
-
 	function visibleAssignees(issue: Issue) {
 		return (issue.assignees ?? [])
 			.map((person) => userName(person))
 			.filter((person) => person !== 'Unknown user');
 	}
+
+	function loadMoreIssues() { visibleIssues = Math.min(visibleIssues + chunkSize, filteredIssues.length); }
+	function loadMoreLabels() { visibleLabels = Math.min(visibleLabels + chunkSize, filteredLabels.length); }
+	function loadMoreMilestones() { visibleMilestones = Math.min(visibleMilestones + chunkSize, filteredMilestones.length); }
 </script>
 
 <div class="mx-auto max-w-6xl">
@@ -400,7 +396,7 @@
 		{/if}
 
 		<div class="divide-y divide-[#252522] bg-[#141412]">
-			{#each filteredIssues as issue}
+			{#each shownIssues as issue}
 				<button class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#191917]" onclick={() => goto(`/${tenant}/${project}/issues/${issue.id}`)}>
 					{#if (issue.state ?? issue.status) === 'open'}
 						<Circle class="mt-0.5 h-4 w-4 shrink-0 text-[#7cb97c]" />
@@ -430,11 +426,11 @@
 				</div>
 			{/each}
 		</div>
-		<PaginationControls data={issueData} onPage={(page) => (issuePage = page)} />
+		<InfiniteLoader active={shownIssues.length < filteredIssues.length} onVisible={loadMoreIssues} />
 	{:else if activeTab === 'labels'}
 		<div class={canMaintain ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
 			<div class="divide-y divide-[#252522] bg-[#141412]">
-				{#each filteredLabels as label}
+				{#each shownLabels as label}
 					<button class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#191917]" onclick={() => setLabelFilter(label.name)}>
 						<span class="h-3 w-3 shrink-0" style={`background: ${label.color}`}></span>
 						<div class="min-w-0 flex-1">
@@ -462,11 +458,11 @@
 			</form>
 			{/if}
 		</div>
-		<PaginationControls data={labelData} onPage={(page) => (labelPage = page)} />
+		<InfiniteLoader active={shownLabels.length < filteredLabels.length} onVisible={loadMoreLabels} />
 	{:else}
 		<div class={canMaintain ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
 			<div class="divide-y divide-[#252522] bg-[#141412]">
-				{#each filteredMilestones as milestone}
+				{#each shownMilestones as milestone}
 					<div class="px-4 py-3">
 						<div class="flex flex-wrap items-center gap-2">
 							<div class="text-sm font-medium text-[#eae9e4]">{milestone.title}</div>
@@ -495,6 +491,6 @@
 			</form>
 			{/if}
 		</div>
-		<PaginationControls data={milestoneData} onPage={(page) => (milestonePage = page)} />
+		<InfiniteLoader active={shownMilestones.length < filteredMilestones.length} onVisible={loadMoreMilestones} />
 	{/if}
 </div>

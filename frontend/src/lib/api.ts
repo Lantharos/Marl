@@ -107,7 +107,14 @@ export interface ProjectOverview {
 	default_workspace: string;
 }
 
-export type MeResponse = { user: string; profile?: UserProfile | null; tenants: TenantSummary[] };
+export type MeResponse = {
+	user: string;
+	profile?: UserProfile | null;
+	tenants: TenantSummary[];
+	account_tenant?: string | null;
+	account_setup_required?: boolean;
+	account_tenant_suggestions?: string[];
+};
 
 export interface ProjectDiscoveryItem {
 	tenant: string;
@@ -254,8 +261,16 @@ export async function getInitializedMe(options: ApiOptions = {}) {
 }
 
 function isAccountTenantReady(me: MeResponse) {
-	const handle = me.profile?.handle?.trim();
-	return Boolean(handle && me.tenants.some((tenant) => tenant.kind === 'user' && tenant.name === handle));
+	return Boolean(me.account_tenant || me.tenants.some((tenant) => tenant.kind === 'user'));
+}
+
+export async function createAccountTenant(name: string) {
+	const response = await authedFetch('/v1/account/tenant', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ name })
+	});
+	return (await response.json()) as TenantSummary;
 }
 
 export async function listProjects(options: ApiOptions = {}) {
@@ -333,6 +348,16 @@ export async function listAccessibleTenantFolders(tenant: string, options: ApiOp
 export async function getUserProfilePage(tenant: string, options: ApiOptions = {}): Promise<UserProfilePage | null> {
 	try {
 		const response = await publicFetch(`/v1/profiles/${encodeURIComponent(tenant)}`, { signal: options.signal });
+		return (await response.json()) as UserProfilePage;
+	} catch (error) {
+		if (error instanceof Error && error.message.includes('profile not found')) return null;
+		throw error;
+	}
+}
+
+export async function getUserProfilePageByHandle(handle: string, options: ApiOptions = {}): Promise<UserProfilePage | null> {
+	try {
+		const response = await publicFetch(`/v1/users/${encodeURIComponent(handle)}/profile`, { signal: options.signal });
 		return (await response.json()) as UserProfilePage;
 	} catch (error) {
 		if (error instanceof Error && error.message.includes('profile not found')) return null;

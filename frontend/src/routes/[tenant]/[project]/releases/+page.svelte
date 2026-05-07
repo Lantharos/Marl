@@ -9,15 +9,14 @@
 		listTags,
 		updateProjectSettings,
 		uploadReleaseArtifact,
-		type Paginated,
 		type ProjectSettings,
 		type Release,
 		type ReleaseArtifact,
 		type TagInfo
 	} from '$lib/api';
 	import { apiBase } from '$lib/session';
+	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
-	import PaginationControls from '$lib/components/PaginationControls.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userName } from '$lib/identity';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
@@ -31,10 +30,11 @@
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
+	const chunkSize = 20;
 
-	let releaseData = $state<Paginated<Release> | null>(null);
+	let releaseItems = $state<Release[]>([]);
 	let tags = $state<TagInfo[]>([]);
-	let releasePage = $state(1);
+	let visibleCount = $state(chunkSize);
 	let loading = $state(true);
 	let error = $state('');
 	let showForm = $state(false);
@@ -54,7 +54,8 @@
 
 	onDestroy(unsubscribe);
 
-	const releases = $derived(releaseData?.items ?? []);
+	const releases = $derived(releaseItems);
+	const visibleReleases = $derived(releases.slice(0, visibleCount));
 	const tagSuggestions = $derived(() => {
 		const needle = tag.trim().toLowerCase();
 		return tags
@@ -140,11 +141,11 @@
 		error = '';
 		try {
 			const [releaseResult, tagResult, settingsResult] = await Promise.all([
-				listReleasesPage(tenant, project, { page: releasePage, perPage: 25, signal }),
+				listReleasesPage(tenant, project, { page: 1, perPage: 500, signal }),
 				listTags(tenant, project, { page: 1, perPage: 100, signal }).catch(() => null),
 				getProjectSettings(tenant, project, { signal }).catch(() => null)
 			]);
-			releaseData = releaseResult;
+			releaseItems = releaseResult.items;
 			tags = tagResult?.items ?? [];
 			settings = settingsResult;
 		} catch (e) {
@@ -197,13 +198,16 @@
 			notes = '';
 			pendingFiles = [];
 			showForm = false;
-			releasePage = 1;
 			await load();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
 			busy = false;
 		}
+	}
+
+	function loadMore() {
+		visibleCount = Math.min(visibleCount + chunkSize, releases.length);
 	}
 </script>
 
@@ -338,7 +342,7 @@
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else}
 		<div class="grid gap-5">
-			{#each releases as release}
+			{#each visibleReleases as release}
 				{@const artifacts = artifactList(release)}
 				<section class="grid gap-3 rounded border border-[#2a2a28] bg-[#141412] p-4">
 					<div class="flex items-start gap-3">
@@ -413,6 +417,6 @@
 				</div>
 			{/each}
 		</div>
-		<PaginationControls data={releaseData} onPage={(page) => (releasePage = page)} />
+		<InfiniteLoader active={visibleReleases.length < releases.length} onVisible={loadMore} />
 	{/if}
 </div>

@@ -297,6 +297,8 @@ pub struct WorkspaceState {
     pub status: String,
     pub head: Option<String>,
     pub parent_workspace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_activity_at: Option<String>,
     pub child_workspaces: Vec<String>,
     pub is_ready: bool,
     pub mergeable: bool,

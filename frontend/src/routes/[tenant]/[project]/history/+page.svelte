@@ -1,26 +1,27 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { getProjectHistory, isAbortError, type HistoryEntry, type Paginated } from '$lib/api';
-	import PaginationControls from '$lib/components/PaginationControls.svelte';
+	import { getProjectHistory, isAbortError, type HistoryEntry } from '$lib/api';
+	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
+	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
-	const perPage = 20;
+	const chunkSize = 20;
 
 	let entries = $state<HistoryEntry[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let historyPage = $state(1);
+	let visibleCount = $state(chunkSize);
 
 	async function load(signal: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			entries = await getProjectHistory(tenant, project, { signal });
+			entries = await getProjectHistory(tenant, project, { signal, limit: 500 });
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -55,22 +56,21 @@
 
 	const workspaces = $derived(['__all__', ...new Set(entries.map((e) => e.workspace))]);
 	let filter = $state('__all__');
-	const filtered = $derived(filter === '__all__' ? entries : entries.filter((e) => e.workspace === filter));
-	const totalPages = $derived(Math.max(1, Math.ceil(filtered.length / perPage)));
-	const visibleEntries = $derived(filtered.slice((historyPage - 1) * perPage, historyPage * perPage));
-	const pageData = $derived<Paginated<HistoryEntry>>({
-		items: visibleEntries,
-		page: historyPage,
-		per_page: perPage,
-		total: filtered.length,
-		total_pages: totalPages,
-		next: historyPage < totalPages ? historyPage + 1 : null,
-		prev: historyPage > 1 ? historyPage - 1 : null
-	});
+	let dateFrom = $state('');
+	let dateTo = $state('');
+	const filtered = $derived(entries.filter((entry) => {
+		if (filter !== '__all__' && entry.workspace !== filter) return false;
+		return inDateRange(entry.timestamp);
+	}));
+	const visibleEntries = $derived(filtered.slice(0, visibleCount));
+	const hasMore = $derived(visibleEntries.length < filtered.length);
 	const groupedEntries = $derived(groupByDay(visibleEntries));
 
 	$effect(() => {
-		if (historyPage > totalPages) historyPage = totalPages;
+		filter;
+		dateFrom;
+		dateTo;
+		visibleCount = chunkSize;
 	});
 
 	function displayMessage(entry: HistoryEntry) {
@@ -79,7 +79,13 @@
 
 	function setFilter(workspace: string) {
 		filter = workspace;
-		historyPage = 1;
+	}
+
+	function inDateRange(timestamp: string) {
+		const date = timestamp.slice(0, 10);
+		if (dateFrom && date < dateFrom) return false;
+		if (dateTo && date > dateTo) return false;
+		return true;
 	}
 
 	function dayKey(timestamp: string) {
@@ -115,6 +121,10 @@
 		}
 		return groups;
 	}
+
+	function loadMore() {
+		visibleCount = Math.min(visibleCount + chunkSize, filtered.length);
+	}
 </script>
 
 <div>
@@ -125,15 +135,18 @@
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else}
-		<div class="mb-4 flex flex-wrap gap-2">
-			{#each workspaces as ws}
-				<button
-					class="rounded px-2.5 py-1 text-xs font-medium {filter === ws ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#2a2a28] text-[#a09d94] hover:bg-[#3a3a36]'}"
-					onclick={() => setFilter(ws)}
-				>
-					{ws === '__all__' ? 'All' : ws}
-				</button>
-			{/each}
+		<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+			<div class="flex flex-wrap gap-2">
+				{#each workspaces as ws}
+					<button
+						class="rounded px-2.5 py-1 text-xs font-medium {filter === ws ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#2a2a28] text-[#a09d94] hover:bg-[#3a3a36]'}"
+						onclick={() => setFilter(ws)}
+					>
+						{ws === '__all__' ? 'All' : ws}
+					</button>
+				{/each}
+			</div>
+			<DateRangePicker bind:from={dateFrom} bind:to={dateTo} />
 		</div>
 
 		{#if filtered.length}
@@ -183,7 +196,7 @@
 					</section>
 				{/each}
 			</div>
-			<PaginationControls data={pageData} onPage={(page) => (historyPage = page)} />
+			<InfiniteLoader active={hasMore} onVisible={loadMore} />
 		{:else}
 			<p class="py-8 text-center text-sm text-[#6f6b5f]">No history yet.</p>
 		{/if}

@@ -54,7 +54,34 @@ pub(crate) async fn me(req: Request, ctx: crate::request_context::AppRouteContex
     let database = db(&ctx)?;
     let profile = d1::user_profile(&database, &user).await?;
     let tenants = d1::tenants(&database, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
-    Response::from_json(&MeResponse { user, profile, tenants })
+    let account_tenant = d1::user_account_tenant(&database, &user).await?;
+    let account_setup_required = profile
+        .as_ref()
+        .and_then(|profile| profile.handle.as_deref())
+        .is_some()
+        && account_tenant.is_none();
+    let account_tenant_suggestions = if account_setup_required {
+        d1::account_tenant_suggestions(&database, &user).await?
+    } else {
+        Vec::new()
+    };
+    Response::from_json(&MeResponse {
+        user,
+        profile,
+        tenants,
+        account_tenant,
+        account_setup_required,
+        account_tenant_suggestions,
+    })
+}
+
+pub(crate) async fn create_account_tenant(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let body: sty_protocol::CreateAccountTenantRequest = req.json().await?;
+    let name = body.name.trim();
+    let database = db(&ctx)?;
+    let tenant = d1::create_account_tenant(&database, name, &sty_protocol::TokenPrincipal { user }).await?;
+    Response::from_json(&tenant)
 }
 
 pub(crate) async fn create_org(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
@@ -65,6 +92,16 @@ pub(crate) async fn create_org(mut req: Request, ctx: crate::request_context::Ap
     let database = db(&ctx)?;
     let tenant = d1::create_org(&database, name, &sty_protocol::TokenPrincipal { user }).await?;
     Response::from_json(&tenant)
+}
+
+pub(crate) async fn user_profile_by_handle(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let handle = param(&ctx, "handle")?;
+    let database = db(&ctx)?;
+    let viewer = optional_auth(&req, &ctx).await?;
+    let Some(profile) = d1::user_profile_page_by_handle(&database, &handle, viewer.as_deref()).await? else {
+        return json_error(404, "profile not found");
+    };
+    Response::from_json(&profile)
 }
 
 pub(crate) async fn list_projects(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {

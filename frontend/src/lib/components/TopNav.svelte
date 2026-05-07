@@ -60,10 +60,11 @@
 	const accountSettings = $derived(pathParts[0] === 'settings');
 	const currentTenant = $derived(accountSettings ? '' : (pathParts[0] ?? ''));
 	const currentProject = $derived(accountSettings ? null : (pathParts[1] ?? null));
-	const selectedTenant = $derived(homePage || accountSettings ? '' : currentTenant || tenants[0]?.name || profile?.preferredUsername || '');
+	const userTenant = $derived(tenants.find((tenant) => tenant.kind === 'user')?.name ?? '');
+	const selectedTenant = $derived(homePage || accountSettings ? '' : currentTenant || tenants[0]?.name || userTenant || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
 	const currentProjectSummary = $derived(projects.find((p) => p.tenant === currentTenant && p.project === currentProject));
-	const displayName = $derived(profile?.preferredUsername || profile?.name || 'Signed in');
+	const displayName = $derived(userTenant || profile?.preferredUsername || profile?.name || 'Signed in');
 	const profileHandle = $derived(profile?.preferredUsername ? `@${profile.preferredUsername}` : profile?.email);
 	const profileDetail = $derived(profileHandle || '');
 	const avatarUrl = $derived(profile?.picture);

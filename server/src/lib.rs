@@ -65,7 +65,9 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async("/v1/session/exchange", exchange_session)
         .delete_async("/v1/session", revoke_session)
         .get_async("/v1/me", me)
+        .post_async("/v1/account/tenant", create_account_tenant)
         .get_async("/v1/users/search", search_users)
+        .get_async("/v1/users/:handle/profile", user_profile_by_handle)
         .post_async("/v1/remote-approvals", create_remote_approval)
         .get_async("/v1/remote-approvals/:approval_id", get_remote_approval)
         .post_async(

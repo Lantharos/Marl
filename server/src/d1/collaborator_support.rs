@@ -83,9 +83,8 @@ pub async fn tenant_effective_role(
     user: &str,
 ) -> Result<Option<String>> {
     ensure_collaboration_schema(db).await?;
-    if account_tenant_name(db, user)
-        .await
-        .ok()
+    if user_account_tenant(db, user)
+        .await?
         .as_deref()
         .is_some_and(|account_tenant| account_tenant == tenant)
     {

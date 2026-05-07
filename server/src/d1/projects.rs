@@ -334,6 +334,31 @@ pub async fn create_org(
     })
 }
 
+pub async fn create_account_tenant(
+    db: &Database,
+    name: &str,
+    principal: &TokenPrincipal,
+) -> Result<TenantSummary> {
+    validate_segment(name).map_err(|error| err(error.to_string()))?;
+    if user_account_tenant(db, &principal.user).await?.is_some() {
+        return Err(err("account tenant already exists"));
+    }
+    if tenant_exists(db, name).await? {
+        return Err(err("tenant conflict"));
+    }
+    let members =
+        serde_json::to_string(&vec![principal.user.clone()]).map_err(|e| err(e.to_string()))?;
+    db.prepare("INSERT INTO tenants (name, kind, owner, members_json) VALUES (?1, 'user', ?2, ?3)")
+        .bind(&[js_str(name), js_str(&principal.user), js_str(&members)])?
+        .run()
+        .await?;
+    Ok(TenantSummary {
+        name: name.to_string(),
+        kind: "user".to_string(),
+        owner: principal.user.clone(),
+    })
+}
+
 pub async fn tenant_control(db: &Database, tenant: &str, user: &str) -> Result<bool> {
     Ok(role_allows(
         tenant_effective_role(db, tenant, user).await?.as_deref(),
@@ -349,7 +374,13 @@ pub async fn tenant_access(db: &Database, tenant: &str, user: &str) -> Result<bo
 }
 
 pub async fn ensure_account_tenant(db: &Database, user: &str) -> Result<String> {
+    if let Some(tenant) = user_account_tenant(db, user).await? {
+        return Ok(tenant);
+    }
     let tenant = account_tenant_name(db, user).await?;
+    if tenant_exists(db, &tenant).await? {
+        return Ok(tenant);
+    }
     let members = serde_json::to_string(&vec![user.to_string()]).map_err(|e| err(e.to_string()))?;
     db.prepare(
         "INSERT OR IGNORE INTO tenants (name, kind, owner, members_json) VALUES (?1, 'user', ?2, ?3)",
@@ -368,6 +399,41 @@ pub async fn ensure_account_tenant(db: &Database, user: &str) -> Result<String> 
         .await?;
     }
     Ok(tenant)
+}
+
+pub async fn user_account_tenant(db: &Database, user: &str) -> Result<Option<String>> {
+    #[derive(Deserialize)]
+    struct Row {
+        name: String,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT name FROM tenants WHERE owner = ?1 AND kind = 'user' ORDER BY name LIMIT 1")
+        .bind(&[js_str(user)])?
+        .first(None)
+        .await?;
+    Ok(row.map(|row| row.name))
+}
+
+pub async fn account_tenant_suggestions(db: &Database, user: &str) -> Result<Vec<String>> {
+    let base = account_tenant_name(db, user).await?;
+    let mut candidates = vec![
+        format!("{base}-dev"),
+        format!("{base}-code"),
+        format!("{base}-sty"),
+        format!("{base}-lab"),
+        format!("{base}hq"),
+    ];
+    candidates.retain(|candidate| validate_segment(candidate).is_ok());
+    let mut available = Vec::new();
+    for candidate in candidates {
+        if !tenant_exists(db, &candidate).await? {
+            available.push(candidate);
+        }
+        if available.len() >= 3 {
+            break;
+        }
+    }
+    Ok(available)
 }
 
 pub(crate) async fn account_tenant_name(db: &Database, user: &str) -> Result<String> {

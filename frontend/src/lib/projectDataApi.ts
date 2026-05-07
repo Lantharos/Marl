@@ -48,6 +48,7 @@ export interface WorkspaceStatus {
 	head: string | null;
 	status: 'draft' | 'ready' | 'merged' | string;
 	parent_workspace: string | null;
+	last_activity_at?: string | null;
 	child_workspaces: string[];
 	is_ready: boolean;
 	mergeable: boolean;
@@ -280,13 +281,14 @@ export async function markWorkspaceReady(tenant: string, project: string, worksp
 }
 
 export async function getWorkspaceHistory(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<HistoryEntry[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/history`, { signal: options.signal });
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${workspace}/history?limit=500`, { signal: options.signal });
 	const data = (await response.json()) as { entries: HistoryEntry[] };
 	return data.entries;
 }
 
-export async function getProjectHistory(tenant: string, project: string, options: ApiOptions = {}): Promise<HistoryEntry[]> {
-	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history`, { signal: options.signal });
+export async function getProjectHistory(tenant: string, project: string, options: ApiOptions & { limit?: number } = {}): Promise<HistoryEntry[]> {
+	const limit = options.limit ?? 500;
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history?limit=${encodeURIComponent(String(limit))}`, { signal: options.signal });
 	const data = (await response.json()) as { entries: HistoryEntry[] };
 	return data.entries;
 }

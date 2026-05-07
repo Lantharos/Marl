@@ -108,16 +108,18 @@ pub async fn workspace_states(
         status: String,
         head: Option<String>,
         parent_workspace: Option<String>,
+        last_activity_at: Option<String>,
         is_ready: i64,
         mergeable: i64,
     }
     let result = db
         .prepare(
-            "SELECT ws.workspace, ws.status, wh.head, ws.parent_workspace, ws.is_ready, ws.mergeable \
+            "SELECT ws.workspace, ws.status, wh.head, ws.parent_workspace, ws.is_ready, ws.mergeable, \
+                (SELECT MAX(timestamp) FROM history h WHERE h.tenant = ws.tenant AND h.project = ws.project AND h.workspace = ws.workspace) AS last_activity_at \
              FROM workspace_states ws \
              LEFT JOIN workspace_heads wh ON wh.tenant = ws.tenant AND wh.project = ws.project AND wh.workspace = ws.workspace \
              WHERE ws.tenant = ?1 AND ws.project = ?2 \
-             ORDER BY ws.workspace"
+             ORDER BY COALESCE(last_activity_at, '') DESC, ws.workspace"
         )
         .bind(&[js_str(tenant), js_str(project)])?
         .all()
@@ -130,6 +132,7 @@ pub async fn workspace_states(
             status: r.status,
             head: r.head,
             parent_workspace: r.parent_workspace.clone(),
+            last_activity_at: r.last_activity_at,
             child_workspaces: Vec::new(),
             is_ready: r.is_ready != 0,
             mergeable: r.mergeable != 0,

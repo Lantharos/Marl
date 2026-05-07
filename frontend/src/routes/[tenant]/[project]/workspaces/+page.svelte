@@ -7,10 +7,9 @@
 		listWorkspaceStatuses,
 		markWorkspaceReady,
 		mergeWorkspace,
-		type Paginated,
 		type WorkspaceStatus
 	} from '$lib/api';
-	import PaginationControls from '$lib/components/PaginationControls.svelte';
+	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
@@ -21,14 +20,14 @@
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
-	const perPage = 20;
+	const chunkSize = 20;
 
 	let workspaces = $state<WorkspaceStatus[]>([]);
 	let loading = $state(true);
 	let busy = $state('');
 	let error = $state('');
 	let filter = $state<'open' | 'ready' | 'merged' | 'all'>('open');
-	let workspacePage = $state(1);
+	let visibleCount = $state(chunkSize);
 	let canWrite = $state(false);
 	let canMaintain = $state(false);
 
@@ -72,25 +71,16 @@
 					? workspaces
 					: openWorkspaces
 	);
-	const totalPages = $derived(Math.max(1, Math.ceil(filteredWorkspaces.length / perPage)));
-	const visibleWorkspaces = $derived(filteredWorkspaces.slice((workspacePage - 1) * perPage, workspacePage * perPage));
-	const pageData = $derived<Paginated<WorkspaceStatus>>({
-		items: visibleWorkspaces,
-		page: workspacePage,
-		per_page: perPage,
-		total: filteredWorkspaces.length,
-		total_pages: totalPages,
-		next: workspacePage < totalPages ? workspacePage + 1 : null,
-		prev: workspacePage > 1 ? workspacePage - 1 : null
-	});
+	const visibleWorkspaces = $derived(filteredWorkspaces.slice(0, visibleCount));
+	const hasMore = $derived(visibleWorkspaces.length < filteredWorkspaces.length);
 
 	$effect(() => {
-		if (workspacePage > totalPages) workspacePage = totalPages;
+		filter;
+		visibleCount = chunkSize;
 	});
 
 	function setFilter(value: 'open' | 'ready' | 'merged' | 'all') {
 		filter = value;
-		workspacePage = 1;
 	}
 
 	async function handleReady(name: string) {
@@ -142,6 +132,15 @@
 		if (workspace.is_ready) return CircleDot;
 		return GitPullRequest;
 	}
+
+	function activityLabel(value?: string | null) {
+		if (!value) return 'No activity';
+		return new Date(value).toLocaleDateString();
+	}
+
+	function loadMore() {
+		visibleCount = Math.min(visibleCount + chunkSize, filteredWorkspaces.length);
+	}
 </script>
 
 <div class="mx-auto max-w-5xl">
@@ -150,20 +149,22 @@
 			<h3 class="text-sm font-semibold text-[#f0eee4]">Workspaces</h3>
 			<p class="mt-1 text-xs text-[#6f6b5f]">Review isolated lines of work before they merge back.</p>
 		</div>
-		<div class="flex rounded border border-[#2a2a28] bg-[#141412] p-0.5">
-			{#each [
-				{ id: 'open', label: 'Open', count: openWorkspaces.length },
-				{ id: 'ready', label: 'Ready', count: readyWorkspaces.length },
-				{ id: 'merged', label: 'Merged', count: mergedWorkspaces.length },
-				{ id: 'all', label: 'All', count: workspaces.length }
-			] as item}
-				<button
-					class="rounded px-2.5 py-1 text-xs {filter === item.id ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'text-[#8c887e] hover:bg-[#1b1b18] hover:text-[#eae9e4]'}"
-					onclick={() => setFilter(item.id as 'open' | 'ready' | 'merged' | 'all')}
-				>
-					{item.label} <span class={filter === item.id ? 'text-[#4b4841]' : 'text-[#6f6b5f]'}>{item.count}</span>
-				</button>
-			{/each}
+		<div class="flex flex-wrap justify-end gap-2">
+			<div class="flex rounded border border-[#2a2a28] bg-[#141412] p-0.5">
+				{#each [
+					{ id: 'open', label: 'Open', count: openWorkspaces.length },
+					{ id: 'ready', label: 'Ready', count: readyWorkspaces.length },
+					{ id: 'merged', label: 'Merged', count: mergedWorkspaces.length },
+					{ id: 'all', label: 'All', count: workspaces.length }
+				] as item}
+					<button
+						class="rounded px-2.5 py-1 text-xs {filter === item.id ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'text-[#8c887e] hover:bg-[#1b1b18] hover:text-[#eae9e4]'}"
+						onclick={() => setFilter(item.id as 'open' | 'ready' | 'merged' | 'all')}
+					>
+						{item.label} <span class={filter === item.id ? 'text-[#4b4841]' : 'text-[#6f6b5f]'}>{item.count}</span>
+					</button>
+				{/each}
+			</div>
 		</div>
 	</div>
 
@@ -200,6 +201,7 @@
 								{#if workspace.head}
 									<span class="font-mono">{workspace.head.slice(0, 12)}</span>
 								{/if}
+								<span>{activityLabel(workspace.last_activity_at)}</span>
 								{#if workspace.child_workspaces.length}
 									<span>{workspace.child_workspaces.length} child workspace{workspace.child_workspaces.length === 1 ? '' : 's'}</span>
 								{/if}
@@ -231,6 +233,6 @@
 				</div>
 			{/each}
 		</div>
-		<PaginationControls data={pageData} onPage={(page) => (workspacePage = page)} />
+		<InfiniteLoader active={hasMore} onVisible={loadMore} />
 	{/if}
 </div>

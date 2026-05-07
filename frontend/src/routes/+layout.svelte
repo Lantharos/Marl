@@ -3,8 +3,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import {
+		createAccountTenant,
 		createOrg,
-		getInitializedMe,
+		getMe,
 		listProjects,
 		type ProjectSummary,
 		type TenantSummary
@@ -22,12 +23,15 @@
 
 	let { children } = $props();
 
-	let status = $state<'loading' | 'signedOut' | 'signedIn'>('loading');
+	let status = $state<'loading' | 'signedOut' | 'setup' | 'signedIn'>('loading');
 	let profile = $state<AveProfile | null>(null);
 	let tenants = $state<TenantSummary[]>([]);
 	let projects = $state<ProjectSummary[]>([]);
 	let message = $state('');
 	let busy = $state(false);
+	let setupName = $state('');
+	let setupSuggestions = $state<string[]>([]);
+	let aveHandle = $state('');
 	let loadDataPromise: Promise<void> | null = null;
 	let bootstrapDone = false;
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
@@ -37,7 +41,7 @@
 	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/') || $page.url.pathname.startsWith('/oauth/') || isDocsRoute || isPigRoute || isLegalRoute);
 	const isErrorPage = $derived($page.status >= 400);
 	const pathParts = $derived($page.url.pathname.split('/').filter(Boolean));
-	const reservedRoot = $derived(['auth', 'settings', 'verify', 'oauth', 'docs', 'pig', 'privacy', 'terms'].includes(pathParts[0] ?? ''));
+	const reservedRoot = $derived(['auth', 'settings', 'verify', 'oauth', 'docs', 'pig', 'privacy', 'terms', 'u'].includes(pathParts[0] ?? ''));
 	const projectSection = $derived(pathParts[2] ?? '');
 	const isPublicProjectSection = $derived(!['settings', 'automation', 'protocol'].includes(projectSection));
 	const isLandingPage = $derived($page.url.pathname === '/');
@@ -71,7 +75,7 @@
 		status = 'loading';
 		try {
 			await hydrateSession();
-			const me = await getInitializedMe();
+			const me = await getMe();
 			if (me.profile) {
 				profile = {
 					sub: me.profile.user,
@@ -82,6 +86,16 @@
 				};
 			} else {
 				profile = null;
+			}
+			if (me.account_setup_required) {
+				aveHandle = me.profile?.handle ?? '';
+				setupSuggestions = me.account_tenant_suggestions ?? [];
+				setupName = setupSuggestions[0] ?? `${aveHandle}-dev`;
+				tenants = me.tenants;
+				projects = [];
+				appData.set({ me, projects: [], ready: false });
+				status = 'setup';
+				return;
 			}
 			tenants = me.tenants;
 			projects = await listProjects();
@@ -105,7 +119,7 @@
 		message = '';
 		try {
 			const tenant = await createOrg(name.trim());
-			const me = await getInitializedMe();
+			const me = await getMe();
 			tenants = me.tenants;
 			appData.set({ me, projects, ready: true });
 			await goto(`/${tenant.name}`);
@@ -124,6 +138,22 @@
 		tenants = [];
 		profile = null;
 		appData.set({ me: null, projects: [], ready: false });
+	}
+
+	async function handleCreateAccountTenant() {
+		if (!setupName.trim()) return;
+		busy = true;
+		message = '';
+		try {
+			const tenant = await createAccountTenant(setupName.trim());
+			bootstrapDone = false;
+			await loadData();
+			await goto(`/${tenant.name}`, { replaceState: true });
+		} catch (error) {
+			message = error instanceof Error ? error.message : 'Failed';
+		} finally {
+			busy = false;
+		}
 	}
 </script>
 
@@ -242,6 +272,32 @@
 				sty - where pigs ship code
 			</div>
 		</footer>
+	</main>
+{:else if status === 'setup'}
+	<main class="grid min-h-screen place-items-center bg-[#0f0f0d] px-6">
+		<section class="w-full max-w-md bg-[#141412] p-5">
+			<h1 class="text-lg font-semibold text-[#f0eee4]">Choose your sty username</h1>
+			<p class="mt-3 text-sm leading-6 text-[#8c887e]">
+				Your Ave handle is @{aveHandle}, but /{aveHandle} is already taken on sty.
+			</p>
+			<div class="mt-4 flex flex-wrap gap-2">
+				{#each setupSuggestions as suggestion}
+					<button class="bg-[#1e1e1c] px-2.5 py-1 text-sm {setupName === suggestion ? 'text-[#d9a66c]' : 'text-[#a09d94] hover:text-[#eae9e4]'}" onclick={() => (setupName = suggestion)}>
+						/{suggestion}
+					</button>
+				{/each}
+			</div>
+			<div class="mt-4 flex gap-2">
+				<input class="h-9 min-w-0 flex-1 bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none" bind:value={setupName} placeholder="username" />
+				<button class="bg-[#eae9e4] px-3 text-sm font-medium text-[#0f0f0d] disabled:opacity-50" disabled={busy || !setupName.trim()} onclick={handleCreateAccountTenant}>
+					Continue
+				</button>
+			</div>
+			{#if message}
+				<p class="mt-3 text-sm text-[#d96c5a]">{message}</p>
+			{/if}
+			<button class="mt-4 text-sm text-[#8c887e] hover:text-[#eae9e4]" onclick={handleSignOut}>Sign out</button>
+		</section>
 	</main>
 {:else if status === 'signedIn'}
 	<div class="flex h-screen flex-col overflow-hidden bg-[#0f0f0d]">
