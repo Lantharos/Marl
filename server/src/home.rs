@@ -5,6 +5,7 @@ pub(crate) async fn home(req: Request, ctx: crate::request_context::AppRouteCont
     let projects = d1::dashboard_project_cards(&database, &principal, 15).await?;
     let following = d1::followed_project_cards(&database, &principal, 25).await?;
     let releases = d1::followed_release_feed(&database, &principal, 25).await?;
+    let discover = d1::popular_public_project_cards(&database, 40).await?;
     let attention = d1::home_attention(&database, &principal).await?;
     let project_activity = d1::project_activity(&database, &principal, 40).await?;
     let followed_activity = d1::followed_activity(&database, &principal, 40).await?;
@@ -12,7 +13,7 @@ pub(crate) async fn home(req: Request, ctx: crate::request_context::AppRouteCont
         projects,
         following,
         releases,
-        discover: vec![],
+        discover,
         attention,
         activity: followed_activity.clone(),
         project_activity,

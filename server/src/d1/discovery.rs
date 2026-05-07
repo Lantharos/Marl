@@ -108,6 +108,51 @@ pub async fn public_project_cards(
     Ok(rows.into_iter().map(project_card_item).collect())
 }
 
+pub async fn popular_public_project_cards(
+    db: &Database,
+    limit: usize,
+) -> Result<Vec<ProjectDiscoveryItem>> {
+    let result = db
+        .prepare(
+            "SELECT p.tenant, p.project, p.owner,
+                    p.folder,
+                    COALESCE(ps.workspace_count, 0) AS workspace_count,
+                    COALESCE(ps.open_issue_count, 0) AS open_issue_count,
+                    COALESCE(ps.ready_count, 0) AS ready_count,
+                    COALESCE(ps.release_count, 0) AS release_count,
+                    COALESCE(ps.history_count, 0) AS history_count,
+                    (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
+                    (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json,
+                    (
+                        COUNT(DISTINCT f.user) * 10
+                        + COALESCE(ps.ready_count, 0) * 5
+                        + COALESCE(ps.release_count, 0) * 4
+                        + COALESCE(ps.open_issue_count, 0) * 2
+                        + COALESCE(ps.workspace_count, 0)
+                        + MIN(COALESCE(ps.history_count, 0), 100) / 10
+                        + (
+                            SELECT COUNT(*) * 3
+                            FROM history h
+                            WHERE h.tenant = p.tenant
+                            AND h.project = p.project
+                            AND h.timestamp >= datetime('now', '-30 days')
+                        )
+                    ) AS popularity_score
+             FROM projects p
+             LEFT JOIN project_stats ps ON ps.tenant = p.tenant AND ps.project = p.project
+             LEFT JOIN project_follows f ON f.tenant = p.tenant AND f.project = p.project
+             WHERE COALESCE(json_extract(p.settings_json, '$.visibility'), 'private') = 'public'
+             GROUP BY p.tenant, p.project
+             ORDER BY popularity_score DESC, last_activity_at DESC, p.tenant, COALESCE(p.folder, ''), p.project
+             LIMIT ?1",
+        )
+        .bind(&[wasm_bindgen::JsValue::from_f64(limit as f64)])?
+        .all()
+        .await?;
+    let rows: Vec<ProjectCardRow> = result.results()?;
+    Ok(rows.into_iter().map(project_card_item).collect())
+}
+
 pub async fn tenant_public_project_cards(
     db: &Database,
     tenant: &str,

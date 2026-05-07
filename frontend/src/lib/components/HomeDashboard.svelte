@@ -26,23 +26,14 @@
     type AttentionFilter = "all" | "workspaces" | "issues";
     type ActivityScope = "projects" | "following";
 
-    let activeTab = $state<"overview" | "activity">("overview");
+    let activeTab = $state<"overview" | "explore">("overview");
     let attentionFilter = $state<AttentionFilter>("all");
     let activityScope = $state<ActivityScope>("projects");
-    let projectSearch = $state("");
     let publicSearch = $state("");
     let publicResults = $state<ProjectDiscoveryItem[] | null>(null);
     let searchBusy = $state(false);
     const attentionFilters: AttentionFilter[] = ["all", "workspaces", "issues"];
 
-    const filteredProjects = $derived(
-        home
-            ? home.projects.filter((project) =>
-                  projectLabel(project).toLowerCase().includes(projectSearch.trim().toLowerCase()),
-              )
-            : [],
-    );
-    const filteredProjectGroups = $derived(groupProjects(filteredProjects.slice(0, 12)));
     const attentionCount = $derived(
         (home?.attention.ready_workspaces.length ?? 0) +
             (home?.attention.assigned_issues.length ?? 0) +
@@ -72,6 +63,7 @@
             : (home?.followed_activity ?? home?.activity ?? []),
     );
     const recentActivity = $derived(currentActivity.slice(0, 5));
+    const exploreProjects = $derived(publicResults ?? home?.discover ?? []);
 
     async function runSearch() {
         const query = publicSearch.trim();
@@ -98,23 +90,6 @@
             return `${project.tenant}/${project.folder}/${project.project}`;
         }
         return `${project.tenant}/${project.project}`;
-    }
-
-    function groupProjects(items: ProjectDiscoveryItem[]) {
-        const groups = new Map<string, { folder: string | null; items: ProjectDiscoveryItem[] }>();
-        for (const project of items) {
-            const folder = project.folder?.trim() || null;
-            const key = folder ?? "";
-            const group = groups.get(key) ?? { folder, items: [] };
-            group.items.push(project);
-            groups.set(key, group);
-        }
-        return [...groups.values()].sort((a, b) => {
-            if (a.folder === b.folder) return 0;
-            if (!a.folder) return -1;
-            if (!b.folder) return 1;
-            return a.folder.localeCompare(b.folder);
-        });
     }
 
     function workspacePath(item: HomeReadyWorkspace) {
@@ -165,6 +140,15 @@
         if (filter === "issues") return "Issues";
         return "All";
     }
+
+    function projectMeta(project: ProjectDiscoveryItem) {
+        return [
+            `${project.stats.ready_count} ready`,
+            `${project.stats.open_issue_count} issues`,
+            `${project.stats.release_count} releases`,
+            `${project.stats.workspace_count} workspaces`,
+        ].join(" / ");
+    }
 </script>
 
 <div class="p-8">
@@ -191,12 +175,12 @@
                 </button>
                 <button
                     class="rounded px-3 py-1.5 text-sm font-medium {activeTab ===
-                    'activity'
+                    'explore'
                         ? 'bg-[#eae9e4] text-[#0f0f0d]'
                         : 'text-[#8c887e] hover:text-[#eae9e4]'}"
-                    onclick={() => (activeTab = "activity")}
+                    onclick={() => (activeTab = "explore")}
                 >
-                    Activity
+                    Explore
                 </button>
             </div>
         </div>
@@ -209,7 +193,7 @@
             <p class="mt-8 text-sm text-[#d96c5a]">{error}</p>
         {:else if home}
             {#if activeTab === "overview"}
-                <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div class="mt-6">
                     <section class="min-w-0">
                         {#if attentionCount === 0}
                             <div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
@@ -338,126 +322,53 @@
                             {/if}
                         </div>
                     </section>
-
-                    <aside class="min-w-0">
-                        <div class="mb-3 flex items-center justify-between gap-3">
-                            <h3 class="text-sm font-medium text-[#eae9e4]">Projects</h3>
-                            <input
-                                class="h-9 w-44 rounded border border-[#2a2a28] bg-[#141412] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#3a3a36]"
-                                placeholder="Search projects"
-                                bind:value={projectSearch}
-                            />
-                        </div>
-                        <div class="overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
-                            {#if filteredProjectGroups.length > 0}
-                                {#each filteredProjectGroups as group}
-                                    {#if group.folder}
-                                        <div class="border-b border-[#252522] px-4 py-2 text-xs text-[#8c887e]">{group.folder}</div>
-                                    {/if}
-                                    {#each group.items as project}
-                                        <button
-                                            class="block w-full border-b border-[#252522] px-4 py-3 text-left last:border-b-0 hover:bg-[#1a1a18]"
-                                            onclick={() => goto(projectPath(project))}
-                                        >
-                                            <div class="truncate text-sm font-medium text-[#f0eee4]">{projectLabel(project)}</div>
-                                            <div class="mt-1 flex gap-2 text-xs text-[#6f6b5f]">
-                                                <span>{project.stats.ready_count} ready</span>
-                                                <span>{project.stats.open_issue_count} issues</span>
-                                            </div>
-                                        </button>
-                                    {/each}
-                                {/each}
-                            {:else}
-                                <p class="px-4 py-8 text-center text-sm text-[#6f6b5f]">No projects match that search.</p>
-                            {/if}
-                        </div>
-                    </aside>
                 </div>
             {:else}
                 <section class="mt-6">
                     <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
                         <div>
-                            <h3 class="text-sm font-medium text-[#eae9e4]">Activity</h3>
-                            <p class="mt-0.5 text-xs text-[#6f6b5f]">
-                                {activityScope === "projects" ? "Work from your projects." : "Releases from projects you follow."}
-                            </p>
+                            <h3 class="text-sm font-medium text-[#eae9e4]">Explore</h3>
                         </div>
                         <div class="flex flex-wrap justify-end gap-2">
-                            <div class="flex rounded bg-[#141412] p-1">
-                                <button
-                                    class="rounded px-2.5 py-1 text-xs font-medium {activityScope === 'projects'
-                                        ? 'bg-[#eae9e4] text-[#0f0f0d]'
-                                        : 'text-[#8c887e] hover:text-[#eae9e4]'}"
-                                    onclick={() => (activityScope = "projects")}
-                                >
-                                    Your projects
-                                </button>
-                                <button
-                                    class="rounded px-2.5 py-1 text-xs font-medium {activityScope === 'following'
-                                        ? 'bg-[#eae9e4] text-[#0f0f0d]'
-                                        : 'text-[#8c887e] hover:text-[#eae9e4]'}"
-                                    onclick={() => (activityScope = "following")}
-                                >
-                                    Following
-                                </button>
-                            </div>
                             <div class="flex w-full gap-2 sm:w-96">
-                            <input
-                                class="h-9 min-w-0 flex-1 rounded border border-[#2a2a28] bg-[#141412] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#3a3a36]"
-                                placeholder="Search public projects"
-                                bind:value={publicSearch}
-                                oninput={publicSearchInput}
-                                onkeydown={publicSearchKeydown}
-                            />
-                            <button
-                                class="grid h-9 w-20 place-items-center rounded border border-[#2a2a28] text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]"
-                                disabled={searchBusy}
-                                onclick={runSearch}
-                            >
-                                {#if searchBusy}
-                                    <Loader2 class="h-4 w-4 animate-spin" />
-                                {:else}
-                                    Search
-                                {/if}
-                            </button>
+                                <input
+                                    class="h-9 min-w-0 flex-1 rounded border border-[#2a2a28] bg-[#141412] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#3a3a36]"
+                                    placeholder="Search public projects"
+                                    bind:value={publicSearch}
+                                    oninput={publicSearchInput}
+                                    onkeydown={publicSearchKeydown}
+                                />
+                                <button
+                                    class="grid h-9 w-20 place-items-center rounded border border-[#2a2a28] text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]"
+                                    disabled={searchBusy}
+                                    onclick={runSearch}
+                                >
+                                    {#if searchBusy}
+                                        <Loader2 class="h-4 w-4 animate-spin" />
+                                    {:else}
+                                        Search
+                                    {/if}
+                                </button>
                             </div>
                         </div>
                     </div>
 
                     <div class="overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
-                        {#if publicResults}
-                            {#each publicResults as project}
+                        {#if exploreProjects.length > 0}
+                            {#each exploreProjects as project}
                                 <button
                                     class="block w-full border-b border-[#252522] px-4 py-3 text-left last:border-b-0 hover:bg-[#1a1a18]"
                                     onclick={() => goto(projectPath(project))}
                                 >
                                     <div class="truncate text-sm font-medium text-[#f0eee4]">{projectLabel(project)}</div>
-                                    <div class="mt-1 flex gap-2 text-xs text-[#6f6b5f]">
-                                        <span>{project.stats.open_issue_count} issues</span>
-                                        <span>{project.stats.release_count} releases</span>
-                                    </div>
+                                    <div class="mt-1 truncate text-xs text-[#6f6b5f]">{projectMeta(project)}</div>
+                                    {#if project.last_activity_at}
+                                        <div class="mt-1 text-xs text-[#8c887e]">{timestamp(project.last_activity_at)}</div>
+                                    {/if}
                                 </button>
-                            {:else}
-                                <p class="px-4 py-8 text-center text-sm text-[#6f6b5f]">No public projects found.</p>
                             {/each}
                         {:else}
-                            {#each currentActivity as item}
-                                <a class="block border-b border-[#252522] px-4 py-3 last:border-b-0 hover:bg-[#1a1a18]" href={item.href}>
-                                    <div class="truncate text-sm font-medium text-[#f0eee4]">{item.title}</div>
-                                    <div class="mt-1 truncate text-xs text-[#6f6b5f]">
-                                        {activityDetail(item)} / {timestamp(item.timestamp)}
-                                    </div>
-                                    {#if item.detail}
-                                        <div class="mt-1 truncate text-xs text-[#8c887e]">{withoutOpaqueUserIds(item.detail)}</div>
-                                    {/if}
-                                </a>
-                            {:else}
-                                <p class="px-4 py-8 text-center text-sm text-[#6f6b5f]">
-                                    {activityScope === "projects"
-                                        ? "No recent activity in your projects."
-                                        : "Follow public projects to see releases here."}
-                                </p>
-                            {/each}
+                            <p class="px-4 py-8 text-center text-sm text-[#6f6b5f]">No public projects found.</p>
                         {/if}
                     </div>
                 </section>
