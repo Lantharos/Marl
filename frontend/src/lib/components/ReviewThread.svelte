@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { ReviewComment } from '$lib/api';
-	import { userDisplayName, userInitials } from '$lib/identity';
 	import Markdown from './Markdown.svelte';
 	import ContentComposer, { type ComposerAction as SubmitAction } from './ContentComposer.svelte';
+	import UserAvatar from './UserAvatar.svelte';
+	import UserProfileLink from './UserProfileLink.svelte';
 	import Pencil from 'lucide-svelte/icons/pencil';
 	import Trash2 from 'lucide-svelte/icons/trash-2';
 
@@ -177,17 +178,11 @@
 		<div class="grid gap-3">
 		{#each ordered as comment}
 			<div class="group relative z-10 grid grid-cols-[28px_1fr] gap-3">
-				<div class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
-					{#if comment.author_profile?.avatar_url}
-						<img src={comment.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />
-					{:else}
-						{userInitials(comment.author, comment.author_profile)}
-					{/if}
-				</div>
+				<UserAvatar user={comment.author} profile={comment.author_profile} />
 				<div class={commentShellClass()}>
 					<div class={commentHeaderClass()}>
 						<div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-							<span class="font-medium text-[#eae9e4]">{userDisplayName(comment.author, comment.author_profile)}</span>
+							<UserProfileLink user={comment.author} profile={comment.author_profile} className="font-medium text-[#eae9e4]" />
 							{#if commentVariant === 'timeline'}
 								<span class="text-[#8c887e]">commented</span>
 							{/if}
@@ -268,13 +263,7 @@
 	{#if !readonly}
 		{#if composerVariant === 'timeline'}
 			<div class="relative z-10 mt-3 grid grid-cols-[28px_1fr] gap-3 before:absolute before:left-[13px] before:top-[-1.75rem] before:h-[calc(1.75rem+14px)] before:w-px before:bg-[#252522]">
-				<div class="{title ? 'mt-7 ' : ''}relative z-10 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
-					{#if currentUserProfile?.avatar_url}
-						<img src={currentUserProfile.avatar_url} alt="" class="h-full w-full object-cover" />
-					{:else}
-						{userInitials(currentUser ?? '', currentUserProfile)}
-					{/if}
-				</div>
+				<UserAvatar user={currentUser ?? ''} profile={currentUserProfile} className={`${title ? 'mt-7 ' : ''}relative z-10`} />
 				<div class="min-w-0">
 					{#if title}
 						<div class="mb-2 text-sm font-medium text-[#eae9e4]">{title}</div>

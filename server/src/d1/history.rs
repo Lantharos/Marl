@@ -35,6 +35,7 @@ fn history_entry_from_row(row: HistoryRow) -> HistoryEntry {
             &row.author,
             row.display_name,
             row.handle,
+            None,
             row.avatar_url,
             row.email,
             row.updated_at,

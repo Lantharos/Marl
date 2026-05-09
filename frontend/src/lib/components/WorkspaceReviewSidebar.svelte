@@ -4,7 +4,8 @@
 	import type { Label, Milestone, UserProfile } from '$lib/api';
 	import { createLabel, listIssuesPage, listLabels, listMilestones, searchUsers } from '$lib/api';
 	import type { Issue } from '$lib/issueApi';
-	import { userDisplayName, userInitials } from '$lib/identity';
+	import UserAvatar from './UserAvatar.svelte';
+	import UserProfileLink from './UserProfileLink.svelte';
 	import BellOff from 'lucide-svelte/icons/bell-off';
 	import CirclePlus from 'lucide-svelte/icons/circle-plus';
 	import Link2 from 'lucide-svelte/icons/link-2';
@@ -194,11 +195,9 @@
 		<div class="grid gap-2">
 			{#each reviewerRows as reviewer}
 				<div class="flex items-center gap-2 text-sm text-[#d8d5ca]">
-					<div class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[9px]">
-						{#if reviewer.profile?.avatar_url}<img src={reviewer.profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(reviewer.author, reviewer.profile)}{/if}
-					</div>
+					<UserAvatar user={reviewer.author} profile={reviewer.profile} size="sm" />
 					<div class="min-w-0 flex-1">
-						<div class="truncate">{userDisplayName(reviewer.author, reviewer.profile)}</div>
+						<UserProfileLink user={reviewer.author} profile={reviewer.profile} className="truncate text-[#d8d5ca]" />
 						<div class="text-[11px] {reviewer.stateClass}">{reviewer.state}</div>
 					</div>
 				</div>
@@ -215,7 +214,7 @@
 			<button class="text-[#8c887e] hover:text-[#d9a66c]" aria-label="Assign people" onclick={() => panelButton('assignees')}><CirclePlus class="h-4 w-4" /></button>
 		</div>
 		{#each assigneeRows as assignee}
-			<div class="text-sm text-[#d8d5ca]">{userDisplayName(assignee.user, assignee.profile)}</div>
+			<div class="text-sm"><UserProfileLink user={assignee.user} profile={assignee.profile} className="text-[#d8d5ca]" /></div>
 		{:else}
 			<p class="text-xs text-[#6f6b5f]">None</p>
 		{/each}
@@ -320,9 +319,7 @@
 		<div class="mb-3 text-sm font-medium text-[#eae9e4]">{participants.length} {participants.length === 1 ? 'participant' : 'participants'}</div>
 		<div class="flex flex-wrap gap-1.5">
 			{#each participants as participant}
-				<div class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[9px] text-[#eae9e4]">
-					{#if participant.profile?.avatar_url}<img src={participant.profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(participant.user, participant.profile)}{/if}
-				</div>
+				<UserAvatar user={participant.user} profile={participant.profile} />
 			{/each}
 		</div>
 	</section>
@@ -341,7 +338,7 @@
 		<div class="max-h-56 overflow-auto">
 			{#each filteredUsers as user}
 				<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => selected.includes(user.user) ? remove(user.user) : add(user.user)}>
-					<div class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[9px] text-[#eae9e4]">{#if user.avatar_url}<img src={user.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(user.user, user)}{/if}</div>
+					<UserAvatar user={user.user} profile={user} size="sm" linked={false} />
 					<span class="min-w-0 flex-1 truncate text-[#eae9e4]">{personLabel(user)}</span>
 					<span class="text-[#d9a66c]">{selected.includes(user.user) ? 'selected' : ''}</span>
 				</button>

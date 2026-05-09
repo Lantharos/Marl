@@ -10,6 +10,7 @@
 	} from '$lib/api';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import UserProfileLink from '$lib/components/UserProfileLink.svelte';
 	import { userName } from '$lib/identity';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
@@ -250,7 +251,7 @@
 			<div class="divide-y divide-[#252522]">
 				{#each shownIssues as issue}
 					{@const type = issueTypeMeta(issue.issue_type)}
-					<a class="flex items-start gap-3 px-4 py-3 hover:bg-[#141412]" href={issueHref(issue)}>
+					<div class="flex items-start gap-3 px-4 py-3 hover:bg-[#141412]">
 						{#if (issue.state ?? issue.status) === 'open'}
 							<Circle class="mt-1 h-4 w-4 shrink-0 text-[#2fbd55]" />
 						{:else}
@@ -258,7 +259,7 @@
 						{/if}
 						<div class="min-w-0 flex-1">
 							<div class="flex flex-wrap items-center gap-2">
-								<span class="font-medium text-[#eae9e4]">{issue.title}</span>
+								<a class="font-medium text-[#eae9e4] hover:text-[#d9a66c]" href={issueHref(issue)}>{issue.title}</a>
 								{#if type}
 									<span class="inline-flex items-center gap-1 text-xs text-[#8c887e]">
 										<span class="h-2.5 w-2.5 rounded-full border-2 bg-transparent" style:border-color={type.color}></span>
@@ -272,7 +273,7 @@
 							</div>
 							<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
 								<span>#{issue.number}</span>
-								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by {userName(issue.author, issue.author_profile)}</span>
+								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by <UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#8c887e]" /></span>
 								{#if issue.milestone}<span>{issue.milestone}</span>{/if}
 								{#if issue.workspace}<span>{issue.workspace}</span>{/if}
 								<span>{issueDate(issue)}</span>
@@ -281,7 +282,7 @@
 						{#if (issue.comment_count ?? 0) > 0}
 							<div class="flex shrink-0 items-center gap-1 text-xs text-[#8c887e]"><MessageSquare class="h-3.5 w-3.5" /> {issue.comment_count}</div>
 						{/if}
-					</a>
+					</div>
 				{:else}
 					<div class="p-8 text-center text-sm text-[#8c887e]">No matching issues.</div>
 				{/each}

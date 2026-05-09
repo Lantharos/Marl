@@ -22,6 +22,7 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
         labels_json: String,
         display_name: Option<String>,
         handle: Option<String>,
+        account_tenant: Option<String>,
         avatar_url: Option<String>,
         email: Option<String>,
         profile_updated_at: Option<String>,
@@ -30,7 +31,9 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
     let result = db
         .prepare(
             "SELECT i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author, i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone, i.workspace, i.issue_type, i.locked, i.pinned, i.labels_json, \
-             u.display_name, u.handle, u.avatar_url, u.email, u.updated_at AS profile_updated_at, \
+             u.display_name, u.handle, \
+             (SELECT t.name FROM tenants t WHERE t.owner = i.author AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant, \
+             u.avatar_url, u.email, u.updated_at AS profile_updated_at, \
              (SELECT COUNT(*) FROM comments c WHERE c.tenant = i.tenant AND c.project = i.project AND c.issue_id = i.id AND COALESCE(c.target_type, 'comment') != 'activity') AS comment_count \
              FROM issues i \
              LEFT JOIN user_profiles u ON u.user = i.author \
@@ -56,6 +59,7 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
                     &r.author,
                     r.display_name,
                     r.handle,
+                    r.account_tenant,
                     r.avatar_url,
                     r.email,
                     r.profile_updated_at,
@@ -449,6 +453,7 @@ pub async fn list_comments(
         target_id: Option<String>,
         display_name: Option<String>,
         handle: Option<String>,
+        account_tenant: Option<String>,
         avatar_url: Option<String>,
         email: Option<String>,
         profile_updated_at: Option<String>,
@@ -456,7 +461,9 @@ pub async fn list_comments(
     let result = db
         .prepare(
             "SELECT c.id, c.issue_id, c.author, c.body, c.created_at, c.target_type, c.target_id, \
-             u.display_name, u.handle, u.avatar_url, u.email, u.updated_at AS profile_updated_at \
+             u.display_name, u.handle, \
+             (SELECT t.name FROM tenants t WHERE t.owner = c.author AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant, \
+             u.avatar_url, u.email, u.updated_at AS profile_updated_at \
              FROM comments c \
              LEFT JOIN user_profiles u ON u.user = c.author \
              WHERE c.tenant = ?1 AND c.project = ?2 AND c.issue_id = ?3 \
@@ -475,6 +482,7 @@ pub async fn list_comments(
                 &r.author,
                 r.display_name,
                 r.handle,
+                r.account_tenant,
                 r.avatar_url,
                 r.email,
                 r.profile_updated_at,

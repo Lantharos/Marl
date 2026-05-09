@@ -88,6 +88,7 @@ fn profile_from_claims(claims: AveClaims) -> UserProfile {
         user: claims.sub,
         display_name,
         handle,
+        account_tenant: None,
         avatar_url: clean_claim(claims.picture),
         email,
         updated_at: None,

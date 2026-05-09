@@ -29,6 +29,15 @@ export function userDisplayName(value: string | null | undefined, profile?: User
 	return text && !isOpaqueUserId(text) ? text : 'Unknown user';
 }
 
+export function userProfileHref(value: string | null | undefined, profile?: UserProfile | null) {
+	const tenant = profile?.account_tenant?.trim();
+	if (tenant) return `/${encodeURIComponent(tenant)}`;
+	const handle = profile?.handle?.trim();
+	if (handle) return `/u/${encodeURIComponent(handle)}`;
+	const text = value?.trim() ?? '';
+	return text && !isOpaqueUserId(text) ? `/${encodeURIComponent(text)}` : null;
+}
+
 export function userInitials(value: string | null | undefined, profile?: UserProfile | null) {
 	const name = userName(value, profile);
 	if (name === 'Unknown user') return '?';

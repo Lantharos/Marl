@@ -2,6 +2,7 @@ export interface UserProfile {
 	user: string;
 	display_name: string;
 	handle?: string | null;
+	account_tenant?: string | null;
 	avatar_url?: string | null;
 	email?: string | null;
 	updated_at?: string | null;

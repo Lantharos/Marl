@@ -57,7 +57,7 @@
 	});
 
 	$effect(() => {
-		if (!canAccessTenant) {
+		if (!canAccessTenant || data.projects.scope === 'all') {
 			authedProjects = null;
 			authedLoadKey = '';
 			return;

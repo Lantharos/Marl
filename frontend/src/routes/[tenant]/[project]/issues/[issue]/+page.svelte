@@ -26,7 +26,8 @@
 	import IssueMetadataSidebar from '$lib/components/IssueMetadataSidebar.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import { userDisplayName, userInitials, userName } from '$lib/identity';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import UserProfileLink from '$lib/components/UserProfileLink.svelte';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
@@ -244,7 +245,7 @@
 						<span class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-white {currentState(issue) === 'open' ? 'bg-[#238636]' : 'bg-[#6f2930]'}">
 							{#if currentState(issue) === 'open'}<Circle class="h-3.5 w-3.5" /> {stateText(issue)}{:else}<CheckCircle2 class="h-3.5 w-3.5" /> {stateText(issue)}{/if}
 						</span>
-						<span>{userName(issue.author, issue.author_profile)} opened this issue on {new Date(issue.created_at).toLocaleDateString()}</span>
+						<span><UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#a09d94]" /> opened this issue on {new Date(issue.created_at).toLocaleDateString()}</span>
 						<span>·</span>
 						<span>{issue.comment_count ?? issue.comments.length} {(issue.comment_count ?? issue.comments.length) === 1 ? 'comment' : 'comments'}</span>
 					</div>
@@ -258,15 +259,13 @@
 
 		<div class="grid gap-8 lg:grid-cols-[1fr_280px]">
 			<section class="relative min-w-0">
-				<div class="relative grid gap-5 before:absolute before:left-5 before:top-0 before:bottom-0 before:w-px before:bg-[#2a2a28]">
-					<div class="relative grid grid-cols-[40px_1fr] gap-3">
-						<div class="z-10 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-xs text-[#eae9e4]">
-							{#if issue.author_profile?.avatar_url}<img src={issue.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(issue.author, issue.author_profile)}{/if}
-						</div>
+				<div class="relative grid gap-5 before:absolute before:left-[13px] before:top-0 before:bottom-0 before:w-px before:bg-[#2a2a28]">
+					<div class="relative z-10 grid grid-cols-[28px_1fr] gap-3">
+						<UserAvatar user={issue.author} profile={issue.author_profile} />
 						<div class="min-w-0 border border-[#2a2a28] bg-[#0f0f0d]">
 							<div class="flex items-center justify-between border-b border-[#252522] bg-[#141412] px-3 py-2 text-sm">
 								<div class="min-w-0 truncate">
-									<span class="font-medium text-[#eae9e4]">{userDisplayName(issue.author, issue.author_profile)}</span>
+									<UserProfileLink user={issue.author} profile={issue.author_profile} className="font-medium text-[#eae9e4]" />
 									<span class="ml-1 text-[#8c887e]">opened {issueDate(issue.created_at)}</span>
 								</div>
 								{#if canWrite}
@@ -287,24 +286,20 @@
 
 					{#each timelineEntries as comment}
 						{#if (comment.target_type ?? 'comment') === 'activity'}
-							<div class="relative grid grid-cols-[40px_1fr] gap-3">
-								<div class="z-10 flex h-8 w-8 translate-x-1 items-center justify-center overflow-hidden rounded-full bg-[#151512] text-[9px] text-[#eae9e4] ring-4 ring-[#0f0f0d]">
-									{#if comment.author_profile?.avatar_url}<img src={comment.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(comment.author, comment.author_profile)}{/if}
-								</div>
+							<div class="relative z-10 grid grid-cols-[28px_1fr] gap-3 py-2">
+								<UserAvatar user={comment.author} profile={comment.author_profile} ring />
 								<div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 py-1 text-sm text-[#8c887e]">
-									<span class="font-medium text-[#eae9e4]">{userDisplayName(comment.author, comment.author_profile)}</span>
+									<UserProfileLink user={comment.author} profile={comment.author_profile} className="font-medium text-[#eae9e4]" />
 									<span>{comment.body}</span>
 									<span>{issueDate(comment.created_at)}</span>
 								</div>
 							</div>
 						{:else}
-							<div class="relative grid grid-cols-[40px_1fr] gap-3">
-								<div class="z-10 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-xs text-[#eae9e4]">
-									{#if comment.author_profile?.avatar_url}<img src={comment.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(comment.author, comment.author_profile)}{/if}
-								</div>
+							<div class="relative z-10 grid grid-cols-[28px_1fr] gap-3">
+								<UserAvatar user={comment.author} profile={comment.author_profile} />
 								<div class="min-w-0 border border-[#2a2a28] bg-[#0f0f0d]">
 									<div class="border-b border-[#252522] bg-[#141412] px-3 py-2 text-sm">
-										<span class="font-medium text-[#eae9e4]">{userDisplayName(comment.author, comment.author_profile)}</span>
+										<UserProfileLink user={comment.author} profile={comment.author_profile} className="font-medium text-[#eae9e4]" />
 										<span class="ml-1 text-[#8c887e]">commented {issueDate(comment.created_at)}</span>
 									</div>
 									<div class="p-4">
@@ -316,20 +311,18 @@
 					{/each}
 
 					{#if currentState(issue) === 'closed' && issue.closed_at && !timelineEntries.some((comment) => (comment.target_type ?? 'comment') === 'activity' && comment.target_id === 'state')}
-						<div class="relative grid grid-cols-[40px_1fr] gap-3">
-							<div class="z-10 flex h-9 w-9 items-center justify-center rounded-full border border-[#2a2a28] bg-[#141412] text-[#d96c5a]"><CheckCircle2 class="h-4 w-4" /></div>
+						<div class="relative z-10 grid grid-cols-[28px_1fr] gap-3 py-2">
+							<div class="flex h-7 w-7 items-center justify-center rounded-full bg-[#1f1f1c] text-[#d96c5a]"><CheckCircle2 class="h-3.5 w-3.5" /></div>
 							<div class="flex items-center gap-2 py-2 text-sm text-[#8c887e]">
-								<span>{userName(issue.author, issue.author_profile)} {stateText(issue).toLowerCase()} on {new Date(issue.closed_at).toLocaleDateString()}</span>
+								<span><UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#a09d94]" /> {stateText(issue).toLowerCase()} on {new Date(issue.closed_at).toLocaleDateString()}</span>
 							</div>
 						</div>
 					{/if}
 				</div>
 
 				{#if canWrite}
-					<div class="relative mt-5 grid grid-cols-[40px_1fr] gap-3 before:absolute before:left-5 before:top-[-1.25rem] before:h-[calc(1.25rem+20px)] before:w-px before:bg-[#2a2a28]">
-						<div class="z-20 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-xs text-[#eae9e4] ring-4 ring-[#0f0f0d]">
-							{#if issue.author_profile?.avatar_url}<img src={issue.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(issue.author, issue.author_profile)}{/if}
-						</div>
+					<div class="relative mt-5 grid grid-cols-[28px_1fr] gap-3 before:absolute before:left-[13px] before:top-[-1.25rem] before:h-[calc(1.25rem+14px)] before:w-px before:bg-[#2a2a28]">
+						<UserAvatar user={issue.author} profile={issue.author_profile} ring className="z-20" />
 						<ContentComposer
 							value={commentBody}
 							submitLabel="Comment"
@@ -342,8 +335,8 @@
 						/>
 					</div>
 				{:else}
-					<div class="relative mt-5 grid grid-cols-[40px_1fr] gap-3 before:absolute before:left-5 before:top-[-1.25rem] before:h-[calc(1.25rem+18px)] before:w-px before:bg-[#2a2a28]">
-						<div class="z-20 flex h-9 w-9 items-center justify-center rounded-full border border-[#2a2a28] bg-[#141412] text-[#8c887e] ring-4 ring-[#0f0f0d]"><MessageSquare class="h-4 w-4" /></div>
+					<div class="relative mt-5 grid grid-cols-[28px_1fr] gap-3 before:absolute before:left-[13px] before:top-[-1.25rem] before:h-[calc(1.25rem+14px)] before:w-px before:bg-[#2a2a28]">
+						<div class="z-20 flex h-7 w-7 items-center justify-center rounded-full bg-[#1f1f1c] text-[#8c887e] ring-4 ring-[#0f0f0d]"><MessageSquare class="h-3.5 w-3.5" /></div>
 						<p class="py-2 text-sm text-[#8c887e]">Sign in with write access to join the conversation.</p>
 					</div>
 				{/if}

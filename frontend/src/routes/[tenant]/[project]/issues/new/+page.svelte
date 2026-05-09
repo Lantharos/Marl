@@ -2,11 +2,11 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onDestroy, onMount } from 'svelte';
-	import { createIssue, getMe, isAbortError, listIssuesPage, type Issue, type IssueType } from '$lib/api';
+	import { createIssue, getMe, isAbortError, listIssuesPage, type Issue, type IssueType, type UserProfile } from '$lib/api';
 	import ContentComposer from '$lib/components/ContentComposer.svelte';
 	import IssueMetadataSidebar from '$lib/components/IssueMetadataSidebar.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import { userInitials } from '$lib/identity';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import Circle from 'lucide-svelte/icons/circle';
 	import Plus from 'lucide-svelte/icons/plus';
@@ -29,8 +29,7 @@
 	let canWrite = $state(false);
 	let canMaintain = $state(false);
 	let currentUser = $state('');
-	let avatarUrl = $state<string | null>(null);
-	let displayName = $state<string | null>(null);
+	let currentUserProfile = $state<UserProfile | null>(null);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canWrite = Boolean(value?.can_write);
@@ -66,8 +65,7 @@
 			]);
 			issues = issuePage.items;
 			currentUser = me?.user ?? '';
-			avatarUrl = me?.profile?.avatar_url ?? null;
-			displayName = me?.profile?.display_name ?? me?.profile?.handle ?? me?.user ?? null;
+			currentUserProfile = me?.profile ?? null;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed to load issues';
@@ -145,10 +143,8 @@
 		{/if}
 
 		<div class="grid gap-8 lg:grid-cols-[1fr_280px]">
-			<section class="grid grid-cols-[40px_1fr] gap-3">
-				<div class="mt-1 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-xs text-[#eae9e4]">
-					{#if avatarUrl}<img src={avatarUrl} alt="" class="h-full w-full object-cover" />{:else}{userInitials(currentUser || displayName)}{/if}
-				</div>
+			<section class="grid grid-cols-[28px_1fr] gap-3">
+				<UserAvatar user={currentUser} profile={currentUserProfile} className="mt-1" />
 				<div class="min-w-0">
 					<div class="mb-4 border border-[#2a2a28] bg-[#0f0f0d]">
 						<div class="border-b border-[#252522] bg-[#141412] px-4 py-3">

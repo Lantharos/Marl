@@ -62,6 +62,7 @@ pub async fn upsert_user_profile(db: &Database, profile: &UserProfile) -> Result
         user: profile.user.clone(),
         display_name: display_name.to_string(),
         handle: profile.handle.clone(),
+        account_tenant: None,
         avatar_url: profile.avatar_url.clone(),
         email: profile.email.clone(),
         updated_at: Some(updated_at),
@@ -74,12 +75,18 @@ pub async fn user_profile(db: &Database, user: &str) -> Result<Option<UserProfil
         user: String,
         display_name: String,
         handle: Option<String>,
+        account_tenant: Option<String>,
         avatar_url: Option<String>,
         email: Option<String>,
         updated_at: String,
     }
     let row: Option<Row> = db
-        .prepare("SELECT user, display_name, handle, avatar_url, email, updated_at FROM user_profiles WHERE user = ?1")
+        .prepare(
+            "SELECT u.user, u.display_name, u.handle, \
+             (SELECT t.name FROM tenants t WHERE t.owner = u.user AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant, \
+             u.avatar_url, u.email, u.updated_at \
+             FROM user_profiles u WHERE u.user = ?1",
+        )
         .bind(&[js_str(user)])?
         .first(None)
         .await?;
@@ -87,6 +94,7 @@ pub async fn user_profile(db: &Database, user: &str) -> Result<Option<UserProfil
         user: row.user,
         display_name: row.display_name,
         handle: row.handle,
+        account_tenant: row.account_tenant,
         avatar_url: row.avatar_url,
         email: row.email,
         updated_at: Some(row.updated_at),

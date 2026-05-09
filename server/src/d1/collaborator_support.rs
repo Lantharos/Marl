@@ -217,14 +217,17 @@ pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Ve
         user: String,
         display_name: String,
         handle: Option<String>,
+        account_tenant: Option<String>,
         avatar_url: Option<String>,
         email: Option<String>,
         updated_at: String,
     }
     let result = if trimmed.is_empty() {
         db.prepare(
-            "SELECT user, display_name, handle, avatar_url, email, updated_at
-             FROM user_profiles
+            "SELECT u.user, u.display_name, u.handle,
+             (SELECT t.name FROM tenants t WHERE t.owner = u.user AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant,
+             u.avatar_url, u.email, u.updated_at
+             FROM user_profiles u
              ORDER BY updated_at DESC, display_name
              LIMIT ?1",
         )
@@ -233,8 +236,10 @@ pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Ve
         .await?
     } else {
         db.prepare(
-            "SELECT user, display_name, handle, avatar_url, email, updated_at
-             FROM user_profiles
+            "SELECT u.user, u.display_name, u.handle,
+             (SELECT t.name FROM tenants t WHERE t.owner = u.user AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant,
+             u.avatar_url, u.email, u.updated_at
+             FROM user_profiles u
              WHERE LOWER(COALESCE(handle, '')) LIKE ?1
                 OR LOWER(display_name) LIKE ?1
                 OR LOWER(COALESCE(email, '')) LIKE ?1
@@ -257,6 +262,7 @@ pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Ve
             user: row.user,
             display_name: row.display_name,
             handle: row.handle,
+            account_tenant: row.account_tenant,
             avatar_url: row.avatar_url,
             email: row.email,
             updated_at: Some(row.updated_at),

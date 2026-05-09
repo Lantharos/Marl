@@ -1,11 +1,13 @@
 <script lang="ts">
 	import type { HistoryEntry, ReviewComment, WorkspaceStatus } from '$lib/api';
-	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
+	import { userDisplayName, withoutOpaqueUserIds } from '$lib/identity';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import CircleDot from 'lucide-svelte/icons/circle-dot';
 	import GitMerge from 'lucide-svelte/icons/git-merge';
 	import type { ComposerAction } from './ContentComposer.svelte';
 	import ReviewThread from './ReviewThread.svelte';
+	import UserAvatar from './UserAvatar.svelte';
+	import UserProfileLink from './UserProfileLink.svelte';
 	import WorkspaceReviewSidebar from './WorkspaceReviewSidebar.svelte';
 
 	type WorkspaceDetail = WorkspaceStatus & { history?: HistoryEntry[] };
@@ -300,16 +302,10 @@
 				{:else if item.type === 'activity'}
 					{@const comment = item.comment}
 					<div class="relative z-10 grid grid-cols-[28px_1fr] gap-3 py-2">
-						<div class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
-							{#if comment.author_profile?.avatar_url}
-								<img src={comment.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />
-							{:else}
-								{userInitials(comment.author, comment.author_profile)}
-							{/if}
-						</div>
+						<UserAvatar user={comment.author} profile={comment.author_profile} />
 						<div class="min-w-0 py-0.5">
 							<div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
-								<span class="font-medium text-[#eae9e4]">{userDisplayName(comment.author, comment.author_profile)}</span>
+								<UserProfileLink user={comment.author} profile={comment.author_profile} className="font-medium text-[#eae9e4]" />
 								<span class="text-[#8c887e]">{comment.body}</span>
 								<span class="text-[#6f6b5f]">{new Date(comment.created_at).toLocaleString()}</span>
 							</div>
@@ -319,16 +315,10 @@
 					{@const event = item.event}
 					{@const target = eventTarget(event)}
 					<div class="relative z-10 grid grid-cols-[28px_1fr] gap-3 py-2">
-						<div class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
-							{#if event.profile?.avatar_url}
-								<img src={event.profile.avatar_url} alt="" class="h-full w-full object-cover" />
-							{:else}
-								{userInitials(event.author, event.profile)}
-							{/if}
-						</div>
+						<UserAvatar user={event.author} profile={event.profile} />
 						<button class="group min-w-0 py-0.5 text-left" onclick={() => onOpenFileConversation(target)}>
 							<div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
-								<span class="font-medium text-[#eae9e4]">{userDisplayName(event.author, event.profile)}</span>
+								<UserProfileLink user={event.author} profile={event.profile} className="font-medium text-[#eae9e4]" />
 								<span class="text-[#8c887e]">commented on file changes</span>
 								<span class={event.openCount ? 'text-[#d9a66c]' : 'text-[#7cb97c]'}>{event.openCount ? `${event.openCount} open` : 'resolved'}</span>
 								<span class="text-[#6f6b5f]">{new Date(event.lastAt).toLocaleString()}</span>
@@ -360,7 +350,7 @@
 						</div>
 						<div class="min-w-0 py-0.5">
 							<div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
-								<span class="font-medium text-[#eae9e4]">{userDisplayName(entry.author, entry.author_profile)}</span>
+								<UserProfileLink user={entry.author} profile={entry.author_profile} className="font-medium text-[#eae9e4]" />
 								<span class="text-[#8c887e]">{historyEventLabel(entry)}</span>
 								<span class="text-[#6f6b5f]">{new Date(entry.timestamp).toLocaleString()}</span>
 							</div>

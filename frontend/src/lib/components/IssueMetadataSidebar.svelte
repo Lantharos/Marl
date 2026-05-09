@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createLabel, listLabels, listMilestones, listProjects, listWorkspaceStatuses, searchUsers, type IssueType, type Label, type Milestone, type ProjectSummary, type UserProfile, type WorkspaceStatus } from '$lib/api';
-	import { userDisplayName, userInitials } from '$lib/identity';
+	import UserAvatar from './UserAvatar.svelte';
+	import UserProfileLink from './UserProfileLink.svelte';
 	import ArrowRight from 'lucide-svelte/icons/arrow-right';
 	import BellOff from 'lucide-svelte/icons/bell-off';
 	import CirclePlus from 'lucide-svelte/icons/circle-plus';
@@ -123,10 +124,6 @@
 		return profile.display_name?.trim() || profile.handle?.trim() || profile.user;
 	}
 
-	function displayPerson(user: string) {
-		return userDisplayName(user, personProfile(user));
-	}
-
 	function personProfile(user: string) {
 		return userChoices.find((item) => item.user === user) ?? null;
 	}
@@ -246,8 +243,8 @@
 			{#each assignees as user}
 				{@const profile = personProfile(user)}
 				<div class="flex min-w-0 items-center gap-2 text-[#d8d5ca]">
-					<div class="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[8px] text-[#eae9e4]">{#if profile?.avatar_url}<img src={profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(user, profile)}{/if}</div>
-					<span class="truncate">{displayPerson(user)}</span>
+					<UserAvatar {user} {profile} size="xs" />
+					<UserProfileLink {user} {profile} className="truncate text-[#d8d5ca]" />
 				</div>
 			{:else}
 				<p class="text-xs text-[#6f6b5f]">No one assigned</p>
@@ -432,9 +429,7 @@
 			<div class="mb-3 font-medium text-[#eae9e4]">{participants.length} {participants.length === 1 ? 'participant' : 'participants'}</div>
 			<div class="flex flex-wrap gap-1.5">
 				{#each participants as participant}
-					<div class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[9px] text-[#eae9e4]">
-						{#if participant.profile?.avatar_url}<img src={participant.profile.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(participant.user, participant.profile)}{/if}
-					</div>
+					<UserAvatar user={participant.user} profile={participant.profile} />
 				{/each}
 			</div>
 		</section>
@@ -497,7 +492,7 @@
 		<div class="max-h-64 overflow-auto">
 			{#each filteredUsers as user}
 				<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => save({ assignees: assignees.includes(user.user) ? removeUser(user.user) : addUser(user.user) })}>
-					<div class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[9px] text-[#eae9e4]">{#if user.avatar_url}<img src={user.avatar_url} alt="" class="h-full w-full object-cover" />{:else}{userInitials(user.user, user)}{/if}</div>
+					<UserAvatar user={user.user} profile={user} size="sm" linked={false} />
 					<span class="min-w-0 flex-1 truncate text-sm text-[#eae9e4]">{personLabel(user)}</span>
 					<span class="text-xs text-[#d9a66c]">{assignees.includes(user.user) ? 'selected' : ''}</span>
 				</button>

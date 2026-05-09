@@ -5,6 +5,8 @@ pub struct UserProfile {
     pub user: String,
     pub display_name: String,
     pub handle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_tenant: Option<String>,
     pub avatar_url: Option<String>,
     pub email: Option<String>,
     pub updated_at: Option<String>,
