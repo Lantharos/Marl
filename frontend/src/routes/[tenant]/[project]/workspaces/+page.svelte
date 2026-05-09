@@ -170,43 +170,51 @@
 		</div>
 	</div>
 
-	<div class="mb-4 flex flex-wrap gap-1 border-b border-[#2a2a28]">
-		{#each [
-			{ id: 'open', label: 'Open', count: openWorkspaces.length },
-			{ id: 'changes', label: 'Changes requested', count: changesRequestedWorkspaces.length },
-			{ id: 'ready', label: 'Ready', count: readyWorkspaces.length },
-			{ id: 'merged', label: 'Merged', count: mergedWorkspaces.length },
-			{ id: 'closed', label: 'Closed', count: closedWorkspaces.length },
-			{ id: 'all', label: 'All', count: workspaces.length }
-		] as item}
-			<button
-				class="border-b px-3 py-2 text-sm {filter === item.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#eae9e4]'}"
-				onclick={() => setFilter(item.id as 'open' | 'changes' | 'ready' | 'merged' | 'closed' | 'all')}
-			>
-				{item.label} <span class="ml-1 text-xs text-[#6f6b5f]">{item.count}</span>
-			</button>
-		{/each}
-	</div>
+	<div class="border border-[#2a2a28] bg-[#0f0f0d]">
+		<div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a2a28] bg-[#141412] px-4 py-3">
+			<div class="flex flex-wrap items-center gap-4 text-sm">
+				{#each [
+					{ id: 'open', label: 'Open', count: openWorkspaces.length },
+					{ id: 'changes', label: 'Changes requested', count: changesRequestedWorkspaces.length },
+					{ id: 'ready', label: 'Ready', count: readyWorkspaces.length },
+					{ id: 'merged', label: 'Merged', count: mergedWorkspaces.length },
+					{ id: 'closed', label: 'Closed', count: closedWorkspaces.length },
+					{ id: 'all', label: 'All', count: workspaces.length }
+				] as item (item.id)}
+					<button
+						class="{filter === item.id ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}"
+						onclick={() => setFilter(item.id as 'open' | 'changes' | 'ready' | 'merged' | 'closed' | 'all')}
+					>
+						{item.label} <span class="ml-1 text-xs text-[#6f6b5f]">{item.count}</span>
+					</button>
+				{/each}
+			</div>
+			<div class="text-xs text-[#6f6b5f]">
+				{filteredWorkspaces.length} {filteredWorkspaces.length === 1 ? 'workspace' : 'workspaces'}
+			</div>
+		</div>
 
-	{#if loading}
-		<Spinner />
-	{:else if error}
-		<div class="text-sm text-[#d96c5a]">{error}</div>
-	{:else if workspaces.length === 0}
-		<div class="bg-[#141412] p-8 text-center">
-			<p class="text-sm text-[#8c887e]">No workspaces yet.</p>
-			<p class="mt-1 text-xs text-[#6f6b5f]">Create one with <code class="rounded bg-[#1e1e1c] px-1 py-0.5">pig work new</code>.</p>
-		</div>
-	{:else if filteredWorkspaces.length === 0}
-		<div class="bg-[#141412] p-8 text-center">
-			<p class="text-sm text-[#8c887e]">Nothing here.</p>
-		</div>
-	{:else}
-		<div class="divide-y divide-[#252522] bg-[#141412]">
-			{#each visibleWorkspaces as workspace}
+		{#if loading}
+			<div class="p-8">
+				<Spinner />
+			</div>
+		{:else if error}
+			<div class="border-b border-[#2a2a28] bg-[#1a1110] px-4 py-3 text-sm text-[#d96c5a]">{error}</div>
+		{:else if workspaces.length === 0}
+			<div class="p-8 text-center">
+				<p class="text-sm text-[#8c887e]">No workspaces yet.</p>
+				<p class="mt-1 text-xs text-[#6f6b5f]">Create one with <code class="rounded bg-[#1e1e1c] px-1 py-0.5">pig work new</code>.</p>
+			</div>
+		{:else if filteredWorkspaces.length === 0}
+			<div class="p-8 text-center">
+				<p class="text-sm text-[#8c887e]">Nothing here.</p>
+			</div>
+		{:else}
+			<div class="divide-y divide-[#252522]">
+				{#each visibleWorkspaces as workspace (workspace.name)}
 				{@const Icon = StatusIcon(workspace)}
 				<button
-					class="group grid w-full gap-2 px-4 py-3 text-left hover:bg-[#181816] md:grid-cols-[1fr_auto]"
+					class="group grid w-full gap-2 px-4 py-3 text-left hover:bg-[#141412] md:grid-cols-[1fr_auto]"
 					onclick={() => goto(`/${tenant}/${project}/workspaces/${workspace.name}`)}
 				>
 					<div class="min-w-0">
@@ -214,7 +222,7 @@
 							<Icon class="h-4 w-4 shrink-0 {statusClass(workspace)}" />
 							<span class="truncate text-sm font-medium text-[#eae9e4]">{workspace.name}</span>
 							<span class="text-xs {statusClass(workspace)}">{statusLabel(workspace)}</span>
-							{#each workspace.labels ?? [] as label}
+							{#each workspace.labels ?? [] as label (label)}
 								<span class="bg-[#1e1e1c] px-1.5 py-0.5 text-[11px] text-[#a09d94]">{label}</span>
 							{/each}
 						</div>
@@ -241,8 +249,11 @@
 						<ChevronRight class="h-4 w-4 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
 					</div>
 				</button>
-			{/each}
-		</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+	{#if !loading && !error && filteredWorkspaces.length > 0}
 		<InfiniteLoader active={hasMore} onVisible={loadMore} />
 	{/if}
 </div>

@@ -1,5 +1,7 @@
 use super::*;
 use std::collections::BTreeMap;
+
+const OBJECT_KIND_LOOKUP_BATCH: usize = 98;
 pub async fn object_kind(
     db: &Database,
     tenant: &str,
@@ -54,7 +56,7 @@ pub async fn object_kinds(
         kind: String,
     }
     let mut kinds = BTreeMap::new();
-    for chunk in ids.chunks(100) {
+    for chunk in ids.chunks(OBJECT_KIND_LOOKUP_BATCH) {
         let placeholders = (0..chunk.len())
             .map(|index| format!("?{}", index + 3))
             .collect::<Vec<_>>()

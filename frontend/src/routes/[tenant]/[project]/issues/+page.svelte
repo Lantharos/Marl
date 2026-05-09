@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
 	import {
 		isAbortError,
@@ -57,7 +58,7 @@
 			.sort((a, b) => Date.parse(b.updated_at ?? b.created_at) - Date.parse(a.updated_at ?? a.created_at))
 			.slice(0, 4)
 	);
-	const people = $derived(() => {
+	const people = $derived.by(() => {
 		const names = new Set<string>();
 		for (const issue of issueItems) {
 			if (userName(issue.author, issue.author_profile) !== 'Unknown user') names.add(userName(issue.author, issue.author_profile));
@@ -137,6 +138,20 @@
 		return `/${tenant}/${project}/issues/${issue.number}`;
 	}
 
+	function openIssue(issue: Issue) {
+		return goto(issueHref(issue));
+	}
+
+	function issueRowKeydown(event: KeyboardEvent, issue: Issue) {
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		event.preventDefault();
+		void openIssue(issue);
+	}
+
+	function stopRowNavigation(event: Event) {
+		event.stopPropagation();
+	}
+
 	function issueDate(issue: Issue) {
 		return new Date(issue.updated_at ?? issue.created_at).toLocaleDateString();
 	}
@@ -161,7 +176,7 @@
 		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
 		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 		{#if canWrite}
-			<a class="inline-flex h-9 items-center gap-1 bg-[#eae9e4] px-3 text-sm font-medium text-[#0f0f0d] hover:bg-[#d8d3c5]" href="/{tenant}/{project}/issues/new"><Plus class="h-4 w-4" /> New issue</a>
+			<a class="inline-flex h-9 items-center gap-1 bg-[#eae9e4] px-3 text-sm text-[#0f0f0d] hover:bg-[#d8d3c5]" href="/{tenant}/{project}/issues/new"><Plus class="h-4 w-4" /> New issue</a>
 		{/if}
 	</div>
 
@@ -174,7 +189,7 @@
 	{:else}
 		{#if pinnedIssues.length}
 			<div class="mb-4 grid gap-3 md:grid-cols-2">
-				{#each pinnedIssues as issue}
+				{#each pinnedIssues as issue (issue.id)}
 					{@const type = issueTypeMeta(issue.issue_type)}
 					<a class="border border-[#2a2a28] bg-[#141412] px-4 py-3 hover:border-[#3a3a36]" href={issueHref(issue)}>
 						<div class="flex items-center gap-2 text-sm font-medium text-[#eae9e4]">
@@ -227,7 +242,7 @@
 				{#if openPanel === 'labels'}
 					<div class="absolute right-24 top-11 z-20 w-72 border border-[#2a2a28] bg-[#141412] shadow-lg">
 						<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Filter by label</div>
-						{#each labelItems as label}
+						{#each labelItems as label (label.name)}
 							<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-sm hover:bg-[#181816]" onclick={() => { selectedLabel = label.name; openPanel = ''; }}>
 								<span class="h-3 w-3 rounded-full" style:background-color={color(label.color)}></span>
 								<span class="truncate text-[#eae9e4]">{label.name}</span>
@@ -240,7 +255,7 @@
 				{#if openPanel === 'assignees'}
 					<div class="absolute right-4 top-11 z-20 w-72 border border-[#2a2a28] bg-[#141412] shadow-lg">
 						<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Filter by assignee</div>
-						{#each people() as person}
+						{#each people as person (person)}
 							<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-sm text-[#eae9e4] hover:bg-[#181816]" onclick={() => { selectedAssignee = person; openPanel = ''; }}>{person}</button>
 						{:else}
 							<div class="px-3 py-3 text-xs text-[#6f6b5f]">No assignees yet.</div>
@@ -249,9 +264,15 @@
 				{/if}
 			</div>
 			<div class="divide-y divide-[#252522]">
-				{#each shownIssues as issue}
+				{#each shownIssues as issue (issue.id)}
 					{@const type = issueTypeMeta(issue.issue_type)}
-					<div class="flex items-start gap-3 px-4 py-3 hover:bg-[#141412]">
+					<div
+						class="group flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-[#141412]"
+						role="link"
+						tabindex="0"
+						onclick={() => openIssue(issue)}
+						onkeydown={(event) => issueRowKeydown(event, issue)}
+					>
 						{#if (issue.state ?? issue.status) === 'open'}
 							<Circle class="mt-1 h-4 w-4 shrink-0 text-[#2fbd55]" />
 						{:else}
@@ -259,21 +280,21 @@
 						{/if}
 						<div class="min-w-0 flex-1">
 							<div class="flex flex-wrap items-center gap-2">
-								<a class="font-medium text-[#eae9e4] hover:text-[#d9a66c]" href={issueHref(issue)}>{issue.title}</a>
+								<span class="font-medium text-[#eae9e4] group-hover:text-[#d9a66c]">{issue.title}</span>
 								{#if type}
 									<span class="inline-flex items-center gap-1 text-xs text-[#8c887e]">
 										<span class="h-2.5 w-2.5 rounded-full border-2 bg-transparent" style:border-color={type.color}></span>
 										{type.label}
 									</span>
 								{/if}
-								{#each issue.labels as name}
+								{#each issue.labels as name (name)}
 									{@const item = labelItems.find((label) => label.name === name)}
 									<span class="px-1.5 py-0.5 text-[11px] text-[#eae9e4]" style:background-color={item ? color(item.color) : '#2a2a28'}>{name}</span>
 								{/each}
 							</div>
 							<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
 								<span>#{issue.number}</span>
-								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by <UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#8c887e]" /></span>
+								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by <UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#8c887e]" onclick={stopRowNavigation} /></span>
 								{#if issue.milestone}<span>{issue.milestone}</span>{/if}
 								{#if issue.workspace}<span>{issue.workspace}</span>{/if}
 								<span>{issueDate(issue)}</span>

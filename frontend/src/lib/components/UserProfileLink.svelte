@@ -5,11 +5,13 @@
 	let {
 		user,
 		profile = null,
-		className = ''
+		className = '',
+		onclick
 	}: {
 		user: string | null | undefined;
 		profile?: UserProfile | null;
 		className?: string;
+		onclick?: (event: MouseEvent) => void;
 	} = $props();
 
 	const label = $derived(userDisplayName(user, profile));
@@ -17,7 +19,7 @@
 </script>
 
 {#if href}
-	<a href={href} class={`${className} hover:text-[#d9a66c]`}>{label}</a>
+	<a href={href} class={`${className} hover:text-[#d9a66c]`} {onclick}>{label}</a>
 {:else}
 	<span class={className}>{label}</span>
 {/if}

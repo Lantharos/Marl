@@ -255,6 +255,7 @@
 		busy = true;
 		try {
 			await onChange(patch);
+			openPanel = '';
 			deleteArmed = false;
 			terminalWorkspaceArmed = '';
 		} finally {
@@ -355,7 +356,7 @@
 			<button class="text-[#8c887e] hover:text-[#d9a66c] disabled:opacity-40" aria-label="Edit assignees" disabled={!canWrite || busy} onclick={() => togglePanel('assignees')}><CirclePlus class="h-4 w-4" /></button>
 		</div>
 		<div class="grid gap-1.5">
-			{#each assignees as user}
+			{#each assignees as user (user)}
 				{@const profile = personProfile(user)}
 				<div class="flex min-w-0 items-center gap-2 text-[#d8d5ca]">
 					<UserAvatar {user} {profile} size="xs" />
@@ -374,7 +375,7 @@
 			<button class="text-[#8c887e] hover:text-[#d9a66c] disabled:opacity-40" aria-label="Edit labels" disabled={!canWrite || busy} onclick={() => togglePanel('labels')}><CirclePlus class="h-4 w-4" /></button>
 		</div>
 		<div class="flex flex-wrap gap-1.5">
-			{#each selectedLabels as name}
+			{#each selectedLabels as name (name)}
 				{@const item = labels.find((label) => label.name === name)}
 				<span class="px-2 py-0.5 text-xs text-[#eae9e4]" style:background-color={item ? color(item.color) : '#2a2a28'}>{name}</span>
 			{:else}
@@ -391,7 +392,7 @@
 					</div>
 				</div>
 				<div class="max-h-72 overflow-auto">
-					{#each filteredLabels as label}
+					{#each filteredLabels as label (label.name)}
 						<button class="flex w-full items-start gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => toggleLabel(label.name)}>
 							<span class="mt-1 h-3 w-3 shrink-0 rounded-full" style:background-color={color(label.color)}></span>
 							<span class="min-w-0 flex-1"><span class="block truncate text-sm text-[#eae9e4]">{label.name}</span><span class="block truncate text-xs text-[#8c887e]">{label.description ?? ''}</span></span>
@@ -424,7 +425,7 @@
 				{#if milestone}
 					<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs text-[#d9a66c] hover:bg-[#181816]" onclick={() => save({ milestone: null })}>Clear milestone</button>
 				{/if}
-				{#each filteredMilestones as item}
+				{#each filteredMilestones as item (item.id)}
 					<button class="block w-full border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => save({ milestone: item.title })}>
 						<span class="block text-sm text-[#eae9e4]">{item.title}</span>
 						<span class="block truncate text-xs text-[#8c887e]">{item.description ?? ''}</span>
@@ -465,7 +466,7 @@
 					{#if issueType}
 						<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs text-[#d9a66c] hover:bg-[#181816]" onclick={() => save({ issue_type: null })}>Clear type</button>
 					{/if}
-					{#each filteredIssueTypes as type}
+					{#each filteredIssueTypes as type (type.value)}
 						<button class="flex w-full items-start gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => save({ issue_type: type.value })}>
 							<span class="mt-1 h-3 w-3 shrink-0 rounded-full border-2 bg-transparent" style:border-color={type.color}></span>
 							<span class="min-w-0 flex-1">
@@ -514,7 +515,7 @@
 						<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs text-[#d9a66c] hover:bg-[#181816]" onclick={() => save({ workspace: null })}>Unlink workspace</button>
 					{/if}
 					<div class="max-h-72 overflow-auto">
-						{#each visibleWorkspaces as item}
+						{#each visibleWorkspaces as item (item.name)}
 							<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => linkWorkspace(item)}>
 								<Link2 class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
 								<span class="min-w-0 flex-1">
@@ -543,7 +544,7 @@
 		<section class="border-b border-[#2a2a28] pb-4">
 			<div class="mb-3 font-medium text-[#eae9e4]">{participants.length} {participants.length === 1 ? 'participant' : 'participants'}</div>
 			<div class="flex flex-wrap gap-1.5">
-				{#each participants as participant}
+				{#each participants as participant (participant.user)}
 					<UserAvatar user={participant.user} profile={participant.profile} />
 				{/each}
 			</div>
@@ -579,7 +580,7 @@
 							</div>
 						</div>
 						<div class="max-h-80 overflow-auto">
-							{#each filteredProjects as item}
+							{#each filteredProjects as item (`${item.tenant}/${item.project}`)}
 								<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => transfer(item)}>
 									<ArrowRight class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
 									<span class="min-w-0 flex-1 truncate text-sm text-[#eae9e4]">{item.tenant}/{item.project}</span>
@@ -605,7 +606,7 @@
 			</div>
 		</div>
 		<div class="max-h-64 overflow-auto">
-			{#each filteredUsers as user}
+			{#each filteredUsers as user (user.user)}
 				<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => save({ assignees: assignees.includes(user.user) ? removeUser(user.user) : addUser(user.user) })}>
 					<UserAvatar user={user.user} profile={user} size="sm" linked={false} />
 					<span class="min-w-0 flex-1 truncate text-sm text-[#eae9e4]">{personLabel(user)}</span>
