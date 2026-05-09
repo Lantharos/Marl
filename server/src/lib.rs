@@ -23,6 +23,8 @@ mod release_support;
 mod releases;
 mod request_context;
 mod support;
+mod source_archive;
+mod workspace_metadata;
 
 use account_keys::*;
 use auth::verify_ave_id_token;
@@ -33,6 +35,7 @@ use protocol::*;
 use protocol_ready::*;
 use releases::*;
 use request_context::AppContext;
+use source_archive::*;
 use support::{
     MAX_TREE_DEPTH, MAX_TREE_ENTRIES, apply_cache_headers, apply_cors, bearer_token, bucket, db,
     delete_prefix, frontend_origin, json_error, not_modified_response, object_key,
@@ -41,6 +44,7 @@ use support::{
     validate_object_id, validate_object_metadata, validate_object_payload,
     validate_tree_entry_name,
 };
+use workspace_metadata::*;
 
 include!("code.rs");
 include!("graph.rs");
@@ -147,6 +151,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             list_workspaces,
         )
         .get_async("/v1/tenants/:tenant/projects/:project/tree", project_tree)
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/source.zip",
+            project_source_archive,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/files/:path",
             project_file,
@@ -388,6 +396,22 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async(
             "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge-preview",
             merge_preview,
+        )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/labels",
+            update_workspace_labels,
+        )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/metadata",
+            update_workspace_metadata,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/close",
+            close_workspace,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace",
+            delete_draft_workspace,
         )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/history/:entry_id",

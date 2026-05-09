@@ -1,61 +1,104 @@
 <script lang="ts">
-	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
 	import {
+		closeWorkspace,
+		createReviewComment,
+		deleteReviewComment,
+		deleteDraftWorkspace,
+		getHistoryEntryDetail,
 		getWorkspaceDetail,
-		getProjectFile,
+		getWorkspaceMergePreview,
 		isAbortError,
 		listReviewComments,
-		mergeWorkspace,
 		markWorkspaceReady,
+		mergeWorkspace,
 		requestWorkspaceChanges,
-		createReviewComment,
+		updateReviewComment,
+		updateReviewCommentState,
+		updateWorkspaceMetadata,
+		updateWorkspaceLabels,
+		type ChangedFile,
 		type ReviewComment,
-		type ProjectFile
+		type UserProfile
 	} from '$lib/api';
-	import FileTreePane from '$lib/FileTreePane.svelte';
-	import CodePane from '$lib/CodePane.svelte';
-	import ReviewThread from '$lib/components/ReviewThread.svelte';
+	import { appData } from '$lib/appState';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
+	import ReviewSubmitDialog from '$lib/components/ReviewSubmitDialog.svelte';
+	import WorkspaceConversation from '$lib/components/WorkspaceConversation.svelte';
+	import WorkspaceFilesView from '$lib/components/WorkspaceFilesView.svelte';
+	import WorkspaceHistoryTimeline from '$lib/components/WorkspaceHistoryTimeline.svelte';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
+	import { labelActivity, metadataActivity } from '$lib/workspaceActivity';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
 	const workspaceName = $derived($page.params.workspace as string);
 
+	type Tab = 'conversation' | 'files' | 'history';
+	type DiffMode = 'inline' | 'split';
+	const historyChunkSize = 20;
+
 	let detail = $state<Awaited<ReturnType<typeof getWorkspaceDetail>> | null>(null);
-	let file = $state<ProjectFile | null>(null);
+	let changedFiles = $state<ChangedFile[]>([]);
+	let previewError = $state('');
+	let selectedPath = $state('');
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
-	let reviewBusy = $state(false);
-	let changeReason = $state('');
+	let activeTab = $state<Tab>('conversation');
+	let diffMode = $state<DiffMode>('inline');
 	let reviewComments = $state<ReviewComment[]>([]);
-	let selectedReviewFile = $state<string | null>(null);
-	let selectedReviewRange = $state<{ file: string; startLine: number; endLine: number } | null>(null);
-	let fileController: AbortController | null = null;
+	let historyFiles = $state<Record<string, ChangedFile[]>>({});
+	let historyVisibleCount = $state(historyChunkSize);
+	let selectedReviewRange = $state<{ file: string; startLine: number; endLine: number; side?: 'old' | 'new' } | null>(null);
+	let pendingReviewComments = $state<ReviewComment[]>([]);
+	let reviewSubmitOpen = $state(false);
 	let canWrite = $state(false);
 	let canMaintain = $state(false);
+	let currentUser = $state<string | null>(null);
+	let currentUserProfile = $state<UserProfile | null>(null);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canWrite = Boolean(value?.can_write);
 		canMaintain = Boolean(value?.can_maintain && !value?.archived);
 	});
+	const unsubscribeAppData = appData.subscribe((value) => {
+		currentUser = value.me?.user ?? null;
+		currentUserProfile = value.me?.profile ?? null;
+	});
 
-	onDestroy(unsubscribe);
+	onDestroy(() => {
+		unsubscribe();
+		unsubscribeAppData();
+	});
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
+		previewError = '';
 		try {
-			const [workspaceDetail, comments] = await Promise.all([
+			const [workspaceDetail, comments, preview] = await Promise.all([
 				getWorkspaceDetail(tenant, project, workspaceName, signal ? { signal } : {}),
-				listReviewComments(tenant, project, { workspace: workspaceName }, signal ? { signal } : {})
+				listReviewComments(tenant, project, { workspace: workspaceName }, signal ? { signal } : {}),
+				getWorkspaceMergePreview(tenant, project, workspaceName, signal ? { signal } : {}).catch((e) => {
+					if (isAbortError(e)) throw e;
+					previewError = e instanceof Error ? e.message : 'Failed to load changed files';
+					return { files: [] };
+				})
 			]);
 			detail = workspaceDetail;
 			reviewComments = comments.items;
+			pendingReviewComments = [];
+			changedFiles = [...preview.files].sort((a, b) => a.path.localeCompare(b.path));
+			if (changedFiles.length === 0) {
+				selectedPath = '';
+			} else if (!selectedPath || !changedFiles.some((file) => file.path === selectedPath)) {
+				selectedPath = changedFiles[0].path;
+			}
+			historyFiles = {};
+			historyVisibleCount = historyChunkSize;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -68,264 +111,359 @@
 		if (!tenant || !project || !workspaceName) return;
 		const controller = new AbortController();
 		load(controller.signal);
-		return () => {
-			controller.abort();
-			fileController?.abort();
-		};
+		return () => controller.abort();
 	});
 
-	async function openFile(path: string) {
-		const entry = detail?.files.entries.find((e) => e.path === path);
-		if (entry?.entry_type !== 'blob') return;
-		selectedReviewFile = path;
-		selectedReviewRange = null;
-		fileController?.abort();
+	const workspaceComments = $derived(reviewComments.filter((comment) => comment.target_type === 'workspace'));
+	const activityComments = $derived(reviewComments.filter((comment) => comment.target_type === 'activity'));
+	const fileThreads = $derived([...reviewComments, ...pendingReviewComments].filter((comment) => comment.file));
+	const unresolvedFileThreads = $derived(fileThreads.filter((comment) => comment.state !== 'resolved'));
+	const commentCountsByFile = $derived(
+		reviewComments.reduce<Record<string, number>>((counts, comment) => {
+			if (comment.file && comment.state !== 'resolved') counts[comment.file] = (counts[comment.file] ?? 0) + 1;
+			return counts;
+		}, {})
+	);
+	const conversationActions = $derived(buildConversationActions());
+	const visibleHistoryEntries = $derived(detail?.history.slice(0, historyVisibleCount) ?? []);
+	const historyTotal = $derived(detail?.history.length ?? 0);
+
+	$effect(() => {
+		if (!detail || activeTab !== 'history') return;
+		const missing = visibleHistoryEntries.filter((entry) => !(entry.id in historyFiles));
+		if (missing.length === 0) return;
 		const controller = new AbortController();
-		fileController = controller;
-		try {
-			file = await getProjectFile(tenant, project, path, workspaceName, undefined, { signal: controller.signal });
-		} catch (e) {
-			if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			if (fileController === controller) fileController = null;
-		}
+		loadHistoryFiles(missing, controller.signal).catch((e) => {
+			if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed to load history files';
+		});
+		return () => controller.abort();
+	});
+
+	function setTab(tab: Tab) {
+		activeTab = tab;
 	}
 
-	async function handleReady() {
-		busy = true;
-		try {
-			await markWorkspaceReady(tenant, project, workspaceName);
-			await load();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
+	function selectPath(path: string) {
+		selectedPath = path;
+		selectedReviewRange = null;
 	}
 
-	async function handleMerge() {
-		busy = true;
-		try {
-			await mergeWorkspace(tenant, project, workspaceName);
-			await load();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
+	function openFileConversation(comment: ReviewComment) {
+		if (!comment.file) return;
+		selectedPath = comment.file;
+		activeTab = 'files';
+		selectedReviewRange = comment.target_type === 'line'
+			? {
+				file: comment.file,
+				startLine: Number(comment.start_line ?? comment.line ?? comment.end_line ?? 0),
+				endLine: Number(comment.end_line ?? comment.line ?? comment.start_line ?? 0),
+				side: comment.side === 'old' ? 'old' : 'new'
+			}
+			: null;
+	}
+
+	function selectLineReview(path: string, startLine: number, endLine: number, side: 'old' | 'new' = 'new') {
+		selectedPath = path;
+		selectedReviewRange = { file: path, startLine, endLine, side };
 	}
 
 	async function submitReviewComment(body: string) {
 		const target = selectedReviewRange
-			? {
-				target_type: 'line',
-				workspace: workspaceName,
-				file: selectedReviewRange.file,
-				line: selectedReviewRange.startLine,
-				start_line: selectedReviewRange.startLine,
-				end_line: selectedReviewRange.endLine
-			}
-			: selectedReviewFile
-			? {
-				target_type: 'file',
-				workspace: workspaceName,
-				file: selectedReviewFile
-			}
-			: { target_type: 'workspace', workspace: workspaceName };
+			? { target_type: 'line', workspace: workspaceName, file: selectedReviewRange.file, line: selectedReviewRange.startLine, start_line: selectedReviewRange.startLine, end_line: selectedReviewRange.endLine, side: selectedReviewRange.side }
+			: selectedPath && activeTab === 'files'
+				? { target_type: 'file', workspace: workspaceName, file: selectedPath }
+				: { target_type: 'workspace', workspace: workspaceName };
 		await createReviewComment(tenant, project, target, body);
-		const comments = await listReviewComments(tenant, project, { workspace: workspaceName });
-		reviewComments = comments.items;
+		if (activeTab === 'files' && canMaintain && detail?.is_ready && detail.status !== 'merged') {
+			await requestWorkspaceChanges(tenant, project, workspaceName, body);
+		}
+		await refreshReviewComments();
+		selectedReviewRange = null;
+		await load();
+	}
+
+	async function submitFileReviewComment(path: string, body: string) {
+		const range = selectedReviewRange?.file === path ? selectedReviewRange : null;
+		selectedPath = path;
+		pendingReviewComments = [
+			...pendingReviewComments,
+			{
+				id: `pending:${crypto.randomUUID()}`,
+				kind: 'comment',
+				body,
+				author: currentUser ?? 'me',
+				author_profile: currentUserProfile,
+				created_at: new Date().toISOString(),
+				target_type: range ? 'line' : 'file',
+				target_id: [range ? 'line' : 'file', workspaceName, path, range?.side, range?.startLine, range?.endLine].filter(Boolean).join(':'),
+				workspace: workspaceName,
+				file: path,
+				line: range?.startLine ?? null,
+				start_line: range?.startLine ?? null,
+				end_line: range?.endLine ?? null,
+				side: range?.side,
+				state: 'open'
+			}
+		];
 		selectedReviewRange = null;
 	}
 
-	async function handleRequestChanges() {
-		const reason = changeReason.trim();
-		if (!reason) return;
-		reviewBusy = true;
+	async function submitConversationAction(body: string, action: string) {
+		if (!detail) return;
+		busy = true;
 		error = '';
 		try {
-			await requestWorkspaceChanges(tenant, project, workspaceName, reason);
-			await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, reason);
-			changeReason = '';
+			await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, body);
+			if (action === 'ready') {
+				await markWorkspaceReady(tenant, project, workspaceName);
+			} else if (action === 'request_changes') {
+				await requestWorkspaceChanges(tenant, project, workspaceName, body);
+			} else if (action === 'close') {
+				await closeWorkspace(tenant, project, workspaceName, 'closed', body);
+			} else if (action === 'not_planned') {
+				await closeWorkspace(tenant, project, workspaceName, 'not_planned', body);
+			} else if (action === 'merge') {
+				await mergeWorkspace(tenant, project, workspaceName);
+			} else if (action === 'delete') {
+				await deleteDraftWorkspace(tenant, project, workspaceName);
+				goto(`/${tenant}/${project}/workspaces`);
+				return;
+			}
 			await load();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Request changes failed';
+			error = e instanceof Error ? e.message : 'Action failed';
 		} finally {
-			reviewBusy = false;
+			busy = false;
 		}
 	}
 
-	function selectLineReview(startLine: number, endLine: number) {
-		if (!file) return;
-		selectedReviewFile = file.path;
-		selectedReviewRange = { file: file.path, startLine, endLine };
+	async function refreshReviewComments() {
+		const comments = await listReviewComments(tenant, project, { workspace: workspaceName });
+		reviewComments = comments.items;
 	}
 
-	const activeReviewComments = $derived(
-		reviewComments.filter((comment) => comment.target_type === 'workspace')
-	);
-
-	const fileReviewComments = $derived(
-		reviewComments.filter((comment) => comment.file === file?.path && comment.target_type === 'line')
-	);
-
-	const commentCountsByFile = $derived(
-		reviewComments.reduce<Record<string, number>>((counts, comment) => {
-			if (comment.file) counts[comment.file] = (counts[comment.file] ?? 0) + 1;
-			return counts;
-		}, {})
-	);
-
-	function historyMessage(entry: { message: string; kind: string }) {
-		return withoutOpaqueUserIds(entry.message) || entry.kind;
+	async function submitPendingReview(body: string, action: 'comment' | 'approve' | 'request_changes') {
+		busy = true;
+		error = '';
+		try {
+			for (const comment of pendingReviewComments) {
+				await createReviewComment(
+					tenant,
+					project,
+					{
+						target_type: comment.target_type,
+						target_id: comment.target_id,
+						workspace: workspaceName,
+						file: comment.file,
+						line: comment.line,
+						start_line: comment.start_line,
+						end_line: comment.end_line,
+						side: comment.side
+					},
+					comment.body
+				);
+			}
+			if (body) {
+				await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, body);
+			}
+			if (action === 'request_changes') {
+				await requestWorkspaceChanges(tenant, project, workspaceName, body || 'Changes requested');
+			} else if (action === 'approve' && !body) {
+				await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, 'Approved');
+			}
+			pendingReviewComments = [];
+			reviewSubmitOpen = false;
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to submit review';
+		} finally {
+			busy = false;
+		}
 	}
+
+	async function loadHistoryFiles(entries: typeof visibleHistoryEntries, signal: AbortSignal) {
+		const loaded = await Promise.all(
+			entries.map((entry) =>
+				getHistoryEntryDetail(tenant, project, entry.id, { signal })
+					.then((history) => [entry.id, history.files] as const)
+					.catch((e) => {
+						if (isAbortError(e)) throw e;
+						return [entry.id, []] as const;
+					})
+			)
+		);
+		if (!signal.aborted) historyFiles = { ...historyFiles, ...Object.fromEntries(loaded) };
+	}
+
+	async function editReviewComment(comment: ReviewComment, body: string) {
+		if (comment.id.startsWith('pending:')) {
+			pendingReviewComments = pendingReviewComments.map((item) => item.id === comment.id ? { ...item, body, updated_at: new Date().toISOString() } : item);
+			return;
+		}
+		await updateReviewComment(tenant, project, comment.id, body);
+		await refreshReviewComments();
+	}
+
+	async function removeReviewComment(comment: ReviewComment) {
+		if (comment.id.startsWith('pending:')) {
+			pendingReviewComments = pendingReviewComments.filter((item) => item.id !== comment.id);
+			return;
+		}
+		await deleteReviewComment(tenant, project, comment.id);
+		await refreshReviewComments();
+	}
+
+	async function resolveReviewComment(comment: ReviewComment) {
+		if (comment.id.startsWith('pending:')) {
+			pendingReviewComments = pendingReviewComments.map((item) => item.id === comment.id ? { ...item, state: 'resolved' } : item);
+			return;
+		}
+		await updateReviewCommentState(tenant, project, comment.id, 'resolved');
+		await refreshReviewComments();
+	}
+
+	async function saveLabels(labels: string[]) {
+		if (!detail) return;
+		busy = true;
+		try {
+			const previous = detail.labels ?? [];
+			const updated = await updateWorkspaceLabels(tenant, project, workspaceName, labels);
+			detail = { ...detail, labels: updated.labels };
+			await recordActivity(labelActivity(previous, updated.labels));
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function saveMetadata(metadata: Parameters<typeof updateWorkspaceMetadata>[3]) {
+		if (!detail) return;
+		busy = true;
+		try {
+			const previous = detail;
+			const updated = await updateWorkspaceMetadata(tenant, project, workspaceName, metadata);
+			detail = { ...detail, ...updated };
+			await recordActivity(metadataActivity(previous, updated, metadata));
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function recordActivity(messages: string[]) {
+		for (const message of messages) {
+			if (!message.trim()) continue;
+			const comment = await createReviewComment(tenant, project, { target_type: 'activity', workspace: workspaceName }, message);
+			reviewComments = [...reviewComments, comment];
+		}
+	}
+
+	function buildConversationActions() {
+		if (!detail || detail.status === 'merged' || detail.status === 'closed' || detail.status === 'not_planned') return [];
+		const actions: { value: string; label: string; disabled?: boolean }[] = [];
+		const isDraft = !detail.is_ready && ['active', 'draft'].includes(detail.status);
+		if (canWrite && !detail.is_ready) actions.push({ value: 'ready', label: 'Comment and mark ready' });
+		if (canMaintain && detail.is_ready) actions.push({ value: 'request_changes', label: 'Comment and request changes' });
+		if (canMaintain) actions.push({ value: 'close', label: 'Comment and close' });
+		if (canMaintain) actions.push({ value: 'not_planned', label: 'Comment as not planned' });
+		if (canMaintain && detail.is_ready) actions.push({ value: 'merge', label: unresolvedFileThreads.length ? 'Comment and merge (resolve conversations first)' : 'Comment and merge', disabled: unresolvedFileThreads.length > 0 });
+		if (canWrite && isDraft) actions.push({ value: 'delete', label: 'Comment and delete draft' });
+		return actions;
+	}
+
 </script>
 
 {#if loading}
 	<Spinner />
-{:else if error}
+{:else if error && !detail}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
 {:else if detail}
-	<div class="mx-auto max-w-5xl">
-		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-			<div>
+	<div class={activeTab === 'files' ? 'mx-auto max-w-none' : 'mx-auto max-w-6xl'}>
+		<div class={activeTab === 'files' ? 'mx-[calc(50%-50vw)] border-b border-[#2a2a28] px-6 pt-5' : ''}>
+			<div class="mb-4">
 				<h2 class="text-xl font-semibold text-[#f0eee4]">{detail.name}</h2>
-				<div class="mt-1 flex items-center gap-2 text-xs text-[#6f6b5f]">
+				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#6f6b5f]">
+					<span>{workspaceName} into {detail.parent_workspace ?? 'main'}</span>
 					<span class="font-mono">{detail.head?.slice(0, 12) ?? 'empty'}</span>
-					{#if detail.parent_workspace}
-						<span>from {detail.parent_workspace}</span>
-					{/if}
+					<span>{detail.changed_file_count} files</span>
+					<span class="text-[#7cb97c]">+{detail.additions}</span>
+					<span class="text-[#d96c5a]">-{detail.deletions}</span>
 				</div>
 			</div>
-			{#if canWrite || canMaintain}
-			<div class="flex gap-2">
-				{#if canWrite && !detail.is_ready}
-					<button
-						class="rounded bg-[#6ba4c7] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#5a93b6]"
-						disabled={busy}
-						onclick={handleReady}
-					>
-						Mark ready
+
+			<div class="flex flex-wrap gap-1 {activeTab === 'files' ? '' : 'mb-5 border-b border-[#2a2a28]'}">
+				{#each [
+					['conversation', 'Conversation', reviewComments.length],
+					['files', 'Files changed', changedFiles.length],
+					['history', 'History', detail.history.length]
+				] as tab}
+					<button class="border-b px-3 py-2 text-sm {activeTab === tab[0] ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => setTab(tab[0] as Tab)}>
+						{tab[1]} <span class="ml-1 text-xs text-[#6f6b5f]">{tab[2]}</span>
 					</button>
-				{:else if canMaintain}
-					<button
-						class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]"
-						disabled={busy}
-						onclick={handleMerge}
-					>
-						Merge
-					</button>
-				{/if}
+				{/each}
 			</div>
-			{/if}
 		</div>
 
-		<div class="grid gap-5 xl:grid-cols-[1fr_300px]">
-			<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-				<h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Files</h4>
-				<div class="flex flex-col md:flex-row gap-0 overflow-hidden" style="height: calc(100vh - 220px);">
-					<div class="h-48 md:h-auto md:w-[260px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-[#2a2a28]">
-						<div class="flex-1 overflow-auto min-h-0 pr-3">
-							<FileTreePane entries={detail.files.entries} selectedPath={file?.path ?? ''} onSelect={openFile} commentCounts={commentCountsByFile} />
-						</div>
-					</div>
-					<div class="min-w-0 flex-1 overflow-auto pl-0 md:pl-4 pt-3 md:pt-0">
-						<CodePane
-							{file}
-							reviewComments={fileReviewComments}
-							activeRange={selectedReviewRange}
-							readonly={!canWrite && !canMaintain}
-							onLineComment={selectLineReview}
-							onSubmitInline={submitReviewComment}
-							onCancelInline={() => (selectedReviewRange = null)}
-						/>
-					</div>
-				</div>
-			</div>
+		{#if error}
+			<div class="mb-4 text-sm text-[#d96c5a]">{error}</div>
+		{/if}
 
-			<div class="grid gap-5">
-				<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-					<ReviewThread
-						title={detail.name}
-						comments={activeReviewComments}
-						onSubmit={async (body: string) => {
-							selectedReviewFile = null;
-							selectedReviewRange = null;
-							await submitReviewComment(body);
-						}}
-						readonly={!canWrite && !canMaintain}
-					/>
-					{#if canMaintain && detail.is_ready && detail.status !== 'merged'}
-						<form class="mt-4 grid gap-2 border-t border-[#2a2a28] pt-4" onsubmit={(event) => { event.preventDefault(); handleRequestChanges(); }}>
-							<textarea
-								class="min-h-[76px] resize-y rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#5f5b52] focus:outline-[#4a4942]"
-								placeholder="Explain what needs to change..."
-								bind:value={changeReason}
-							></textarea>
-							<div class="flex justify-end">
-								<button
-									type="submit"
-									class="rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36] disabled:opacity-60"
-									disabled={reviewBusy || !changeReason.trim()}
-								>
-									{reviewBusy ? 'Sending...' : 'Request changes'}
-								</button>
-							</div>
-						</form>
-					{/if}
-				</div>
-
-				{#if detail.child_workspaces.length}
-					<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-						<h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">Child workspaces</h4>
-						<div class="grid gap-1">
-							{#each detail.child_workspaces as child}
-								<button
-									class="rounded bg-[#0f0f0d] px-2.5 py-1.5 text-left text-sm text-[#eae9e4] hover:bg-[#1a1a18]"
-									onclick={() => goto(`/${tenant}/${project}/workspaces/${child}`)}
-								>
-									{child}
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-					<h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6f6b5f]">History</h4>
-					<div class="relative grid gap-0">
-						<div class="absolute left-[15px] top-0 bottom-0 w-px bg-[#2a2a28]"></div>
-						{#each detail.history as entry}
-							<button
-								class="relative flex w-full items-start gap-2 py-1.5 text-left hover:opacity-80"
-								onclick={() => goto(`/${tenant}/${project}/history/${entry.id}`)}
-							>
-								<div class="relative z-10 flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[8px] font-medium text-[#eae9e4]">
-									{#if entry.author_profile?.avatar_url}
-										<img src={entry.author_profile.avatar_url} alt="" class="h-full w-full object-cover" />
-									{:else}
-										{userInitials(entry.author, entry.author_profile)}
-									{/if}
-								</div>
-								<div class="min-w-0 flex-1">
-									<div class="flex flex-wrap items-center gap-1.5 text-xs text-[#eae9e4]">
-										<span>{historyMessage(entry)}</span>
-										{#if entry.agent}
-											<span class="rounded bg-[#1e1e1c] px-1 py-0.5 text-[9px] text-[#a09d94]">{entry.agent}</span>
-										{/if}
-										{#if entry.signature}
-											<span class="rounded border border-[#25462a] bg-[#142018] px-1 py-0.5 text-[9px] text-[#7cb97c]">signed</span>
-										{/if}
-									</div>
-									<div class="text-[10px] text-[#6f6b5f]">{userDisplayName(entry.author, entry.author_profile)} · {new Date(entry.timestamp).toLocaleString()}</div>
-								</div>
-							</button>
-						{:else}
-							<p class="py-4 text-center text-xs text-[#6f6b5f]">No history yet.</p>
-						{/each}
-					</div>
-				</div>
-			</div>
-		</div>
+		{#if activeTab === 'conversation'}
+			<WorkspaceConversation
+				{detail}
+				{tenant}
+				{project}
+				{workspaceName}
+				{workspaceComments}
+				{activityComments}
+				{fileThreads}
+				{unresolvedFileThreads}
+				{conversationActions}
+				{currentUser}
+				{currentUserProfile}
+				{canWrite}
+				{canMaintain}
+				{busy}
+				onSubmitComment={submitReviewComment}
+				onSubmitAction={submitConversationAction}
+				onUpdateComment={editReviewComment}
+				onDeleteComment={removeReviewComment}
+				onOpenFileConversation={openFileConversation}
+				onOpenHistory={() => setTab('history')}
+				onSaveMetadata={saveMetadata}
+				onSaveLabels={saveLabels}
+			/>
+		{:else if activeTab === 'files'}
+			<WorkspaceFilesView
+				{tenant}
+				{project}
+				{changedFiles}
+				expectedFileCount={detail.changed_file_count}
+				{previewError}
+				reviewKey={`${tenant}/${project}/${workspaceName}/${detail.head ?? 'empty'}`}
+				pendingReviewCount={pendingReviewComments.length}
+				{selectedPath}
+				{commentCountsByFile}
+				{fileThreads}
+				{selectedReviewRange}
+				{diffMode}
+				{currentUser}
+				{canMaintain}
+				readonly={(!canWrite && !canMaintain) || (detail.locked && !canMaintain)}
+				onSelectPath={selectPath}
+				onDiffModeChange={(mode) => (diffMode = mode)}
+				onOpenConversation={openFileConversation}
+				onOpenSubmitReview={() => (reviewSubmitOpen = true)}
+				onLineComment={selectLineReview}
+				onSubmitFileComment={submitFileReviewComment}
+				onCancelInline={() => (selectedReviewRange = null)}
+				onUpdateComment={editReviewComment}
+				onDeleteComment={removeReviewComment}
+				onResolveComment={resolveReviewComment}
+			/>
+		{:else}
+			<WorkspaceHistoryTimeline entries={visibleHistoryEntries} {historyFiles} hasMore={visibleHistoryEntries.length < historyTotal} onOpenEntry={(entry) => goto(`/${tenant}/${project}/history/${entry.id}`)} onLoadMore={() => (historyVisibleCount = Math.min(historyVisibleCount + historyChunkSize, historyTotal))} />
+		{/if}
 	</div>
+	{#if reviewSubmitOpen}
+		<ReviewSubmitDialog count={pendingReviewComments.length} {canMaintain} onCancel={() => (reviewSubmitOpen = false)} onSubmit={submitPendingReview} />
+	{/if}
 {/if}

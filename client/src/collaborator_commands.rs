@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use clap::Subcommand;
 use sty_protocol::{validate_segment, validate_target};
 
-use crate::cli::load_config;
+use crate::auth_commands::load_config;
 use crate::collaborators;
 
 #[derive(Subcommand)]

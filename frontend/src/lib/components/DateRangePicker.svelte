@@ -80,7 +80,7 @@
 		{label}
 	</button>
 	{#if open}
-		<div class="absolute right-0 z-20 mt-2 w-64 bg-[#141412] p-3 shadow-xl shadow-black/30">
+		<div class="absolute left-0 z-20 mt-2 w-64 bg-[#141412] p-3 shadow-xl shadow-black/30">
 			<div class="mb-3 flex items-center justify-between">
 				<button class="p-1 text-[#8c887e] hover:text-[#eae9e4]" onclick={() => moveMonth(-1)} aria-label="Previous month">
 					<ChevronLeft class="h-4 w-4" />

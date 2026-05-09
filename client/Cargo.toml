@@ -17,3 +17,4 @@ tempfile.workspace = true
 url = "2.5.8"
 uuid = { version = "1.23.1", features = ["v4"] }
 webbrowser = "1.2.1"
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }

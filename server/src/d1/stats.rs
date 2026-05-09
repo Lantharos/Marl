@@ -21,9 +21,9 @@ pub async fn recompute_project_stats(db: &Database, tenant: &str, project: &str)
          VALUES (
             ?1,
             ?2,
-            (SELECT COUNT(*) FROM workspace_states WHERE tenant = ?1 AND project = ?2 AND workspace != 'main'),
+            (SELECT COUNT(*) FROM workspace_states WHERE tenant = ?1 AND project = ?2 AND workspace != 'main' AND status NOT IN ('merged', 'closed', 'not_planned', 'deleted')),
             (SELECT COUNT(*) FROM issues WHERE tenant = ?1 AND project = ?2 AND status = 'open'),
-            (SELECT COUNT(*) FROM workspace_states WHERE tenant = ?1 AND project = ?2 AND workspace != 'main' AND is_ready = 1),
+            (SELECT COUNT(*) FROM workspace_states WHERE tenant = ?1 AND project = ?2 AND workspace != 'main' AND status != 'deleted' AND is_ready = 1),
             (SELECT COUNT(*) FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND kind = 'release'),
             (SELECT COUNT(*) FROM history WHERE tenant = ?1 AND project = ?2),
             ?3

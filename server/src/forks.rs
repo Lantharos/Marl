@@ -77,9 +77,12 @@ pub(crate) async fn send_work(
         "workspaces:write",
     )
     .await?;
-    let fork = d1::project_fork(&database, &tenant, &project)
-        .await?
-        .ok_or_else(|| Error::RustError("project is not a contribution fork".to_string()))?;
+    let Some(fork) = d1::project_fork(&database, &tenant, &project).await? else {
+        return json_error(
+            409,
+            "sendwork only works from a linked contribution fork; use normal workspace review for this project",
+        );
+    };
     let head = d1::head(&database, &tenant, &project, &body.workspace)
         .await?
         .ok_or_else(|| Error::RustError("workspace has no head; sync it first".to_string()))?;

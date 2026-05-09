@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ProjectFile, ReviewComment } from '$lib/api';
-	import { highlightCode } from '$lib/codeHighlight';
+	import { highlightCodeLines, languageLabelForPath } from '$lib/codeHighlight';
 	import ReviewThread from '$lib/components/ReviewThread.svelte';
 	import Plus from 'lucide-svelte/icons/plus';
 
@@ -23,8 +23,26 @@
 	} = $props();
 
 	const lines = $derived(file?.text?.split('\n') ?? []);
+	const language = $derived(file ? languageLabelForPath(file.path) : 'plain');
+	const fileSize = $derived(file?.text === null || file?.text === undefined ? '' : formatBytes(file.text.length));
 	let dragStart = $state<number | null>(null);
 	let dragEnd = $state<number | null>(null);
+	let highlightedLines = $state<string[]>([]);
+	let lineWrap = $state(false);
+	let highlightRun = 0;
+
+	$effect(() => {
+		const current = file;
+		if (!current || current.binary || current.text === null) {
+			highlightedLines = [];
+			return;
+		}
+		const run = ++highlightRun;
+		highlightedLines = current.text.split('\n').map(escapeHtml);
+		highlightCodeLines(current.text, current.path).then((next) => {
+			if (run === highlightRun) highlightedLines = next;
+		});
+	});
 
 	function beginSelection(event: PointerEvent, line: number) {
 		if (!onLineComment || readonly) return;
@@ -97,29 +115,60 @@
 		if (!first) return '';
 		return rangeTitle(commentStartLine(first), commentEndLine(first));
 	}
+
+	function formatBytes(value: number) {
+		if (value < 1024) return `${value} B`;
+		if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+		return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function escapeHtml(value: string) {
+		return value
+			.replaceAll('&', '&amp;')
+			.replaceAll('<', '&lt;')
+			.replaceAll('>', '&gt;')
+			.replaceAll('"', '&quot;');
+	}
 </script>
 
 <svelte:window onpointerup={finishSelection} />
 
 {#if !file}
 	<div class="grid min-h-[360px] place-items-center px-6 text-center text-sm text-[#6f6b5f]">
-		Select a file from the tree.
+		No file selected.
 	</div>
 {:else if file.binary || file.text === null}
 	<div class="grid min-h-[360px] place-items-center px-6 text-center text-sm text-[#6f6b5f]">
 		This file is stored as binary content.
 	</div>
 {:else}
-	<div class="overflow-auto bg-[#0f0f0d] font-mono text-[12px] leading-5 text-[#eae9e4]">
+	<div class="flex h-full min-h-0 flex-col bg-[#0f0f0d]">
+		<div class="flex shrink-0 items-center justify-between gap-3 border-b border-[#242420] bg-[#141412] px-4 py-2">
+			<div class="min-w-0 truncate font-mono text-xs text-[#eae9e4]">{file.path}</div>
+			<div class="flex shrink-0 items-center gap-2 text-[11px] text-[#6f6b5f]">
+				<span>{language}</span>
+				<span>{lines.length} {lines.length === 1 ? 'line' : 'lines'}</span>
+				<span>{fileSize}</span>
+				<button
+					type="button"
+					class="ml-1 text-[11px] {lineWrap ? 'text-[#d9a66c]' : 'text-[#6f6b5f] hover:text-[#a09d94]'}"
+					onclick={() => (lineWrap = !lineWrap)}
+				>
+					wrap
+				</button>
+			</div>
+		</div>
+		<div class="min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-5 text-[#d8d5ca] code-pane">
+			<div class={lineWrap ? 'w-full min-w-0' : 'w-max min-w-full'}>
 		{#each lines as line, index}
 			{@const lineNumber = index + 1}
 			{@const rowComments = commentsForLine(lineNumber)}
 			<div
 				role="presentation"
-				class="group grid grid-cols-[74px_1fr] border-b border-[#171714] hover:bg-[#171714] {lineInCommentRange(lineNumber) ? 'bg-[#132034]' : ''} {lineInActiveRange(lineNumber) ? 'bg-[#14263a]' : ''} {selectionActive(lineNumber) ? 'bg-[#14263a]' : ''} {composerActive(lineNumber) ? 'bg-[#172235]' : ''}"
+				class="group grid grid-cols-[64px_minmax(0,1fr)] hover:bg-[#171714] {lineInCommentRange(lineNumber) ? 'bg-[#132034]' : ''} {lineInActiveRange(lineNumber) ? 'bg-[#14263a]' : ''} {selectionActive(lineNumber) ? 'bg-[#14263a]' : ''} {composerActive(lineNumber) ? 'bg-[#172235]' : ''}"
 				onpointerenter={() => extendSelection(lineNumber)}
 			>
-				<div class="flex select-none items-center justify-end gap-1 border-r border-[#242420] px-2 text-right text-[#5f5b52]">
+				<div class="flex select-none items-center justify-end gap-1 px-2 text-right text-[#5f5b52]">
 					{#if onLineComment && !readonly}
 						<button
 							type="button"
@@ -132,11 +181,11 @@
 					{/if}
 					<span>{lineNumber}</span>
 				</div>
-				<pre class="min-w-0 overflow-x-auto px-3 py-0 whitespace-pre-wrap break-words">{@html highlightCode(line || ' ')}</pre>
+				<pre class="min-w-0 px-4 py-0 {lineWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}">{@html highlightedLines[index] || '&nbsp;'}</pre>
 			</div>
 			{#if rowComments.length || composerActive(lineNumber)}
-				<div class="grid grid-cols-[74px_1fr] border-b border-[#242420] bg-[#10100e]">
-					<div class="border-r border-[#242420]"></div>
+				<div class="grid grid-cols-[64px_1fr] border-y border-[#242420] bg-[#10100e]">
+					<div></div>
 					<div class="max-w-[760px] px-3 py-3">
 						<ReviewThread
 							title={composerActive(lineNumber) && activeRange ? rangeTitle(activeRange.startLine, activeRange.endLine) : commentThreadTitle(rowComments)}
@@ -150,5 +199,40 @@
 				</div>
 			{/if}
 		{/each}
+			</div>
+		</div>
 	</div>
 {/if}
+
+<style>
+	:global(.code-pane .shj-syn-kwd),
+	:global(.code-pane .shj-syn-class),
+	:global(.code-pane .shj-syn-type) {
+		color: #7fb4d9;
+	}
+	:global(.code-pane .shj-syn-str),
+	:global(.code-pane .shj-syn-esc) {
+		color: #d9a66c;
+	}
+	:global(.code-pane .shj-syn-cmnt) {
+		color: #6f6b5f;
+	}
+	:global(.code-pane .shj-syn-num),
+	:global(.code-pane .shj-syn-bool) {
+		color: #9fca7c;
+	}
+	:global(.code-pane .shj-syn-func) {
+		color: #d8c27a;
+	}
+	:global(.code-pane .shj-syn-oper),
+	:global(.code-pane .shj-syn-var) {
+		color: #a9a69d;
+	}
+	:global(.code-pane .shj-syn-deleted),
+	:global(.code-pane .shj-syn-err) {
+		color: #d96c5a;
+	}
+	:global(.code-pane .shj-syn-insert) {
+		color: #7cb97c;
+	}
+</style>

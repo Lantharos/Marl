@@ -21,6 +21,12 @@
 	const project = $derived(data.project);
 	const overview = $derived(authedOverview ?? data.overview);
 	const workspaces = $derived<WorkspaceStatus[]>(overview?.workspaces ?? []);
+	const panelWorkspaces = $derived(
+		workspaces
+			.filter((workspace) => workspace.name !== 'main' && isOpenWorkspace(workspace))
+			.toSorted((left, right) => workspaceActivityTime(right) - workspaceActivityTime(left))
+			.slice(0, 3)
+	);
 	const releases = $derived<Release[]>(overview?.releases ?? []);
 	const readme = $derived<string | null>(overview?.readme ?? null);
 	const settings = $derived<ProjectSettings | null>(overview?.settings ?? null);
@@ -50,6 +56,15 @@
 		if (ws.is_ready) return 'bg-[#7cb97c]';
 		if (ws.status === 'merged') return 'bg-[#a09d94]';
 		return 'bg-[#d9a66c]';
+	}
+
+	function isOpenWorkspace(workspace: WorkspaceStatus) {
+		return workspace.is_ready || !['merged', 'closed', 'not_planned', 'deleted'].includes(workspace.status);
+	}
+
+	function workspaceActivityTime(workspace: WorkspaceStatus) {
+		const time = workspace.last_activity_at ? Date.parse(workspace.last_activity_at) : 0;
+		return Number.isFinite(time) ? time : 0;
 	}
 
 	function releaseTitle(release: Release) {
@@ -128,19 +143,16 @@
 					<div class="mt-2">
 						{#if panel.type === 'workspaces'}
 							<div class="grid gap-1">
-								{#each workspaces.filter((w) => w.name !== 'main') as ws}
+								{#each panelWorkspaces as ws}
 									<button
-										class="flex items-center justify-between rounded bg-[#0f0f0d] px-2.5 py-1.5 text-left text-sm hover:bg-[#1a1a18]"
-										onclick={() => goto(`/${tenant}/${project}/workspaces/${ws.name}`)}
+										class="flex min-w-0 items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-1.5 text-left text-sm hover:bg-[#1a1a18]"
+										onclick={() => goto(`/${tenant}/${project}/workspaces/${encodeURIComponent(ws.name)}`)}
 									>
-										<span class="text-[#eae9e4]">{ws.name}</span>
-										<span class="flex items-center gap-2">
-											<span class="text-xs text-[#6f6b5f]">{ws.head?.slice(0, 8) ?? 'empty'}</span>
-											<span class="h-1.5 w-1.5 rounded-full {wsDotColor(ws)}" title={ws.status}></span>
-										</span>
+										<span class="min-w-0 flex-1 truncate text-[#eae9e4]">{ws.name}</span>
+										<span class="h-1.5 w-1.5 shrink-0 rounded-full {wsDotColor(ws)}" title={ws.status}></span>
 									</button>
 								{:else}
-									<p class="text-xs text-[#6f6b5f]">No workspaces yet.</p>
+									<p class="text-xs text-[#6f6b5f]">No open workspaces.</p>
 								{/each}
 							</div>
 						{:else if panel.type === 'releases'}

@@ -94,6 +94,19 @@ pub async fn unmark_ready(
         "workspaces:ready",
     )
     .await?;
+    let state = d1::workspace_states(&database, &tenant, &project)
+        .await?
+        .into_iter()
+        .find(|item| item.name == workspace);
+    let Some(state) = state else {
+        return json_error(404, "workspace not found");
+    };
+    if workspace == "main" {
+        return json_error(404, "workspace not found");
+    }
+    if !state.is_ready || state.status != "ready" {
+        return json_error(409, "workspace is not ready");
+    }
     d1::unmark_workspace_ready(
         &database,
         &tenant,
@@ -122,6 +135,19 @@ pub async fn reject_ready(
     )
     .await?;
     let workspace = param(&ctx, "workspace")?;
+    let state = d1::workspace_states(&database, &tenant, &project)
+        .await?
+        .into_iter()
+        .find(|item| item.name == workspace);
+    let Some(state) = state else {
+        return json_error(404, "workspace not found");
+    };
+    if workspace == "main" {
+        return json_error(404, "workspace not found");
+    }
+    if !state.is_ready || state.status != "ready" {
+        return json_error(409, "workspace is not ready");
+    }
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     d1::reject_workspace_ready(
         &database,

@@ -54,20 +54,14 @@
 		}
 	}
 
-	const workspaces = $derived(['__all__', ...new Set(entries.map((e) => e.workspace))]);
-	let filter = $state('__all__');
 	let dateFrom = $state('');
 	let dateTo = $state('');
-	const filtered = $derived(entries.filter((entry) => {
-		if (filter !== '__all__' && entry.workspace !== filter) return false;
-		return inDateRange(entry.timestamp);
-	}));
+	const filtered = $derived(entries.filter((entry) => inDateRange(entry.timestamp)));
 	const visibleEntries = $derived(filtered.slice(0, visibleCount));
 	const hasMore = $derived(visibleEntries.length < filtered.length);
 	const groupedEntries = $derived(groupByDay(visibleEntries));
 
 	$effect(() => {
-		filter;
 		dateFrom;
 		dateTo;
 		visibleCount = chunkSize;
@@ -75,10 +69,6 @@
 
 	function displayMessage(entry: HistoryEntry) {
 		return withoutOpaqueUserIds(entry.message) || entry.kind;
-	}
-
-	function setFilter(workspace: string) {
-		filter = workspace;
 	}
 
 	function inDateRange(timestamp: string) {
@@ -135,17 +125,7 @@
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else}
-		<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
-			<div class="flex flex-wrap gap-2">
-				{#each workspaces as ws}
-					<button
-						class="rounded px-2.5 py-1 text-xs font-medium {filter === ws ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#2a2a28] text-[#a09d94] hover:bg-[#3a3a36]'}"
-						onclick={() => setFilter(ws)}
-					>
-						{ws === '__all__' ? 'All' : ws}
-					</button>
-				{/each}
-			</div>
+		<div class="mb-4 flex flex-wrap items-center gap-3">
 			<DateRangePicker bind:from={dateFrom} bind:to={dateTo} />
 		</div>
 
@@ -171,7 +151,6 @@
 										<div class="flex flex-wrap items-center gap-2">
 											<span class="text-sm font-medium text-[#eae9e4]">{displayMessage(entry)}</span>
 											<span class="text-xs text-[#6f6b5f]">{actionLabel(entry.kind)}</span>
-											<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">{entry.workspace}</span>
 											{#if entry.agent}
 												<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#a09d94]">{entry.agent}{entry.model ? ` ${entry.model}` : ''}</span>
 											{/if}

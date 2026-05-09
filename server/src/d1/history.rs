@@ -109,7 +109,7 @@ pub async fn project_history_with_limit(
             "SELECT h.id, h.kind, h.message, h.author, u.display_name, u.handle, u.avatar_url, u.email, u.updated_at, \
              h.timestamp, h.workspace, h.snapshot_id, h.agent, h.model, h.signature_json FROM history h \
              LEFT JOIN user_profiles u ON u.user = h.author \
-             WHERE h.tenant = ?1 AND h.project = ?2 \
+             WHERE h.tenant = ?1 AND h.project = ?2 AND h.workspace = 'main' \
              ORDER BY h.timestamp DESC LIMIT ?3"
         )
         .bind(&[
@@ -124,7 +124,7 @@ pub async fn project_history_with_limit(
             "SELECT h.id, h.kind, h.message, h.author, u.display_name, u.handle, u.avatar_url, u.email, u.updated_at, \
              h.timestamp, h.workspace, h.snapshot_id, h.agent, h.model, h.signature_json FROM history h \
              LEFT JOIN user_profiles u ON u.user = h.author \
-             WHERE h.tenant = ?1 AND h.project = ?2 \
+             WHERE h.tenant = ?1 AND h.project = ?2 AND h.workspace = 'main' \
              ORDER BY h.timestamp DESC"
         )
         .bind(&[js_str(tenant), js_str(project)])?

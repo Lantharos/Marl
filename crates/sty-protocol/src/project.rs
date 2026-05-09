@@ -299,6 +299,24 @@ pub struct WorkspaceState {
     pub parent_workspace: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_activity_at: Option<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub reviewers: Vec<String>,
+    #[serde(default)]
+    pub assignees: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub milestone: Option<String>,
+    #[serde(default)]
+    pub linked_issues: Vec<String>,
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub changed_file_count: u64,
+    #[serde(default)]
+    pub additions: u64,
+    #[serde(default)]
+    pub deletions: u64,
     pub child_workspaces: Vec<String>,
     pub is_ready: bool,
     pub mergeable: bool,

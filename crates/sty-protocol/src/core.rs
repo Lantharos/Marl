@@ -20,6 +20,12 @@ pub struct CompareRequest {
 pub struct CompareResponse {
     pub remote_head: Option<String>,
     pub relation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_workspace: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_head: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

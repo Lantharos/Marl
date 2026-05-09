@@ -13,8 +13,8 @@
 	} from '$lib/api';
 	import { appData } from '$lib/appState';
 	import { downloadObjectText } from '$lib/objectApi';
-	import FileTreePane from '$lib/FileTreePane.svelte';
 	import FileDiffCard from '$lib/components/FileDiffCard.svelte';
+	import FilePathTree from '$lib/components/FilePathTree.svelte';
 	import ReviewThread from '$lib/components/ReviewThread.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
@@ -130,9 +130,7 @@
 		return () => controller.abort();
 	});
 
-	const treeEntries = $derived(detail?.files.map((f) => ({ path: f.path, name: f.path.split('/').pop() ?? f.path, id: f.new_id ?? f.old_id ?? '', entry_type: 'blob' as const })) ?? []);
-
-	const gitStatus = $derived(detail?.files.map((f) => ({ path: f.path, status: f.change_type as 'added' | 'deleted' | 'modified' | 'renamed' | 'untracked' })) ?? []);
+	const treeEntries = $derived(detail?.files.map((file) => ({ path: file.path, kind: 'file' as const, status: file.change_type })) ?? []);
 
 	function actionLabel(kind: HistoryEntry['kind']) {
 		switch (kind) {
@@ -286,7 +284,7 @@
 							{detail.files.length} changed {detail.files.length === 1 ? 'file' : 'files'}
 						</div>
 						<div class="flex-1 overflow-auto min-h-0 py-1.5">
-							<FileTreePane entries={treeEntries} {selectedPath} {gitStatus} commentCounts={commentCountsByFile} initialExpansion="open" flattenEmptyDirectories={true} onSelect={selectPath} />
+							<FilePathTree entries={treeEntries} {selectedPath} {commentCountsByFile} onSelect={selectPath} maxHeight="100%" minHeight="0px" fill={true} />
 						</div>
 					</div>
 					<div class="flex-1 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">

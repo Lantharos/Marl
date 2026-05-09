@@ -237,8 +237,134 @@ pub(crate) async fn list_workspaces(req: Request, ctx: crate::request_context::A
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "workspaces:read").await?;
-    let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
+    let mut workspaces = d1::workspace_states(&database, &tenant, &project).await?;
+    enrich_workspace_change_summaries(&ctx, &tenant, &project, &mut workspaces).await.ok();
     Response::from_json(&WorkspaceStateResponse { workspaces })
+}
+
+async fn enrich_workspace_change_summaries(
+    ctx: &crate::request_context::AppRouteContext,
+    tenant: &str,
+    project: &str,
+    workspaces: &mut [sty_protocol::WorkspaceState],
+) -> Result<()> {
+    let store = bucket(&ctx.env)?;
+    let heads = workspaces
+        .iter()
+        .map(|workspace| (workspace.name.clone(), workspace.head.clone()))
+        .collect::<std::collections::HashMap<_, _>>();
+    for workspace in workspaces.iter_mut().filter(|workspace| workspace.name != "main") {
+        let Some(head) = workspace.head.as_deref() else {
+            continue;
+        };
+        let parent = workspace.parent_workspace.as_deref().unwrap_or("main");
+        let Some(parent_head) = heads.get(parent).and_then(|head| head.as_deref()) else {
+            continue;
+        };
+        let current = snapshot_blob_map(&store, tenant, project, head).await?;
+        let base = snapshot_blob_map(&store, tenant, project, parent_head).await?;
+        let summary = change_summary(&store, tenant, project, &current, &base).await?;
+        workspace.changed_file_count = summary.files;
+        workspace.additions = summary.additions;
+        workspace.deletions = summary.deletions;
+    }
+    Ok(())
+}
+
+struct WorkspaceChangeSummary {
+    files: u64,
+    additions: u64,
+    deletions: u64,
+}
+
+async fn snapshot_blob_map(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+) -> Result<std::collections::HashMap<String, String>> {
+    let snapshot_bytes = r2_bytes(store, &object_key(tenant, project, snapshot_id)).await?;
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&snapshot_bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();
+    let mut entries = Vec::new();
+    walk_tree(store, tenant, project, "", &root_tree, &mut entries).await?;
+    Ok(entries
+        .into_iter()
+        .filter(|entry| entry.entry_type == "blob")
+        .map(|entry| (entry.path, entry.id))
+        .collect())
+}
+
+async fn change_summary(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    current: &std::collections::HashMap<String, String>,
+    base: &std::collections::HashMap<String, String>,
+) -> Result<WorkspaceChangeSummary> {
+    let mut summary = WorkspaceChangeSummary { files: 0, additions: 0, deletions: 0 };
+    for (path, new_id) in current {
+        match base.get(path) {
+            None => {
+                summary.files += 1;
+                summary.additions += blob_line_count(store, tenant, project, new_id).await?;
+            }
+            Some(old_id) if old_id != new_id => {
+                summary.files += 1;
+                let old_text = blob_text(store, tenant, project, old_id).await?;
+                let new_text = blob_text(store, tenant, project, new_id).await?;
+                let (additions, deletions) = changed_lines(old_text.as_deref(), new_text.as_deref());
+                summary.additions += additions;
+                summary.deletions += deletions;
+            }
+            _ => {}
+        }
+    }
+    for (path, old_id) in base {
+        if current.contains_key(path) {
+            continue;
+        }
+        summary.files += 1;
+        summary.deletions += blob_line_count(store, tenant, project, old_id).await?;
+    }
+    Ok(summary)
+}
+
+async fn blob_line_count(store: &Bucket, tenant: &str, project: &str, id: &str) -> Result<u64> {
+    Ok(blob_text(store, tenant, project, id).await?.map(|text| line_count(&text)).unwrap_or(0))
+}
+
+async fn blob_text(store: &Bucket, tenant: &str, project: &str, id: &str) -> Result<Option<String>> {
+    let bytes = r2_bytes(store, &object_key(tenant, project, id)).await?;
+    Ok(String::from_utf8(bytes).ok())
+}
+
+fn changed_lines(old: Option<&str>, new: Option<&str>) -> (u64, u64) {
+    let (Some(old), Some(new)) = (old, new) else {
+        return (0, 0);
+    };
+    let old_lines = old.lines().collect::<Vec<_>>();
+    let new_lines = new.lines().collect::<Vec<_>>();
+    let mut start = 0;
+    while start < old_lines.len() && start < new_lines.len() && old_lines[start] == new_lines[start] {
+        start += 1;
+    }
+    let mut old_end = old_lines.len();
+    let mut new_end = new_lines.len();
+    while old_end > start && new_end > start && old_lines[old_end - 1] == new_lines[new_end - 1] {
+        old_end -= 1;
+        new_end -= 1;
+    }
+    ((new_end - start) as u64, (old_end - start) as u64)
+}
+
+fn line_count(value: &str) -> u64 {
+    if value.is_empty() {
+        0
+    } else {
+        value.lines().count() as u64
+    }
 }
 
 fn token_expires_at(env: &Env) -> String {

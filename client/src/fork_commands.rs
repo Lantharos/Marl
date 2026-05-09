@@ -9,7 +9,7 @@ use sty_protocol::{
     validate_target,
 };
 
-use crate::cli::load_config;
+use crate::auth_commands::load_config;
 use crate::http::{RequestBuilderExt, response_error};
 use crate::interactive;
 use crate::project_commands;

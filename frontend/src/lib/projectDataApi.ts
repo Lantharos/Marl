@@ -49,6 +49,15 @@ export interface WorkspaceStatus {
 	status: 'draft' | 'ready' | 'merged' | string;
 	parent_workspace: string | null;
 	last_activity_at?: string | null;
+	labels: string[];
+	reviewers: string[];
+	assignees: string[];
+	milestone?: string | null;
+	linked_issues: string[];
+	locked: boolean;
+	changed_file_count: number;
+	additions: number;
+	deletions: number;
 	child_workspaces: string[];
 	is_ready: boolean;
 	mergeable: boolean;
@@ -67,7 +76,7 @@ export interface MergeRequest {
 
 export interface HistoryEntry {
 	id: string;
-	kind: 'save' | 'ship' | 'cram' | 'merge' | 'ready';
+	kind: 'save' | 'ship' | 'cram' | 'merge' | 'ready' | string;
 	message: string;
 	author: string;
 	author_profile?: UserProfile | null;
@@ -144,6 +153,12 @@ export async function getProjectFile(tenant: string, project: string, path: stri
 	return (await response.json()) as ProjectFile;
 }
 
+export async function downloadProjectSource(tenant: string, project: string, workspace = 'main', snapshot?: string, options: ApiOptions = {}) {
+	let url = `/v1/tenants/${tenant}/projects/${project}/source.zip?workspace=${encodeURIComponent(workspace)}`;
+	if (snapshot) url += `&snapshot=${encodeURIComponent(snapshot)}`;
+	return publicFetch(url, { signal: options.signal });
+}
+
 export async function getHistoryEntry(tenant: string, project: string, entryId: string, options: ApiOptions = {}): Promise<HistoryEntry> {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/history/${encodeURIComponent(entryId)}`, { signal: options.signal });
 	return (await response.json()) as HistoryEntry;
@@ -162,7 +177,8 @@ export async function getWorkspaceDetail(tenant: string, project: string, worksp
 		getWorkspaceHistory(tenant, project, workspace, options)
 	]);
 	const status = statuses.find((s) => s.name === workspace);
-	return { ...(status ?? statuses[0]), history, files: tree };
+	if (!status) throw new Error('Workspace not found');
+	return { ...status, history, files: tree };
 }
 
 export async function listReadyWorkspaces(tenant: string, project: string, options: ApiOptions = {}): Promise<WorkspaceStatus[]> {
@@ -219,12 +235,27 @@ export async function updateReviewComment(
 	tenant: string,
 	project: string,
 	commentId: string,
-	body: string
+	body: string,
+	state?: 'open' | 'resolved'
 ): Promise<ReviewComment> {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/comments/${encodeURIComponent(commentId)}`, {
 		method: 'PATCH',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ body })
+		body: JSON.stringify({ body, state })
+	});
+	return (await response.json()) as ReviewComment;
+}
+
+export async function updateReviewCommentState(
+	tenant: string,
+	project: string,
+	commentId: string,
+	state: 'open' | 'resolved'
+): Promise<ReviewComment> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/comments/${encodeURIComponent(commentId)}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ state })
 	});
 	return (await response.json()) as ReviewComment;
 }
@@ -242,6 +273,52 @@ export async function requestWorkspaceChanges(tenant: string, project: string, w
 		body: JSON.stringify({ reason })
 	});
 	notifyProjectStatsChanged(tenant, project);
+}
+
+export async function closeWorkspace(tenant: string, project: string, workspace: string, status: 'closed' | 'not_planned', reason: string) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/close`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ status, reason })
+	});
+	notifyProjectStatsChanged(tenant, project);
+}
+
+export async function deleteDraftWorkspace(tenant: string, project: string, workspace: string) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}`, {
+		method: 'DELETE'
+	});
+	notifyProjectStatsChanged(tenant, project);
+}
+
+export async function updateWorkspaceLabels(tenant: string, project: string, workspace: string, labels: string[]) {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/labels`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ labels })
+	});
+	return (await response.json()) as { labels: string[] };
+}
+
+export async function updateWorkspaceMetadata(
+	tenant: string,
+	project: string,
+	workspace: string,
+	metadata: Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked'>>
+) {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/metadata`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(metadata)
+	});
+	return (await response.json()) as Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked'>;
+}
+
+export async function getWorkspaceMergePreview(tenant: string, project: string, workspace: string, options: ApiOptions = {}) {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/merge-preview`, {
+		signal: options.signal
+	});
+	return (await response.json()) as { files: ChangedFile[] };
 }
 
 function reviewTargetId(target: ReviewCommentTarget) {

@@ -4,7 +4,10 @@
 	import { renderFileDiffHunks, type DiffHunk, type DiffRow } from '$lib/diff';
 	import { userDisplayName } from '$lib/identity';
 	import ReviewThread from './ReviewThread.svelte';
+	import MessageSquare from 'lucide-svelte/icons/message-square';
 	import Plus from 'lucide-svelte/icons/plus';
+	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import Spinner from './Spinner.svelte';
 
 	type ReviewLineSide = 'old' | 'new';
 	type ActiveReviewRange = { file: string; startLine: number; endLine: number; side?: ReviewLineSide };
@@ -22,8 +25,15 @@
 		onCancelInline = null,
 		onUpdateComment = null,
 		onDeleteComment = null,
+		onResolveComment = null,
 		currentUser = null,
-		canMaintain = false
+		canMaintain = false,
+		viewMode = 'inline',
+		loading = false,
+		viewed = false,
+		collapsed = false,
+		onToggleCollapsed = null,
+		onToggleViewed = null
 	}: {
 		path: string;
 		oldText: string | null;
@@ -37,8 +47,15 @@
 		onCancelInline?: (() => void) | null;
 		onUpdateComment?: ((comment: ReviewComment, body: string) => Promise<void> | void) | null;
 		onDeleteComment?: ((comment: ReviewComment) => Promise<void> | void) | null;
+		onResolveComment?: ((comment: ReviewComment) => Promise<void> | void) | null;
 		currentUser?: string | null;
 		canMaintain?: boolean;
+		viewMode?: 'inline' | 'split';
+		loading?: boolean;
+		viewed?: boolean;
+		collapsed?: boolean;
+		onToggleCollapsed?: (() => void) | null;
+		onToggleViewed?: (() => void) | null;
 	} = $props();
 
 	const hunks = $derived(renderFileDiffHunks(oldText, newText));
@@ -47,17 +64,20 @@
 	let dragStart = $state<number | null>(null);
 	let dragEnd = $state<number | null>(null);
 	let dragSide = $state<ReviewLineSide | null>(null);
+	let fileComposerOpen = $state(false);
+	const fileLevelComments = $derived(reviewComments.filter((comment) => comment.target_type === 'file' || (!comment.line && !comment.start_line && !comment.end_line)));
 
 	function rowClass(kind: DiffRow['kind'], line: number | null, side: ReviewLineSide) {
 		const selected = lineInActiveRange(line, side) || selectionActive(line, side) || composerActive(line, side);
 		const commented = lineInCommentRange(line, side);
+		if (selected) return 'bg-[#2f2a1c] shadow-[inset_3px_0_0_#d9a66c] text-[#f0d69a]';
 		switch (kind) {
 			case 'add':
-				return `${selected ? 'bg-[#1f5a2d] shadow-[inset_3px_0_0_#7cb97c]' : commented ? 'bg-[#18351f] shadow-[inset_2px_0_0_#4c8f55]' : 'bg-[#122016]'} text-[#bfe8c2]`;
+				return `${commented ? 'bg-[#18351f] shadow-[inset_2px_0_0_#4c8f55]' : 'bg-[#122016]'} text-[#bfe8c2]`;
 			case 'remove':
-				return `${selected ? 'bg-[#642a23] shadow-[inset_3px_0_0_#d96c5a]' : commented ? 'bg-[#3a1d1a] shadow-[inset_2px_0_0_#9f493d]' : 'bg-[#241513]'} text-[#e6b8ae]`;
+				return `${commented ? 'bg-[#3a1d1a] shadow-[inset_2px_0_0_#9f493d]' : 'bg-[#241513]'} text-[#e6b8ae]`;
 			default:
-				return `${selected ? 'bg-[#282722] shadow-[inset_3px_0_0_#d9a66c]' : commented ? 'bg-[#1d1d1a] shadow-[inset_2px_0_0_#8c887e]' : ''} text-[#d8d5ca]`;
+				return `${commented ? 'bg-[#1d1d1a] shadow-[inset_2px_0_0_#8c887e]' : ''} text-[#d8d5ca]`;
 		}
 	}
 
@@ -159,12 +179,22 @@
 		if (!first) return '';
 		return rangeTitle(commentStartLine(first), commentEndLine(first));
 	}
+
+	async function submitFileComment(body: string) {
+		await onSubmitInline?.(body);
+		fileComposerOpen = false;
+	}
 </script>
 
 <svelte:window onpointerup={finishSelection} />
 
-<div class="h-full overflow-auto bg-[#141412] font-mono text-[12px] leading-5">
-	<div class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-[#2a2a28] bg-[#141412] px-3 py-2 text-xs text-[#a09d94]">
+<div class="overflow-hidden border border-[#2a2a28] bg-[#0f0f0d] font-mono text-[12px] leading-5">
+	<div class="flex flex-wrap items-center gap-2 border-b border-[#2a2a28] bg-[#141412] px-3 py-2 text-xs text-[#a09d94]">
+		{#if onToggleCollapsed}
+			<button type="button" class="grid h-5 w-5 place-items-center text-[#8c887e] hover:text-[#eae9e4]" aria-label={collapsed ? 'Expand file' : 'Collapse file'} aria-expanded={!collapsed} onclick={onToggleCollapsed}>
+				<ChevronDown class="h-3.5 w-3.5 transition {collapsed ? '-rotate-90' : ''}" />
+			</button>
+		{/if}
 		<span class="min-w-0 flex-1 truncate">{path}</span>
 		{#if entry?.agent}
 			<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#a09d94]">{entry.agent}{entry.model ? ` ${entry.model}` : ''}</span>
@@ -177,8 +207,48 @@
 		{#if entry}
 			<span class="text-[10px] text-[#6f6b5f]">{userDisplayName(entry.author, entry.author_profile)}</span>
 		{/if}
+		{#if onSubmitInline && !readonly}
+			<button type="button" class="flex h-6 items-center gap-1 bg-[#242420] px-2 text-[11px] text-[#d8d5ca] hover:bg-[#2f2f2b]" onclick={() => (fileComposerOpen = !fileComposerOpen)}>
+				<MessageSquare class="h-3 w-3" />Comment on file
+			</button>
+		{/if}
+		{#if onToggleViewed}
+			<button type="button" class="flex h-6 items-center gap-1 border border-[#3a3a36] bg-[#1a1a18] px-2 text-[11px] {viewed ? 'text-[#eae9e4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={onToggleViewed}>
+				<span class="grid h-3.5 w-3.5 place-items-center border border-[#6f6b5f] text-[10px] leading-none">{viewed ? '✓' : ''}</span>
+				Viewed
+			</button>
+		{/if}
 	</div>
-	{#if hunks.length}
+	{#if !collapsed && (fileLevelComments.length || fileComposerOpen)}
+		<div class="border-b border-[#242420] bg-[#10100e] px-3 py-3 font-sans">
+			<ReviewThread
+				title="File conversation"
+				comments={fileLevelComments}
+				onSubmit={submitFileComment}
+				onCancel={fileComposerOpen ? () => (fileComposerOpen = false) : null}
+				onUpdate={onUpdateComment}
+				onDelete={onDeleteComment}
+				onResolve={onResolveComment}
+				readonly={!fileComposerOpen}
+				showEmpty={fileComposerOpen}
+				{currentUser}
+				{canMaintain}
+			/>
+		</div>
+	{/if}
+	{#if collapsed}
+		<div class="px-3 py-2 font-sans text-xs text-[#6f6b5f]">{hunks.length} changed {hunks.length === 1 ? 'hunk' : 'hunks'} hidden.</div>
+	{:else if loading}
+		<div class="grid min-h-[180px] place-items-center font-sans">
+			<Spinner />
+		</div>
+	{:else if hunks.length && viewMode === 'split'}
+		{#each hunks as hunk}
+			{#each hunk.rows as row, index (lineKey(row, index))}
+				{@render SplitRowView(row)}
+			{/each}
+		{/each}
+	{:else if hunks.length}
 		{#each hunks as hunk}
 			{#if hunk.hiddenBefore > 0 || hunk.before.length > 3}
 				<button
@@ -254,6 +324,7 @@
 					onCancel={composerActive(reviewLine, reviewSide) ? onCancelInline : null}
 					onUpdate={onUpdateComment}
 					onDelete={onDeleteComment}
+					onResolve={onResolveComment}
 					readonly={!composerActive(reviewLine, reviewSide)}
 					showEmpty={Boolean(composerActive(reviewLine, reviewSide))}
 					{currentUser}
@@ -262,4 +333,48 @@
 			</div>
 		</div>
 	{/if}
+{/snippet}
+
+{#snippet SplitRowView(row: DiffRow)}
+	{@const oldLine = row.oldLine}
+	{@const newLine = row.newLine}
+	{@const oldComments = oldLine ? commentsForLine(oldLine, 'old') : []}
+	{@const newComments = newLine ? commentsForLine(newLine, 'new') : []}
+	<div class="grid grid-cols-[72px_1fr_72px_1fr] border-b border-[#1d1d1a]">
+		{@render SplitCell(oldLine, row.kind === 'add' ? '' : row.text, row.kind === 'remove' ? 'remove' : 'context', 'old')}
+		{@render SplitCell(newLine, row.kind === 'remove' ? '' : row.text, row.kind === 'add' ? 'add' : 'context', 'new')}
+	</div>
+	{#if oldLine && (oldComments.length || composerActive(oldLine, 'old'))}
+		{@render SplitThread(oldLine, 'old', oldComments)}
+	{/if}
+	{#if newLine && (newComments.length || composerActive(newLine, 'new'))}
+		{@render SplitThread(newLine, 'new', newComments)}
+	{/if}
+{/snippet}
+
+{#snippet SplitCell(line: number | null, text: string, kind: DiffRow['kind'], side: ReviewLineSide)}
+	{@const sign = kind === 'add' ? '+' : kind === 'remove' ? '-' : ' '}
+	<div role="presentation" class="group flex select-none items-center justify-end gap-1 border-r border-[#2a2a28] px-2 text-right text-[#6f6b5f] {rowClass(kind, line, side)}" onpointerenter={() => extendSelection(line, side)}>
+		{#if onLineComment && line && !readonly}
+			<button
+				type="button"
+				class="flex h-4 w-4 items-center justify-center rounded-sm bg-[#1d4f8f] text-[#eaf4ff] opacity-0 hover:bg-[#2f6eb8] hover:opacity-100 group-hover:opacity-100 {composerActive(line, side) ? 'opacity-100' : ''}"
+				aria-label={`Comment on line ${line}`}
+				onpointerdown={(event) => beginSelection(event, line, side)}
+			>
+				<Plus class="h-3 w-3" />
+			</button>
+		{/if}
+		<span>{line ?? ''}</span>
+	</div>
+	<pre class="min-w-0 overflow-x-auto px-2 whitespace-pre-wrap break-words {rowClass(kind, line, side)}">{sign} {@html highlightCode(text || ' ')}</pre>
+{/snippet}
+
+{#snippet SplitThread(line: number, side: ReviewLineSide, comments: ReviewComment[])}
+	<div class="grid grid-cols-[72px_minmax(0,1fr)] border-b border-[#242420] bg-[#10100e]">
+		<div class="border-r border-[#2a2a28]"></div>
+		<div class="px-2 py-3">
+			<ReviewThread title={composerActive(line, side) && activeRange ? rangeTitle(activeRange.startLine, activeRange.endLine) : commentThreadTitle(comments)} comments={comments} onSubmit={(body: string) => onSubmitInline?.(body)} onCancel={composerActive(line, side) ? onCancelInline : null} onUpdate={onUpdateComment} onDelete={onDeleteComment} onResolve={onResolveComment} readonly={!composerActive(line, side)} showEmpty={Boolean(composerActive(line, side))} {currentUser} {canMaintain} />
+		</div>
+	</div>
 {/snippet}

@@ -23,7 +23,7 @@ INSERT OR REPLACE INTO project_stats (
 SELECT
     p.tenant,
     p.project,
-    (SELECT COUNT(*) FROM workspace_states ws WHERE ws.tenant = p.tenant AND ws.project = p.project AND ws.workspace != 'main'),
+    (SELECT COUNT(*) FROM workspace_states ws WHERE ws.tenant = p.tenant AND ws.project = p.project AND ws.workspace != 'main' AND ws.status NOT IN ('merged', 'closed', 'not_planned', 'deleted')),
     (SELECT COUNT(*) FROM issues i WHERE i.tenant = p.tenant AND i.project = p.project AND i.status = 'open'),
     (SELECT COUNT(*) FROM workspace_states ws WHERE ws.tenant = p.tenant AND ws.project = p.project AND ws.workspace != 'main' AND ws.is_ready = 1),
     (SELECT COUNT(*) FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release'),

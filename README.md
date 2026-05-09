@@ -38,6 +38,13 @@ sty project create --tenant tenant --project website --folder product
 
 Use project folders when a product is split across separate repositories. The remote for each repository is still `tenant/project`; the folder is organization metadata used by sty lists and dashboards. In the tenant home, maintainers can create nested folders and drag projects into them.
 
+To download a project without forking it or configuring a PIG remote:
+
+```powershell
+sty clone source-tenant/source-project
+sty clone source-tenant/source-project ./source-copy --workspace main
+```
+
 To start from a public project, fork it:
 
 ```powershell

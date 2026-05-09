@@ -22,6 +22,8 @@ export const styCommandGroups: CommandGroup[] = [
 			{ command: 'sty init', description: 'Choose a tenant, name the project, create or connect it, and add the PIG remote for the current repo.' },
 			{ command: 'sty init --tenant <tenant> --project <project>', description: 'Create or connect a project without prompts.' },
 			{ command: 'sty init --tenant <tenant> --project mobile --folder product', description: 'Connect a repository and group it under a project folder in sty.' },
+			{ command: 'sty clone <tenant>/<project> [path]', description: 'Download the current project files without forking or configuring a PIG remote.' },
+			{ command: 'sty clone <tenant>/<project> --workspace <name>', description: 'Download files from a specific workspace.' },
 			{ command: 'sty project list', description: 'List projects visible to the signed-in user.' },
 			{ command: 'sty project create --tenant <tenant> --project website --folder product', description: 'Create a grouped project without changing the current PIG remote.' }
 		]

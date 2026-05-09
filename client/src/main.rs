@@ -1,4 +1,6 @@
+mod auth_commands;
 mod cli;
+mod clone_commands;
 mod collaborator_commands;
 mod collaborators;
 mod fork_commands;

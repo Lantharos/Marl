@@ -299,19 +299,19 @@
 					</button>
 				{/each}
 			</div>
-			<div class="flex items-center gap-2 bg-[#141412] px-2.5 py-1.5">
+			<div class="flex items-center gap-2 border border-transparent bg-[#141412] px-2.5 py-1.5 focus-within:border-[#d9a66c]">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search issues" bind:value={query} />
+				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search issues" bind:value={query} />
 			</div>
 		{:else if activeTab === 'labels'}
-			<div class="flex items-center gap-2 bg-[#141412] px-2.5 py-1.5">
+			<div class="flex items-center gap-2 border border-transparent bg-[#141412] px-2.5 py-1.5 focus-within:border-[#d9a66c]">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search labels" bind:value={labelQuery} />
+				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search labels" bind:value={labelQuery} />
 			</div>
 		{:else}
-			<div class="flex items-center gap-2 bg-[#141412] px-2.5 py-1.5">
+			<div class="flex items-center gap-2 border border-transparent bg-[#141412] px-2.5 py-1.5 focus-within:border-[#d9a66c]">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search milestones" bind:value={milestoneQuery} />
+				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search milestones" bind:value={milestoneQuery} />
 			</div>
 		{/if}
 
@@ -494,3 +494,9 @@
 		<InfiniteLoader active={shownMilestones.length < filteredMilestones.length} onVisible={loadMoreMilestones} />
 	{/if}
 </div>
+
+<style>
+	.issue-search-input:focus-visible {
+		outline: none;
+	}
+</style>

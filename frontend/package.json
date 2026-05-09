@@ -24,7 +24,9 @@
 		"wrangler": "^4.85.0"
 	},
 	"dependencies": {
+		"@iconify/svelte": "^5.2.1",
 		"@pierre/trees": "^1.0.0-beta.3",
+		"@speed-highlight/core": "^1.2.15",
 		"diff": "^9.0.0",
 		"lucide-svelte": "^1.0.1",
 		"marked": "^18.0.2"

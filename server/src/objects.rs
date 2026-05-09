@@ -4,18 +4,18 @@ pub(crate) async fn missing(mut req: Request, ctx: crate::request_context::AppRo
     let database = db(&ctx)?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "objects:write").await?;
     let body: MissingRequest = req.json().await?;
-    let store = bucket(&ctx.env)?;
-    let mut missing = Vec::new();
+    let mut ids = Vec::new();
     for id in body.ids {
         validate_object_id(&id)?;
-        if d1::object_kind(&database, &tenant, &project, &id).await?.is_some() {
-            continue;
-        }
-        let key = object_key(&tenant, &project, &id);
-        if store.head(key).await?.is_none() {
-            missing.push(id);
+        if !ids.contains(&id) {
+            ids.push(id);
         }
     }
+    let known = d1::object_kinds(&database, &tenant, &project, &ids).await?;
+    let missing = ids
+        .into_iter()
+        .filter(|id| !known.contains_key(id))
+        .collect();
     Response::from_json(&MissingResponse { missing })
 }
 

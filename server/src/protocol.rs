@@ -64,21 +64,39 @@ pub async fn update_protocol_comment(
     if item["kind"].as_str() != Some("comment") {
         return json_error(404, "item not found");
     }
-    if item["author"].as_str() != Some(user.as_str()) {
-        return json_error(403, "only the comment author can edit this comment");
-    }
     if d1::project_is_archived(&database, &tenant, &project).await? {
         return json_error(403, "project is archived and read-only");
     }
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
-    let Some(next_body) = body["body"].as_str().map(str::trim).filter(|value| !value.is_empty()) else {
-        return json_error(400, "missing body");
-    };
+    let next_body = body["body"].as_str().map(str::trim).filter(|value| !value.is_empty());
+    let next_state = body["state"].as_str().filter(|value| matches!(*value, "open" | "resolved"));
+    if next_body.is_none() && next_state.is_none() {
+        return json_error(400, "missing comment update");
+    }
+    if next_body.is_some() && item["author"].as_str() != Some(user.as_str()) {
+        return json_error(403, "only the comment author can edit this comment");
+    }
+    if next_state.is_some() {
+        check_project_write_capability(
+            &database,
+            &tenant,
+            &project,
+            &user,
+            "contributor",
+            "issues:write",
+        )
+        .await?;
+    }
     let now = js_sys::Date::new_0()
         .to_iso_string()
         .as_string()
         .unwrap_or_default();
-    item["body"] = json!(next_body);
+    if let Some(next_body) = next_body {
+        item["body"] = json!(next_body);
+    }
+    if let Some(next_state) = next_state {
+        item["state"] = json!(next_state);
+    }
     item["updated_at"] = json!(now);
     upsert_protocol_item(&database, &tenant, &project, "comment", &id, item.clone()).await?;
     enrich_protocol_comment_profiles(&database, std::slice::from_mut(&mut item)).await?;
