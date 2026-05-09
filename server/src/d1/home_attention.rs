@@ -104,7 +104,6 @@ async fn home_assigned_issues(
     limit: usize,
 ) -> Result<Vec<HomeIssueItem>> {
     ensure_collaboration_schema(db).await?;
-    ensure_issue_schema(db).await?;
     let result = db
         .prepare(
             "SELECT i.tenant, i.project, i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author,

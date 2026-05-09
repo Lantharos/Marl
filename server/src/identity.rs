@@ -270,7 +270,13 @@ async fn enrich_workspace_change_summaries(
         .iter()
         .map(|workspace| (workspace.name.clone(), workspace.head.clone()))
         .collect::<std::collections::HashMap<_, _>>();
-    for workspace in workspaces.iter_mut().filter(|workspace| workspace.name != "main") {
+    for workspace in workspaces.iter_mut().filter(|workspace| {
+        workspace.name != "main"
+            && !matches!(
+                workspace.status.as_str(),
+                "merged" | "closed" | "not_planned" | "deleted"
+            )
+    }) {
         let Some(head) = workspace.head.as_deref() else {
             continue;
         };

@@ -1,6 +1,6 @@
 use super::*;
+
 pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<Vec<Issue>> {
-    ensure_issue_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         id: String,
@@ -30,13 +30,20 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
     }
     let result = db
         .prepare(
-            "SELECT i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author, i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone, i.workspace, i.issue_type, i.locked, i.pinned, i.labels_json, \
+            "WITH comment_counts AS (
+                SELECT tenant, project, issue_id, COUNT(*) AS comment_count
+                FROM comments
+                WHERE tenant = ?1 AND project = ?2 AND COALESCE(target_type, 'comment') != 'activity'
+                GROUP BY tenant, project, issue_id
+             )
+             SELECT i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author, i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone, i.workspace, i.issue_type, i.locked, i.pinned, i.labels_json, \
              u.display_name, u.handle, \
              (SELECT t.name FROM tenants t WHERE t.owner = i.author AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant, \
              u.avatar_url, u.email, u.updated_at AS profile_updated_at, \
-             (SELECT COUNT(*) FROM comments c WHERE c.tenant = i.tenant AND c.project = i.project AND c.issue_id = i.id AND COALESCE(c.target_type, 'comment') != 'activity') AS comment_count \
+             COALESCE(cc.comment_count, 0) AS comment_count \
              FROM issues i \
              LEFT JOIN user_profiles u ON u.user = i.author \
+             LEFT JOIN comment_counts cc ON cc.tenant = i.tenant AND cc.project = i.project AND cc.issue_id = i.id \
              WHERE i.tenant = ?1 AND i.project = ?2 ORDER BY i.number DESC"
         )
         .bind(&[js_str(tenant), js_str(project)])?
@@ -94,7 +101,6 @@ pub async fn create_issue(
     milestone: Option<&str>,
     issue_type: Option<&str>,
 ) -> Result<Issue> {
-    ensure_issue_schema(db).await?;
     #[derive(Deserialize)]
     struct CountRow {
         count: f64,
@@ -148,7 +154,6 @@ pub async fn update_issue_status(
     status: &str,
     state_reason: Option<&str>,
 ) -> Result<Issue> {
-    ensure_issue_schema(db).await?;
     let issue = list_issues(db, tenant, project)
         .await?
         .into_iter()
@@ -184,7 +189,6 @@ pub async fn transfer_issue(
     target_tenant: &str,
     target_project: &str,
 ) -> Result<Issue> {
-    ensure_issue_schema(db).await?;
     if !project_exists(db, target_tenant, target_project).await? {
         return Err(err("target project not found"));
     }
@@ -238,7 +242,6 @@ pub async fn transfer_issue(
 }
 
 pub async fn delete_issue(db: &Database, tenant: &str, project: &str, issue_id: &str) -> Result<bool> {
-    ensure_issue_schema(db).await?;
     let Some(issue) = list_issues(db, tenant, project)
         .await?
         .into_iter()
@@ -274,7 +277,6 @@ pub async fn update_issue(
     locked: Option<bool>,
     pinned: Option<bool>,
 ) -> Result<Issue> {
-    ensure_issue_schema(db).await?;
     let issue = list_issues(db, tenant, project)
         .await?
         .into_iter()
@@ -334,34 +336,6 @@ pub async fn update_issue(
         .into_iter()
         .find(|item| item.id == issue.id)
         .ok_or_else(|| err("issue not found"))
-}
-
-pub async fn ensure_issue_schema(db: &Database) -> Result<()> {
-    db.prepare("ALTER TABLE issues ADD COLUMN issue_type TEXT")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE issues ADD COLUMN state_reason TEXT")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE issues ADD COLUMN locked INTEGER NOT NULL DEFAULT 0")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE issues ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE comments ADD COLUMN target_type TEXT NOT NULL DEFAULT 'comment'")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE comments ADD COLUMN target_id TEXT")
-        .run()
-        .await
-        .ok();
-    Ok(())
 }
 
 // -- Comments ---------------------------------------------
@@ -441,7 +415,6 @@ pub async fn list_comments(
     project: &str,
     issue_id: &str,
 ) -> Result<Vec<Comment>> {
-    ensure_issue_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         id: String,
@@ -506,7 +479,6 @@ pub async fn create_comment(
     target_type: Option<&str>,
     target_id: Option<&str>,
 ) -> Result<Comment> {
-    ensure_issue_schema(db).await?;
     let id = format!("comment-{}", Uuid::new_v4().simple());
     let created_at = now_rfc3339();
     let normalized_target_type = target_type

@@ -1,3 +1,4 @@
--- User settings columns are added by the runtime user schema guard so databases
--- that receive the new worker before migrations run do not fail on duplicate columns.
+-- User settings are part of the baseline schema.
+-- Keep this migration a no-op for databases that saw an older compatibility
+-- release before migrations ran.
 SELECT 1;

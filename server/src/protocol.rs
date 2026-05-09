@@ -468,11 +468,15 @@ async fn enrich_protocol_comment_profiles(
     database: &crate::request_context::Database,
     items: &mut [serde_json::Value],
 ) -> Result<()> {
+    let mut profiles = std::collections::HashMap::new();
     for item in items {
         let Some(author) = item["author"].as_str().map(ToOwned::to_owned) else {
             continue;
         };
-        if let Some(profile) = d1::user_profile(database, &author).await? {
+        if !profiles.contains_key(&author) {
+            profiles.insert(author.clone(), d1::user_profile(database, &author).await?);
+        }
+        if let Some(profile) = profiles.get(&author).cloned().flatten() {
             item["author_profile"] = json!(profile);
         }
     }

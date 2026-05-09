@@ -4,10 +4,12 @@ CREATE TABLE IF NOT EXISTS tokens (
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     revoked_at TEXT,
-    last_used_at TEXT
+    last_used_at TEXT,
+    kind TEXT NOT NULL DEFAULT 'cli'
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON tokens(user);
 CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_tokens_kind ON tokens(kind);
 
 CREATE TABLE IF NOT EXISTS user_profiles (
     user TEXT PRIMARY KEY,
@@ -15,7 +17,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     handle TEXT,
     avatar_url TEXT,
     email TEXT,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    settings_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS tenants (
@@ -49,6 +52,12 @@ CREATE TABLE IF NOT EXISTS workspace_states (
     is_ready INTEGER NOT NULL DEFAULT 0,
     parent_workspace TEXT,
     mergeable INTEGER NOT NULL DEFAULT 0,
+    labels_json TEXT NOT NULL DEFAULT '[]',
+    reviewers_json TEXT NOT NULL DEFAULT '[]',
+    assignees_json TEXT NOT NULL DEFAULT '[]',
+    milestone TEXT,
+    linked_issues_json TEXT NOT NULL DEFAULT '[]',
+    locked INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (tenant, project, workspace)
 );
 

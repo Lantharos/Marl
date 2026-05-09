@@ -1,4 +1,5 @@
 use super::*;
+
 pub async fn head(
     db: &Database,
     tenant: &str,
@@ -53,7 +54,6 @@ pub async fn workspace_state(
     project: &str,
     workspace: &str,
 ) -> Result<Option<WorkspaceSyncState>> {
-    ensure_workspace_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         status: String,
@@ -85,7 +85,6 @@ pub async fn update_head(
     expected_head: Option<&str>,
     new_head: &str,
 ) -> Result<bool> {
-    ensure_workspace_schema(db).await?;
     let result = db
         .prepare(
             "UPDATE workspace_heads
@@ -145,7 +144,6 @@ pub async fn workspace_states(
     tenant: &str,
     project: &str,
 ) -> Result<Vec<WorkspaceState>> {
-    ensure_workspace_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         workspace: String,
@@ -220,7 +218,6 @@ pub async fn set_workspace_labels(
     workspace: &str,
     labels: &[String],
 ) -> Result<()> {
-    ensure_workspace_schema(db).await?;
     let labels_json = serde_json::to_string(labels).map_err(|error| err(error.to_string()))?;
     db.prepare("UPDATE workspace_states SET labels_json = ?1 WHERE tenant = ?2 AND project = ?3 AND workspace = ?4")
         .bind(&[js_str(&labels_json), js_str(tenant), js_str(project), js_str(workspace)])?
@@ -240,7 +237,6 @@ pub async fn set_workspace_metadata(
     linked_issues: &[String],
     locked: bool,
 ) -> Result<()> {
-    ensure_workspace_schema(db).await?;
     let reviewers_json = serde_json::to_string(reviewers).map_err(|error| err(error.to_string()))?;
     let assignees_json = serde_json::to_string(assignees).map_err(|error| err(error.to_string()))?;
     let linked_issues_json = serde_json::to_string(linked_issues).map_err(|error| err(error.to_string()))?;
@@ -260,34 +256,6 @@ pub async fn set_workspace_metadata(
     ])?
     .run()
     .await?;
-    Ok(())
-}
-
-async fn ensure_workspace_schema(db: &Database) -> Result<()> {
-    db.prepare("ALTER TABLE workspace_states ADD COLUMN labels_json TEXT NOT NULL DEFAULT '[]'")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE workspace_states ADD COLUMN reviewers_json TEXT NOT NULL DEFAULT '[]'")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE workspace_states ADD COLUMN assignees_json TEXT NOT NULL DEFAULT '[]'")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE workspace_states ADD COLUMN milestone TEXT")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE workspace_states ADD COLUMN linked_issues_json TEXT NOT NULL DEFAULT '[]'")
-        .run()
-        .await
-        .ok();
-    db.prepare("ALTER TABLE workspace_states ADD COLUMN locked INTEGER NOT NULL DEFAULT 0")
-        .run()
-        .await
-        .ok();
     Ok(())
 }
 

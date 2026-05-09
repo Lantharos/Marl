@@ -1,6 +1,7 @@
 use super::*;
+
+const TOKEN_TOUCH_INTERVAL_MS: f64 = 5.0 * 60.0 * 1000.0;
 pub async fn add_token(db: &Database, user: &str, expires_at: &str, kind: &str) -> Result<String> {
-    ensure_token_schema(db).await?;
     let token = format!("sty_{}", Uuid::new_v4().simple());
     let hash = token_hash(&token);
     let created_at = now_rfc3339();
@@ -12,7 +13,6 @@ pub async fn add_token(db: &Database, user: &str, expires_at: &str, kind: &str) 
 }
 
 pub async fn revoke_token(db: &Database, token: &str) -> Result<bool> {
-    ensure_token_schema(db).await?;
     let hash = token_hash(token);
     let revoked_at = now_rfc3339();
     let result = db
@@ -24,7 +24,6 @@ pub async fn revoke_token(db: &Database, token: &str) -> Result<bool> {
 }
 
 pub async fn prune_expired_tokens(db: &Database) -> Result<()> {
-    ensure_token_schema(db).await?;
     let now = now_rfc3339();
     db.prepare("DELETE FROM tokens WHERE expires_at <= ?1 OR revoked_at IS NOT NULL")
         .bind(&[js_str(&now)])?
@@ -34,7 +33,6 @@ pub async fn prune_expired_tokens(db: &Database) -> Result<()> {
 }
 
 pub async fn upsert_user_profile(db: &Database, profile: &UserProfile) -> Result<UserProfile> {
-    ensure_user_settings_schema(db).await?;
     let updated_at = now_rfc3339();
     let display_name = profile.display_name.trim();
     let display_name = if display_name.is_empty() {
@@ -103,7 +101,6 @@ pub async fn user_profile(db: &Database, user: &str) -> Result<Option<UserProfil
 }
 
 pub async fn user_settings(db: &Database, user: &str) -> Result<sty_protocol::UserSettings> {
-    ensure_user_settings_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         settings_json: Option<String>,
@@ -124,7 +121,6 @@ pub async fn update_user_settings(
     user: &str,
     request: sty_protocol::UpdateUserSettingsRequest,
 ) -> Result<sty_protocol::UserSettings> {
-    ensure_user_settings_schema(db).await?;
     let mut settings = user_settings(db, user).await?;
     if let Some(value) = request.vigilant_mode {
         settings.vigilant_mode = value;
@@ -138,16 +134,16 @@ pub async fn update_user_settings(
 }
 
 pub async fn principal_for_token(db: &Database, token: &str) -> Result<Option<TokenPrincipal>> {
-    ensure_token_schema(db).await?;
     let hash = token_hash(token);
     #[derive(Deserialize)]
     struct Row {
         user: String,
         expires_at: String,
         revoked_at: Option<String>,
+        last_used_at: Option<String>,
     }
     let row: Option<Row> = db
-        .prepare("SELECT user, expires_at, revoked_at FROM tokens WHERE token_hash = ?1")
+        .prepare("SELECT user, expires_at, revoked_at, last_used_at FROM tokens WHERE token_hash = ?1")
         .bind(&[js_str(&hash)])?
         .first(None)
         .await?;
@@ -157,15 +153,16 @@ pub async fn principal_for_token(db: &Database, token: &str) -> Result<Option<To
     if row.revoked_at.is_some() || row.expires_at <= now_rfc3339() {
         return Ok(None);
     }
-    db.prepare("UPDATE tokens SET last_used_at = ?1 WHERE token_hash = ?2")
-        .bind(&[js_str(&now_rfc3339()), js_str(&hash)])?
-        .run()
-        .await?;
+    if should_touch_token(row.last_used_at.as_deref()) {
+        db.prepare("UPDATE tokens SET last_used_at = ?1 WHERE token_hash = ?2")
+            .bind(&[js_str(&now_rfc3339()), js_str(&hash)])?
+            .run()
+            .await?;
+    }
     Ok(Some(TokenPrincipal { user: row.user }))
 }
 
 pub async fn token_kind(db: &Database, token: &str) -> Result<Option<String>> {
-    ensure_token_schema(db).await?;
     let hash = token_hash(token);
     #[derive(Deserialize)]
     struct Row {
@@ -187,23 +184,15 @@ pub async fn token_kind(db: &Database, token: &str) -> Result<Option<String>> {
     Ok(Some(row.kind))
 }
 
-async fn ensure_token_schema(db: &Database) -> Result<()> {
-    db.prepare("ALTER TABLE tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'cli'")
-        .run()
-        .await
-        .ok();
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_tokens_kind ON tokens(kind)")
-        .run()
-        .await?;
-    Ok(())
-}
-
-async fn ensure_user_settings_schema(db: &Database) -> Result<()> {
-    db.prepare("ALTER TABLE user_profiles ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}'")
-        .run()
-        .await
-        .ok();
-    Ok(())
+fn should_touch_token(last_used_at: Option<&str>) -> bool {
+    let Some(last_used_at) = last_used_at else {
+        return true;
+    };
+    let last = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(last_used_at)).get_time();
+    if !last.is_finite() {
+        return true;
+    }
+    js_sys::Date::new_0().get_time() - last >= TOKEN_TOUCH_INTERVAL_MS
 }
 
 // -- Tenants / Projects -----------------------------------
