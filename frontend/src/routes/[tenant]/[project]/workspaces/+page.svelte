@@ -3,11 +3,14 @@
 	import { page } from '$app/stores';
 	import {
 		isAbortError,
+		listLabelsPage,
 		listReviewComments,
 		listWorkspaceStatuses,
+		type Label,
 		type WorkspaceStatus
 	} from '$lib/api';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
+	import LabelBadge from '$lib/components/LabelBadge.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
@@ -24,6 +27,7 @@
 	const chunkSize = 20;
 
 	let workspaces = $state<WorkspaceStatus[]>([]);
+	let labelItems = $state<Label[]>([]);
 	let commentCounts = $state<Record<string, number>>({});
 	let unresolvedCommentCounts = $state<Record<string, number>>({});
 	let loading = $state(true);
@@ -36,11 +40,13 @@
 		loading = true;
 		error = '';
 		try {
-			const [all, comments] = await Promise.all([
+			const [all, comments, labelsResult] = await Promise.all([
 				listWorkspaceStatuses(tenant, project, signal ? { signal } : {}),
-				listReviewComments(tenant, project, {}, { perPage: 500, signal }).catch(() => null)
+				listReviewComments(tenant, project, {}, { perPage: 500, signal }).catch(() => null),
+				listLabelsPage(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null)
 			]);
 			workspaces = all.filter((workspace) => workspace.name !== 'main');
+			labelItems = labelsResult?.items ?? [];
 			commentCounts = (comments?.items ?? []).reduce<Record<string, number>>((counts, comment) => {
 				if (comment.workspace) counts[comment.workspace] = (counts[comment.workspace] ?? 0) + 1;
 				return counts;
@@ -84,6 +90,7 @@
 	);
 	const visibleWorkspaces = $derived(filteredWorkspaces.slice(0, visibleCount));
 	const hasMore = $derived(visibleWorkspaces.length < filteredWorkspaces.length);
+	const labelByName = $derived.by(() => new Map(labelItems.map((label) => [label.name, label])));
 
 	$effect(() => {
 		filter;
@@ -141,6 +148,7 @@
 			workspace.name,
 			workspace.status,
 			baseName(workspace),
+			workspace.milestone ?? '',
 			...(workspace.labels ?? [])
 		].join(' ').toLowerCase();
 		return haystack.includes(needle);
@@ -157,17 +165,13 @@
 </script>
 
 <div class="mx-auto max-w-6xl">
-	<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
-		<div>
-			<h3 class="text-sm font-semibold text-[#f0eee4]">Workspaces</h3>
-			<p class="mt-1 text-xs text-[#6f6b5f]">Review, discuss, and merge work back into main.</p>
+	<div class="mb-5 flex flex-wrap items-center gap-3">
+		<div class="flex h-9 min-w-64 flex-1 items-center gap-2 border border-transparent bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
+			<Search class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
+			<input class="workspace-search-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search workspaces" bind:value={query} />
 		</div>
-		<div class="flex min-w-0 flex-wrap justify-end gap-2">
-			<div class="flex h-8 min-w-56 items-center gap-2 border border-transparent bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
-				<Search class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
-				<input class="workspace-search-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search workspaces" bind:value={query} />
-			</div>
-		</div>
+		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
+		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 	</div>
 
 	<div class="border border-[#2a2a28] bg-[#0f0f0d]">
@@ -189,9 +193,7 @@
 					</button>
 				{/each}
 			</div>
-			<div class="text-xs text-[#6f6b5f]">
-				{filteredWorkspaces.length} {filteredWorkspaces.length === 1 ? 'workspace' : 'workspaces'}
-			</div>
+			<div class="text-sm text-[#8c887e]">Newest</div>
 		</div>
 
 		{#if loading}
@@ -223,7 +225,7 @@
 							<span class="truncate text-sm font-medium text-[#eae9e4]">{workspace.name}</span>
 							<span class="text-xs {statusClass(workspace)}">{statusLabel(workspace)}</span>
 							{#each workspace.labels ?? [] as label (label)}
-								<span class="bg-[#1e1e1c] px-1.5 py-0.5 text-[11px] text-[#a09d94]">{label}</span>
+								<LabelBadge name={label} color={labelByName.get(label)?.color} />
 							{/each}
 						</div>
 						<div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6f6b5f]">
@@ -232,20 +234,23 @@
 							{#if workspace.head}
 								<span class="inline-flex items-center gap-1 font-mono"><GitCommit class="h-3 w-3" />{workspace.head.slice(0, 10)}</span>
 							{/if}
+							{#if workspace.milestone}
+								<span>{workspace.milestone}</span>
+							{/if}
+							{#if sizeLabel(workspace)}
+								<span class="inline-flex items-center gap-1">
+									<FileDiff class="h-3.5 w-3.5" />{sizeLabel(workspace)}
+								</span>
+							{/if}
+							<span class="inline-flex items-center gap-1">
+								<MessageSquare class="h-3.5 w-3.5" />{unresolvedCommentCounts[workspace.name] ? `${unresolvedCommentCounts[workspace.name]} open` : commentCounts[workspace.name] ?? 0}
+							</span>
 							{#if workspace.child_workspaces.length}
 								<span>{workspace.child_workspaces.length} child workspace{workspace.child_workspaces.length === 1 ? '' : 's'}</span>
 							{/if}
 						</div>
 					</div>
-					<div class="flex shrink-0 items-center gap-4 text-xs text-[#6f6b5f]">
-						{#if sizeLabel(workspace)}
-							<span class="inline-flex items-center gap-1">
-								<FileDiff class="h-3.5 w-3.5" />{sizeLabel(workspace)}
-							</span>
-						{/if}
-						<span class="inline-flex items-center gap-1">
-							<MessageSquare class="h-3.5 w-3.5" />{unresolvedCommentCounts[workspace.name] ? `${unresolvedCommentCounts[workspace.name]} open` : commentCounts[workspace.name] ?? 0}
-						</span>
+					<div class="flex shrink-0 items-start text-xs text-[#6f6b5f]">
 						<ChevronRight class="h-4 w-4 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
 					</div>
 				</button>

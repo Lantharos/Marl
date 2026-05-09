@@ -4,6 +4,7 @@
 	import type { Label, Milestone, UserProfile } from '$lib/api';
 	import { createLabel, listIssuesPage, listLabels, listMilestones, searchUsers } from '$lib/api';
 	import type { Issue } from '$lib/issueApi';
+	import LabelBadge from './LabelBadge.svelte';
 	import UserAvatar from './UserAvatar.svelte';
 	import UserProfileLink from './UserProfileLink.svelte';
 	import BellOff from 'lucide-svelte/icons/bell-off';
@@ -79,6 +80,7 @@
 	const visibleLinkedIssues = $derived(linkedIssues.slice(0, 10));
 	const visibleIssues = $derived(filteredIssues.slice(0, 10));
 	const exactLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelFilter.trim().toLowerCase()));
+	const labelByName = $derived.by(() => new Map(labels.map((label) => [label.name, label])));
 	const subscriptionKey = $derived(`sty:workspace-subscription:${tenant}/${project}/${detail.name}`);
 
 	onMount(() => {
@@ -121,6 +123,10 @@
 
 	$effect(() => {
 		if (linkedIssues.length > 0) void ensureIssues();
+	});
+
+	$effect(() => {
+		if (selectedLabels.length > 0) void ensureLabels();
 	});
 
 	$effect(() => {
@@ -248,6 +254,12 @@
 		labelFilter = '';
 	}
 
+	async function saveMilestone(value: string | null) {
+		await onSaveMetadata({ milestone: value });
+		milestoneFilter = '';
+		openPanel = '';
+	}
+
 	function issueLabel(id: string) {
 		const issue = issues.find((item) => item.id === id || String(item.number) === id);
 		return issue ? `#${issue.number} ${issue.title}` : id;
@@ -289,7 +301,7 @@
 			<button class="text-[#8c887e] hover:text-[#d9a66c]" aria-label="Request reviewers" onclick={() => panelButton('reviewers')}><CirclePlus class="h-4 w-4" /></button>
 		</div>
 		<div class="grid gap-2">
-			{#each reviewerRows as reviewer}
+			{#each reviewerRows as reviewer (reviewer.author)}
 				<div class="flex items-center gap-2 text-sm text-[#d8d5ca]">
 					<UserAvatar user={reviewer.author} profile={reviewer.profile} size="sm" />
 					<div class="min-w-0 flex-1">
@@ -309,7 +321,7 @@
 			<div class="text-sm font-medium text-[#eae9e4]">Assignees</div>
 			<button class="text-[#8c887e] hover:text-[#d9a66c]" aria-label="Assign people" onclick={() => panelButton('assignees')}><CirclePlus class="h-4 w-4" /></button>
 		</div>
-		{#each assigneeRows as assignee}
+		{#each assigneeRows as assignee (assignee.user)}
 			<div class="text-sm"><UserProfileLink user={assignee.user} profile={assignee.profile} className="text-[#d8d5ca]" /></div>
 		{:else}
 			<p class="text-xs text-[#6f6b5f]">None</p>
@@ -323,8 +335,8 @@
 			<button class="text-[#8c887e] hover:text-[#d9a66c]" aria-label="Edit labels" onclick={() => panelButton('labels')}><CirclePlus class="h-4 w-4" /></button>
 		</div>
 		<div class="flex flex-wrap gap-1.5">
-			{#each selectedLabels as label}
-				<span class="bg-[#1e1e1c] px-2 py-1 text-xs text-[#a09d94]">{label}</span>
+			{#each selectedLabels as label (label)}
+				<LabelBadge name={label} color={labelByName.get(label)?.color} />
 			{:else}
 				<span class="text-xs text-[#6f6b5f]">None</span>
 			{/each}
@@ -336,7 +348,7 @@
 					<input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" placeholder="Filter labels" bind:value={labelFilter} />
 				</div>
 				<div class="max-h-64 overflow-auto">
-					{#each filteredLabels as label}
+					{#each filteredLabels as label (label.name)}
 						<button class="flex w-full items-start gap-2 border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => toggleLabel(label.name)}>
 							<span class="mt-1 h-3 w-3 shrink-0 rounded-full" style={`background:#${label.color}`}></span>
 							<span class="min-w-0"><span class="block text-[#eae9e4]">{label.name}</span><span class="block text-[#8c887e]">{label.description ?? ''}</span></span>
@@ -361,8 +373,11 @@
 			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Set milestone</div>
 				<div class="border-b border-[#2a2a28] p-2"><input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" placeholder="Filter milestones" bind:value={milestoneFilter} /></div>
-				{#each filteredMilestones as milestone}
-					<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => onSaveMetadata({ milestone: milestone.title })}>
+				{#if detail.milestone}
+					<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs text-[#d9a66c] hover:bg-[#181816]" onclick={() => saveMilestone(null)}>Clear milestone</button>
+				{/if}
+				{#each filteredMilestones as milestone (milestone.id)}
+					<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => saveMilestone(milestone.title)}>
 						<span class="block text-[#eae9e4]">{milestone.title}</span>
 						<span class="block text-[#8c887e]">{milestone.description ?? ''}</span>
 					</button>
@@ -378,7 +393,7 @@
 			<div class="text-sm font-medium text-[#eae9e4]">Development</div>
 			<button class="text-[#8c887e] hover:text-[#d9a66c]" aria-label="Link issues" onclick={() => panelButton('development')}><Settings class="h-4 w-4" /></button>
 		</div>
-		{#each visibleLinkedIssues as issue}
+		{#each visibleLinkedIssues as issue (issue)}
 			<div class="text-xs text-[#d9a66c]">{issueLabel(issue)}</div>
 		{:else}
 			<p class="text-xs text-[#6f6b5f]">None yet</p>
@@ -390,7 +405,7 @@
 			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Link an issue from this repository</div>
 				<div class="border-b border-[#2a2a28] p-2"><input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" placeholder="Filter" bind:value={issueFilter} /></div>
-				{#each visibleIssues as issue}
+				{#each visibleIssues as issue (issue.id)}
 					<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => onSaveMetadata({ linked_issues: linkedIssues.includes(issue.id) ? linkedIssues.filter((item) => item !== issue.id) : [...linkedIssues, issue.id] })}>
 						<Link2 class="h-3.5 w-3.5 text-[#8c887e]" />
 						<span class="min-w-0 truncate text-[#eae9e4]">#{issue.number} {issue.title}</span>
@@ -414,7 +429,7 @@
 	<section class="border-b border-[#2a2a28] pb-4">
 		<div class="mb-3 text-sm font-medium text-[#eae9e4]">{participants.length} {participants.length === 1 ? 'participant' : 'participants'}</div>
 		<div class="flex flex-wrap gap-1.5">
-			{#each participants as participant}
+			{#each participants as participant (participant.user)}
 				<UserAvatar user={participant.user} profile={participant.profile} />
 			{/each}
 		</div>
@@ -432,7 +447,7 @@
 		<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">{title}</div>
 		<div class="border-b border-[#2a2a28] p-2"><input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" {placeholder} value={userFilter} oninput={changeUserFilter} /></div>
 		<div class="max-h-56 overflow-auto">
-			{#each filteredUsers as user}
+			{#each filteredUsers as user (user.user)}
 				<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => selected.includes(user.user) ? remove(user.user) : add(user.user)}>
 					<UserAvatar user={user.user} profile={user} size="sm" linked={false} />
 					<span class="min-w-0 flex-1 truncate text-[#eae9e4]">{personLabel(user)}</span>

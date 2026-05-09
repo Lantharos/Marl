@@ -10,11 +10,13 @@
 		type Label
 	} from '$lib/api';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
+	import LabelBadge from '$lib/components/LabelBadge.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import UserProfileLink from '$lib/components/UserProfileLink.svelte';
 	import { userName } from '$lib/identity';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
+	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import Circle from 'lucide-svelte/icons/circle';
 	import MessageSquare from 'lucide-svelte/icons/message-square';
 	import Plus from 'lucide-svelte/icons/plus';
@@ -58,6 +60,7 @@
 			.sort((a, b) => Date.parse(b.updated_at ?? b.created_at) - Date.parse(a.updated_at ?? a.created_at))
 			.slice(0, 4)
 	);
+	const labelByName = $derived.by(() => new Map(labelItems.map((label) => [label.name, label])));
 	const people = $derived.by(() => {
 		const names = new Set<string>();
 		for (const issue of issueItems) {
@@ -267,20 +270,21 @@
 				{#each shownIssues as issue (issue.id)}
 					{@const type = issueTypeMeta(issue.issue_type)}
 					<div
-						class="group flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-[#141412]"
+						class="group grid gap-2 px-4 py-3 text-left hover:bg-[#141412] md:grid-cols-[1fr_auto]"
 						role="link"
 						tabindex="0"
 						onclick={() => openIssue(issue)}
 						onkeydown={(event) => issueRowKeydown(event, issue)}
 					>
-						{#if (issue.state ?? issue.status) === 'open'}
-							<Circle class="mt-1 h-4 w-4 shrink-0 text-[#2fbd55]" />
-						{:else}
-							<CheckCircle2 class="mt-1 h-4 w-4 shrink-0 text-[#8c887e]" />
-						{/if}
-						<div class="min-w-0 flex-1">
-							<div class="flex flex-wrap items-center gap-2">
-								<span class="font-medium text-[#eae9e4] group-hover:text-[#d9a66c]">{issue.title}</span>
+						<div class="flex min-w-0 items-start gap-3">
+							{#if (issue.state ?? issue.status) === 'open'}
+								<Circle class="mt-1 h-4 w-4 shrink-0 text-[#2fbd55]" />
+							{:else}
+								<CheckCircle2 class="mt-1 h-4 w-4 shrink-0 text-[#8c887e]" />
+							{/if}
+							<div class="min-w-0 flex-1">
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="font-medium text-[#eae9e4]">{issue.title}</span>
 								{#if type}
 									<span class="inline-flex items-center gap-1 text-xs text-[#8c887e]">
 										<span class="h-2.5 w-2.5 rounded-full border-2 bg-transparent" style:border-color={type.color}></span>
@@ -288,21 +292,22 @@
 									</span>
 								{/if}
 								{#each issue.labels as name (name)}
-									{@const item = labelItems.find((label) => label.name === name)}
-									<span class="px-1.5 py-0.5 text-[11px] text-[#eae9e4]" style:background-color={item ? color(item.color) : '#2a2a28'}>{name}</span>
+									<LabelBadge {name} color={labelByName.get(name)?.color} />
 								{/each}
 							</div>
-							<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
+								<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
 								<span>#{issue.number}</span>
-								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by <UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#8c887e]" onclick={stopRowNavigation} /></span>
+								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by <UserProfileLink user={issue.author} profile={issue.author_profile} className="text-[#8c887e]" onclick={stopRowNavigation} onkeydown={stopRowNavigation} /></span>
 								{#if issue.milestone}<span>{issue.milestone}</span>{/if}
 								{#if issue.workspace}<span>{issue.workspace}</span>{/if}
 								<span>{issueDate(issue)}</span>
+								{#if (issue.comment_count ?? 0) > 0}
+									<span class="inline-flex items-center gap-1"><MessageSquare class="h-3.5 w-3.5" /> {issue.comment_count}</span>
+								{/if}
+								</div>
 							</div>
 						</div>
-						{#if (issue.comment_count ?? 0) > 0}
-							<div class="flex shrink-0 items-center gap-1 text-xs text-[#8c887e]"><MessageSquare class="h-3.5 w-3.5" /> {issue.comment_count}</div>
-						{/if}
+						<ChevronRight class="mt-1 h-4 w-4 shrink-0 justify-self-end text-[#6f6b5f] group-hover:text-[#eae9e4]" />
 					</div>
 				{:else}
 					<div class="p-8 text-center text-sm text-[#8c887e]">No matching issues.</div>
