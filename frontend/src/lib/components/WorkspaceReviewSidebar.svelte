@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { HistoryEntry, WorkspaceStatus } from '$lib/api';
 	import type { Label, Milestone, UserProfile } from '$lib/api';
 	import { createLabel, listIssuesPage, listLabels, listMilestones, searchUsers } from '$lib/api';
@@ -51,6 +52,8 @@
 	let issues = $state<Issue[]>([]);
 	let subscribed = $state(true);
 	let loadedSubscriptionKey = $state('');
+	let root = $state<HTMLElement | null>(null);
+	let userSearchController: AbortController | null = null;
 
 	const selectedLabels = $derived(detail.labels ?? []);
 	const selectedReviewers = $derived(detail.reviewers ?? []);
@@ -62,19 +65,29 @@
 	const filteredMilestones = $derived(milestones.filter((milestone) => milestone.title.toLowerCase().includes(milestoneFilter.trim().toLowerCase())));
 	const filteredUsers = $derived(users.filter((user) => personLabel(user).toLowerCase().includes(userFilter.trim().toLowerCase())));
 	const filteredIssues = $derived(issues.filter((issue) => `${issue.number} ${issue.title}`.toLowerCase().includes(issueFilter.trim().toLowerCase())));
+	const visibleLinkedIssues = $derived(linkedIssues.slice(0, 10));
+	const visibleIssues = $derived(filteredIssues.slice(0, 10));
 	const exactLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelFilter.trim().toLowerCase()));
 	const subscriptionKey = $derived(`sty:workspace-subscription:${tenant}/${project}/${detail.name}`);
 
-	$effect(() => {
-		if (!tenant || !project) return;
+	onMount(() => {
 		const controller = new AbortController();
 		Promise.all([
 			listLabels(tenant, project, { signal: controller.signal }).then((items) => (labels = items)).catch(ignoreAbort),
 			listMilestones(tenant, project, { signal: controller.signal }).then((items) => (milestones = items)).catch(ignoreAbort),
-			searchUsers('', { signal: controller.signal, perPage: 15 }).then((page) => (users = page.items)).catch(ignoreAbort),
-			listIssuesPage(tenant, project, { signal: controller.signal, perPage: 25 }).then((page) => (issues = page.items)).catch(ignoreAbort)
+			refreshUsers('', controller.signal),
+			listIssuesPage(tenant, project, { signal: controller.signal, perPage: 100, state: 'all' }).then((page) => (issues = page.items)).catch(ignoreAbort)
 		]);
-		return () => controller.abort();
+		function closePanel(event: PointerEvent) {
+			if (!openPanel || !root) return;
+			if (!root.contains(event.target as Node)) openPanel = '';
+		}
+		document.addEventListener('pointerdown', closePanel, true);
+		return () => {
+			userSearchController?.abort();
+			controller.abort();
+			document.removeEventListener('pointerdown', closePanel, true);
+		};
 	});
 
 	$effect(() => {
@@ -104,6 +117,7 @@
 
 	function togglePanel(panel: string) {
 		openPanel = openPanel === panel ? '' : panel;
+		if (openPanel === 'reviewers' || openPanel === 'assignees') refreshUsers(userFilter);
 	}
 
 	function mergePeople(requested: string[], reviewed: Reviewer[]) {
@@ -150,9 +164,28 @@
 	function panelButton(panel: string) {
 		return canWrite ? togglePanel(panel) : undefined;
 	}
+
+	async function refreshUsers(query = userFilter, signal?: AbortSignal) {
+		if (!signal) {
+			userSearchController?.abort();
+			userSearchController = new AbortController();
+			signal = userSearchController.signal;
+		}
+		try {
+			const page = await searchUsers(query, { signal, perPage: 20 });
+			users = page.items;
+		} catch (error) {
+			ignoreAbort(error);
+		}
+	}
+
+	function changeUserFilter(event: Event) {
+		userFilter = (event.currentTarget as HTMLInputElement).value;
+		refreshUsers(userFilter);
+	}
 </script>
 
-<aside class="grid h-fit gap-5">
+<aside bind:this={root} class="grid h-fit gap-5">
 	<section class="relative border-b border-[#2a2a28] pb-4">
 		<div class="mb-3 flex items-center justify-between gap-3">
 			<div class="text-sm font-medium text-[#eae9e4]">Reviewers</div>
@@ -202,10 +235,10 @@
 			{/each}
 		</div>
 		{#if openPanel === 'labels'}
-			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#3a3a36] bg-[#10100e] shadow-xl">
+			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Apply labels</div>
 				<div class="border-b border-[#2a2a28] p-2">
-					<input class="w-full bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#6f6b5f] focus:outline-[#d9a66c]" placeholder="Filter labels" bind:value={labelFilter} />
+					<input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" placeholder="Filter labels" bind:value={labelFilter} />
 				</div>
 				<div class="max-h-64 overflow-auto">
 					{#each filteredLabels as label}
@@ -230,9 +263,9 @@
 		</div>
 		<p class="text-xs text-[#6f6b5f]">{detail.milestone ?? 'No milestone'}</p>
 		{#if openPanel === 'milestone'}
-			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#3a3a36] bg-[#10100e] shadow-xl">
+			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Set milestone</div>
-				<div class="border-b border-[#2a2a28] p-2"><input class="w-full bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#6f6b5f] focus:outline-[#d9a66c]" placeholder="Filter milestones" bind:value={milestoneFilter} /></div>
+				<div class="border-b border-[#2a2a28] p-2"><input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" placeholder="Filter milestones" bind:value={milestoneFilter} /></div>
 				{#each filteredMilestones as milestone}
 					<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => onSaveMetadata({ milestone: milestone.title })}>
 						<span class="block text-[#eae9e4]">{milestone.title}</span>
@@ -250,17 +283,19 @@
 			<div class="text-sm font-medium text-[#eae9e4]">Development</div>
 			<button class="text-[#8c887e] hover:text-[#d9a66c]" aria-label="Link issues" onclick={() => panelButton('development')}><Settings class="h-4 w-4" /></button>
 		</div>
-		<p class="mb-2 text-xs leading-5 text-[#d8d5ca]">Successfully merging this workspace may close these issues.</p>
-		{#each linkedIssues as issue}
+		{#each visibleLinkedIssues as issue}
 			<div class="text-xs text-[#d9a66c]">{issueLabel(issue)}</div>
 		{:else}
 			<p class="text-xs text-[#6f6b5f]">None yet</p>
 		{/each}
+		{#if linkedIssues.length > visibleLinkedIssues.length}
+			<p class="mt-1 text-xs text-[#6f6b5f]">{linkedIssues.length - visibleLinkedIssues.length} more linked</p>
+		{/if}
 		{#if openPanel === 'development'}
-			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#3a3a36] bg-[#10100e] shadow-xl">
+			<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Link an issue from this repository</div>
-				<div class="border-b border-[#2a2a28] p-2"><input class="w-full bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#6f6b5f] focus:outline-[#d9a66c]" placeholder="Filter" bind:value={issueFilter} /></div>
-				{#each filteredIssues as issue}
+				<div class="border-b border-[#2a2a28] p-2"><input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" placeholder="Filter" bind:value={issueFilter} /></div>
+				{#each visibleIssues as issue}
 					<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => onSaveMetadata({ linked_issues: linkedIssues.includes(issue.id) ? linkedIssues.filter((item) => item !== issue.id) : [...linkedIssues, issue.id] })}>
 						<Link2 class="h-3.5 w-3.5 text-[#8c887e]" />
 						<span class="min-w-0 truncate text-[#eae9e4]">#{issue.number} {issue.title}</span>
@@ -268,6 +303,9 @@
 				{:else}
 					<div class="px-3 py-3 text-xs text-[#6f6b5f]">No results</div>
 				{/each}
+				{#if filteredIssues.length > visibleIssues.length}
+					<div class="px-3 py-2 text-xs text-[#6f6b5f]">Keep typing to narrow {filteredIssues.length - visibleIssues.length} more.</div>
+				{/if}
 			</div>
 		{/if}
 	</section>
@@ -297,9 +335,9 @@
 </aside>
 
 {#snippet UserPanel(title: string, placeholder: string, selected: string[], add: (user: string) => void, remove: (user: string) => void)}
-	<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#3a3a36] bg-[#10100e] shadow-xl">
+	<div class="absolute right-0 top-7 z-30 w-[300px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 		<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">{title}</div>
-		<div class="border-b border-[#2a2a28] p-2"><input class="w-full bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#6f6b5f] focus:outline-[#d9a66c]" {placeholder} bind:value={userFilter} /></div>
+		<div class="border-b border-[#2a2a28] p-2"><input class="panel-input w-full border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 text-sm text-[#eae9e4] placeholder:text-[#6f6b5f] focus:border-[#d9a66c]" {placeholder} value={userFilter} oninput={changeUserFilter} /></div>
 		<div class="max-h-56 overflow-auto">
 			{#each filteredUsers as user}
 				<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-xs hover:bg-[#181816]" onclick={() => selected.includes(user.user) ? remove(user.user) : add(user.user)}>
@@ -313,3 +351,11 @@
 		</div>
 	</div>
 {/snippet}
+
+<style>
+	.panel-input:focus,
+	.panel-input:focus-visible {
+		outline: none !important;
+		box-shadow: none !important;
+	}
+</style>

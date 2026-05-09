@@ -2,6 +2,7 @@
 	import CircleDot from 'lucide-svelte/icons/circle-dot';
 	import MessageSquare from 'lucide-svelte/icons/message-square';
 	import X from 'lucide-svelte/icons/x';
+	import ContentComposer from './ContentComposer.svelte';
 
 	type ReviewAction = 'comment' | 'approve' | 'request_changes';
 
@@ -40,7 +41,7 @@
 			<button class="text-[#8c887e] hover:text-[#eae9e4]" aria-label="Close" onclick={onCancel}><X class="h-4 w-4" /></button>
 		</div>
 		<div class="p-4">
-			<textarea class="min-h-[150px] w-full resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#6f6b5f] focus:outline-[#d9a66c]" placeholder="Leave a comment" bind:value={body}></textarea>
+			<ContentComposer value={body} placeholder="Leave a comment" minHeight="150px" onInput={(value) => (body = value)} />
 			<div class="mt-4 grid gap-3 text-sm">
 				<button class="flex items-start gap-3 text-left {action === 'comment' ? 'text-[#eae9e4]' : 'text-[#8c887e]'}" onclick={() => (action = 'comment')}>
 					<CircleDot class="mt-0.5 h-4 w-4 {action === 'comment' ? 'text-[#d9a66c]' : 'text-[#4a4942]'}" />

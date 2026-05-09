@@ -379,6 +379,31 @@ pub(crate) async fn close_workspace(mut req: Request, ctx: crate::request_contex
     Response::from_json(&OkResponse { ok: true })
 }
 
+pub(crate) async fn reopen_workspace(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let body: serde_json::Value = req.json().await.unwrap_or_default();
+    let reason = body["reason"].as_str().map(str::trim).filter(|value| !value.is_empty());
+    let database = db(&ctx)?;
+    check_project_write_capability(&database, &tenant, &project, &user, "maintainer", "workspaces:write").await?;
+    let state = d1::workspace_states(&database, &tenant, &project)
+        .await?
+        .into_iter()
+        .find(|item| item.name == workspace);
+    let Some(state) = state else {
+        return json_error(404, "workspace not found");
+    };
+    if workspace == "main" {
+        return json_error(404, "workspace not found");
+    }
+    if matches!(state.status.as_str(), "merged" | "deleted") {
+        return json_error(409, "workspace cannot be reopened");
+    }
+    d1::reopen_workspace(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }, reason).await?;
+    Response::from_json(&OkResponse { ok: true })
+}
+
 pub(crate) async fn delete_draft_workspace(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
     let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;

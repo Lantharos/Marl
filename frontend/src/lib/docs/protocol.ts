@@ -80,7 +80,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. Review states include draft, ready, changes requested, merged, closed, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, and lock state.',
+		note: 'Ready review lives on workspaces. Review states include draft, ready, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, and lock state.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',
@@ -93,6 +93,7 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/close',
+			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reopen',
 			'DELETE /v1/tenants/:tenant/projects/:project/workspaces/:workspace',
 			'PATCH /v1/tenants/:tenant/projects/:project/workspaces/:workspace/labels',
 			'PATCH /v1/tenants/:tenant/projects/:project/workspaces/:workspace/metadata',
@@ -104,14 +105,20 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Issues and project records',
-		note: 'Labels, milestones, comments, hooks, and tags use standard paginated protocol collections. Comments also carry review target fields when they belong to code review.',
+		note: 'Issues support filtered listing, comments, metadata activity, labels, assignees, milestones, linked workspaces, issue types, lock or pin state, transfer, deletion, and open, closed, or closed-as-not-planned state updates. Labels, milestones, hooks, and tags use standard paginated protocol collections. Project comments can also carry review target fields when they belong to code review.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/issues',
 			'POST /v1/tenants/:tenant/projects/:project/issues',
 			'GET /v1/tenants/:tenant/projects/:project/issues/:issue_id',
 			'PATCH /v1/tenants/:tenant/projects/:project/issues/:issue_id',
+			'DELETE /v1/tenants/:tenant/projects/:project/issues/:issue_id',
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/close',
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/reopen',
+			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/transfer',
+			'GET /v1/tenants/:tenant/projects/:project/issues/:issue_id/comments',
+			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/comments',
+			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/assignees',
+			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/labels',
 			'GET /v1/tenants/:tenant/projects/:project/labels',
 			'GET /v1/tenants/:tenant/projects/:project/milestones',
 			'GET /v1/tenants/:tenant/projects/:project/comments',

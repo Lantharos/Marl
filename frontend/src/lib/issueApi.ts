@@ -15,6 +15,7 @@ export interface Issue {
 	body: string;
 	status: 'open' | 'closed';
 	state?: 'open' | 'closed';
+	state_reason?: 'completed' | 'not_planned' | 'duplicate' | string | null;
 	author: string;
 	author_profile?: import('./api').UserProfile | null;
 	assignees?: string[];
@@ -24,7 +25,13 @@ export interface Issue {
 	labels: string[];
 	milestone?: string | null;
 	workspace?: string | null;
+	issue_type?: IssueType | null;
+	locked?: boolean;
+	pinned?: boolean;
+	comment_count?: number;
 }
+
+export type IssueType = 'bug' | 'feature' | 'task';
 
 export interface Comment {
 	id: string;
@@ -54,9 +61,8 @@ export async function listIssues(tenant: string, project: string, options: PageO
 }
 
 export async function getIssue(tenant: string, project: string, issueId: string, options: ApiOptions = {}): Promise<Issue & { comments: Comment[] }> {
-	const issues = await listIssues(tenant, project, options);
-	const issue = issues.issues.find((i) => i.id === issueId || String(i.number) === issueId);
-	if (!issue) throw new Error('Issue not found');
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}`, { signal: options.signal });
+	const issue = (await response.json()) as Issue;
 	const comments = await listIssueComments(tenant, project, issue.id, options);
 	return { ...issue, comments };
 }
@@ -76,7 +82,11 @@ export async function createIssueComment(tenant: string, project: string, issueI
 	return (await response.json()) as Comment;
 }
 
-export async function createIssue(tenant: string, project: string, issue: { title: string; body: string; labels?: string[]; assignee?: string }) {
+export async function createIssue(
+	tenant: string,
+	project: string,
+	issue: { title: string; body: string; labels?: string[]; assignee?: string; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null }
+) {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
@@ -91,7 +101,7 @@ export async function updateIssue(
 	tenant: string,
 	project: string,
 	issueId: string,
-	issue: { title?: string; body?: string; state?: 'open' | 'closed'; status?: 'open' | 'closed' }
+	issue: { title?: string; body?: string; state?: 'open' | 'closed'; status?: 'open' | 'closed'; labels?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; locked?: boolean; pinned?: boolean }
 ): Promise<Issue> {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}`, {
 		method: 'PATCH',
@@ -112,6 +122,10 @@ export async function addIssueLabel(tenant: string, project: string, issueId: st
 	return (await response.json()) as Issue;
 }
 
+export async function setIssueLabels(tenant: string, project: string, issueId: string, labels: string[]): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { labels });
+}
+
 export async function assignIssue(tenant: string, project: string, issueId: string, user: string): Promise<Issue> {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/assignees`, {
 		method: 'POST',
@@ -121,6 +135,53 @@ export async function assignIssue(tenant: string, project: string, issueId: stri
 	return (await response.json()) as Issue;
 }
 
-export async function updateIssueStatus(tenant: string, project: string, issueId: string, status: 'open' | 'closed'): Promise<Issue> {
-	return updateIssue(tenant, project, issueId, { status, state: status });
+export async function setIssueAssignees(tenant: string, project: string, issueId: string, assignees: string[]): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { assignees });
+}
+
+export async function setIssueMilestone(tenant: string, project: string, issueId: string, milestone: string | null): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { milestone });
+}
+
+export async function setIssueType(tenant: string, project: string, issueId: string, issueType: IssueType | null): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { issue_type: issueType });
+}
+
+export async function setIssueWorkspace(tenant: string, project: string, issueId: string, workspace: string | null): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { workspace });
+}
+
+export async function setIssueLocked(tenant: string, project: string, issueId: string, locked: boolean): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { locked });
+}
+
+export async function setIssuePinned(tenant: string, project: string, issueId: string, pinned: boolean): Promise<Issue> {
+	return updateIssue(tenant, project, issueId, { pinned });
+}
+
+export async function transferIssue(tenant: string, project: string, issueId: string, targetTenant: string, targetProject: string): Promise<Issue> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/transfer`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ tenant: targetTenant, project: targetProject })
+	});
+	notifyProjectStatsChanged(tenant, project);
+	notifyProjectStatsChanged(targetTenant, targetProject);
+	return (await response.json()) as Issue;
+}
+
+export async function deleteIssue(tenant: string, project: string, issueId: string): Promise<void> {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}`, { method: 'DELETE' });
+	notifyProjectStatsChanged(tenant, project);
+}
+
+export async function updateIssueStatus(tenant: string, project: string, issueId: string, status: 'open' | 'closed', reason: 'completed' | 'not_planned' | 'duplicate' = 'completed'): Promise<Issue> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}/${status === 'open' ? 'reopen' : 'close'}`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ reason })
+	});
+	const item = (await response.json()) as Issue;
+	notifyProjectStatsChanged(tenant, project);
+	return item;
 }

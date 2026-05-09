@@ -4,11 +4,12 @@
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import CircleDot from 'lucide-svelte/icons/circle-dot';
 	import GitMerge from 'lucide-svelte/icons/git-merge';
+	import type { ComposerAction } from './ContentComposer.svelte';
 	import ReviewThread from './ReviewThread.svelte';
 	import WorkspaceReviewSidebar from './WorkspaceReviewSidebar.svelte';
 
 	type WorkspaceDetail = WorkspaceStatus & { history?: HistoryEntry[] };
-	type SubmitAction = { value: string; label: string; disabled?: boolean };
+	type SubmitAction = ComposerAction;
 	type FileReviewEvent = {
 		key: string;
 		author: string;
@@ -95,12 +96,12 @@
 		if (detail.status === 'merged') return 'This workspace has been merged.';
 		if (detail.status === 'closed') return 'This workspace was closed without merging.';
 		if (detail.status === 'not_planned') return 'This workspace was closed as not planned.';
-		if (detail.status === 'changes_requested') return 'Address the feedback, then mark it ready again from the comment menu.';
+		if (detail.status === 'changes_requested') return 'Address the feedback, then mark it ready again from the action menu.';
 		if (detail.locked) return 'This conversation is locked to maintainers.';
 		if (unresolvedFileThreads.length) return `${unresolvedFileThreads.length} file ${unresolvedFileThreads.length === 1 ? 'conversation needs' : 'conversations need'} resolution.`;
 		if (detail.is_ready && detail.mergeable) return 'No blocking file conversations are open.';
 		if (detail.is_ready) return 'The workspace is ready, but the merge is blocked.';
-		return 'Add a summary, then mark it ready from the comment menu.';
+		return 'Add a summary, then mark it ready from the action menu.';
 	}
 
 	function groupFileEvents(comments: ReviewComment[]) {

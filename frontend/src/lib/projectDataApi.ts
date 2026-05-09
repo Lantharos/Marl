@@ -284,6 +284,15 @@ export async function closeWorkspace(tenant: string, project: string, workspace:
 	notifyProjectStatsChanged(tenant, project);
 }
 
+export async function reopenWorkspace(tenant: string, project: string, workspace: string, reason = '') {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/reopen`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ reason })
+	});
+	notifyProjectStatsChanged(tenant, project);
+}
+
 export async function deleteDraftWorkspace(tenant: string, project: string, workspace: string) {
 	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}`, {
 		method: 'DELETE'

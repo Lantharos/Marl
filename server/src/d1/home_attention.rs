@@ -103,11 +103,12 @@ async fn home_assigned_issues(
     limit: usize,
 ) -> Result<Vec<HomeIssueItem>> {
     ensure_collaboration_schema(db).await?;
+    ensure_issue_schema(db).await?;
     let result = db
         .prepare(
-            "SELECT i.tenant, i.project, i.id, i.number, i.title, i.body, i.status, i.author,
+            "SELECT i.tenant, i.project, i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author,
                     i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone,
-                    i.workspace, i.labels_json,
+                    i.workspace, i.issue_type, i.labels_json,
                     u.display_name, u.handle, u.avatar_url, u.email, u.updated_at AS profile_updated_at
              FROM issues i
              JOIN projects p ON p.tenant = i.tenant AND p.project = i.project
@@ -255,6 +256,7 @@ fn issue_from_row(row: IssueRow) -> Issue {
         body: row.body,
         state: row.status.clone(),
         status: row.status,
+        state_reason: row.state_reason,
         author_profile: user_profile_from_parts(
             &row.author,
             row.display_name,
@@ -272,6 +274,10 @@ fn issue_from_row(row: IssueRow) -> Issue {
         labels: serde_json::from_str(&row.labels_json).unwrap_or_default(),
         milestone: row.milestone,
         workspace: row.workspace,
+        issue_type: row.issue_type,
+        locked: false,
+        pinned: false,
+        comment_count: 0,
     }
 }
 
@@ -301,6 +307,7 @@ struct IssueRow {
     title: String,
     body: String,
     status: String,
+    state_reason: Option<String>,
     author: String,
     created_at: String,
     updated_at: Option<String>,
@@ -308,6 +315,7 @@ struct IssueRow {
     assignees_json: Option<String>,
     milestone: Option<String>,
     workspace: Option<String>,
+    issue_type: Option<String>,
     labels_json: String,
     display_name: Option<String>,
     handle: Option<String>,

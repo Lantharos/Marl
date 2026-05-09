@@ -451,6 +451,30 @@ pub async fn close_workspace(
     Ok(())
 }
 
+pub async fn reopen_workspace(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    principal: &TokenPrincipal,
+    reason: Option<&str>,
+) -> Result<()> {
+    db.prepare("UPDATE workspace_states SET status = 'active', is_ready = 0, mergeable = 0 WHERE tenant = ?1 AND project = ?2 AND workspace = ?3")
+        .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    let message = reason
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("reopened workspace {workspace}: {value}"))
+        .unwrap_or_else(|| format!("reopened workspace {workspace}"));
+    log_history(
+        db, tenant, project, workspace, principal, "ready", &message, None, None,
+    )
+    .await?;
+    recompute_project_stats(db, tenant, project).await?;
+    Ok(())
+}
+
 pub async fn delete_draft_workspace(
     db: &Database,
     tenant: &str,

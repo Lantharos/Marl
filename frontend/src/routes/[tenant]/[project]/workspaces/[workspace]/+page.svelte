@@ -14,6 +14,7 @@
 		listReviewComments,
 		markWorkspaceReady,
 		mergeWorkspace,
+		reopenWorkspace,
 		requestWorkspaceChanges,
 		updateReviewComment,
 		updateReviewCommentState,
@@ -210,18 +211,26 @@
 
 	async function submitConversationAction(body: string, action: string) {
 		if (!detail) return;
+		if (action === 'request_changes' && !body.trim()) {
+			error = 'Request changes needs a comment.';
+			return;
+		}
 		busy = true;
 		error = '';
 		try {
-			await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, body);
+			if (body.trim()) {
+				await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, body.trim());
+			}
 			if (action === 'ready') {
 				await markWorkspaceReady(tenant, project, workspaceName);
 			} else if (action === 'request_changes') {
-				await requestWorkspaceChanges(tenant, project, workspaceName, body);
+				await requestWorkspaceChanges(tenant, project, workspaceName, body.trim());
 			} else if (action === 'close') {
-				await closeWorkspace(tenant, project, workspaceName, 'closed', body);
+				await closeWorkspace(tenant, project, workspaceName, 'closed', body.trim());
 			} else if (action === 'not_planned') {
-				await closeWorkspace(tenant, project, workspaceName, 'not_planned', body);
+				await closeWorkspace(tenant, project, workspaceName, 'not_planned', body.trim());
+			} else if (action === 'reopen') {
+				await reopenWorkspace(tenant, project, workspaceName, body.trim());
 			} else if (action === 'merge') {
 				await mergeWorkspace(tenant, project, workspaceName);
 			} else if (action === 'delete') {
@@ -357,15 +366,24 @@
 	}
 
 	function buildConversationActions() {
-		if (!detail || detail.status === 'merged' || detail.status === 'closed' || detail.status === 'not_planned') return [];
-		const actions: { value: string; label: string; disabled?: boolean }[] = [];
+		if (!detail || detail.status === 'merged') return [];
+		const actions: { value: string; label: string; withContentLabel?: string; description?: string; disabled?: boolean; requiresContent?: boolean; danger?: boolean }[] = [];
 		const isDraft = !detail.is_ready && ['active', 'draft'].includes(detail.status);
-		if (canWrite && !detail.is_ready) actions.push({ value: 'ready', label: 'Comment and mark ready' });
-		if (canMaintain && detail.is_ready) actions.push({ value: 'request_changes', label: 'Comment and request changes' });
-		if (canMaintain) actions.push({ value: 'close', label: 'Comment and close' });
-		if (canMaintain) actions.push({ value: 'not_planned', label: 'Comment as not planned' });
-		if (canMaintain && detail.is_ready) actions.push({ value: 'merge', label: unresolvedFileThreads.length ? 'Comment and merge (resolve conversations first)' : 'Comment and merge', disabled: unresolvedFileThreads.length > 0 });
-		if (canWrite && isDraft) actions.push({ value: 'delete', label: 'Comment and delete draft' });
+		if (canMaintain && ['closed', 'not_planned', 'changes_requested'].includes(detail.status)) {
+			actions.push({ value: 'reopen', label: 'Reopen', withContentLabel: 'Reopen with comment' });
+		}
+		if (canWrite && !detail.is_ready && !['closed', 'not_planned'].includes(detail.status)) {
+			actions.push({ value: 'ready', label: 'Mark ready', withContentLabel: 'Mark ready with comment' });
+		}
+		if (canMaintain && detail.is_ready) {
+			actions.push({ value: 'merge', label: 'Merge', withContentLabel: 'Merge with comment', disabled: unresolvedFileThreads.length > 0, description: unresolvedFileThreads.length ? 'Resolve file conversations first.' : undefined });
+			actions.push({ value: 'request_changes', label: 'Request changes', withContentLabel: 'Request changes', requiresContent: true, description: 'Requires a comment.' });
+		}
+		if (canMaintain && !['closed', 'not_planned'].includes(detail.status)) {
+			actions.push({ value: 'close', label: 'Close', withContentLabel: 'Close with comment' });
+			actions.push({ value: 'not_planned', label: 'Close as not planned', withContentLabel: 'Close as not planned with comment' });
+		}
+		if (canWrite && isDraft) actions.push({ value: 'delete', label: 'Delete draft', withContentLabel: 'Delete draft with comment', danger: true });
 		return actions;
 	}
 

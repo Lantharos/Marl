@@ -211,9 +211,6 @@ pub async fn project_access_response(
 
 pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Vec<UserProfile>> {
     let trimmed = query.trim().trim_start_matches('@').to_ascii_lowercase();
-    if trimmed.is_empty() {
-        return Ok(Vec::new());
-    }
     let pattern = format!("%{trimmed}%");
     #[derive(Deserialize)]
     struct Row {
@@ -224,8 +221,18 @@ pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Ve
         email: Option<String>,
         updated_at: String,
     }
-    let result = db
-        .prepare(
+    let result = if trimmed.is_empty() {
+        db.prepare(
+            "SELECT user, display_name, handle, avatar_url, email, updated_at
+             FROM user_profiles
+             ORDER BY updated_at DESC, display_name
+             LIMIT ?1",
+        )
+        .bind(&[wasm_bindgen::JsValue::from_f64(limit as f64)])?
+        .all()
+        .await?
+    } else {
+        db.prepare(
             "SELECT user, display_name, handle, avatar_url, email, updated_at
              FROM user_profiles
              WHERE LOWER(COALESCE(handle, '')) LIKE ?1
@@ -241,7 +248,8 @@ pub async fn search_users(db: &Database, query: &str, limit: usize) -> Result<Ve
             wasm_bindgen::JsValue::from_f64(limit as f64),
         ])?
         .all()
-        .await?;
+        .await?
+    };
     let rows: Vec<Row> = result.results()?;
     Ok(rows
         .into_iter()

@@ -12,6 +12,7 @@ export interface PageOptions extends ApiOptions {
 	state?: 'open' | 'closed' | 'all';
 	label?: string;
 	assignee?: string;
+	q?: string;
 }
 
 export interface Paginated<T> {
@@ -64,6 +65,7 @@ export function pageQuery(options: PageOptions = {}) {
 	if (options.state && options.state !== 'all') params.set('state', options.state);
 	if (options.label) params.set('label', options.label);
 	if (options.assignee) params.set('assignee', options.assignee);
+	if (options.q) params.set('q', options.q);
 	const value = params.toString();
 	return value ? `?${value}` : '';
 }

@@ -78,9 +78,13 @@ CREATE TABLE IF NOT EXISTS issues (
     created_at TEXT NOT NULL,
     updated_at TEXT,
     closed_at TEXT,
+    state_reason TEXT,
     assignees_json TEXT NOT NULL DEFAULT '[]',
     milestone TEXT,
     workspace TEXT,
+    issue_type TEXT,
+    locked INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
     labels_json TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(tenant, project);
@@ -113,7 +117,9 @@ CREATE TABLE IF NOT EXISTS comments (
     issue_id TEXT NOT NULL,
     author TEXT NOT NULL,
     body TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    target_type TEXT NOT NULL DEFAULT 'comment',
+    target_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(tenant, project, issue_id);
 

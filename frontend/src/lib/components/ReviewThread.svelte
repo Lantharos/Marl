@@ -1,14 +1,10 @@
 <script lang="ts">
 	import type { ReviewComment } from '$lib/api';
 	import { userDisplayName, userInitials } from '$lib/identity';
-	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
-	import ChevronDown from 'lucide-svelte/icons/chevron-down';
-	import CircleDot from 'lucide-svelte/icons/circle-dot';
-	import GitMerge from 'lucide-svelte/icons/git-merge';
+	import Markdown from './Markdown.svelte';
+	import ContentComposer, { type ComposerAction as SubmitAction } from './ContentComposer.svelte';
 	import Pencil from 'lucide-svelte/icons/pencil';
 	import Trash2 from 'lucide-svelte/icons/trash-2';
-
-	type SubmitAction = { value: string; label: string; disabled?: boolean };
 
 	let {
 		title,
@@ -56,13 +52,11 @@
 	let editingBody = $state('');
 	let actionBusy = $state<string | null>(null);
 	let pendingDeleteId = $state<string | null>(null);
-	let submitMenuOpen = $state(false);
 	const ordered = $derived(
 		[...comments].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 	);
 
-	async function handleSubmit(event: Event) {
-		event.preventDefault();
+	async function handleSubmit() {
 		const value = body.trim();
 		if (!value) return;
 		busy = true;
@@ -75,13 +69,13 @@
 		}
 	}
 
-	async function handleSubmitAction(action: SubmitAction) {
-		const value = body.trim();
-		if (!value || action.disabled || !onSubmitAction) return;
+	async function handleSubmitAction(value: string, actionValue: string) {
+		const action = submitActions.find((item) => item.value === actionValue);
+		if (!action || action.disabled || !onSubmitAction) return;
+		if (action.requiresContent && !value.trim()) return;
 		busy = true;
-		submitMenuOpen = false;
 		try {
-			await onSubmitAction(value, action.value);
+			await onSubmitAction(value.trim(), action.value);
 			body = '';
 			onCancel?.();
 		} finally {
@@ -169,18 +163,6 @@
 	}
 </script>
 
-{#snippet SubmitActionIcon(action: SubmitAction)}
-	{#if action.value === 'ready'}
-		<CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-[#7cb97c]" />
-	{:else if action.value === 'merge'}
-		<GitMerge class="h-3.5 w-3.5 shrink-0 text-[#7cb97c]" />
-	{:else if action.value === 'delete'}
-		<Trash2 class="h-3.5 w-3.5 shrink-0 text-[#d96c5a]" />
-	{:else}
-		<CircleDot class="h-3.5 w-3.5 shrink-0 text-[#d9a66c]" />
-	{/if}
-{/snippet}
-
 <section class="grid gap-3">
 	{#if title && composerVariant !== 'timeline'}
 		<div class="flex items-center justify-between gap-3">
@@ -256,31 +238,21 @@
 					</div>
 					<div class={commentBodyClass()}>
 						{#if editingId === comment.id}
-							<div class="grid gap-2">
-								<textarea
-									class="min-h-[76px] resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#5f5b52] focus:outline-[#4a4942]"
-									bind:value={editingBody}
-								></textarea>
-								<div class="flex justify-end gap-2">
-									<button
-										type="button"
-										class="bg-[#242420] px-3 py-1.5 text-xs font-medium text-[#d8d5ca] hover:bg-[#2f2f2b]"
-										onclick={() => { editingId = null; editingBody = ''; }}
-									>
-										Cancel
-									</button>
-									<button
-										type="button"
-										class="bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-50"
-										disabled={actionBusy === `edit:${comment.id}` || !editingBody.trim()}
-										onclick={() => saveEdit(comment)}
-									>
-										{actionBusy === `edit:${comment.id}` ? 'Saving...' : 'Save'}
-									</button>
-								</div>
-							</div>
+							<ContentComposer
+								value={editingBody}
+								placeholder="Edit comment..."
+								minHeight="92px"
+								submitLabel="Save"
+								busy={actionBusy === `edit:${comment.id}`}
+								disabled={!editingBody.trim()}
+								onInput={(value) => (editingBody = value)}
+								onSubmit={() => saveEdit(comment)}
+								onCancel={() => { editingId = null; editingBody = ''; }}
+							/>
 						{:else}
-							<p class={commentTextClass()}>{comment.body}</p>
+							<div class={commentTextClass()}>
+								<Markdown source={comment.body} />
+							</div>
 						{/if}
 					</div>
 				</div>
@@ -307,115 +279,33 @@
 					{#if title}
 						<div class="mb-2 text-sm font-medium text-[#eae9e4]">{title}</div>
 					{/if}
-					<form class="border border-[#2a2a28] bg-[#11110f] p-3" onsubmit={handleSubmit}>
-						<textarea
-							class="min-h-[88px] w-full resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#5f5b52] focus:outline-[#4a4942]"
-							{placeholder}
-							bind:value={body}
-						></textarea>
-						<div class="mt-2 flex justify-end">
-							{#if onCancel}
-								<button
-									type="button"
-									class="mr-2 bg-[#242420] px-3 py-1.5 text-xs font-medium text-[#d8d5ca] hover:bg-[#2f2f2b]"
-									onclick={onCancel}
-								>
-									Cancel
-								</button>
-							{/if}
-							<div class="relative flex">
-								<button
-									type="submit"
-									class="flex h-8 items-center bg-[#eae9e4] px-3 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-50"
-									disabled={busy || !body.trim()}
-								>
-									{busy ? 'Posting...' : submitLabel}
-								</button>
-								{#if submitActions.length}
-									<button
-										type="button"
-										class="ml-px flex h-8 w-8 items-center justify-center bg-[#eae9e4] text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-50"
-										disabled={busy || !body.trim()}
-										aria-label="More comment actions"
-										onclick={() => (submitMenuOpen = !submitMenuOpen)}
-									>
-										<ChevronDown class="h-3.5 w-3.5" />
-									</button>
-									{#if submitMenuOpen}
-										<div class="absolute bottom-9 right-0 z-20 w-max min-w-56 border border-[#2a2a28] bg-[#141412] p-1 shadow-xl">
-											{#each submitActions as action}
-												<button
-													type="button"
-													class="flex w-full items-center gap-2 whitespace-nowrap px-2.5 py-1.5 text-left text-xs text-[#d8d5ca] hover:bg-[#1e1e1c] disabled:text-[#5f5b52]"
-													disabled={Boolean(action.disabled)}
-													onclick={() => handleSubmitAction(action)}
-												>
-													{@render SubmitActionIcon(action)}
-													<span>{action.label}</span>
-												</button>
-											{/each}
-										</div>
-									{/if}
-								{/if}
-							</div>
-						</div>
-					</form>
+					<ContentComposer
+						value={body}
+						{placeholder}
+						{submitLabel}
+						minHeight="92px"
+						{busy}
+						actions={submitActions}
+						onInput={(value) => (body = value)}
+						onSubmit={handleSubmit}
+						onAction={onSubmitAction ? handleSubmitAction : null}
+						{onCancel}
+					/>
 				</div>
 			</div>
 		{:else}
-			<form class="grid gap-2" onsubmit={handleSubmit}>
-				<textarea
-					class="min-h-[88px] resize-y rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline outline-1 outline-[#2a2a28] placeholder:text-[#5f5b52] focus:outline-[#4a4942]"
-					{placeholder}
-					bind:value={body}
-				></textarea>
-				<div class="flex justify-end">
-					{#if onCancel}
-						<button
-							type="button"
-							class="mr-2 rounded bg-[#242420] px-3 py-1.5 text-xs font-medium text-[#d8d5ca] hover:bg-[#2f2f2b]"
-							onclick={onCancel}
-						>
-							Cancel
-						</button>
-					{/if}
-					<div class="relative flex">
-						<button
-							type="submit"
-							class="flex h-8 items-center bg-[#eae9e4] px-3 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-50"
-							disabled={busy || !body.trim()}
-						>
-							{busy ? 'Posting...' : submitLabel}
-						</button>
-						{#if submitActions.length}
-							<button
-								type="button"
-								class="ml-px flex h-8 w-8 items-center justify-center bg-[#eae9e4] text-[#0f0f0d] hover:bg-[#d9d5c6] disabled:opacity-50"
-								disabled={busy || !body.trim()}
-								aria-label="More comment actions"
-								onclick={() => (submitMenuOpen = !submitMenuOpen)}
-							>
-								<ChevronDown class="h-3.5 w-3.5" />
-							</button>
-							{#if submitMenuOpen}
-								<div class="absolute bottom-9 right-0 z-20 w-max min-w-56 border border-[#2a2a28] bg-[#141412] p-1 shadow-xl">
-									{#each submitActions as action}
-										<button
-											type="button"
-											class="flex w-full items-center gap-2 whitespace-nowrap px-2.5 py-1.5 text-left text-xs text-[#d8d5ca] hover:bg-[#1e1e1c] disabled:text-[#5f5b52]"
-											disabled={Boolean(action.disabled)}
-											onclick={() => handleSubmitAction(action)}
-										>
-											{@render SubmitActionIcon(action)}
-											<span>{action.label}</span>
-										</button>
-									{/each}
-								</div>
-							{/if}
-						{/if}
-					</div>
-				</div>
-			</form>
+			<ContentComposer
+				value={body}
+				{placeholder}
+				{submitLabel}
+				minHeight="92px"
+				{busy}
+				actions={submitActions}
+				onInput={(value) => (body = value)}
+				onSubmit={handleSubmit}
+				onAction={onSubmitAction ? handleSubmitAction : null}
+				{onCancel}
+			/>
 		{/if}
 	{/if}
 </section>

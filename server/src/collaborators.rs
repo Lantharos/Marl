@@ -46,7 +46,16 @@ pub(crate) async fn search_users(
         .find_map(|(key, value)| (key == "q").then(|| value.to_string()))
         .unwrap_or_default();
     let database = db(&ctx)?;
-    let users = d1::search_users(&database, &query, 10).await?;
+    let limit = url
+        .query_pairs()
+        .find_map(|(key, value)| {
+            (key == "per_page" || key == "limit")
+                .then(|| value.parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or(10)
+        .clamp(1, 50);
+    let users = d1::search_users(&database, &query, limit).await?;
     Response::from_json(&paginate_vec(url, users))
 }
 

@@ -22,6 +22,9 @@
 	:global(.markdown-body > *:first-child) {
 		margin-top: 0;
 	}
+	:global(.markdown-body > *:last-child) {
+		margin-bottom: 0;
+	}
 	:global(.markdown-body h2) {
 		font-size: 1.25rem;
 		font-weight: 600;

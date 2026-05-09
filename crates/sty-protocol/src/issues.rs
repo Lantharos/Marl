@@ -10,6 +10,8 @@ pub struct Issue {
     pub body: String,
     pub state: String,
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_reason: Option<String>,
     pub author: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author_profile: Option<UserProfile>,
@@ -20,6 +22,14 @@ pub struct Issue {
     pub labels: Vec<String>,
     pub milestone: Option<String>,
     pub workspace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_type: Option<String>,
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub comment_count: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,6 +40,12 @@ pub struct CreateIssueRequest {
     pub labels: Vec<String>,
     #[serde(default)]
     pub assignee: Option<String>,
+    #[serde(default)]
+    pub assignees: Vec<String>,
+    #[serde(default)]
+    pub milestone: Option<String>,
+    #[serde(default)]
+    pub issue_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -42,6 +58,20 @@ pub struct UpdateIssueRequest {
     pub title: Option<String>,
     #[serde(default)]
     pub body: Option<String>,
+    #[serde(default)]
+    pub labels: Option<Vec<String>>,
+    #[serde(default)]
+    pub assignees: Option<Vec<String>>,
+    #[serde(default)]
+    pub milestone: Option<Option<String>>,
+    #[serde(default)]
+    pub issue_type: Option<Option<String>>,
+    #[serde(default)]
+    pub workspace: Option<Option<String>>,
+    #[serde(default)]
+    pub locked: Option<bool>,
+    #[serde(default)]
+    pub pinned: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -53,11 +83,19 @@ pub struct Comment {
     pub author_profile: Option<UserProfile>,
     pub body: String,
     pub created_at: String,
+    #[serde(default)]
+    pub target_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateCommentRequest {
     pub body: String,
+    #[serde(default)]
+    pub target_type: Option<String>,
+    #[serde(default)]
+    pub target_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

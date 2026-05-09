@@ -1,19 +1,12 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import {
-		createIssue,
-		createLabel,
-		createMilestone,
-		getMe,
 		isAbortError,
 		listIssuesPage,
 		listLabelsPage,
-		listMilestonesPage,
 		type Issue,
-		type Label,
-		type Milestone
+		type Label
 	} from '$lib/api';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -21,482 +14,287 @@
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import Circle from 'lucide-svelte/icons/circle';
+	import MessageSquare from 'lucide-svelte/icons/message-square';
 	import Plus from 'lucide-svelte/icons/plus';
 	import Search from 'lucide-svelte/icons/search';
 
 	const tenant = $derived($page.params.tenant as string);
 	const project = $derived($page.params.project as string);
+	const issueTypes = {
+		bug: { label: 'Bug', color: '#d96c5a' },
+		feature: { label: 'Feature', color: '#4a90d9' },
+		task: { label: 'Task', color: '#d9a66c' }
+	} as const;
 
-	type Tab = 'issues' | 'labels' | 'milestones';
 	type IssueState = 'open' | 'closed' | 'all';
 	const chunkSize = 25;
 
-	let activeTab = $state<Tab>('issues');
-	let filter = $state<IssueState>('open');
+	let stateFilter = $state<IssueState>('open');
 	let query = $state('');
-	let labelQuery = $state('');
-	let milestoneQuery = $state('');
 	let selectedLabel = $state('');
+	let selectedAssignee = $state('');
+	let openPanel = $state('');
 	let issueItems = $state<Issue[]>([]);
 	let labelItems = $state<Label[]>([]);
-	let milestoneItems = $state<Milestone[]>([]);
 	let visibleIssues = $state(chunkSize);
-	let visibleLabels = $state(chunkSize);
-	let visibleMilestones = $state(chunkSize);
 	let loading = $state(true);
 	let error = $state('');
-	let busy = $state(false);
-
-	let showIssueForm = $state(false);
-	let title = $state('');
-	let body = $state('');
-	let selectedIssueLabels = $state<string[]>([]);
-	let labelDraft = $state('');
-	let assignee = $state('');
-	let assigneeDraft = $state('');
-	let currentUser = $state('');
-
-	let labelName = $state('');
-	let labelColor = $state('#d9a66c');
-	let labelDescription = $state('');
-	let milestoneTitle = $state('');
-	let milestoneDescription = $state('');
-	let milestoneDue = $state('');
 	let canWrite = $state(false);
-	let canMaintain = $state(false);
+	let filterRoot = $state<HTMLDivElement | null>(null);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canWrite = Boolean(value?.can_write);
-		canMaintain = Boolean(value?.can_maintain && !value?.archived);
 	});
 
 	onDestroy(unsubscribe);
 
-	const issues = $derived(issueItems);
-	const labels = $derived(labelItems);
-	const milestones = $derived(milestoneItems);
-	const filteredLabels = $derived(
-		labels.filter((label) => {
-			const haystack = `${label.name} ${label.description ?? ''} ${label.color}`.toLowerCase();
-			return haystack.includes(labelQuery.trim().toLowerCase());
-		})
+	const openIssues = $derived(issueItems.filter((issue) => (issue.state ?? issue.status) === 'open'));
+	const closedIssues = $derived(issueItems.filter((issue) => (issue.state ?? issue.status) === 'closed'));
+	const pinnedIssues = $derived(
+		issueItems
+			.filter((issue) => issue.pinned)
+			.sort((a, b) => Date.parse(b.updated_at ?? b.created_at) - Date.parse(a.updated_at ?? a.created_at))
+			.slice(0, 4)
 	);
-	const filteredMilestones = $derived(
-		milestones.filter((milestone) => {
-			const haystack = `${milestone.title} ${milestone.description ?? ''} ${milestone.state ?? ''}`.toLowerCase();
-			return haystack.includes(milestoneQuery.trim().toLowerCase());
-		})
-	);
-	const filteredIssues = $derived(
-		issues.filter((issue) => {
-			const haystack = `${issue.title} ${issue.body} ${issue.labels.join(' ')} ${userName(issue.author, issue.author_profile)}`.toLowerCase();
-			return haystack.includes(query.trim().toLowerCase());
-		})
-	);
-	const shownIssues = $derived(filteredIssues.slice(0, visibleIssues));
-	const shownLabels = $derived(filteredLabels.slice(0, visibleLabels));
-	const shownMilestones = $derived(filteredMilestones.slice(0, visibleMilestones));
 	const people = $derived(() => {
 		const names = new Set<string>();
-		if (currentUser) names.add(currentUser);
-		for (const issue of issues) {
-			const author = userName(issue.author, issue.author_profile);
-			if (author !== 'Unknown user') names.add(author);
-			for (const person of issue.assignees ?? []) {
-				const name = userName(person);
-				if (name !== 'Unknown user') names.add(name);
-			}
+		for (const issue of issueItems) {
+			if (userName(issue.author, issue.author_profile) !== 'Unknown user') names.add(userName(issue.author, issue.author_profile));
+			for (const assignee of issue.assignees ?? []) names.add(assignee);
 		}
 		return [...names].sort((a, b) => a.localeCompare(b));
 	});
-	const availableLabelSuggestions = $derived(() => {
-		const needle = labelDraft.trim().toLowerCase();
-		return labels
-			.filter((label) => !selectedIssueLabels.includes(label.name))
-			.filter((label) => !needle || label.name.toLowerCase().includes(needle))
-			.slice(0, 8);
-	});
-	const assigneeSuggestions = $derived(() => {
-		const needle = assigneeDraft.trim().toLowerCase();
-		return people()
-			.filter((person) => !needle || person.toLowerCase().includes(needle))
-			.slice(0, 8);
-	});
-	const exactDraftLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelDraft.trim().toLowerCase()));
-	const exactDraftAssignee = $derived(people().find((person) => person.toLowerCase() === assigneeDraft.trim().toLowerCase()));
-	const canCreateIssue = $derived(
-		canWrite && !!title.trim() && !busy && (!labelDraft.trim() || !!exactDraftLabel) && (!assigneeDraft.trim() || !!exactDraftAssignee)
+	const filteredIssues = $derived(
+		issueItems.filter((issue) => {
+			const state = issue.state ?? issue.status;
+			if (stateFilter !== 'all' && state !== stateFilter) return false;
+			if (selectedLabel && !issue.labels.includes(selectedLabel)) return false;
+			if (selectedAssignee && !(issue.assignees ?? []).includes(selectedAssignee)) return false;
+			const needle = query.trim().toLowerCase();
+			if (!needle) return true;
+			const haystack = `${issue.title} ${issue.body} ${issue.issue_type ?? ''} ${issue.labels.join(' ')} ${issue.assignees?.join(' ') ?? ''} ${userName(issue.author, issue.author_profile)}`.toLowerCase();
+			return haystack.includes(needle);
+		})
 	);
+	const shownIssues = $derived(filteredIssues.slice(0, visibleIssues));
+
+	onMount(() => {
+		selectedLabel = $page.url.searchParams.get('label') ?? '';
+		const controller = new AbortController();
+		load(controller.signal);
+		function closeFilters(event: PointerEvent) {
+			if (!openPanel || !filterRoot) return;
+			if (!filterRoot.contains(event.target as Node)) openPanel = '';
+		}
+		document.addEventListener('pointerdown', closeFilters, true);
+		return () => {
+			controller.abort();
+			document.removeEventListener('pointerdown', closeFilters, true);
+		};
+	});
 
 	$effect(() => {
-		if (!canWrite) showIssueForm = false;
+		stateFilter;
+		query;
+		selectedLabel;
+		selectedAssignee;
+		visibleIssues = chunkSize;
 	});
 
 	async function load(signal?: AbortSignal) {
 		loading = true;
 		error = '';
 		try {
-			const [issuesResult, labelsResult, milestonesResult, me] = await Promise.all([
-				listIssuesPage(tenant, project, {
-					page: 1,
-					perPage: 500,
-					state: filter,
-					label: selectedLabel || undefined,
-					signal
-				}),
-				listLabelsPage(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null),
-				listMilestonesPage(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null),
-				getMe({ signal }).catch(() => null)
+			const [issuesResult, labelsResult] = await Promise.all([
+				listIssuesPage(tenant, project, { page: 1, perPage: 500, state: 'all', signal }),
+				listLabelsPage(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null)
 			]);
 			issueItems = issuesResult.items;
 			labelItems = labelsResult?.items ?? [];
-			milestoneItems = milestonesResult?.items ?? [];
-			currentUser = me?.profile?.handle ?? currentUser;
 		} catch (e) {
 			if (isAbortError(e)) return;
-			error = e instanceof Error ? e.message : 'Failed';
+			error = e instanceof Error ? e.message : 'Failed to load issues';
 		} finally {
 			if (!signal?.aborted) loading = false;
 		}
 	}
 
-	$effect(() => {
-		if (!tenant || !project) return;
-		const controller = new AbortController();
-		load(controller.signal);
-		return () => controller.abort();
-	});
-
-	$effect(() => { assignee = exactDraftAssignee ?? ''; });
-
-	$effect(() => {
-		filter;
-		query;
-		selectedLabel;
-		visibleIssues = chunkSize;
-	});
-
-	$effect(() => { labelQuery; visibleLabels = chunkSize; });
-
-	$effect(() => { milestoneQuery; visibleMilestones = chunkSize; });
-
-	async function reloadCurrent() { await load(); }
-
-	async function handleCreateIssue() {
-		if (!canCreateIssue) return;
-		const labels = [...selectedIssueLabels];
-		if (exactDraftLabel && !labels.includes(exactDraftLabel.name)) {
-			labels.push(exactDraftLabel.name);
-		}
-		const chosenAssignee = assignee || exactDraftAssignee || '';
-		busy = true;
-		try {
-			await createIssue(tenant, project, {
-				title: title.trim(),
-				body: body.trim(),
-				labels,
-				assignee: chosenAssignee || undefined
-			});
-			title = '';
-			body = '';
-			selectedIssueLabels = [];
-			labelDraft = '';
-			assignee = '';
-			assigneeDraft = '';
-			showIssueForm = false;
-			await reloadCurrent();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
+	function togglePanel(panel: string) {
+		openPanel = openPanel === panel ? '' : panel;
 	}
 
-	async function handleCreateLabel() {
-		if (!labelName.trim()) return;
-		busy = true;
-		try {
-			await createLabel(tenant, project, {
-				name: labelName.trim(),
-				color: labelColor.trim() || '#d9a66c',
-				description: labelDescription.trim() || null
-			});
-			labelName = '';
-			labelDescription = '';
-			await reloadCurrent();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
+	function color(value: string) {
+		const normalized = normalizedLabelColor(value);
+		return `#${normalized}`;
 	}
 
-	async function handleCreateMilestone() {
-		if (!milestoneTitle.trim()) return;
-		busy = true;
-		try {
-			await createMilestone(tenant, project, {
-				title: milestoneTitle.trim(),
-				description: milestoneDescription.trim() || null,
-				due_at: milestoneDue || null,
-				state: 'open'
-			});
-			milestoneTitle = '';
-			milestoneDescription = '';
-			milestoneDue = '';
-			await reloadCurrent();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			busy = false;
-		}
+	function normalizedLabelColor(value: string) {
+		return value.trim().replace(/^#/, '') || 'd9a66c';
 	}
 
-	function setFilter(next: IssueState) { filter = next; }
-	function setLabelFilter(name: string) { selectedLabel = selectedLabel === name ? '' : name; activeTab = 'issues'; }
-	function removeIssueLabel(name: string) { selectedIssueLabels = selectedIssueLabels.filter((label) => label !== name); }
-	function chooseAssignee(name: string) { assignee = name; assigneeDraft = name; }
-
-	function addIssueLabel(name: string) {
-		if (!name || selectedIssueLabels.includes(name)) return;
-		selectedIssueLabels = [...selectedIssueLabels, name];
-		labelDraft = '';
+	function issueHref(issue: Issue) {
+		return `/${tenant}/${project}/issues/${issue.number}`;
 	}
 
-	function visibleAssignees(issue: Issue) {
-		return (issue.assignees ?? [])
-			.map((person) => userName(person))
-			.filter((person) => person !== 'Unknown user');
+	function issueDate(issue: Issue) {
+		return new Date(issue.updated_at ?? issue.created_at).toLocaleDateString();
 	}
 
-	function loadMoreIssues() { visibleIssues = Math.min(visibleIssues + chunkSize, filteredIssues.length); }
-	function loadMoreLabels() { visibleLabels = Math.min(visibleLabels + chunkSize, filteredLabels.length); }
-	function loadMoreMilestones() { visibleMilestones = Math.min(visibleMilestones + chunkSize, filteredMilestones.length); }
+	function clearFilters() {
+		query = '';
+		selectedLabel = '';
+		selectedAssignee = '';
+	}
+
+	function issueTypeMeta(type: Issue['issue_type']) {
+		return type && type in issueTypes ? issueTypes[type as keyof typeof issueTypes] : null;
+	}
 </script>
 
 <div class="mx-auto max-w-6xl">
 	<div class="mb-5 flex flex-wrap items-center gap-3">
-		<div class="flex bg-[#141412] p-0.5">
-			{#each [
-				['issues', 'Issues'],
-				['labels', 'Labels'],
-				['milestones', 'Milestones']
-			] as tab}
-				<button
-					class="px-3 py-1.5 text-sm {activeTab === tab[0] ? 'bg-[#2a2a28] text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}"
-					onclick={() => (activeTab = tab[0] as Tab)}
-				>
-					{tab[1]}
-				</button>
-			{/each}
+		<div class="issue-search flex h-9 min-w-64 flex-1 items-center gap-2 border border-transparent bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
+			<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
+			<input class="issue-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Search issues" bind:value={query} />
 		</div>
-
-		{#if activeTab === 'issues'}
-			<div class="flex bg-[#141412] p-0.5">
-				{#each ['open', 'closed', 'all'] as item}
-					<button class="px-2.5 py-1 text-xs {filter === item ? 'bg-[#2a2a28] text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => setFilter(item as IssueState)}>
-						{item}
-					</button>
-				{/each}
-			</div>
-			<div class="flex items-center gap-2 border border-transparent bg-[#141412] px-2.5 py-1.5 focus-within:border-[#d9a66c]">
-				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search issues" bind:value={query} />
-			</div>
-		{:else if activeTab === 'labels'}
-			<div class="flex items-center gap-2 border border-transparent bg-[#141412] px-2.5 py-1.5 focus-within:border-[#d9a66c]">
-				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search labels" bind:value={labelQuery} />
-			</div>
-		{:else}
-			<div class="flex items-center gap-2 border border-transparent bg-[#141412] px-2.5 py-1.5 focus-within:border-[#d9a66c]">
-				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
-				<input class="issue-search-input w-48 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search milestones" bind:value={milestoneQuery} />
-			</div>
-		{/if}
-
+		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
+		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 		{#if canWrite}
-			<div class="ml-auto">
-			{#if activeTab === 'issues'}
-				<button class="inline-flex items-center gap-1 bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => (showIssueForm = !showIssueForm)}>
-					<Plus class="h-3.5 w-3.5" /> New issue
-				</button>
-			{/if}
-			</div>
+			<a class="inline-flex h-9 items-center gap-1 bg-[#eae9e4] px-3 text-sm font-medium text-[#0f0f0d] hover:bg-[#d8d3c5]" href="/{tenant}/{project}/issues/new"><Plus class="h-4 w-4" /> New issue</a>
 		{/if}
 	</div>
 
 	{#if error}
-		<div class="mb-4 text-sm text-[#d96c5a]">{error}</div>
+		<div class="mb-4 border border-[#4a2a24] bg-[#1a1110] px-3 py-2 text-sm text-[#d96c5a]">{error}</div>
 	{/if}
 
 	{#if loading}
 		<Spinner />
-	{:else if activeTab === 'issues'}
-		{#if canWrite && showIssueForm}
-			<div class="mb-4 grid gap-3 bg-[#141412] p-4">
-				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Title" bind:value={title} />
-				<textarea class="min-h-[110px] resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Description" bind:value={body}></textarea>
-				<div class="grid gap-3 md:grid-cols-2">
-					<div class="grid gap-2">
-						<div class="flex min-h-9 self-start flex-wrap items-center gap-1.5 bg-[#0f0f0d] px-2 py-1.5">
-							{#each selectedIssueLabels as label}
-								<button class="h-6 bg-[#1e1e1c] px-1.5 text-[11px] leading-6 text-[#a09d94] hover:text-[#eae9e4]" onclick={() => removeIssueLabel(label)}>
-									{label}
-								</button>
-							{/each}
-							<input class="h-6 min-w-28 flex-1 bg-transparent text-sm leading-6 text-[#eae9e4] outline-none" placeholder={selectedIssueLabels.length ? 'Add label' : 'Labels'} bind:value={labelDraft} />
-						</div>
-						{#if labelDraft.trim() && !exactDraftLabel}
-							<p class="text-[11px] text-[#d96c5a]">Choose an existing label.</p>
-						{/if}
-						{#if availableLabelSuggestions().length}
-							<div class="flex flex-wrap gap-1.5">
-								{#each availableLabelSuggestions() as label}
-									<button class="inline-flex items-center gap-1 bg-[#0f0f0d] px-2 py-1 text-xs text-[#a09d94] hover:text-[#eae9e4]" onclick={() => addIssueLabel(label.name)}>
-										<span class="h-2 w-2" style={`background: ${label.color}`}></span>
-										{label.name}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-					<div class="grid gap-2">
-						<input
-							class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none"
-							placeholder="Assignee"
-							bind:value={assigneeDraft}
-						/>
-						{#if assigneeDraft.trim() && !exactDraftAssignee}
-							<p class="text-[11px] text-[#d96c5a]">Choose an existing person.</p>
-						{/if}
-						{#if assigneeSuggestions().length}
-							<div class="flex flex-wrap gap-1.5">
-								{#each assigneeSuggestions() as person}
-									<button class="bg-[#0f0f0d] px-2 py-1 text-xs {person === (assignee || exactDraftAssignee) ? 'text-[#d9a66c]' : 'text-[#a09d94] hover:text-[#eae9e4]'}" onclick={() => chooseAssignee(person)}>
-										{person}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</div>
-				<div class="flex justify-end gap-2">
-					<button class="px-3 py-1.5 text-xs text-[#a09d94] hover:text-[#eae9e4]" onclick={() => (showIssueForm = false)}>Cancel</button>
-					<button class="bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] disabled:opacity-50" disabled={!canCreateIssue} onclick={handleCreateIssue}>Create</button>
-				</div>
-			</div>
-		{/if}
-
-		{#if selectedLabel}
-			<div class="mb-3 flex items-center gap-2 text-xs text-[#8c887e]">
-				<span>Filtered by {selectedLabel}</span>
-				<button class="text-[#eae9e4] hover:text-[#d9a66c]" onclick={() => setLabelFilter(selectedLabel)}>Clear</button>
-			</div>
-		{/if}
-
-		<div class="divide-y divide-[#252522] bg-[#141412]">
-			{#each shownIssues as issue}
-				<button class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#191917]" onclick={() => goto(`/${tenant}/${project}/issues/${issue.id}`)}>
-					{#if (issue.state ?? issue.status) === 'open'}
-						<Circle class="mt-0.5 h-4 w-4 shrink-0 text-[#7cb97c]" />
-					{:else}
-						<CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0 text-[#d96c5a]" />
-					{/if}
-					<div class="min-w-0 flex-1">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="text-sm font-medium text-[#eae9e4]">{issue.title}</span>
-							{#each issue.labels as label}
-								<span class="bg-[#1e1e1c] px-1.5 py-0.5 text-[11px] text-[#a09d94]">{label}</span>
-							{/each}
-						</div>
-						<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
-							<span>#{issue.number}</span>
-							<span>opened by {userName(issue.author, issue.author_profile)}</span>
-							{#if visibleAssignees(issue).length}<span>assigned to {visibleAssignees(issue).join(', ')}</span>{/if}
-							{#if issue.milestone}<span>{issue.milestone}</span>{/if}
-							{#if issue.workspace}<span>{issue.workspace}</span>{/if}
-							<span>{new Date(issue.updated_at ?? issue.created_at).toLocaleDateString()}</span>
-						</div>
-					</div>
-				</button>
-			{:else}
-				<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
-					<p class="text-sm text-[#8c887e]">No matching issues.</p>
-				</div>
-			{/each}
-		</div>
-		<InfiniteLoader active={shownIssues.length < filteredIssues.length} onVisible={loadMoreIssues} />
-	{:else if activeTab === 'labels'}
-		<div class={canMaintain ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
-			<div class="divide-y divide-[#252522] bg-[#141412]">
-				{#each shownLabels as label}
-					<button class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#191917]" onclick={() => setLabelFilter(label.name)}>
-						<span class="h-3 w-3 shrink-0" style={`background: ${label.color}`}></span>
-						<div class="min-w-0 flex-1">
-							<div class="text-sm font-medium text-[#eae9e4]">{label.name}</div>
-							{#if label.description}<div class="mt-0.5 text-xs text-[#6f6b5f]">{label.description}</div>{/if}
-						</div>
-						<div class="font-mono text-xs text-[#6f6b5f]">{label.color}</div>
-					</button>
-				{:else}
-					<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
-						<p class="text-sm text-[#8c887e]">{labelQuery.trim() ? 'No matching labels.' : 'No labels yet.'}</p>
-					</div>
-				{/each}
-			</div>
-			{#if canMaintain}
-			<form class="grid h-fit gap-3 bg-[#141412] p-4" onsubmit={(event) => { event.preventDefault(); handleCreateLabel(); }}>
-				<div class="text-sm font-medium text-[#eae9e4]">New label</div>
-				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Name" bind:value={labelName} />
-				<div class="flex gap-2">
-					<span class="h-9 w-9 shrink-0" style={`background: ${labelColor}`}></span>
-					<input class="min-w-0 flex-1 bg-[#0f0f0d] px-3 py-2 font-mono text-sm text-[#eae9e4] outline-none" placeholder="#d9a66c" bind:value={labelColor} />
-				</div>
-				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Description" bind:value={labelDescription} />
-				<button class="bg-[#eae9e4] px-3 py-2 text-xs font-medium text-[#0f0f0d]" disabled={busy || !labelName.trim()}>Create label</button>
-			</form>
-			{/if}
-		</div>
-		<InfiniteLoader active={shownLabels.length < filteredLabels.length} onVisible={loadMoreLabels} />
 	{:else}
-		<div class={canMaintain ? 'grid gap-5 lg:grid-cols-[1fr_320px]' : 'grid gap-5'}>
-			<div class="divide-y divide-[#252522] bg-[#141412]">
-				{#each shownMilestones as milestone}
-					<div class="px-4 py-3">
-						<div class="flex flex-wrap items-center gap-2">
-							<div class="text-sm font-medium text-[#eae9e4]">{milestone.title}</div>
-							<span class="text-xs text-[#8c887e]">{milestone.state ?? 'open'}</span>
+		{#if pinnedIssues.length}
+			<div class="mb-4 grid gap-3 md:grid-cols-2">
+				{#each pinnedIssues as issue}
+					{@const type = issueTypeMeta(issue.issue_type)}
+					<a class="border border-[#2a2a28] bg-[#141412] px-4 py-3 hover:border-[#3a3a36]" href={issueHref(issue)}>
+						<div class="flex items-center gap-2 text-sm font-medium text-[#eae9e4]">
+							{#if (issue.state ?? issue.status) === 'open'}
+								<Circle class="h-3.5 w-3.5 shrink-0 text-[#2fbd55]" />
+							{:else}
+								<CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
+							{/if}
+							<span class="truncate">{issue.title}</span>
 						</div>
-						{#if milestone.description}<p class="mt-1 text-sm text-[#a09d94]">{milestone.description}</p>{/if}
-						<div class="mt-2 flex flex-wrap gap-2 text-xs text-[#6f6b5f]">
-							<span>{milestone.open_issues ?? 0} open</span>
-							<span>{milestone.closed_issues ?? 0} closed</span>
-							<span>{milestone.due_at ? `due ${new Date(milestone.due_at).toLocaleDateString()}` : 'no due date'}</span>
+						<div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#8c887e]">
+							<span>#{issue.number}</span>
+							{#if type}
+								<span class="inline-flex items-center gap-1">
+									<span class="h-2.5 w-2.5 rounded-full border-2 bg-transparent" style:border-color={type.color}></span>
+									{type.label}
+								</span>
+							{/if}
+							{#if (issue.comment_count ?? 0) > 0}
+								<span class="inline-flex items-center gap-1"><MessageSquare class="h-3 w-3" /> {issue.comment_count}</span>
+							{/if}
+							<span class="min-w-0 truncate">{issueDate(issue)}</span>
 						</div>
-					</div>
-				{:else}
-					<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
-						<p class="text-sm text-[#8c887e]">{milestoneQuery.trim() ? 'No matching milestones.' : 'No milestones yet.'}</p>
-					</div>
+					</a>
 				{/each}
 			</div>
-			{#if canMaintain}
-			<form class="grid h-fit gap-3 bg-[#141412] p-4" onsubmit={(event) => { event.preventDefault(); handleCreateMilestone(); }}>
-				<div class="text-sm font-medium text-[#eae9e4]">New milestone</div>
-				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Title" bind:value={milestoneTitle} />
-				<textarea class="min-h-[90px] resize-y bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Description" bind:value={milestoneDescription}></textarea>
-				<input class="bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none" placeholder="Due date, YYYY-MM-DD" bind:value={milestoneDue} />
-				<button class="bg-[#eae9e4] px-3 py-2 text-xs font-medium text-[#0f0f0d]" disabled={busy || !milestoneTitle.trim()}>Create milestone</button>
-			</form>
-			{/if}
+		{/if}
+
+		{#if selectedLabel || selectedAssignee || query.trim()}
+			<div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-[#8c887e]">
+				<span>{filteredIssues.length} matching {filteredIssues.length === 1 ? 'issue' : 'issues'}</span>
+				{#if selectedLabel}<button class="bg-[#1e1e1c] px-2 py-1 text-[#d9a66c]" onclick={() => (selectedLabel = '')}>label: {selectedLabel} ×</button>{/if}
+				{#if selectedAssignee}<button class="bg-[#1e1e1c] px-2 py-1 text-[#d9a66c]" onclick={() => (selectedAssignee = '')}>assignee: {selectedAssignee} ×</button>{/if}
+				<button class="text-[#eae9e4] hover:text-[#d9a66c]" onclick={clearFilters}>Clear</button>
+			</div>
+		{/if}
+
+		<div class="border border-[#2a2a28] bg-[#0f0f0d]">
+			<div bind:this={filterRoot} class="relative flex flex-wrap items-center justify-between gap-3 border-b border-[#2a2a28] bg-[#141412] px-4 py-3">
+				<div class="flex items-center gap-4 text-sm">
+					<button class="{stateFilter === 'open' ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (stateFilter = 'open')}>Open <span class="text-[#6f6b5f]">{openIssues.length}</span></button>
+					<button class="{stateFilter === 'closed' ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (stateFilter = 'closed')}>Closed <span class="text-[#6f6b5f]">{closedIssues.length}</span></button>
+					<button class="{stateFilter === 'all' ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (stateFilter = 'all')}>All</button>
+				</div>
+				<div class="flex items-center gap-4 text-sm text-[#8c887e]">
+					<button class="hover:text-[#eae9e4]" onclick={() => togglePanel('labels')}>Labels</button>
+					<button class="hover:text-[#eae9e4]" onclick={() => togglePanel('assignees')}>Assignees</button>
+					<span>Newest</span>
+				</div>
+				{#if openPanel === 'labels'}
+					<div class="absolute right-24 top-11 z-20 w-72 border border-[#2a2a28] bg-[#141412] shadow-lg">
+						<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Filter by label</div>
+						{#each labelItems as label}
+							<button class="flex w-full items-center gap-2 border-b border-[#242420] px-3 py-2 text-left text-sm hover:bg-[#181816]" onclick={() => { selectedLabel = label.name; openPanel = ''; }}>
+								<span class="h-3 w-3 rounded-full" style:background-color={color(label.color)}></span>
+								<span class="truncate text-[#eae9e4]">{label.name}</span>
+							</button>
+						{:else}
+							<div class="px-3 py-3 text-xs text-[#6f6b5f]">No labels yet.</div>
+						{/each}
+					</div>
+				{/if}
+				{#if openPanel === 'assignees'}
+					<div class="absolute right-4 top-11 z-20 w-72 border border-[#2a2a28] bg-[#141412] shadow-lg">
+						<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Filter by assignee</div>
+						{#each people() as person}
+							<button class="block w-full border-b border-[#242420] px-3 py-2 text-left text-sm text-[#eae9e4] hover:bg-[#181816]" onclick={() => { selectedAssignee = person; openPanel = ''; }}>{person}</button>
+						{:else}
+							<div class="px-3 py-3 text-xs text-[#6f6b5f]">No assignees yet.</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			<div class="divide-y divide-[#252522]">
+				{#each shownIssues as issue}
+					{@const type = issueTypeMeta(issue.issue_type)}
+					<a class="flex items-start gap-3 px-4 py-3 hover:bg-[#141412]" href={issueHref(issue)}>
+						{#if (issue.state ?? issue.status) === 'open'}
+							<Circle class="mt-1 h-4 w-4 shrink-0 text-[#2fbd55]" />
+						{:else}
+							<CheckCircle2 class="mt-1 h-4 w-4 shrink-0 text-[#8c887e]" />
+						{/if}
+						<div class="min-w-0 flex-1">
+							<div class="flex flex-wrap items-center gap-2">
+								<span class="font-medium text-[#eae9e4]">{issue.title}</span>
+								{#if type}
+									<span class="inline-flex items-center gap-1 text-xs text-[#8c887e]">
+										<span class="h-2.5 w-2.5 rounded-full border-2 bg-transparent" style:border-color={type.color}></span>
+										{type.label}
+									</span>
+								{/if}
+								{#each issue.labels as name}
+									{@const item = labelItems.find((label) => label.name === name)}
+									<span class="px-1.5 py-0.5 text-[11px] text-[#eae9e4]" style:background-color={item ? color(item.color) : '#2a2a28'}>{name}</span>
+								{/each}
+							</div>
+							<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
+								<span>#{issue.number}</span>
+								<span>{(issue.state ?? issue.status) === 'open' ? 'opened' : 'closed'} by {userName(issue.author, issue.author_profile)}</span>
+								{#if issue.milestone}<span>{issue.milestone}</span>{/if}
+								{#if issue.workspace}<span>{issue.workspace}</span>{/if}
+								<span>{issueDate(issue)}</span>
+							</div>
+						</div>
+						{#if (issue.comment_count ?? 0) > 0}
+							<div class="flex shrink-0 items-center gap-1 text-xs text-[#8c887e]"><MessageSquare class="h-3.5 w-3.5" /> {issue.comment_count}</div>
+						{/if}
+					</a>
+				{:else}
+					<div class="p-8 text-center text-sm text-[#8c887e]">No matching issues.</div>
+				{/each}
+			</div>
 		</div>
-		<InfiniteLoader active={shownMilestones.length < filteredMilestones.length} onVisible={loadMoreMilestones} />
+		<InfiniteLoader active={shownIssues.length < filteredIssues.length} onVisible={() => (visibleIssues = Math.min(visibleIssues + chunkSize, filteredIssues.length))} />
 	{/if}
 </div>
 
 <style>
-	.issue-search-input:focus-visible {
-		outline: none;
+	.issue-input:focus,
+	.issue-input:focus-visible {
+		outline: none !important;
+		box-shadow: none !important;
 	}
 </style>

@@ -173,6 +173,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/issues/:issue_id",
             update_issue,
         )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/issues/:issue_id",
+            delete_issue,
+        )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/issues/:issue_id/close",
             close_issue,
@@ -188,6 +192,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async(
             "/v1/tenants/:tenant/projects/:project/issues/:issue_id/labels",
             label_issue,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/transfer",
+            transfer_issue,
         )
         .get_async("/v1/tenants/:tenant/projects/:project/labels", list_labels)
         .post_async("/v1/tenants/:tenant/projects/:project/labels", create_label)
@@ -408,6 +416,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async(
             "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/close",
             close_workspace,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reopen",
+            reopen_workspace,
         )
         .delete_async(
             "/v1/tenants/:tenant/projects/:project/workspaces/:workspace",
