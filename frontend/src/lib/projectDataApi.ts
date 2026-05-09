@@ -170,15 +170,14 @@ export async function listWorkspaceStatuses(tenant: string, project: string, opt
 	return data.workspaces;
 }
 
-export async function getWorkspaceDetail(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<WorkspaceStatus & { history: HistoryEntry[]; files: ProjectTree }> {
-	const [statuses, tree, history] = await Promise.all([
+export async function getWorkspaceDetail(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<WorkspaceStatus & { history: HistoryEntry[] }> {
+	const [statuses, history] = await Promise.all([
 		listWorkspaceStatuses(tenant, project, options),
-		getProjectTree(tenant, project, workspace, undefined, options),
 		getWorkspaceHistory(tenant, project, workspace, options)
 	]);
 	const status = statuses.find((s) => s.name === workspace);
 	if (!status) throw new Error('Workspace not found');
-	return { ...status, history, files: tree };
+	return { ...status, history };
 }
 
 export async function listReadyWorkspaces(tenant: string, project: string, options: ApiOptions = {}): Promise<WorkspaceStatus[]> {

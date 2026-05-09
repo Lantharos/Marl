@@ -4,9 +4,7 @@
 	import { onMount } from 'svelte';
 	import {
 		getProjectStats,
-		getProjectSettings,
 		getProjectFollow,
-		getProjectAccess,
 		isAbortError,
 		followProject,
 		unfollowProject,
@@ -46,11 +44,9 @@
 	let showTenantMenu = $state(false);
 	let showProjectMenu = $state(false);
 	let showCreateOrg = $state(false);
-	let settings = $state<ProjectSettings | null>(null);
 	let follow = $state<FollowResponse | null>(null);
-	let stats = $state<ProjectStats | null>(null);
-	let access = $state<AccessResponse | null>(null);
-	let settingsLoading = $state(false);
+	let statsOverride = $state<ProjectStats | null>(null);
+	let followLoading = $state(false);
 	let settingsKey = '';
 	let newOrgName = $state('');
 
@@ -69,6 +65,18 @@
 	const profileDetail = $derived(profileHandle || '');
 	const avatarUrl = $derived(profile?.picture);
 	const avatarInitials = $derived(initials(displayName));
+	const projectChrome = $derived(
+		($page.data as {
+			projectChrome?: {
+				settings: ProjectSettings | null;
+				stats: ProjectStats | null;
+				access: AccessResponse | null;
+			};
+		}).projectChrome ?? null
+	);
+	const settings = $derived(projectChrome?.settings ?? null);
+	const stats = $derived(statsOverride ?? projectChrome?.stats ?? null);
+	const access = $derived(projectChrome?.access ?? null);
 
 	const visibleTabs = $derived(() => {
 		return projectTabs(settings?.navbar_items, access?.can_maintain ? 'private' : 'public');
@@ -86,18 +94,22 @@
 		const key = currentTenant && currentProject ? `${currentTenant}/${currentProject}` : '';
 		if (!key) {
 			settingsKey = '';
-			settings = null;
 			follow = null;
-			stats = null;
-			access = null;
+			statsOverride = null;
 			currentProjectAccess.set(null);
 			return;
 		}
 		if (key === settingsKey) return;
 		settingsKey = key;
+		follow = null;
+		statsOverride = null;
 		const controller = new AbortController();
-		loadProjectChrome(currentTenant, currentProject ?? '', controller.signal);
+		loadProjectFollow(currentTenant, currentProject ?? '', controller.signal);
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		currentProjectAccess.set(currentProject ? access : null);
 	});
 
 	onMount(() => {
@@ -110,35 +122,21 @@
 		return () => window.removeEventListener('sty:project-stats-changed', handleStatsChanged);
 	});
 
-	async function loadProjectChrome(tenant: string, project: string, signal?: AbortSignal) {
-		settingsLoading = true;
+	async function loadProjectFollow(tenant: string, project: string, signal?: AbortSignal) {
+		followLoading = true;
 		try {
-			const [loadedSettings, loadedStats, loadedFollow, loadedAccess] = await Promise.all([
-				getProjectSettings(tenant, project, signal ? { signal } : {}).catch(() => null),
-				getProjectStats(tenant, project, signal ? { signal } : {}),
-				getProjectFollow(tenant, project, signal ? { signal } : {}).catch(() => null),
-				getProjectAccess(tenant, project, signal ? { signal } : {}).catch(() => null)
-			]);
-			settings = loadedSettings;
-			stats = loadedStats;
-			follow = loadedFollow;
-			access = loadedAccess;
-			currentProjectAccess.set(loadedAccess);
+			follow = await getProjectFollow(tenant, project, signal ? { signal } : {}).catch(() => null);
 		} catch (error) {
 			if (isAbortError(error)) return;
-			settings = null;
 			follow = null;
-			stats = null;
-			access = null;
-			currentProjectAccess.set(null);
 		} finally {
-			if (!signal?.aborted) settingsLoading = false;
+			if (!signal?.aborted) followLoading = false;
 		}
 	}
 
 	async function refreshProjectStats(tenant: string, project: string) {
 		try {
-			stats = await getProjectStats(tenant, project);
+			statsOverride = await getProjectStats(tenant, project);
 		} catch {
 			return;
 		}
@@ -245,7 +243,7 @@
 					{/if}
 				</div>
 
-				{#if follow?.can_follow && !settingsLoading}
+				{#if follow?.can_follow && !followLoading}
 				<button
 					class="ml-1 rounded border px-2.5 py-1 text-xs font-medium {follow.is_following ? 'border-[#d9a66c] bg-[#1a1712] text-[#d9a66c] hover:bg-[#211d16]' : 'border-[#2a2a28] text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]'}"
 					onclick={handleToggleFollow}
@@ -253,7 +251,7 @@
 					{follow.is_following ? 'Following' : 'Follow'}
 				</button>
 				{/if}
-				{#if settings && !settingsLoading}
+				{#if settings}
 				{#if settings.visibility === 'private'}
 					<span class="ml-1.5 rounded border border-[#2a2a28] px-1.5 py-0.5 text-[11px] text-[#6f6b5f]">
 						Private

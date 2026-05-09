@@ -47,14 +47,24 @@
 	let userFilter = $state('');
 	let milestoneFilter = $state('');
 	let issueFilter = $state('');
-	let labels = $state<Label[]>([]);
-	let milestones = $state<Milestone[]>([]);
-	let users = $state<UserProfile[]>([]);
-	let issues = $state<Issue[]>([]);
+	let labels = $state.raw<Label[]>([]);
+	let milestones = $state.raw<Milestone[]>([]);
+	let users = $state.raw<UserProfile[]>([]);
+	let issues = $state.raw<Issue[]>([]);
 	let subscribed = $state(true);
 	let loadedSubscriptionKey = $state('');
 	let root = $state<HTMLElement | null>(null);
 	let userSearchController: AbortController | null = null;
+	let userSearchTimer: ReturnType<typeof setTimeout> | null = null;
+	const loadControllers = new Set<AbortController>();
+	let labelsLoaded = false;
+	let labelsLoading = false;
+	let milestonesLoaded = false;
+	let milestonesLoading = false;
+	let issuesLoaded = false;
+	let issuesLoading = false;
+	let usersLoaded = false;
+	let resourceKey = '';
 
 	const selectedLabels = $derived(detail.labels ?? []);
 	const selectedReviewers = $derived(detail.reviewers ?? []);
@@ -72,23 +82,45 @@
 	const subscriptionKey = $derived(`sty:workspace-subscription:${tenant}/${project}/${detail.name}`);
 
 	onMount(() => {
-		const controller = new AbortController();
-		Promise.all([
-			listLabels(tenant, project, { signal: controller.signal }).then((items) => (labels = items)).catch(ignoreAbort),
-			listMilestones(tenant, project, { signal: controller.signal }).then((items) => (milestones = items)).catch(ignoreAbort),
-			refreshUsers('', controller.signal),
-			listIssuesPage(tenant, project, { signal: controller.signal, perPage: 100, state: 'all' }).then((page) => (issues = page.items)).catch(ignoreAbort)
-		]);
 		function closePanel(event: PointerEvent) {
 			if (!openPanel || !root) return;
 			if (!root.contains(event.target as Node)) openPanel = '';
 		}
 		document.addEventListener('pointerdown', closePanel, true);
 		return () => {
+			if (userSearchTimer) clearTimeout(userSearchTimer);
 			userSearchController?.abort();
-			controller.abort();
+			for (const controller of loadControllers) controller.abort();
 			document.removeEventListener('pointerdown', closePanel, true);
 		};
+	});
+
+	$effect(() => {
+		const key = `${tenant}/${project}/${detail.name}`;
+		if (resourceKey === key) return;
+		resourceKey = key;
+		if (userSearchTimer) clearTimeout(userSearchTimer);
+		userSearchTimer = null;
+		userSearchController?.abort();
+		userSearchController = null;
+		for (const controller of loadControllers) controller.abort();
+		loadControllers.clear();
+		labels = [];
+		milestones = [];
+		users = [];
+		issues = [];
+		labelsLoaded = false;
+		labelsLoading = false;
+		milestonesLoaded = false;
+		milestonesLoading = false;
+		issuesLoaded = false;
+		issuesLoading = false;
+		usersLoaded = false;
+		openPanel = '';
+	});
+
+	$effect(() => {
+		if (linkedIssues.length > 0) void ensureIssues();
 	});
 
 	$effect(() => {
@@ -118,7 +150,66 @@
 
 	function togglePanel(panel: string) {
 		openPanel = openPanel === panel ? '' : panel;
-		if (openPanel === 'reviewers' || openPanel === 'assignees') refreshUsers(userFilter);
+		if ((openPanel === 'reviewers' || openPanel === 'assignees') && !usersLoaded) void refreshUsers(userFilter);
+		if (openPanel === 'labels') void ensureLabels();
+		if (openPanel === 'milestone') void ensureMilestones();
+		if (openPanel === 'development') void ensureIssues();
+	}
+
+	function trackController() {
+		const controller = new AbortController();
+		loadControllers.add(controller);
+		return controller;
+	}
+
+	function releaseController(controller: AbortController) {
+		loadControllers.delete(controller);
+	}
+
+	async function ensureLabels() {
+		if (labelsLoaded || labelsLoading) return;
+		labelsLoading = true;
+		const controller = trackController();
+		try {
+			labels = await listLabels(tenant, project, { signal: controller.signal });
+			labelsLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			labelsLoading = false;
+			releaseController(controller);
+		}
+	}
+
+	async function ensureMilestones() {
+		if (milestonesLoaded || milestonesLoading) return;
+		milestonesLoading = true;
+		const controller = trackController();
+		try {
+			milestones = await listMilestones(tenant, project, { signal: controller.signal });
+			milestonesLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			milestonesLoading = false;
+			releaseController(controller);
+		}
+	}
+
+	async function ensureIssues() {
+		if (issuesLoaded || issuesLoading) return;
+		issuesLoading = true;
+		const controller = trackController();
+		try {
+			const page = await listIssuesPage(tenant, project, { signal: controller.signal, perPage: 100, state: 'all' });
+			issues = page.items;
+			issuesLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			issuesLoading = false;
+			releaseController(controller);
+		}
 	}
 
 	function mergePeople(requested: string[], reviewed: Reviewer[]) {
@@ -175,6 +266,7 @@
 		try {
 			const page = await searchUsers(query, { signal, perPage: 20 });
 			users = page.items;
+			usersLoaded = true;
 		} catch (error) {
 			ignoreAbort(error);
 		}
@@ -182,7 +274,11 @@
 
 	function changeUserFilter(event: Event) {
 		userFilter = (event.currentTarget as HTMLInputElement).value;
-		refreshUsers(userFilter);
+		if (userSearchTimer) clearTimeout(userSearchTimer);
+		userSearchTimer = setTimeout(() => {
+			userSearchTimer = null;
+			void refreshUsers(userFilter);
+		}, 180);
 	}
 </script>
 

@@ -66,17 +66,29 @@
 	let milestoneFilter = $state('');
 	let workspaceFilter = $state('');
 	let projectFilter = $state('');
-	let labels = $state<Label[]>([]);
-	let milestones = $state<Milestone[]>([]);
-	let users = $state<UserProfile[]>([]);
-	let workspaces = $state<WorkspaceStatus[]>([]);
-	let projects = $state<ProjectSummary[]>([]);
+	let labels = $state.raw<Label[]>([]);
+	let milestones = $state.raw<Milestone[]>([]);
+	let users = $state.raw<UserProfile[]>([]);
+	let workspaces = $state.raw<WorkspaceStatus[]>([]);
+	let projects = $state.raw<ProjectSummary[]>([]);
 	let busy = $state(false);
 	let subscribed = $state(true);
 	let root = $state<HTMLElement | null>(null);
 	let deleteArmed = $state(false);
 	let terminalWorkspaceArmed = $state('');
 	let userSearchController: AbortController | null = null;
+	let userSearchTimer: ReturnType<typeof setTimeout> | null = null;
+	const loadControllers = new Set<AbortController>();
+	let labelsLoaded = false;
+	let labelsLoading = false;
+	let milestonesLoaded = false;
+	let milestonesLoading = false;
+	let workspacesLoaded = false;
+	let workspacesLoading = false;
+	let projectsLoaded = false;
+	let projectsLoading = false;
+	let usersLoaded = false;
+	let resourceKey = '';
 	const filteredLabels = $derived(labels.filter((label) => label.name.toLowerCase().includes(labelFilter.trim().toLowerCase())));
 	const filteredMilestones = $derived(milestones.filter((item) => item.title.toLowerCase().includes(milestoneFilter.trim().toLowerCase())));
 	const userChoices = $derived(mergedUserChoices(users, participants));
@@ -90,24 +102,48 @@
 	const exactLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelFilter.trim().toLowerCase()));
 
 	onMount(() => {
-		const controller = new AbortController();
-		Promise.all([
-			listLabels(tenant, project, { signal: controller.signal }).then((items) => (labels = items)).catch(ignoreAbort),
-			listMilestones(tenant, project, { signal: controller.signal }).then((items) => (milestones = items)).catch(ignoreAbort),
-			listWorkspaceStatuses(tenant, project, { signal: controller.signal }).then((items) => (workspaces = items)).catch(ignoreAbort),
-			listProjects({ signal: controller.signal }).then((items) => (projects = items)).catch(ignoreAbort),
-			refreshUsers('', controller.signal)
-		]);
 		function closePanel(event: PointerEvent) {
 			if (!openPanel || !root) return;
 			if (!root.contains(event.target as Node)) openPanel = '';
 		}
 		document.addEventListener('pointerdown', closePanel, true);
 		return () => {
+			if (userSearchTimer) clearTimeout(userSearchTimer);
 			userSearchController?.abort();
-			controller.abort();
+			for (const controller of loadControllers) controller.abort();
 			document.removeEventListener('pointerdown', closePanel, true);
 		};
+	});
+
+	$effect(() => {
+		const key = `${tenant}/${project}`;
+		if (resourceKey === key) return;
+		resourceKey = key;
+		if (userSearchTimer) clearTimeout(userSearchTimer);
+		userSearchTimer = null;
+		userSearchController?.abort();
+		userSearchController = null;
+		for (const controller of loadControllers) controller.abort();
+		loadControllers.clear();
+		labels = [];
+		milestones = [];
+		users = [];
+		workspaces = [];
+		projects = [];
+		labelsLoaded = false;
+		labelsLoading = false;
+		milestonesLoaded = false;
+		milestonesLoading = false;
+		workspacesLoaded = false;
+		workspacesLoading = false;
+		projectsLoaded = false;
+		projectsLoading = false;
+		usersLoaded = false;
+		openPanel = '';
+	});
+
+	$effect(() => {
+		if (selectedLabels.length > 0) void ensureLabels();
 	});
 
 	function ignoreAbort(error: unknown) {
@@ -117,7 +153,81 @@
 	function togglePanel(panel: string) {
 		if (!canWrite) return;
 		openPanel = openPanel === panel ? '' : panel;
-		if (openPanel === 'assignees') refreshUsers(userFilter);
+		if (openPanel === 'assignees' && !usersLoaded) void refreshUsers(userFilter);
+		if (openPanel === 'labels') void ensureLabels();
+		if (openPanel === 'milestone') void ensureMilestones();
+		if (openPanel === 'development') void ensureWorkspaces();
+		if (openPanel === 'transfer') void ensureProjects();
+	}
+
+	function trackController() {
+		const controller = new AbortController();
+		loadControllers.add(controller);
+		return controller;
+	}
+
+	function releaseController(controller: AbortController) {
+		loadControllers.delete(controller);
+	}
+
+	async function ensureLabels() {
+		if (labelsLoaded || labelsLoading) return;
+		labelsLoading = true;
+		const controller = trackController();
+		try {
+			labels = await listLabels(tenant, project, { signal: controller.signal });
+			labelsLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			labelsLoading = false;
+			releaseController(controller);
+		}
+	}
+
+	async function ensureMilestones() {
+		if (milestonesLoaded || milestonesLoading) return;
+		milestonesLoading = true;
+		const controller = trackController();
+		try {
+			milestones = await listMilestones(tenant, project, { signal: controller.signal });
+			milestonesLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			milestonesLoading = false;
+			releaseController(controller);
+		}
+	}
+
+	async function ensureWorkspaces() {
+		if (workspacesLoaded || workspacesLoading) return;
+		workspacesLoading = true;
+		const controller = trackController();
+		try {
+			workspaces = await listWorkspaceStatuses(tenant, project, { signal: controller.signal });
+			workspacesLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			workspacesLoading = false;
+			releaseController(controller);
+		}
+	}
+
+	async function ensureProjects() {
+		if (projectsLoaded || projectsLoading) return;
+		projectsLoading = true;
+		const controller = trackController();
+		try {
+			projects = await listProjects({ signal: controller.signal });
+			projectsLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			projectsLoading = false;
+			releaseController(controller);
+		}
 	}
 
 	function personLabel(profile: UserProfile) {
@@ -186,6 +296,7 @@
 		try {
 			const page = await searchUsers(query, { signal, perPage: 20 });
 			users = page.items;
+			usersLoaded = true;
 		} catch (error) {
 			ignoreAbort(error);
 		}
@@ -217,7 +328,11 @@
 
 	function changeUserFilter(event: Event) {
 		userFilter = (event.currentTarget as HTMLInputElement).value;
-		refreshUsers(userFilter);
+		if (userSearchTimer) clearTimeout(userSearchTimer);
+		userSearchTimer = setTimeout(() => {
+			userSearchTimer = null;
+			void refreshUsers(userFilter);
+		}, 180);
 	}
 
 	function terminalWorkspace(item: WorkspaceStatus) {
@@ -436,7 +551,7 @@
 
 		{#if canMaintain}
 			<section class="relative grid gap-2 text-sm">
-				<button class="flex items-center gap-2 text-left text-[#d8d5ca] hover:text-[#d9a66c]" disabled={busy} onclick={() => (openPanel = openPanel === 'transfer' ? '' : 'transfer')}>
+				<button class="flex items-center gap-2 text-left text-[#d8d5ca] hover:text-[#d9a66c]" disabled={busy} onclick={() => togglePanel('transfer')}>
 					<ArrowRight class="h-4 w-4" /> Transfer issue
 				</button>
 				<button class="flex items-center gap-2 text-left text-[#d8d5ca] hover:text-[#d9a66c]" disabled={busy} onclick={() => save({ locked: !locked })}>

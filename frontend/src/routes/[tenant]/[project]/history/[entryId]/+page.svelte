@@ -185,25 +185,19 @@
 				snapshot_id: detail.snapshot_id,
 				workspace: detail.workspace
 			};
-		await createReviewComment(tenant, project, target, body);
-		const comments = await listReviewComments(tenant, project, { history_entry_id: entryId });
-		reviewComments = comments.items;
+		const comment = await createReviewComment(tenant, project, target, body);
+		reviewComments = [...reviewComments, comment];
 		selectedReviewRange = null;
 	}
 
-	async function refreshReviewComments() {
-		const comments = await listReviewComments(tenant, project, { history_entry_id: entryId });
-		reviewComments = comments.items;
-	}
-
 	async function editReviewComment(comment: ReviewComment, body: string) {
-		await updateReviewComment(tenant, project, comment.id, body);
-		await refreshReviewComments();
+		const updated = await updateReviewComment(tenant, project, comment.id, body);
+		reviewComments = reviewComments.map((item) => item.id === updated.id ? updated : item);
 	}
 
 	async function removeReviewComment(comment: ReviewComment) {
 		await deleteReviewComment(tenant, project, comment.id);
-		await refreshReviewComments();
+		reviewComments = reviewComments.filter((item) => item.id !== comment.id);
 	}
 
 	const activeReviewComments = $derived(

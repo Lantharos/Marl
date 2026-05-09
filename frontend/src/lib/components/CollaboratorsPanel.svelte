@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import {
 		searchUsers,
 		type Collaborator,
@@ -34,6 +35,12 @@
 	let suggestions = $state<UserProfile[]>([]);
 	let searching = $state(false);
 	let searchController: AbortController | null = null;
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+	onDestroy(() => {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchController?.abort();
+	});
 
 	async function runSearch() {
 		searchController?.abort();
@@ -57,6 +64,21 @@
 				searching = false;
 			}
 		}
+	}
+
+	function scheduleSearch() {
+		selectedUser = '';
+		if (searchTimer) clearTimeout(searchTimer);
+		if (!query.trim()) {
+			searchController?.abort();
+			searching = false;
+			suggestions = [];
+			return;
+		}
+		searchTimer = setTimeout(() => {
+			searchTimer = null;
+			void runSearch();
+		}, 180);
 	}
 
 	function chooseUser(profile: UserProfile) {
@@ -106,7 +128,7 @@
 					class="w-full rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f]"
 					placeholder="Handle or user"
 					bind:value={query}
-					oninput={runSearch}
+					oninput={scheduleSearch}
 				/>
 				{#if suggestions.length}
 					<div class="absolute left-0 right-0 top-full z-20 mt-1 rounded border border-[#2a2a28] bg-[#10100e] py-1 shadow-lg">

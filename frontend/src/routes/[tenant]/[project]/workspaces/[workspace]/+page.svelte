@@ -174,13 +174,13 @@
 			: selectedPath && activeTab === 'files'
 				? { target_type: 'file', workspace: workspaceName, file: selectedPath }
 				: { target_type: 'workspace', workspace: workspaceName };
-		await createReviewComment(tenant, project, target, body);
+		const comment = await createReviewComment(tenant, project, target, body);
+		reviewComments = [...reviewComments, comment];
 		if (activeTab === 'files' && canMaintain && detail?.is_ready && detail.status !== 'merged') {
 			await requestWorkspaceChanges(tenant, project, workspaceName, body);
+			await load();
 		}
-		await refreshReviewComments();
 		selectedReviewRange = null;
-		await load();
 	}
 
 	async function submitFileReviewComment(path: string, body: string) {
@@ -246,11 +246,6 @@
 		}
 	}
 
-	async function refreshReviewComments() {
-		const comments = await listReviewComments(tenant, project, { workspace: workspaceName });
-		reviewComments = comments.items;
-	}
-
 	async function submitPendingReview(body: string, action: 'comment' | 'approve' | 'request_changes') {
 		busy = true;
 		error = '';
@@ -309,8 +304,8 @@
 			pendingReviewComments = pendingReviewComments.map((item) => item.id === comment.id ? { ...item, body, updated_at: new Date().toISOString() } : item);
 			return;
 		}
-		await updateReviewComment(tenant, project, comment.id, body);
-		await refreshReviewComments();
+		const updated = await updateReviewComment(tenant, project, comment.id, body);
+		reviewComments = reviewComments.map((item) => item.id === updated.id ? updated : item);
 	}
 
 	async function removeReviewComment(comment: ReviewComment) {
@@ -319,7 +314,7 @@
 			return;
 		}
 		await deleteReviewComment(tenant, project, comment.id);
-		await refreshReviewComments();
+		reviewComments = reviewComments.filter((item) => item.id !== comment.id);
 	}
 
 	async function resolveReviewComment(comment: ReviewComment) {
@@ -327,8 +322,8 @@
 			pendingReviewComments = pendingReviewComments.map((item) => item.id === comment.id ? { ...item, state: 'resolved' } : item);
 			return;
 		}
-		await updateReviewCommentState(tenant, project, comment.id, 'resolved');
-		await refreshReviewComments();
+		const updated = await updateReviewCommentState(tenant, project, comment.id, 'resolved');
+		reviewComments = reviewComments.map((item) => item.id === updated.id ? updated : item);
 	}
 
 	async function saveLabels(labels: string[]) {

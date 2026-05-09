@@ -65,7 +65,7 @@
 
     $effect(() => {
         const key = `${tenant}/${project}/${signedIn ? "auth" : "public"}`;
-        if (settings && stats && access) {
+        if (layoutChrome || overview || (settings && stats && access)) {
             publicChromeKey = "";
             return;
         }

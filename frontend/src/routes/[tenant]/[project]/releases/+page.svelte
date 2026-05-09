@@ -3,7 +3,6 @@
 	import { onDestroy } from 'svelte';
 	import {
 		createRelease,
-		getProjectSettings,
 		isAbortError,
 		listReleasesPage,
 		listTags,
@@ -46,7 +45,7 @@
 	let busy = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let canMutate = $state(false);
-	let settings = $state<ProjectSettings | null>(null);
+	let settingsOverride = $state<ProjectSettings | null>(null);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canMutate = Boolean(value?.can_maintain && !value?.archived);
@@ -55,6 +54,10 @@
 	onDestroy(unsubscribe);
 
 	const releases = $derived(releaseItems);
+	const layoutSettings = $derived(
+		($page.data as { projectChrome?: { settings: ProjectSettings | null } }).projectChrome?.settings ?? null
+	);
+	const settings = $derived(settingsOverride ?? layoutSettings);
 	const visibleReleases = $derived(releases.slice(0, visibleCount));
 	const tagSuggestions = $derived(() => {
 		const needle = tag.trim().toLowerCase();
@@ -140,14 +143,12 @@
 		loading = true;
 		error = '';
 		try {
-			const [releaseResult, tagResult, settingsResult] = await Promise.all([
+			const [releaseResult, tagResult] = await Promise.all([
 				listReleasesPage(tenant, project, { page: 1, perPage: 500, signal }),
-				listTags(tenant, project, { page: 1, perPage: 100, signal }).catch(() => null),
-				getProjectSettings(tenant, project, { signal }).catch(() => null)
+				listTags(tenant, project, { page: 1, perPage: 100, signal }).catch(() => null)
 			]);
 			releaseItems = releaseResult.items;
 			tags = tagResult?.items ?? [];
-			settings = settingsResult;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -161,7 +162,7 @@
 		busy = true;
 		error = '';
 		try {
-			settings = await updateProjectSettings(tenant, project, {
+			settingsOverride = await updateProjectSettings(tenant, project, {
 				public_releases: !settings.public_releases
 			});
 		} catch (e) {
