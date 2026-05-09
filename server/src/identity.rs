@@ -54,6 +54,7 @@ pub(crate) async fn me(req: Request, ctx: crate::request_context::AppRouteContex
     let database = db(&ctx)?;
     let profile = d1::user_profile(&database, &user).await?;
     let tenants = d1::tenants(&database, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let settings = d1::user_settings(&database, &user).await?;
     let account_tenant = d1::user_account_tenant(&database, &user).await?;
     let account_setup_required = profile
         .as_ref()
@@ -69,10 +70,26 @@ pub(crate) async fn me(req: Request, ctx: crate::request_context::AppRouteContex
         user,
         profile,
         tenants,
+        settings,
         account_tenant,
         account_setup_required,
         account_tenant_suggestions,
     })
+}
+
+pub(crate) async fn get_account_settings(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let database = db(&ctx)?;
+    let settings = d1::user_settings(&database, &user).await?;
+    Response::from_json(&settings)
+}
+
+pub(crate) async fn update_account_settings(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let body: sty_protocol::UpdateUserSettingsRequest = req.json().await?;
+    let database = db(&ctx)?;
+    let settings = d1::update_user_settings(&database, &user, body).await?;
+    Response::from_json(&settings)
 }
 
 pub(crate) async fn create_account_tenant(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {

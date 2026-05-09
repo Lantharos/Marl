@@ -14,6 +14,31 @@ body {
 	background: #0f0f0d;
 }
 
+html[data-sty-auth-check='pending'] body > div {
+	visibility: hidden;
+}
+
+html[data-sty-auth-check='pending'] body::before {
+	content: '';
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	z-index: 9999;
+	width: 20px;
+	height: 20px;
+	margin: -10px 0 0 -10px;
+	border: 1px solid #3a3a36;
+	border-top-color: #d9a66c;
+	border-radius: 9999px;
+	animation: sty-auth-spin 0.75s linear infinite;
+}
+
+@keyframes sty-auth-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 * {
 	scrollbar-width: none;
 	-ms-overflow-style: none;

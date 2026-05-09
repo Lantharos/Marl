@@ -13,9 +13,10 @@ export type AveProfile = {
 };
 
 const defaultAveClientId = 'app_813ac5533bb87d939f328d76b5a1dca8';
+const aveSessionStorageKey = 'sty_ave_session';
 const redirectUri = browser ? `${window.location.origin}/auth/callback` : '';
 const storage = browser
-	? createLocalStorageAdapter('sty_ave_session')
+	? createLocalStorageAdapter(aveSessionStorageKey)
 	: {
 			async load() {
 				return null;
@@ -92,6 +93,10 @@ export async function getAveProfile() {
 
 export function hasStyToken() {
 	return browser && Boolean(localStorage.getItem('sty_token'));
+}
+
+export function hasStoredAuth() {
+	return browser && Boolean(localStorage.getItem('sty_token') || localStorage.getItem(aveSessionStorageKey));
 }
 
 export function currentStyToken() {

@@ -2,9 +2,9 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     AuthCheckResponse, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
-    CreateIssueRequest, HeadResponse, HeadUpdateRequest, HistoryEntry, HistoryResponse,
-    HistorySignature, LogHistoryRequest, MeResponse, MissingRequest, MissingResponse,
-    CreateProjectRequest, ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
+    CreateIssueRequest, CreateProjectRequest, HeadResponse, HeadUpdateRequest, HistoryEntry,
+    HistoryResponse, HistorySignature, LogHistoryRequest, MeResponse, MissingRequest,
+    MissingResponse, ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
     ProjectTreeResponse, SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
     UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary, validate_segment,
 };
@@ -22,8 +22,8 @@ mod protocol_ready;
 mod release_support;
 mod releases;
 mod request_context;
-mod support;
 mod source_archive;
+mod support;
 mod workspace_metadata;
 
 use account_keys::*;
@@ -69,6 +69,8 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async("/v1/session/exchange", exchange_session)
         .delete_async("/v1/session", revoke_session)
         .get_async("/v1/me", me)
+        .get_async("/v1/account/settings", get_account_settings)
+        .patch_async("/v1/account/settings", update_account_settings)
         .post_async("/v1/account/tenant", create_account_tenant)
         .get_async("/v1/users/search", search_users)
         .get_async("/v1/users/:handle/profile", user_profile_by_handle)

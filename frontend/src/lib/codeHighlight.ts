@@ -3,7 +3,14 @@ import type { ShjLanguage, ShjToken } from '@speed-highlight/core';
 const keywordPattern =
 	/\b(async|await|break|case|catch|class|const|continue|derive|else|enum|export|fn|for|from|function|if|impl|import|in|interface|let|match|mod|pub|return|self|struct|type|use|where|while)\b/g;
 const numberPattern = /\b\d+(\.\d+)?\b/g;
+const plainTokenPattern =
+	/\b(async|await|break|case|catch|class|const|continue|derive|else|enum|export|fn|for|from|function|if|impl|import|in|interface|let|match|mod|pub|return|self|struct|type|use|where|while)\b|\b\d+(\.\d+)?\b/g;
 const literalPattern = /(\/\/.*|#\[.*\]|"([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`)/g;
+
+export interface HighlightSegment {
+	text: string;
+	color?: string;
+}
 
 const extensionLanguages: Record<string, ShjLanguage> = {
 	asm: 'asm',
@@ -51,18 +58,24 @@ export async function highlightCodeLines(value: string, path: string) {
 }
 
 export function highlightCode(value: string) {
-	let html = '';
+	return highlightCodeSegments(value)
+		.map((segment) => (segment.color ? `<span style="color: ${segment.color}">${escapeHtml(segment.text)}</span>` : escapeHtml(segment.text)))
+		.join('');
+}
+
+export function highlightCodeSegments(value: string): HighlightSegment[] {
+	const segments: HighlightSegment[] = [];
 	let cursor = 0;
 	for (const match of value.matchAll(literalPattern)) {
 		const index = match.index ?? 0;
-		html += highlightPlain(value.slice(cursor, index));
+		segments.push(...highlightPlainSegments(value.slice(cursor, index)));
 		const literal = match[0];
 		const color = literal.startsWith('//') || literal.startsWith('#[') ? '#6f6b5f' : '#d9a66c';
-		html += `<span style="color: ${color}">${escapeHtml(literal)}</span>`;
+		segments.push({ text: literal, color });
 		cursor = index + literal.length;
 	}
-	html += highlightPlain(value.slice(cursor));
-	return html;
+	segments.push(...highlightPlainSegments(value.slice(cursor)));
+	return segments;
 }
 
 export function languageForPath(path: string): ShjLanguage {
@@ -93,10 +106,18 @@ function wrapToken(value: string, token?: ShjToken) {
 	return token ? `<span class="shj-syn-${token}">${escaped}</span>` : escaped;
 }
 
-function highlightPlain(value: string) {
-	return escapeHtml(value)
-		.replace(keywordPattern, '<span style="color: #7fb4d9">$1</span>')
-		.replace(numberPattern, '<span style="color: #9fca7c">$&</span>');
+function highlightPlainSegments(value: string): HighlightSegment[] {
+	const segments: HighlightSegment[] = [];
+	let cursor = 0;
+	for (const match of value.matchAll(plainTokenPattern)) {
+		const index = match.index ?? 0;
+		if (index > cursor) segments.push({ text: value.slice(cursor, index) });
+		const text = match[0];
+		segments.push({ text, color: /^\d/.test(text) ? '#9fca7c' : '#7fb4d9' });
+		cursor = index + text.length;
+	}
+	if (cursor < value.length) segments.push({ text: value.slice(cursor) });
+	return segments;
 }
 
 function escapeHtml(value: string) {

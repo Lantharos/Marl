@@ -73,12 +73,25 @@ pub struct MeResponse {
     pub user: String,
     pub profile: Option<UserProfile>,
     pub tenants: Vec<crate::TenantSummary>,
+    #[serde(default)]
+    pub settings: UserSettings,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_tenant: Option<String>,
     #[serde(default)]
     pub account_setup_required: bool,
     #[serde(default)]
     pub account_tenant_suggestions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct UserSettings {
+    #[serde(default)]
+    pub vigilant_mode: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UpdateUserSettingsRequest {
+    pub vigilant_mode: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

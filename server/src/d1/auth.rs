@@ -34,6 +34,7 @@ pub async fn prune_expired_tokens(db: &Database) -> Result<()> {
 }
 
 pub async fn upsert_user_profile(db: &Database, profile: &UserProfile) -> Result<UserProfile> {
+    ensure_user_settings_schema(db).await?;
     let updated_at = now_rfc3339();
     let display_name = profile.display_name.trim();
     let display_name = if display_name.is_empty() {
@@ -101,6 +102,41 @@ pub async fn user_profile(db: &Database, user: &str) -> Result<Option<UserProfil
     }))
 }
 
+pub async fn user_settings(db: &Database, user: &str) -> Result<sty_protocol::UserSettings> {
+    ensure_user_settings_schema(db).await?;
+    #[derive(Deserialize)]
+    struct Row {
+        settings_json: Option<String>,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT settings_json FROM user_profiles WHERE user = ?1")
+        .bind(&[js_str(user)])?
+        .first(None)
+        .await?;
+    Ok(row
+        .and_then(|row| row.settings_json)
+        .and_then(|value| serde_json::from_str::<sty_protocol::UserSettings>(&value).ok())
+        .unwrap_or_default())
+}
+
+pub async fn update_user_settings(
+    db: &Database,
+    user: &str,
+    request: sty_protocol::UpdateUserSettingsRequest,
+) -> Result<sty_protocol::UserSettings> {
+    ensure_user_settings_schema(db).await?;
+    let mut settings = user_settings(db, user).await?;
+    if let Some(value) = request.vigilant_mode {
+        settings.vigilant_mode = value;
+    }
+    let settings_json = serde_json::to_string(&settings).map_err(|error| err(error.to_string()))?;
+    db.prepare("UPDATE user_profiles SET settings_json = ?1 WHERE user = ?2")
+        .bind(&[js_str(&settings_json), js_str(user)])?
+        .run()
+        .await?;
+    Ok(settings)
+}
+
 pub async fn principal_for_token(db: &Database, token: &str) -> Result<Option<TokenPrincipal>> {
     ensure_token_schema(db).await?;
     let hash = token_hash(token);
@@ -159,6 +195,14 @@ async fn ensure_token_schema(db: &Database) -> Result<()> {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_tokens_kind ON tokens(kind)")
         .run()
         .await?;
+    Ok(())
+}
+
+async fn ensure_user_settings_schema(db: &Database) -> Result<()> {
+    db.prepare("ALTER TABLE user_profiles ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}'")
+        .run()
+        .await
+        .ok();
     Ok(())
 }
 

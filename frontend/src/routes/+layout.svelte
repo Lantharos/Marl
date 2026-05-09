@@ -1,7 +1,9 @@
 <script lang="ts">
 	import '../app.css';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
 	import {
 		createAccountTenant,
 		createOrg,
@@ -13,6 +15,7 @@
 	import { appData } from '$lib/appState';
 	import {
 		clearStyToken,
+		hasStoredAuth,
 		hydrateSession,
 		signOut,
 		startLogin,
@@ -34,6 +37,7 @@
 	let aveHandle = $state('');
 	let loadDataPromise: Promise<void> | null = null;
 	let bootstrapDone = false;
+	let authCheckHasStoredCredentials = $state(false);
 	const isAuthRoute = $derived($page.url.pathname.startsWith('/auth/'));
 	const isDocsRoute = $derived($page.url.pathname === '/docs' || $page.url.pathname.startsWith('/docs/'));
 	const isPigRoute = $derived($page.url.pathname === '/pig' || $page.url.pathname.startsWith('/pig/'));
@@ -52,10 +56,17 @@
 			(pathParts.length >= 2 && !reservedRoot && isPublicProjectSection)
 	);
 	const hasPublicShell = $derived(isPublicRoute && !isLandingPage && !isProjectRoute);
+	const shouldShowAuthSpinner = $derived(status === 'loading' && authCheckHasStoredCredentials && !isStandaloneRoute && !isErrorPage);
+
+	onMount(() => {
+		authCheckHasStoredCredentials = hasStoredAuth();
+		if (!authCheckHasStoredCredentials) clearAuthSplash();
+	});
 
 	$effect(() => {
 		if (isStandaloneRoute) {
 			bootstrapDone = false;
+			clearAuthSplash();
 			return;
 		}
 		if (!bootstrapDone && !loadDataPromise) {
@@ -110,7 +121,13 @@
 			status = 'signedOut';
 		} finally {
 			bootstrapDone = true;
+			clearAuthSplash();
 		}
+	}
+
+	function clearAuthSplash() {
+		if (!browser) return;
+		document.documentElement.removeAttribute('data-sty-auth-check');
 	}
 
 	async function handleCreateOrg(name: string) {
@@ -163,6 +180,10 @@
 
 {#if isStandaloneRoute || isErrorPage}
 	{@render children()}
+{:else if shouldShowAuthSpinner}
+	<div class="grid min-h-screen place-items-center bg-[#0f0f0d]">
+		<Spinner />
+	</div>
 {:else if status !== 'signedIn' && isLandingPage}
 	{@render children()}
 {:else if status !== 'signedIn' && isProjectRoute && isPublicRoute}

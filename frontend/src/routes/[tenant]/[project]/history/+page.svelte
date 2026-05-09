@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 	import { getProjectHistory, isAbortError, type HistoryEntry } from '$lib/api';
+	import { appData } from '$lib/appState';
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -16,6 +18,13 @@
 	let loading = $state(true);
 	let error = $state('');
 	let visibleCount = $state(chunkSize);
+	let vigilantMode = $state(false);
+
+	const unsubscribeAppData = appData.subscribe((value) => {
+		vigilantMode = Boolean(value.me?.settings?.vigilant_mode);
+	});
+
+	onDestroy(unsubscribeAppData);
 
 	async function load(signal: AbortSignal) {
 		loading = true;
@@ -115,30 +124,36 @@
 	function loadMore() {
 		visibleCount = Math.min(visibleCount + chunkSize, filtered.length);
 	}
+
 </script>
 
-<div>
-	<h3 class="mb-4 text-sm font-semibold text-[#f0eee4]">History</h3>
+<div class="mx-auto max-w-6xl">
+	<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+		<h3 class="text-sm font-semibold text-[#f0eee4]">History</h3>
+		{#if !loading && !error}
+			<DateRangePicker bind:from={dateFrom} bind:to={dateTo} />
+		{/if}
+	</div>
 
 	{#if loading}
 		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else}
-		<div class="mb-4 flex flex-wrap items-center gap-3">
-			<DateRangePicker bind:from={dateFrom} bind:to={dateTo} />
-		</div>
-
 		{#if filtered.length}
 			<div class="grid gap-7">
-				{#each groupedEntries as group}
+				{#each groupedEntries as group (group.key)}
 					<section>
 						<div class="mb-2 text-xs font-medium text-[#8c887e]">{group.label}</div>
 						<div class="grid overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
-							{#each group.entries as entry}
-								<button
+							{#each group.entries as entry (entry.id)}
+								<a
+									href={resolve('/[tenant]/[project]/history/[entryId]', {
+										tenant,
+										project,
+										entryId: entry.id
+									})}
 									class="group flex w-full items-start gap-3 border-b border-[#252522] px-4 py-3 text-left last:border-b-0 hover:bg-[#1a1a18]"
-									onclick={() => goto(`/${tenant}/${project}/history/${entry.id}`)}
 								>
 									<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
 										{#if entry.author_profile?.avatar_url}
@@ -156,7 +171,7 @@
 											{/if}
 											{#if entry.signature}
 												<span class="rounded border border-[#25462a] bg-[#142018] px-1.5 py-0.5 text-[10px] text-[#7cb97c]">signed</span>
-											{:else if entry.snapshot_id}
+											{:else if vigilantMode && entry.snapshot_id}
 												<span class="rounded border border-[#2a2a28] bg-[#10100e] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">unsigned</span>
 											{/if}
 										</div>
@@ -169,7 +184,7 @@
 										</div>
 									</div>
 									<ChevronRight class="mt-1 h-4 w-4 shrink-0 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
-								</button>
+								</a>
 							{/each}
 						</div>
 					</section>

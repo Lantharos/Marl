@@ -111,10 +111,15 @@ export type MeResponse = {
 	user: string;
 	profile?: UserProfile | null;
 	tenants: TenantSummary[];
+	settings: UserSettings;
 	account_tenant?: string | null;
 	account_setup_required?: boolean;
 	account_tenant_suggestions?: string[];
 };
+
+export interface UserSettings {
+	vigilant_mode: boolean;
+}
 
 export interface ProjectDiscoveryItem {
 	tenant: string;
@@ -249,7 +254,8 @@ export interface RemoteApproval {
 
 export async function getMe(options: ApiOptions = {}) {
 	const response = await authedFetch('/v1/me', { signal: options.signal });
-	return (await response.json()) as MeResponse;
+	const me = (await response.json()) as MeResponse;
+	return { ...me, settings: me.settings ?? defaultUserSettings() };
 }
 
 export async function getInitializedMe(options: ApiOptions = {}) {
@@ -271,6 +277,26 @@ export async function createAccountTenant(name: string) {
 		body: JSON.stringify({ name })
 	});
 	return (await response.json()) as TenantSummary;
+}
+
+export async function getUserSettings(options: ApiOptions = {}): Promise<UserSettings> {
+	const response = await authedFetch('/v1/account/settings', { signal: options.signal });
+	const settings = (await response.json()) as UserSettings;
+	return { ...defaultUserSettings(), ...settings };
+}
+
+export async function updateUserSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
+	const response = await authedFetch('/v1/account/settings', {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(settings)
+	});
+	const updated = (await response.json()) as UserSettings;
+	return { ...defaultUserSettings(), ...updated };
+}
+
+function defaultUserSettings(): UserSettings {
+	return { vigilant_mode: false };
 }
 
 export async function listProjects(options: ApiOptions = {}) {

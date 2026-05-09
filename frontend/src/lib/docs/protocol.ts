@@ -37,6 +37,8 @@ export const endpointGroups: EndpointGroup[] = [
 			'DELETE /v1/session',
 			'POST /v1/auth/check',
 			'GET /v1/me',
+			'GET /v1/account/settings',
+			'PATCH /v1/account/settings',
 			'GET /v1/home',
 			'GET /v1/discover/projects?q=<query>',
 			'GET /v1/users/search?q=<query>'

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HistoryEntry, ReviewComment } from '$lib/api';
-	import { highlightCode } from '$lib/codeHighlight';
+	import { highlightCodeSegments } from '$lib/codeHighlight';
 	import { renderFileDiffHunks, type DiffHunk, type DiffRow } from '$lib/diff';
 	import { userDisplayName } from '$lib/identity';
 	import ReviewThread from './ReviewThread.svelte';
@@ -32,6 +32,7 @@
 		loading = false,
 		viewed = false,
 		collapsed = false,
+		vigilantMode = false,
 		onToggleCollapsed = null,
 		onToggleViewed = null
 	}: {
@@ -54,6 +55,7 @@
 		loading?: boolean;
 		viewed?: boolean;
 		collapsed?: boolean;
+		vigilantMode?: boolean;
 		onToggleCollapsed?: (() => void) | null;
 		onToggleViewed?: (() => void) | null;
 	} = $props();
@@ -201,7 +203,7 @@
 		{/if}
 		{#if entry?.signature}
 			<span class="rounded border border-[#25462a] bg-[#142018] px-1.5 py-0.5 text-[10px] text-[#7cb97c]">signed</span>
-		{:else if entry?.snapshot_id}
+		{:else if vigilantMode && entry?.snapshot_id}
 			<span class="rounded border border-[#2a2a28] bg-[#10100e] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">unsigned</span>
 		{/if}
 		{#if entry}
@@ -242,14 +244,14 @@
 		<div class="grid min-h-[180px] place-items-center font-sans">
 			<Spinner />
 		</div>
-	{:else if hunks.length && viewMode === 'split'}
-		{#each hunks as hunk}
-			{#each hunk.rows as row, index (lineKey(row, index))}
-				{@render SplitRowView(row)}
+		{:else if hunks.length && viewMode === 'split'}
+			{#each hunks as hunk (hunk.id)}
+				{#each hunk.rows as row, index (lineKey(row, index))}
+					{@render SplitRowView(row)}
+				{/each}
 			{/each}
-		{/each}
-	{:else if hunks.length}
-		{#each hunks as hunk}
+		{:else if hunks.length}
+			{#each hunks as hunk (hunk.id)}
 			{#if hunk.hiddenBefore > 0 || hunk.before.length > 3}
 				<button
 					type="button"
@@ -310,7 +312,7 @@
 			<span>{reviewLine ?? ''}</span>
 		</div>
 		<div class="select-none text-center text-[#8a8578]">{marker(row.kind)}</div>
-		<pre class="min-w-0 overflow-x-auto px-2 whitespace-pre-wrap break-words">{@html highlightCode(row.text || ' ')}</pre>
+			<pre class="min-w-0 overflow-x-auto px-2 whitespace-pre-wrap break-words">{#each highlightCodeSegments(row.text || ' ') as segment, segmentIndex (`${segment.text}-${segment.color ?? ''}-${segmentIndex}`)}{#if segment.color}<span style:color={segment.color}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</pre>
 	</div>
 	{#if reviewLine && (rowComments.length || composerActive(reviewLine, reviewSide))}
 		<div class="grid grid-cols-[72px_20px_1fr] border-b border-[#242420] bg-[#10100e]">
@@ -367,7 +369,7 @@
 		{/if}
 		<span>{line ?? ''}</span>
 	</div>
-	<pre class="min-w-0 overflow-x-auto px-2 whitespace-pre-wrap break-words {rowClass(kind, line, side)}">{sign} {@html highlightCode(text || ' ')}</pre>
+		<pre class="min-w-0 overflow-x-auto px-2 whitespace-pre-wrap break-words {rowClass(kind, line, side)}">{sign} {#each highlightCodeSegments(text || ' ') as segment, segmentIndex (`${segment.text}-${segment.color ?? ''}-${segmentIndex}`)}{#if segment.color}<span style:color={segment.color}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</pre>
 {/snippet}
 
 {#snippet SplitThread(line: number, side: ReviewLineSide, comments: ReviewComment[])}

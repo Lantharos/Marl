@@ -162,7 +162,7 @@
 </script>
 
 <div class="overflow-auto {fill ? 'h-full' : ''}" style={`max-height:${maxHeight};min-height:${minHeight};`}>
-	<div class="w-max min-w-full">
+	<div class="w-max min-w-full {fill ? 'pb-16' : ''}">
 		{#each rows as row (row.node.path)}
 			{@const node = row.node}
 			{@const isDirectory = node.kind === 'dir'}

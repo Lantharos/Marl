@@ -27,6 +27,9 @@
 		currentUser,
 		canMaintain,
 		readonly,
+		fillSidebar = false,
+		showReviewFocus = true,
+		showViewedState = true,
 		onSelectPath,
 		onDiffModeChange,
 		onOpenConversation,
@@ -53,6 +56,9 @@
 		currentUser: string | null;
 		canMaintain: boolean;
 		readonly: boolean;
+		fillSidebar?: boolean;
+		showReviewFocus?: boolean;
+		showViewedState?: boolean;
 		onSelectPath: (path: string) => void;
 		onDiffModeChange: (mode: DiffMode) => void;
 		onOpenConversation: (comment: ReviewComment) => void;
@@ -95,6 +101,10 @@
 		fileText = {};
 		lastScrolledPath = '';
 		collapsedPaths = [];
+		if (!showViewedState) {
+			viewedPaths = [];
+			return;
+		}
 		try {
 			const stored = localStorage.getItem(`sty:viewed-files:${reviewKey}`);
 			viewedPaths = stored ? JSON.parse(stored) : [];
@@ -112,7 +122,7 @@
 	});
 
 	$effect(() => {
-		if (!reviewKey || loadedReviewKey !== reviewKey) return;
+		if (!showViewedState || !reviewKey || loadedReviewKey !== reviewKey) return;
 		localStorage.setItem(`sty:viewed-files:${reviewKey}`, JSON.stringify(viewedPaths));
 	});
 
@@ -239,7 +249,7 @@
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div class="text-sm text-[#8c887e]">
 				{visibleFileCount} changed {visibleFileCount === 1 ? 'file' : 'files'}
-				{#if changedFiles.length}
+				{#if showViewedState && changedFiles.length}
 					<span> · {viewedCount}/{changedFiles.length} viewed</span>
 				{/if}
 				{#if openCount}
@@ -248,7 +258,7 @@
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<div class="flex bg-[#141412] p-0.5">
-					{#each [['inline', 'Inline'], ['split', 'Split']] as mode}
+					{#each [['inline', 'Inline'], ['split', 'Split']] as mode (mode[0])}
 						<button class="px-2.5 py-1 text-xs {diffMode === mode[0] ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => onDiffModeChange(mode[0] as DiffMode)}>{mode[1]}</button>
 					{/each}
 				</div>
@@ -266,12 +276,12 @@
 	{/if}
 
 	<div class="grid gap-4 pt-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-		<aside class="sticky top-[68px] h-fit max-h-[calc(100vh-88px)] overflow-auto border border-[#2a2a28] bg-[#0f0f0d] p-2">
-			{#if focusFiles.length}
+		<aside class="sticky border border-[#2a2a28] bg-[#0f0f0d] p-2 {fillSidebar ? 'top-[82px] flex h-[calc(100vh-146px)] flex-col overflow-hidden' : 'top-[68px] h-fit max-h-[calc(100vh-88px)] overflow-auto'}">
+			{#if showReviewFocus && focusFiles.length}
 				<div class="mb-3 border-b border-[#252522] pb-3">
 					<div class="mb-2 text-xs font-medium text-[#eae9e4]">Review focus</div>
 					<div class="grid gap-1">
-						{#each focusFiles.slice(0, 6) as item}
+						{#each focusFiles.slice(0, 6) as item (item.file.path)}
 							<button class="flex min-w-0 items-center gap-2 px-1.5 py-1 text-left text-xs hover:bg-[#1a1a18]" onclick={() => jumpToPath(item.file.path)}>
 								<span class="w-12 shrink-0 text-[#d9a66c]">{item.label}</span>
 								<span class="truncate text-[#d8d5ca]">{item.file.path}</span>
@@ -280,19 +290,21 @@
 					</div>
 				</div>
 			{/if}
-			<ChangedFilesTree {changedFiles} {selectedPath} {commentCountsByFile} onSelect={jumpToPath} />
+			<div class={fillSidebar ? 'min-h-0 flex-1' : ''}>
+				<ChangedFilesTree {changedFiles} {selectedPath} {commentCountsByFile} fill={fillSidebar} maxHeight={fillSidebar ? 'none' : '45vh'} minHeight={fillSidebar ? '0' : '220px'} onSelect={jumpToPath} />
+			</div>
 			{#if sortedThreads.length}
 				<div class="mt-3 border-t border-[#252522] pt-3">
 					<div class="mb-2 flex items-center justify-between text-xs">
 						<span class="font-medium text-[#eae9e4]">Conversations</span>
 						<div class="flex bg-[#141412] p-0.5">
-							{#each [['open', openCount], ['all', sortedThreads.length]] as item}
+							{#each [['open', openCount], ['all', sortedThreads.length]] as item (item[0])}
 								<button class="px-1.5 py-0.5 text-[11px] {conversationFilter === item[0] ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'text-[#6f6b5f] hover:text-[#eae9e4]'}" onclick={() => (conversationFilter = item[0] as 'open' | 'all')}>{item[0]} {item[1]}</button>
 							{/each}
 						</div>
 					</div>
 					<div class="grid gap-1">
-						{#each visibleThreads as comment}
+						{#each visibleThreads as comment (comment.id)}
 							<button class="grid gap-0.5 px-1.5 py-1.5 text-left hover:bg-[#1a1a18]" onclick={() => onOpenConversation(comment)}>
 								<div class="flex min-w-0 items-center gap-1.5 text-xs">
 									<span class="h-1.5 w-1.5 shrink-0 {comment.state === 'resolved' ? 'bg-[#6f6b5f]' : 'bg-[#d9a66c]'}"></span>
@@ -338,7 +350,7 @@
 						viewed={viewedPath(file.path)}
 						collapsed={collapsedPath(file.path)}
 						onToggleCollapsed={() => toggleCollapsed(file.path)}
-						onToggleViewed={() => toggleViewed(file.path)}
+						onToggleViewed={showViewedState ? () => toggleViewed(file.path) : null}
 					/>
 					{#if text?.error}
 						<div class="border-x border-b border-[#2a2a28] bg-[#2b1b18] px-3 py-2 text-sm text-[#e0b0a7]">{text.error}</div>
