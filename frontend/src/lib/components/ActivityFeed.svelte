@@ -63,9 +63,9 @@
 </script>
 
 <div class="grid gap-0">
-	{#each activities as activity}
+	{#each activities as activity (activity.id)}
 		{@const message = displayMessage(activity)}
-		<div class="flex items-start gap-3 border-b border-[#1e1e1c] py-3 last:border-0">
+		<div class="flex items-start gap-3 border-b border-[#252522] py-3 last:border-0">
 			<div class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
 				{#if activity.actor_profile?.avatar_url}
 					<img src={activity.actor_profile.avatar_url} alt="" class="h-full w-full object-cover" />
@@ -76,13 +76,11 @@
 			<div class="min-w-0 flex-1">
 				<p class="text-sm text-[#eae9e4]">
 					<span class="font-medium">{displayName(activity)}</span>
-					{#if message}
-						{' '}{message}
-					{/if}
+					{#if message} {message}{/if}
 				</p>
 				<div class="mt-0.5 flex items-center gap-2 text-xs text-[#6f6b5f]">
 					{#if activity.workspace}
-						<span class="rounded bg-[#1e1e1c] px-1.5 py-0.5">{activity.workspace}</span>
+						<span class="bg-[#1e1e1c] px-1.5 py-0.5">{activity.workspace}</span>
 					{/if}
 					<span>{new Date(activity.timestamp).toLocaleString()}</span>
 				</div>

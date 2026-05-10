@@ -1,11 +1,15 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import { getProjectOverview, type ProjectOverview, type WorkspaceStatus, type ProjectSettings, type PanelItem, type Release } from '$lib/api';
 	import { appData } from '$lib/appState';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import BookOpen from 'lucide-svelte/icons/book-open';
+	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
+	import GitBranch from 'lucide-svelte/icons/git-branch';
+	import History from 'lucide-svelte/icons/history';
+	import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
 	import Tag from 'lucide-svelte/icons/tag';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import type { PageProps } from './$types';
@@ -30,6 +34,7 @@
 	const releases = $derived<Release[]>(overview?.releases ?? []);
 	const readme = $derived<string | null>(overview?.readme ?? null);
 	const settings = $derived<ProjectSettings | null>(overview?.settings ?? null);
+	const stats = $derived(overview?.stats ?? null);
 
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
@@ -47,10 +52,18 @@
 		return merged;
 	}
 
-	const orderedPanels = $derived(() => {
+	const orderedPanels = $derived.by(() => {
 		const panels = settings?.panels?.length ? settings.panels : DEFAULT_PANELS;
 		return withDefaultPanels(panels).filter((p) => p.enabled).sort((a, b) => a.order - b.order);
 	});
+	const sidePanels = $derived(orderedPanels.filter((panel) => panel.type !== 'activity'));
+	const showActivity = $derived(orderedPanels.some((panel) => panel.type === 'activity'));
+	const projectStats = $derived.by(() => [
+		{ label: 'Workspaces', value: stats?.workspace_count ?? 0, href: `/${tenant}/${project}/workspaces` },
+		{ label: 'Issues', value: stats?.open_issue_count ?? 0, href: `/${tenant}/${project}/issues` },
+		{ label: 'Releases', value: stats?.release_count ?? 0, href: `/${tenant}/${project}/releases` },
+		{ label: 'History', value: stats?.history_count ?? 0, href: `/${tenant}/${project}/history` }
+	]);
 
 	function wsDotColor(ws: WorkspaceStatus) {
 		if (ws.is_ready) return 'bg-[#7cb97c]';
@@ -74,6 +87,11 @@
 	function releaseDate(release: Release) {
 		const value = release.created_at ?? release.updated_at;
 		return value ? new Date(value).toLocaleDateString() : '';
+	}
+
+	function workspaceLabel(workspace: WorkspaceStatus) {
+		if (workspace.is_ready) return 'ready';
+		return workspace.status || 'open';
 	}
 
 	const unsubscribe = appData.subscribe((value) => {
@@ -119,48 +137,121 @@
 {#if loading}
 	<Spinner />
 {:else if overview}
-	<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-		<div class="min-w-0">
+	<div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+		<div class="min-w-0 space-y-5">
 			{#if readme}
-				<div class="min-w-0 rounded border border-[#2a2a28] bg-[#141412] p-5">
-					<Markdown source={readme} />
-				</div>
+				<section class="min-w-0 border border-[#2a2a28] bg-[#141412]">
+					<div class="flex min-h-11 items-center gap-2 border-b border-[#2a2a28] px-4">
+						<BookOpen class="h-4 w-4 text-[#8c887e]" />
+						<h2 class="text-sm font-medium text-[#eae9e4]">README.md</h2>
+					</div>
+					<div class="p-5">
+						<Markdown source={readme} />
+					</div>
+				</section>
 			{:else}
-				<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
-					<h3 class="text-sm font-semibold text-[#f0eee4]">About</h3>
-					<p class="mt-2 text-sm leading-relaxed text-[#a09d94]">
-						PIG project hosted on sty. Use <code class="rounded bg-[#1e1e1c] px-1 py-0.5 text-xs">sty init --target {tenant}/{project}</code> to sync.
-					</p>
-					<p class="mt-1 text-xs text-[#6f6b5f]">Add a README.md to show project documentation here.</p>
-				</div>
+				<section class="border border-[#2a2a28] bg-[#141412]">
+					<div class="flex min-h-11 items-center gap-2 border-b border-[#2a2a28] px-4">
+						<BookOpen class="h-4 w-4 text-[#8c887e]" />
+						<h2 class="text-sm font-medium text-[#eae9e4]">README.md</h2>
+					</div>
+					<div class="p-5">
+						<p class="text-sm leading-relaxed text-[#a09d94]">
+							PIG project hosted on sty. Use <code class="bg-[#1e1e1c] px-1 py-0.5 text-xs">sty init --target {tenant}/{project}</code> to sync.
+						</p>
+						<p class="mt-1 text-xs text-[#6f6b5f]">Add a README.md to show project documentation here.</p>
+					</div>
+				</section>
+			{/if}
+
+			{#if showActivity}
+				<section class="border border-[#2a2a28] bg-[#141412]">
+					<div class="flex min-h-11 items-center justify-between border-b border-[#2a2a28] px-4">
+						<div class="flex items-center gap-2">
+							<History class="h-4 w-4 text-[#8c887e]" />
+							<h2 class="text-sm font-medium text-[#eae9e4]">Recent activity</h2>
+						</div>
+						<a class="text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/history`}>View history</a>
+					</div>
+					<div class="px-4">
+						<ActivityFeed activities={overview.recent_activity} />
+					</div>
+				</section>
 			{/if}
 		</div>
 
-		<div class="flex h-fit flex-col gap-4">
-			{#each orderedPanels() as panel}
-				<div class="rounded border border-[#2a2a28] bg-[#141412] p-4">
-					<h3 class="text-sm font-semibold text-[#eae9e4]">{panel.title}</h3>
-					<div class="mt-2">
+		<aside class="flex h-fit flex-col border border-[#2a2a28] bg-[#141412]">
+			<section class="border-b border-[#2a2a28] p-4">
+				<div class="flex min-w-0 items-start justify-between gap-3">
+					<div class="min-w-0">
+						<h2 class="truncate text-sm font-medium text-[#eae9e4]">{tenant}/{project}</h2>
+						<div class="mt-1 flex items-center gap-1.5 text-xs text-[#8c887e]">
+							{#if settings?.visibility === 'private'}
+								<LockKeyhole class="h-3.5 w-3.5" />
+								<span>Private</span>
+							{:else}
+								<span>Public</span>
+							{/if}
+						</div>
+					</div>
+					{#if settings?.follower_count !== undefined}
+						<div class="shrink-0 text-right">
+							<div class="text-sm text-[#eae9e4]">{settings.follower_count}</div>
+							<div class="text-[11px] text-[#6f6b5f]">followers</div>
+						</div>
+					{/if}
+				</div>
+				<div class="mt-4 grid grid-cols-2 border border-[#252522]">
+					{#each projectStats as item (item.label)}
+						<a class="border-b border-r border-[#252522] px-3 py-2 hover:bg-[#1a1a18] even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0" href={item.href}>
+							<div class="text-sm text-[#eae9e4]">{item.value}</div>
+							<div class="text-[11px] text-[#6f6b5f]">{item.label}</div>
+						</a>
+					{/each}
+				</div>
+				<div class="mt-3 flex items-center gap-2 text-xs text-[#6f6b5f]">
+					<GitBranch class="h-3.5 w-3.5" />
+					<span class="min-w-0 truncate">default: {overview.default_workspace}</span>
+				</div>
+			</section>
+
+			{#each sidePanels as panel (panel.id)}
+				<section class="border-b border-[#2a2a28] last:border-b-0">
+					<div class="flex min-h-10 items-center justify-between gap-3 px-4">
+						<h3 class="text-sm font-medium text-[#eae9e4]">{panel.title}</h3>
 						{#if panel.type === 'workspaces'}
-							<div class="grid gap-1">
-								{#each panelWorkspaces as ws}
-									<button
-										class="flex min-w-0 items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-1.5 text-left text-sm hover:bg-[#1a1a18]"
-										onclick={() => goto(`/${tenant}/${project}/workspaces/${encodeURIComponent(ws.name)}`)}
+							<a class="text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/workspaces`}>All</a>
+						{:else if panel.type === 'releases'}
+							<a class="text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/releases`}>All</a>
+						{/if}
+					</div>
+					<div class="border-t border-[#252522]">
+						{#if panel.type === 'workspaces'}
+							<div class="divide-y divide-[#252522]">
+								{#each panelWorkspaces as ws (ws.name)}
+									<a
+										class="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 hover:bg-[#1a1a18]"
+										href={`/${tenant}/${project}/workspaces/${encodeURIComponent(ws.name)}`}
 									>
-										<span class="min-w-0 flex-1 truncate text-[#eae9e4]">{ws.name}</span>
-										<span class="h-1.5 w-1.5 shrink-0 rounded-full {wsDotColor(ws)}" title={ws.status}></span>
-									</button>
+										<span class="min-w-0">
+											<span class="block truncate text-sm text-[#eae9e4]">{ws.name}</span>
+											<span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#6f6b5f]">
+												<span class="h-1.5 w-1.5 shrink-0 rounded-full {wsDotColor(ws)}"></span>
+												{workspaceLabel(ws)}
+											</span>
+										</span>
+										<ChevronRight class="h-4 w-4 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
+									</a>
 								{:else}
-									<p class="text-xs text-[#6f6b5f]">No open workspaces.</p>
+									<p class="px-4 py-3 text-xs text-[#6f6b5f]">No open workspaces.</p>
 								{/each}
 							</div>
 						{:else if panel.type === 'releases'}
-							<div class="grid gap-1">
-								{#each releases.slice(0, 5) as release}
-									<button
-										class="flex min-w-0 items-start gap-2 rounded bg-[#0f0f0d] px-2.5 py-2 text-left hover:bg-[#1a1a18]"
-										onclick={() => goto(`/${tenant}/${project}/releases`)}
+							<div class="divide-y divide-[#252522]">
+								{#each releases.slice(0, 5) as release (release.id ?? release.tag)}
+									<a
+										class="group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-4 py-2.5 hover:bg-[#1a1a18]"
+										href={`/${tenant}/${project}/releases`}
 									>
 										<Tag class="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d9a66c]" />
 										<span class="min-w-0 flex-1">
@@ -172,18 +263,15 @@
 												{/if}
 											</span>
 										</span>
-									</button>
+										<ChevronRight class="mt-0.5 h-4 w-4 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
+									</a>
 								{:else}
-									<p class="text-xs text-[#6f6b5f]">No releases yet.</p>
+									<p class="px-4 py-3 text-xs text-[#6f6b5f]">No releases yet.</p>
 								{/each}
-							</div>
-						{:else if panel.type === 'activity'}
-							<div class="overflow-y-auto" style="max-height: 400px;">
-								<ActivityFeed activities={overview.recent_activity} />
 							</div>
 						{:else if panel.type === 'text'}
 							{#if panel.content}
-								<div class="text-sm leading-relaxed text-[#a09d94]">
+								<div class="p-4 text-sm leading-relaxed text-[#a09d94]">
 									<Markdown source={panel.content} />
 								</div>
 							{/if}
@@ -192,7 +280,7 @@
 								{@const isExternal = panel.url.startsWith('http')}
 								<a
 									href={panel.url}
-									class="inline-block rounded bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
+									class="m-4 inline-block bg-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]"
 									{...isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}}
 								>
 									{panel.button_label ?? panel.title}
@@ -203,7 +291,7 @@
 								{@const isExternal = panel.url.startsWith('http')}
 								<a
 									href={panel.url}
-									class="text-xs text-[#a09d94] hover:text-[#d9a66c]"
+									class="m-4 inline-flex items-center text-xs text-[#a09d94] hover:text-[#d9a66c]"
 									{...isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}}
 								>
 									{panel.content ?? panel.url}
@@ -214,18 +302,18 @@
 							{/if}
 						{:else if panel.type === 'info'}
 							{#if panel.content}
-								<div class="text-sm text-[#a09d94]">
+								<div class="p-4 text-sm text-[#a09d94]">
 									<Markdown source={panel.content} />
 								</div>
 							{/if}
 						{/if}
 					</div>
-				</div>
+				</section>
 			{/each}
-		</div>
+		</aside>
 	</div>
 {:else}
-	<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+	<div class="mx-auto max-w-6xl border border-[#2a2a28] bg-[#141412] p-8 text-center">
 		<p class="text-sm text-[#8c887e]">{data.accessStatus === 404 ? 'Project not found.' : 'This project is private.'}</p>
 	</div>
 {/if}
