@@ -170,8 +170,8 @@
 			<Search class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
 			<input class="workspace-search-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search workspaces" bind:value={query} />
 		</div>
-		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
-		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
+		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
+		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 	</div>
 
 	<div class="border border-[#2a2a28] bg-[#0f0f0d]">

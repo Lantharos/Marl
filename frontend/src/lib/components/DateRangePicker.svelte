@@ -35,8 +35,8 @@
 
 	function moveMonth(offset: number) {
 		const date = new Date(`${cursor}T00:00:00`);
-		date.setMonth(date.getMonth() + offset);
-		cursor = monthStart(date.toISOString().slice(0, 10));
+		const next = new Date(date.getFullYear(), date.getMonth() + offset, 1);
+		cursor = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
 	}
 
 	function choose(value: string) {
@@ -75,12 +75,12 @@
 </script>
 
 <div class="relative">
-	<button class="inline-flex h-8 items-center gap-2 bg-[#141412] px-2.5 text-xs text-[#a09d94] hover:text-[#eae9e4]" onclick={() => (open = !open)}>
+	<button class="inline-flex h-9 items-center gap-2 border border-[#2a2a28] bg-[#141412] px-2.5 text-xs text-[#a09d94] hover:border-[#3a3a36] hover:text-[#eae9e4]" onclick={() => (open = !open)}>
 		<CalendarDays class="h-3.5 w-3.5" />
 		{label}
 	</button>
 	{#if open}
-		<div class="absolute left-0 z-20 mt-2 w-64 bg-[#141412] p-3 shadow-xl shadow-black/30">
+		<div class="absolute left-0 z-20 mt-2 w-64 border border-[#2a2a28] bg-[#141412] p-3 shadow-xl shadow-black/30">
 			<div class="mb-3 flex items-center justify-between">
 				<button class="p-1 text-[#8c887e] hover:text-[#eae9e4]" onclick={() => moveMonth(-1)} aria-label="Previous month">
 					<ChevronLeft class="h-4 w-4" />
@@ -95,10 +95,10 @@
 				<button class="flex-1 py-1 text-xs {choosing === 'to' ? 'bg-[#2a2a28] text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (choosing = 'to')}>End</button>
 			</div>
 			<div class="grid grid-cols-7 gap-1 text-center text-[11px] text-[#6f6b5f]">
-				{#each ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as day}
+				{#each ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as day, index (index)}
 					<div class="py-1">{day}</div>
 				{/each}
-				{#each days as day}
+				{#each days as day, index (day || `blank-${index}`)}
 					{#if day}
 						<button
 							class="h-7 text-xs {day === from || day === to ? 'bg-[#eae9e4] text-[#0f0f0d]' : day > from && day < to ? 'bg-[#24231f] text-[#eae9e4]' : 'text-[#a09d94] hover:bg-[#1f1f1c] hover:text-[#eae9e4]'}"

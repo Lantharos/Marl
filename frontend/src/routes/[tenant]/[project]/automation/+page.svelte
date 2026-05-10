@@ -11,6 +11,7 @@
 		listProjectIntegrations,
 		listProjectWebhooks,
 		testProjectWebhook,
+		triggerProjectWebhook,
 		type ProjectApiKey,
 		type ProjectIntegration,
 		type ProjectWebhook
@@ -39,7 +40,7 @@
 	let generatedKey = $state<ProjectApiKey | null>(null);
 	let webhookName = $state('');
 	let webhookUrl = $state('');
-	let webhookEvents = $state<string[]>(['snapshot.shipped', 'release.created']);
+	let webhookEvents = $state<string[]>(['manual', 'snapshot.shipped', 'release.created']);
 	let createdWebhook = $state<ProjectWebhook | null>(null);
 	let testMessage = $state('');
 	let canMaintain = $state(false);
@@ -81,6 +82,7 @@
 		if (!keyName.trim()) return;
 		busy = true;
 		error = '';
+		generatedKey = null;
 		try {
 			generatedKey = await createProjectApiKey(tenant, project, {
 				name: keyName.trim(),
@@ -113,6 +115,7 @@
 		busy = true;
 		error = '';
 		testMessage = '';
+		createdWebhook = null;
 		try {
 			createdWebhook = await createProjectWebhook(tenant, project, {
 				name: webhookName.trim(),
@@ -157,6 +160,21 @@
 		}
 	}
 
+	async function triggerWebhook(id: string) {
+		busy = true;
+		error = '';
+		testMessage = '';
+		try {
+			const result = await triggerProjectWebhook(tenant, project, id);
+			testMessage = result.ok ? `Manual event returned ${result.status}` : `Manual event failed with ${result.status || 'no response'}`;
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function removeIntegration(id: string) {
 		busy = true;
 		error = '';
@@ -171,8 +189,11 @@
 	}
 </script>
 
-<div class="mx-auto max-w-3xl">
-	<h3 class="mb-4 text-sm font-semibold text-[#f0eee4]">Automation</h3>
+<div class="mx-auto max-w-6xl">
+	<div class="mb-5 grid gap-1">
+		<h2 class="text-base font-semibold text-[#f0eee4]">Automation</h2>
+		<p class="text-sm text-[#6f6b5f]">API keys, webhooks, and connected apps for this project.</p>
+	</div>
 
 	{#if loading}
 		<div class="flex min-h-[220px] items-center justify-center">
@@ -181,7 +202,7 @@
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if !canMaintain}
-		<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+		<div class="border border-[#2a2a28] bg-[#141412] p-8 text-center">
 			<p class="text-sm text-[#8c887e]">Project automation is limited to maintainers.</p>
 		</div>
 	{:else}
@@ -203,6 +224,7 @@
 			{addWebhook}
 			{removeWebhook}
 			{testWebhook}
+			{triggerWebhook}
 			{removeIntegration}
 		/>
 	{/if}

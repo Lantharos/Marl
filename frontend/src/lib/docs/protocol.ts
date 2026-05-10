@@ -22,7 +22,7 @@ export const apiScopes: ApiScope[] = [
 	{ scope: 'releases:read', allows: 'Read releases, tags, artifacts, and public release metadata.' },
 	{ scope: 'releases:write', allows: 'Create releases, upload artifacts, and manage release metadata.' },
 	{ scope: 'webhooks:read', allows: 'List webhooks, integrations, and webhook delivery state.' },
-	{ scope: 'webhooks:write', allows: 'Create, test, and revoke project webhooks.' },
+	{ scope: 'webhooks:write', allows: 'Create, test, trigger, and revoke project webhooks.' },
 	{ scope: 'settings:read', allows: 'Read project settings visible to maintainers.' },
 	{ scope: 'settings:write', allows: 'Change project settings, archive state, visibility, and project automation settings.' }
 ];
@@ -136,6 +136,7 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/tenants/:tenant/projects/:project/webhooks',
 			'POST /v1/tenants/:tenant/projects/:project/webhooks',
 			'POST /v1/tenants/:tenant/projects/:project/webhooks/:id/test',
+			'POST /v1/tenants/:tenant/projects/:project/webhooks/:id/trigger',
 			'GET /v1/tenants/:tenant/projects/:project/integrations',
 			'GET /v1/developer/apps',
 			'POST /v1/developer/apps',
@@ -164,6 +165,7 @@ export const endpointGroups: EndpointGroup[] = [
 ];
 
 export const webhookEvents = [
+	{ event: 'manual', meaning: 'A maintainer triggered a webhook from automation settings.' },
 	{ event: 'sync', meaning: 'A sync completed for a project.' },
 	{ event: 'snapshot.saved', meaning: 'A save snapshot was recorded remotely.' },
 	{ event: 'snapshot.crammed', meaning: 'A cram snapshot was recorded remotely.' },

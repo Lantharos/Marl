@@ -312,6 +312,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/test",
             test_project_webhook,
         )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/trigger",
+            trigger_project_webhook,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/integrations",
             list_project_integrations,

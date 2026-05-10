@@ -3,7 +3,7 @@
 
 	let {
 		title,
-		description,
+		description: _description,
 		open = false,
 		actions,
 		children
@@ -15,23 +15,15 @@
 		children: import('svelte').Snippet;
 	} = $props();
 
-	let expanded = $state(false);
-
-	$effect(() => {
-		expanded = open;
-	});
+	let expandedOverride = $state<boolean | null>(null);
+	let expanded = $derived(expandedOverride ?? open);
 </script>
 
-<section class="rounded border border-[#2a2a28] bg-[#141412]">
-	<div class="flex items-center justify-between gap-3 p-4">
-		<button class="flex min-w-0 flex-1 items-center gap-2 text-left" onclick={() => (expanded = !expanded)}>
+<section class="border border-[#2a2a28] bg-[#141412]">
+	<div class="flex min-h-12 items-center justify-between gap-3 border-b px-4 transition-[background-color] hover:bg-[#181816] {expanded ? 'border-[#252522]' : 'border-transparent'}">
+		<button class="flex min-w-0 flex-1 items-center gap-2 py-3 text-left outline-none focus-visible:outline-none" type="button" onclick={() => (expandedOverride = !expanded)}>
 			<ChevronDown class="h-4 w-4 shrink-0 text-[#6f6b5f] transition-transform {expanded ? '' : '-rotate-90'}" />
-			<span class="min-w-0">
-				<span class="block text-sm font-medium text-[#eae9e4]">{title}</span>
-				{#if description}
-					<span class="mt-1 block text-xs text-[#6f6b5f]">{description}</span>
-				{/if}
-			</span>
+			<span class="min-w-0 truncate text-sm font-medium text-[#eae9e4]">{title}</span>
 		</button>
 	{#if actions}
 		<div class="shrink-0">
@@ -41,7 +33,7 @@
 	</div>
 
 	{#if expanded}
-		<div class="border-t border-[#252522] p-4">
+		<div class="p-4">
 			{@render children()}
 		</div>
 	{/if}

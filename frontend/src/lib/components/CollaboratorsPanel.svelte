@@ -113,7 +113,7 @@
 	}
 </script>
 
-<section class="rounded border border-[#2a2a28] bg-[#141412] p-4">
+<section class="border border-[#2a2a28] bg-[#141412] p-4">
 	<div class="flex items-start justify-between gap-3">
 		<div class="min-w-0">
 			<div class="text-sm font-medium text-[#eae9e4]">{title}</div>
@@ -125,14 +125,14 @@
 		<div class="mt-4 grid gap-2">
 			<div class="relative">
 				<input
-					class="w-full rounded bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f]"
+					class="h-9 w-full border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c]"
 					placeholder="Handle or user"
 					bind:value={query}
 					oninput={scheduleSearch}
 				/>
 				{#if suggestions.length}
-					<div class="absolute left-0 right-0 top-full z-20 mt-1 rounded border border-[#2a2a28] bg-[#10100e] py-1 shadow-lg">
-						{#each suggestions as profile}
+					<div class="absolute left-0 right-0 top-full z-20 mt-1 border border-[#2a2a28] bg-[#10100e] py-1 shadow-lg">
+						{#each suggestions as profile (profile.user)}
 							<button
 								class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#1e1e1c]"
 								onclick={() => chooseUser(profile)}
@@ -156,8 +156,8 @@
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<div class="flex overflow-hidden rounded border border-[#2a2a28]">
-					{#each roles as role}
+				<div class="flex overflow-hidden border border-[#2a2a28]">
+					{#each roles as role (role)}
 						<button
 							class="px-2.5 py-1 text-xs {selectedRole === role ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#0f0f0d] text-[#8c887e] hover:text-[#eae9e4]'}"
 							onclick={() => (selectedRole = role)}
@@ -167,7 +167,7 @@
 					{/each}
 				</div>
 				<button
-					class="rounded bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] disabled:opacity-50"
+					class="bg-[#eae9e4] px-3 py-1.5 text-xs font-medium text-[#0f0f0d] disabled:opacity-50"
 					disabled={busy || !query.trim()}
 					onclick={add}
 				>
@@ -178,7 +178,7 @@
 	{/if}
 
 	<div class="mt-4 divide-y divide-[#252522]">
-		{#each collaborators as item}
+		{#each collaborators as item (item.user)}
 			<div class="flex items-center gap-3 py-3">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2a2a28] text-[10px] font-medium text-[#eae9e4]">
 					{#if item.profile?.avatar_url}
@@ -192,8 +192,8 @@
 					<div class="truncate text-xs text-[#6f6b5f]">{detail(item)}</div>
 				</div>
 				{#if canManage && item.removable}
-					<div class="hidden overflow-hidden rounded border border-[#2a2a28] sm:flex">
-						{#each roles as role}
+					<div class="hidden overflow-hidden border border-[#2a2a28] sm:flex">
+						{#each roles as role (role)}
 							<button
 								class="px-2 py-1 text-[11px] {item.role === role ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#0f0f0d] text-[#8c887e] hover:text-[#eae9e4]'}"
 								disabled={busy || item.role === role}
@@ -204,7 +204,7 @@
 						{/each}
 					</div>
 					<button
-						class="flex h-7 w-7 items-center justify-center rounded text-[#6f6b5f] hover:bg-[#1e1e1c] hover:text-[#d96c5a]"
+						class="flex h-7 w-7 items-center justify-center text-[#6f6b5f] hover:bg-[#1e1e1c] hover:text-[#d96c5a]"
 						disabled={busy}
 						aria-label="Remove collaborator"
 						onclick={() => onRemove(item.user)}

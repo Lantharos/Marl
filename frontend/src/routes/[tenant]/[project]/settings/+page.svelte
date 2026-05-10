@@ -18,6 +18,7 @@
 	import SwitchControl from '$lib/components/SwitchControl.svelte';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
+	import Pencil from 'lucide-svelte/icons/pencil';
 	import ChevronUp from 'lucide-svelte/icons/chevron-up';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -63,9 +64,14 @@
 
 	let showAddNavbar = $state(false);
 	let showAddPanel = $state(false);
+	let editingPanelIndex = $state<number | null>(null);
 	let newNavbar: NavbarItem = $state({ id: '', label: '', type: 'link', url: '', enabled: true, order: 0 });
 	let newPanel: PanelItem = $state({ id: '', title: '', type: 'text', content: '', enabled: true, order: 0 });
 	const CUSTOM_PANEL_TYPES: PanelItem['type'][] = ['text', 'button', 'link', 'info'];
+
+	function blankPanel(): PanelItem {
+		return { id: '', title: '', type: 'text', content: '', enabled: true, order: 0 };
+	}
 
 	async function persistSettings(items: { navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean }) {
 		busy = true;
@@ -148,15 +154,36 @@
 		await persistSettings({ panels: items });
 	}
 
-	async function addPanelItem() {
+	function openNewPanelModal() {
+		editingPanelIndex = null;
+		newPanel = blankPanel();
+		showAddPanel = true;
+	}
+
+	function openEditPanelModal(index: number) {
+		editingPanelIndex = index;
+		newPanel = { ...panelItems[index] };
+		showAddPanel = true;
+	}
+
+	function closePanelModal() {
+		editingPanelIndex = null;
+		newPanel = blankPanel();
+		showAddPanel = false;
+	}
+
+	async function savePanelItem() {
 		if (!newPanel.id || !newPanel.title) return;
 		const items = [...panelItems];
-		items.forEach((item) => (item.order += 1));
-		const item = { ...newPanel, order: 0 };
-		items.unshift(item);
+		if (editingPanelIndex === null) {
+			items.forEach((item) => (item.order += 1));
+			items.unshift({ ...newPanel, order: 0 });
+		} else {
+			const existing = items[editingPanelIndex];
+			items[editingPanelIndex] = { ...newPanel, order: existing?.order ?? editingPanelIndex };
+		}
 		settings = { ...settings, panels: items };
-		newPanel = { id: '', title: '', type: 'text', content: '', enabled: true, order: 0 };
-		showAddPanel = false;
+		closePanelModal();
 		await persistSettings({ panels: items });
 	}
 
@@ -193,52 +220,31 @@
 	const canManageProject = $derived(Boolean(access?.can_maintain));
 </script>
 
-<div class="mx-auto max-w-xl">
-	<h3 class="mb-4 text-sm font-semibold text-[#f0eee4]">Settings</h3>
+<div class="mx-auto max-w-6xl">
+	<div class="mb-5 grid gap-1">
+		<h2 class="text-base font-semibold text-[#f0eee4]">Settings</h2>
+		<p class="text-sm text-[#6f6b5f]">Project visibility, navigation, overview panels, access, and destructive actions.</p>
+	</div>
 
 	{#if loading}
 		<Spinner />
 	{:else if error}
 		<div class="text-sm text-[#d96c5a]">{error}</div>
 	{:else if !canManageProject}
-		<div class="rounded border border-[#2a2a28] bg-[#141412] p-8 text-center">
+		<div class="border border-[#2a2a28] bg-[#141412] p-8 text-center">
 			<p class="text-sm text-[#8c887e]">Project settings are limited to maintainers.</p>
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			<SettingsSection title="Navigation" description="Enable, disable, reorder, or add external links.">
-				<div class="mb-3 flex justify-end">
-					<button class="flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddNavbar = !showAddNavbar)}>
+			<SettingsSection title="Navigation">
+				{#snippet actions()}
+					<button class="flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] pl-1.5 pr-2.5 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#2a2a28]" onclick={() => (showAddNavbar = true)}>
 						<Plus class="h-3.5 w-3.5" /> Add
 					</button>
-				</div>
-				{#if showAddNavbar}
-					<div class="mb-3 grid gap-2 rounded bg-[#0f0f0d] p-3">
-						<div class="grid grid-cols-2 gap-2">
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">ID</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="docs" bind:value={newNavbar.id} />
-							</div>
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">Label</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="Docs" bind:value={newNavbar.label} />
-							</div>
-						</div>
-						{#if newNavbar.type === 'link'}
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">URL</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="https://docs.example.com" bind:value={newNavbar.url} />
-							</div>
-						{/if}
-						<div class="flex gap-2">
-							<button class="rounded bg-[#2a2a28] px-3 py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" disabled={busy} onclick={addNavbarItem}>Add</button>
-							<button class="rounded px-3 py-1 text-xs text-[#6f6b5f] hover:text-[#a09d94]" onclick={() => (showAddNavbar = false)}>Cancel</button>
-						</div>
-					</div>
-				{/if}
+				{/snippet}
 				<div class="grid gap-1">
 					{#each navbarItems as item, i (item.id)}
-						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
+						<div class="flex items-center gap-2 border border-[#252522] bg-[#0f0f0d] px-2.5 py-2">
 							<div class="flex items-center gap-0.5 shrink-0">
 								<button
 									class="flex h-4 w-4 items-center justify-center rounded text-[#5c5c5a] hover:text-[#a09d94] disabled:opacity-30"
@@ -262,13 +268,7 @@
 									{/if}
 								</div>
 							</div>
-							<button
-								class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium {item.enabled ? 'bg-[#7cb97c]/20 text-[#7cb97c]' : 'bg-[#d96c5a]/20 text-[#d96c5a]'}"
-								disabled={busy}
-								onclick={() => toggleNavbar(i)}
-							>
-								{item.enabled ? 'on' : 'off'}
-							</button>
+							<SwitchControl checked={item.enabled} disabled={busy} label={`Toggle ${item.label}`} onToggle={() => toggleNavbar(i)} />
 							{#if !['', 'code', 'workspaces', 'issues', 'releases', 'automation', 'history', 'settings'].includes(item.id)}
 								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removeNavbar(i)}><X class="h-3.5 w-3.5" /></button>
 							{/if}
@@ -277,8 +277,8 @@
 				</div>
 			</SettingsSection>
 
-			<SettingsSection title="Releases" description="Control release download access for private projects.">
-				<div class="flex items-center justify-between gap-4 rounded bg-[#0f0f0d] px-3 py-3">
+			<SettingsSection title="Releases">
+				<div class="flex items-center justify-between gap-4 border border-[#252522] bg-[#0f0f0d] px-3 py-3">
 					<div class="min-w-0">
 						<div class="text-sm font-medium text-[#eae9e4]">Public downloads</div>
 						<p class="mt-1 text-xs text-[#6f6b5f]">
@@ -293,70 +293,15 @@
 				</div>
 			</SettingsSection>
 
-			<SettingsSection title="Overview panels" description="Add text, buttons, links, or built-in panels to the project overview.">
-				<div class="mb-3 flex justify-end">
-					<button class="flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddPanel = !showAddPanel)}>
+			<SettingsSection title="Overview panels">
+				{#snippet actions()}
+					<button class="flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] pl-1.5 pr-2.5 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#2a2a28]" onclick={openNewPanelModal}>
 						<Plus class="h-3.5 w-3.5" /> Add
 					</button>
-				</div>
-				{#if showAddPanel}
-					<div class="mb-3 grid gap-2 rounded bg-[#0f0f0d] p-3">
-						<div class="grid grid-cols-2 gap-2">
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">ID</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="my-panel" bind:value={newPanel.id} />
-							</div>
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">Title</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="My Panel" bind:value={newPanel.title} />
-							</div>
-						</div>
-						<div>
-							<div class="text-[10px] text-[#6f6b5f] mb-1">Type</div>
-							<div class="flex flex-wrap gap-1">
-								{#each CUSTOM_PANEL_TYPES as type (type)}
-									<button
-										class="rounded px-2.5 py-1 text-xs capitalize {newPanel.type === type ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#1e1e1c] text-[#a09d94] hover:bg-[#2a2a28] hover:text-[#eae9e4]'}"
-										onclick={() => setNewPanelType(type)}
-									>
-										{type}
-									</button>
-								{/each}
-							</div>
-						</div>
-						{#if newPanel.type === 'text' || newPanel.type === 'info'}
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">Content (markdown)</div>
-								<textarea class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" rows="3" placeholder="Your markdown content here..." bind:value={newPanel.content}></textarea>
-							</div>
-						{/if}
-						{#if newPanel.type === 'button' || newPanel.type === 'link'}
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">URL</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="https://..." bind:value={newPanel.url} />
-							</div>
-						{/if}
-						{#if newPanel.type === 'button'}
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">Button label</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="Learn more" bind:value={newPanel.button_label} />
-							</div>
-						{/if}
-						{#if newPanel.type === 'link'}
-							<div>
-								<div class="text-[10px] text-[#6f6b5f] mb-1">Link text</div>
-								<input class="w-full rounded bg-[#1e1e1c] px-2 py-1 text-xs text-[#eae9e4] outline-none" placeholder="View documentation" bind:value={newPanel.content} />
-							</div>
-						{/if}
-						<div class="flex gap-2">
-							<button class="rounded bg-[#2a2a28] px-3 py-1 text-xs font-medium text-[#eae9e4] hover:bg-[#3a3a36]" disabled={busy} onclick={addPanelItem}>Add</button>
-							<button class="rounded px-3 py-1 text-xs text-[#6f6b5f] hover:text-[#a09d94]" onclick={() => (showAddPanel = false)}>Cancel</button>
-						</div>
-					</div>
-				{/if}
+				{/snippet}
 				<div class="grid gap-1">
 					{#each panelItems as item, i (item.id)}
-						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
+						<div class="flex items-center gap-2 border border-[#252522] bg-[#0f0f0d] px-2.5 py-2">
 							<div class="flex items-center gap-0.5 shrink-0">
 								<button
 									class="flex h-4 w-4 items-center justify-center rounded text-[#5c5c5a] hover:text-[#a09d94] disabled:opacity-30"
@@ -377,13 +322,10 @@
 									<span class="shrink-0 rounded bg-[#1e1e1c] px-1 py-0.5 text-[10px] text-[#6f6b5f] capitalize">{item.type}</span>
 								</div>
 							</div>
-							<button
-								class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium {item.enabled ? 'bg-[#7cb97c]/20 text-[#7cb97c]' : 'bg-[#d96c5a]/20 text-[#d96c5a]'}"
-								disabled={busy}
-								onclick={() => togglePanel(i)}
-							>
-								{item.enabled ? 'on' : 'off'}
+							<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#eae9e4] disabled:opacity-30" disabled={busy} onclick={() => openEditPanelModal(i)} aria-label={`Edit ${item.title}`}>
+								<Pencil class="h-3.5 w-3.5" />
 							</button>
+							<SwitchControl checked={item.enabled} disabled={busy} label={`Toggle ${item.title}`} onToggle={() => togglePanel(i)} />
 							{#if !['workspaces', 'releases', 'activity'].includes(item.id)}
 								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removePanel(i)}><X class="h-3.5 w-3.5" /></button>
 							{/if}
@@ -392,7 +334,7 @@
 				</div>
 			</SettingsSection>
 
-			<SettingsSection title="Collaborators" description="Manage project and inherited tenant access.">
+			<SettingsSection title="Collaborators">
 				<div class="grid gap-3">
 					<ProjectCollaboratorsSettings {tenant} {project} {access} />
 				</div>
@@ -407,5 +349,108 @@
 				onError={(message) => (error = message)}
 			/>
 		</div>
+
+		{#if showAddNavbar}
+			<div class="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4">
+				<button class="absolute inset-0 cursor-default" type="button" aria-label="Close" onclick={() => (showAddNavbar = false)}></button>
+				<div class="relative w-full max-w-lg border border-[#2a2a28] bg-[#141412] shadow-2xl shadow-black/40">
+					<div class="flex h-12 items-center justify-between border-b border-[#252522] px-4">
+						<div class="text-sm font-medium text-[#eae9e4]">Add navigation item</div>
+						<button class="-mr-4 flex h-12 w-12 items-center justify-center text-[#8c887e] hover:text-[#eae9e4]" onclick={() => (showAddNavbar = false)} aria-label="Close">
+							<X class="h-4 w-4" />
+						</button>
+					</div>
+					<div class="grid gap-3 p-4">
+						<div class="grid gap-3 sm:grid-cols-2">
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>ID</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="docs" bind:value={newNavbar.id} />
+							</label>
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>Label</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="Docs" bind:value={newNavbar.label} />
+							</label>
+						</div>
+						<label class="grid gap-1 text-xs text-[#8c887e]">
+							<span>URL</span>
+							<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="https://docs.example.com" bind:value={newNavbar.url} />
+						</label>
+					</div>
+					<div class="flex justify-end gap-2 border-t border-[#252522] px-4 py-3">
+						<button class="border border-[#2a2a28] px-3 py-1.5 text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" onclick={() => (showAddNavbar = false)}>Cancel</button>
+						<button class="bg-[#eae9e4] px-3 py-1.5 text-sm font-medium text-[#0f0f0d] disabled:opacity-50" disabled={busy || !newNavbar.id.trim() || !newNavbar.label.trim()} onclick={addNavbarItem}>Add item</button>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		{#if showAddPanel}
+			<div class="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4">
+				<button class="absolute inset-0 cursor-default" type="button" aria-label="Close" onclick={closePanelModal}></button>
+				<div class="relative w-full max-w-xl border border-[#2a2a28] bg-[#141412] shadow-2xl shadow-black/40">
+					<div class="flex h-12 items-center justify-between border-b border-[#252522] px-4">
+						<div class="text-sm font-medium text-[#eae9e4]">{editingPanelIndex === null ? 'Add overview panel' : 'Edit overview panel'}</div>
+						<button class="-mr-4 flex h-12 w-12 items-center justify-center text-[#8c887e] hover:text-[#eae9e4]" onclick={closePanelModal} aria-label="Close">
+							<X class="h-4 w-4" />
+						</button>
+					</div>
+					<div class="grid gap-3 p-4">
+						<div class="grid gap-3 sm:grid-cols-2">
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>ID</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="my-panel" bind:value={newPanel.id} />
+							</label>
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>Title</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="My panel" bind:value={newPanel.title} />
+							</label>
+						</div>
+						{#if editingPanelIndex === null || CUSTOM_PANEL_TYPES.includes(newPanel.type)}
+							<div class="grid gap-1">
+								<div class="text-xs text-[#8c887e]">Type</div>
+								<div class="flex flex-wrap gap-1.5">
+									{#each CUSTOM_PANEL_TYPES as type (type)}
+										<button
+											class="border px-2.5 py-1 text-xs capitalize {newPanel.type === type ? 'border-[#d9a66c] text-[#d9a66c]' : 'border-[#2a2a28] text-[#8c887e] hover:text-[#eae9e4]'}"
+											onclick={() => setNewPanelType(type)}
+										>
+											{type}
+										</button>
+									{/each}
+								</div>
+							</div>
+						{/if}
+						{#if newPanel.type === 'text' || newPanel.type === 'info'}
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>Content</span>
+								<textarea class="min-h-24 border border-[#2a2a28] bg-[#0f0f0d] px-3 py-2 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="Markdown content" bind:value={newPanel.content}></textarea>
+							</label>
+						{/if}
+						{#if newPanel.type === 'button' || newPanel.type === 'link'}
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>URL</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="https://..." bind:value={newPanel.url} />
+							</label>
+						{/if}
+						{#if newPanel.type === 'button'}
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>Button label</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="Learn more" bind:value={newPanel.button_label} />
+							</label>
+						{/if}
+						{#if newPanel.type === 'link'}
+							<label class="grid gap-1 text-xs text-[#8c887e]">
+								<span>Link text</span>
+								<input class="h-9 border border-[#2a2a28] bg-[#0f0f0d] px-3 text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-[#d9a66c] focus-visible:outline-none" placeholder="View documentation" bind:value={newPanel.content} />
+							</label>
+						{/if}
+					</div>
+					<div class="flex justify-end gap-2 border-t border-[#252522] px-4 py-3">
+						<button class="border border-[#2a2a28] px-3 py-1.5 text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" onclick={closePanelModal}>Cancel</button>
+						<button class="bg-[#eae9e4] px-3 py-1.5 text-sm font-medium text-[#0f0f0d] disabled:opacity-50" disabled={busy || !newPanel.id.trim() || !newPanel.title.trim()} onclick={savePanelItem}>{editingPanelIndex === null ? 'Add panel' : 'Save panel'}</button>
+					</div>
+				</div>
+			</div>
+		{/if}
 	{/if}
 </div>

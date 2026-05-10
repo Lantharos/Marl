@@ -249,6 +249,35 @@ pub async fn test_project_webhook(
     Response::from_json(&json!({ "ok": (200..300).contains(&status), "status": status }))
 }
 
+pub async fn trigger_project_webhook(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let id = param(&ctx, "item_id")?;
+    let database = db(&ctx)?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "webhooks:write",
+    )
+    .await?;
+    let Some(hook) = d1::project_webhook_by_id(&database, &tenant, &project, &id).await? else {
+        return json_error(404, "webhook not found");
+    };
+    if !hook.events.iter().any(|event| event == "manual") {
+        return json_error(400, "webhook is not subscribed to manual events");
+    }
+    let payload = event_payload(&tenant, &project, "manual", json!({ "triggered_by": user }));
+    let status = send_webhook(&hook, "manual", &payload).await.unwrap_or(0);
+    d1::record_webhook_delivery(&database, &tenant, &project, &id, status).await?;
+    Response::from_json(&json!({ "ok": (200..300).contains(&status), "status": status }))
+}
+
 pub async fn list_project_integrations(
     req: Request,
     ctx: crate::request_context::AppRouteContext,

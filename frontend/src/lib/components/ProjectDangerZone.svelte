@@ -106,43 +106,43 @@
 	}
 </script>
 
-<div class="rounded border border-[#d96c5a]/30 bg-[#141412] p-4">
+<div class="border border-[#d96c5a]/30 bg-[#141412] p-4">
 	<div class="text-sm font-medium text-[#d96c5a]">Danger Zone</div>
 	<p class="mt-1 text-xs text-[#6f6b5f]">Visibility changes affect who can see the project. Archived projects are read-only.</p>
 	<div class="mt-3 grid gap-2">
-		<div class="flex items-center justify-between gap-3 rounded bg-[#0f0f0d] px-3 py-2">
+		<div class="flex items-center justify-between gap-3 border border-[#252522] bg-[#0f0f0d] px-3 py-2">
 			<div class="min-w-0">
 				<div class="text-xs font-medium text-[#eae9e4]">{settings.visibility === 'public' ? 'Public project' : 'Private project'}</div>
 				<div class="mt-0.5 text-[11px] text-[#6f6b5f]">{settings.visibility === 'public' ? 'Anyone can read this project.' : 'Only collaborators can read this project.'}</div>
 			</div>
 			<button
-				class="shrink-0 rounded border border-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4] disabled:opacity-50"
+				class="shrink-0 border border-[#2a2a28] px-3 py-1.5 text-xs font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4] disabled:opacity-50"
 				disabled={busy}
 				onclick={() => armVisibilityChange(nextVisibility as 'public' | 'private')}
 			>
 				{visibilityArmedFor === nextVisibility ? 'Confirm' : visibilityAction}
 			</button>
 		</div>
-		<div class="flex items-center justify-between gap-3 rounded bg-[#0f0f0d] px-3 py-2">
+		<div class="flex items-center justify-between gap-3 border border-[#252522] bg-[#0f0f0d] px-3 py-2">
 			<div class="min-w-0">
 				<div class="text-xs font-medium text-[#eae9e4]">{settings.archived_at ? 'Archived project' : 'Active project'}</div>
 				<div class="mt-0.5 text-[11px] text-[#6f6b5f]">{settings.archived_at ? 'Writes and sync pushes are locked.' : 'Archive this project to make it read-only.'}</div>
 			</div>
 			<button
-				class="shrink-0 rounded border border-[#d96c5a] px-3 py-1.5 text-xs font-medium text-[#d96c5a] hover:bg-[#d96c5a] hover:text-[#0f0f0d] disabled:opacity-50"
+				class="shrink-0 border border-[#d96c5a] px-3 py-1.5 text-xs font-medium text-[#d96c5a] hover:bg-[#d96c5a] hover:text-[#0f0f0d] disabled:opacity-50"
 				disabled={busy}
 				onclick={() => (confirmAction = settings.archived_at ? 'unarchive' : 'archive')}
 			>
 				{archiveAction}
 			</button>
 		</div>
-		<div class="flex items-center justify-between gap-3 rounded bg-[#0f0f0d] px-3 py-2">
+		<div class="flex items-center justify-between gap-3 border border-[#252522] bg-[#0f0f0d] px-3 py-2">
 			<div class="min-w-0">
 				<div class="text-xs font-medium text-[#eae9e4]">Delete project</div>
 				<div class="mt-0.5 text-[11px] text-[#6f6b5f]">{canDeleteProject ? 'Remove this project from sty.' : 'Only owners can delete this project.'}</div>
 			</div>
 			<button
-				class="shrink-0 rounded border border-[#d96c5a] px-3 py-1.5 text-xs font-medium text-[#d96c5a] hover:bg-[#d96c5a] hover:text-[#0f0f0d] disabled:opacity-50"
+				class="shrink-0 border border-[#d96c5a] px-3 py-1.5 text-xs font-medium text-[#d96c5a] hover:bg-[#d96c5a] hover:text-[#0f0f0d] disabled:opacity-50"
 				disabled={busy || !canDeleteProject}
 				onclick={() => (confirmAction = 'delete')}
 			>

@@ -55,10 +55,10 @@ input {
 	font: inherit;
 }
 
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
+button:focus-visible:not(.focus-visible\:outline-none),
+input:focus-visible:not(.focus-visible\:outline-none),
+textarea:focus-visible:not(.focus-visible\:outline-none),
+select:focus-visible:not(.focus-visible\:outline-none) {
 	outline: 1px solid #d9a66c;
 	outline-offset: 1px;
 }

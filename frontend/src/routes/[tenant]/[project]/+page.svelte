@@ -7,7 +7,6 @@
 	import BookOpen from 'lucide-svelte/icons/book-open';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
-	import GitBranch from 'lucide-svelte/icons/git-branch';
 	import History from 'lucide-svelte/icons/history';
 	import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
 	import Tag from 'lucide-svelte/icons/tag';
@@ -208,10 +207,6 @@
 							<div class="text-[11px] text-[#6f6b5f]">{item.label}</div>
 						</a>
 					{/each}
-				</div>
-				<div class="mt-3 flex items-center gap-2 text-xs text-[#6f6b5f]">
-					<GitBranch class="h-3.5 w-3.5" />
-					<span class="min-w-0 truncate">default: {overview.default_workspace}</span>
 				</div>
 			</section>
 

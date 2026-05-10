@@ -176,8 +176,8 @@
 			<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 			<input class="issue-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Search issues" bind:value={query} />
 		</div>
-		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
-		<a class="inline-flex h-9 items-center bg-[#242420] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
+		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
+		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 		{#if canWrite}
 			<a class="inline-flex h-9 items-center gap-1 bg-[#eae9e4] px-3 text-sm text-[#0f0f0d] hover:bg-[#d8d3c5]" href="/{tenant}/{project}/issues/new"><Plus class="h-4 w-4" /> New issue</a>
 		{/if}

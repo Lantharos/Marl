@@ -59,6 +59,11 @@ export async function testProjectWebhook(tenant: string, project: string, id: st
 	return (await response.json()) as { ok: boolean; status: number };
 }
 
+export async function triggerProjectWebhook(tenant: string, project: string, id: string) {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/webhooks/${encodeURIComponent(id)}/trigger`, { method: 'POST' });
+	return (await response.json()) as { ok: boolean; status: number };
+}
+
 export async function listProjectIntegrations(
 	tenant: string,
 	project: string,
