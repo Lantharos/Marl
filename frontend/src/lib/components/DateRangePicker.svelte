@@ -48,6 +48,11 @@
 		}
 		if (event.key === 'Escape') open = false;
 	}
+
+	function suggestionPreview(suggestion: string) {
+		const next = parseNaturalDateRange(suggestion);
+		return next ? formatDateRangeLabel(next.from, next.to) : '';
+	}
 </script>
 
 <svelte:document onpointerdown={handleOutside} />
@@ -69,7 +74,7 @@
 					<CalendarDays class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
 					<input
 						class="date-range-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus-visible:outline-none"
-						placeholder="last 7 days, may 1 to may 10"
+						placeholder="before today, last 7 days, may 1 to may 10"
 						bind:value={draft}
 						onkeydown={handleKeydown}
 					/>
@@ -83,11 +88,11 @@
 				</div>
 			</div>
 
-			<div class="grid gap-1 p-2">
+			<div class="grid max-h-64 gap-1 overflow-y-auto p-2">
 				{#each dateRangeSuggestions as suggestion (suggestion)}
 					<button class="flex items-center justify-between px-2 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" type="button" onclick={() => apply(suggestion)}>
 						<span>{suggestion}</span>
-						<span class="text-xs text-[#6f6b5f]">{formatDateRangeLabel(parseNaturalDateRange(suggestion)?.from ?? '', parseNaturalDateRange(suggestion)?.to ?? '')}</span>
+						<span class="text-xs text-[#6f6b5f]">{suggestionPreview(suggestion)}</span>
 					</button>
 				{/each}
 			</div>

@@ -22,6 +22,7 @@ mod protocol_ready;
 mod release_support;
 mod releases;
 mod request_context;
+mod screenshots;
 mod source_archive;
 mod support;
 mod workspace_metadata;
@@ -35,6 +36,7 @@ use protocol::*;
 use protocol_ready::*;
 use releases::*;
 use request_context::AppContext;
+use screenshots::*;
 use source_archive::*;
 use support::{
     MAX_TREE_DEPTH, MAX_TREE_ENTRIES, apply_cache_headers, apply_cors, bearer_token, bucket, db,
@@ -143,6 +145,26 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async(
             "/v1/tenants/:tenant/projects/:project/overview",
             project_overview,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/screenshots",
+            list_screenshots,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/screenshots",
+            upload_screenshot,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/screenshots/:item_id/feature",
+            feature_screenshot,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/screenshots/:item_id",
+            delete_screenshot,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/screenshots/:item_id/download",
+            download_screenshot,
         )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/stats",

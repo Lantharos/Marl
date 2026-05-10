@@ -407,7 +407,9 @@ pub async fn user_account_tenant(db: &Database, user: &str) -> Result<Option<Str
         name: String,
     }
     let row: Option<Row> = db
-        .prepare("SELECT name FROM tenants WHERE owner = ?1 AND kind = 'user' ORDER BY name LIMIT 1")
+        .prepare(
+            "SELECT name FROM tenants WHERE owner = ?1 AND kind = 'user' ORDER BY name LIMIT 1",
+        )
         .bind(&[js_str(user)])?
         .first(None)
         .await?;

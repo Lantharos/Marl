@@ -10,7 +10,7 @@ export type EndpointGroup = {
 };
 
 export const apiScopes: ApiScope[] = [
-	{ scope: 'main:read', allows: 'Read the default workspace, project overview, code, history, stats, and release source metadata.' },
+	{ scope: 'main:read', allows: 'Read the default workspace, project overview, code, screenshots, history, stats, and release source metadata.' },
 	{ scope: 'main:write', allows: 'Advance the default workspace head. This is intentionally separate from workspace feature work.' },
 	{ scope: 'workspaces:read', allows: 'Read non-main workspace heads, history, diffs, ready state, and workspace files.' },
 	{ scope: 'workspaces:create', allows: 'Create and push new feature workspaces without touching main.' },
@@ -24,7 +24,7 @@ export const apiScopes: ApiScope[] = [
 	{ scope: 'webhooks:read', allows: 'List webhooks, integrations, and webhook delivery state.' },
 	{ scope: 'webhooks:write', allows: 'Create, test, trigger, and revoke project webhooks.' },
 	{ scope: 'settings:read', allows: 'Read project settings visible to maintainers.' },
-	{ scope: 'settings:write', allows: 'Change project settings, archive state, visibility, and project automation settings.' }
+	{ scope: 'settings:write', allows: 'Change project settings, screenshots, archive state, visibility, and project automation settings.' }
 ];
 
 export const endpointGroups: EndpointGroup[] = [
@@ -59,6 +59,11 @@ export const endpointGroups: EndpointGroup[] = [
 			'DELETE /v1/tenants/:tenant/projects/:project',
 			'PATCH /v1/tenants/:tenant/projects/:project/folder',
 			'GET /v1/tenants/:tenant/projects/:project/access',
+			'GET /v1/tenants/:tenant/projects/:project/screenshots',
+			'POST /v1/tenants/:tenant/projects/:project/screenshots',
+			'POST /v1/tenants/:tenant/projects/:project/screenshots/:item_id/feature',
+			'DELETE /v1/tenants/:tenant/projects/:project/screenshots/:item_id',
+			'GET /v1/tenants/:tenant/projects/:project/screenshots/:item_id/download',
 			'GET /v1/tenants/:tenant/projects/:project/stats',
 			'GET /v1/tenants/:tenant/projects/:project/settings',
 			'PATCH /v1/tenants/:tenant/projects/:project/settings'

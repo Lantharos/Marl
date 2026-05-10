@@ -4,6 +4,7 @@
 	import { appData } from '$lib/appState';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import ScreenshotImage from '$lib/components/ScreenshotImage.svelte';
 	import BookOpen from 'lucide-svelte/icons/book-open';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
@@ -32,6 +33,7 @@
 	);
 	const releases = $derived<Release[]>(overview?.releases ?? []);
 	const readme = $derived<string | null>(overview?.readme ?? null);
+	const featuredScreenshot = $derived(overview?.featured_screenshot ?? null);
 	const settings = $derived<ProjectSettings | null>(overview?.settings ?? null);
 	const stats = $derived(overview?.stats ?? null);
 
@@ -138,6 +140,18 @@
 {:else if overview}
 	<div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
 		<div class="min-w-0 space-y-5">
+			{#if featuredScreenshot}
+				<section class="min-w-0 border border-[#2a2a28] bg-[#141412]">
+					<a class="block" href={`/${tenant}/${project}/screenshots`}>
+						<ScreenshotImage src={featuredScreenshot.download_url} alt={featuredScreenshot.title ?? featuredScreenshot.name} class="aspect-[16/9]" />
+					</a>
+					<div class="flex min-h-10 items-center justify-between gap-3 border-t border-[#2a2a28] px-4">
+						<div class="min-w-0 truncate text-sm text-[#eae9e4]">{featuredScreenshot.title || featuredScreenshot.name}</div>
+						<a class="shrink-0 text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/screenshots`}>Gallery</a>
+					</div>
+				</section>
+			{/if}
+
 			{#if readme}
 				<section class="min-w-0 border border-[#2a2a28] bg-[#141412]">
 					<div class="flex min-h-11 items-center gap-2 border-b border-[#2a2a28] px-4">

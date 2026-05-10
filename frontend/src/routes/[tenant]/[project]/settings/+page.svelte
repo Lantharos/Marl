@@ -19,6 +19,7 @@
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import Pencil from 'lucide-svelte/icons/pencil';
+	import Trash2 from 'lucide-svelte/icons/trash-2';
 	import ChevronUp from 'lucide-svelte/icons/chevron-up';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -268,10 +269,12 @@
 									{/if}
 								</div>
 							</div>
-							<SwitchControl checked={item.enabled} disabled={busy} label={`Toggle ${item.label}`} onToggle={() => toggleNavbar(i)} />
 							{#if !['', 'code', 'workspaces', 'issues', 'releases', 'automation', 'history', 'settings'].includes(item.id)}
-								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removeNavbar(i)}><X class="h-3.5 w-3.5" /></button>
+								<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removeNavbar(i)} aria-label={`Delete ${item.label}`}>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
 							{/if}
+							<SwitchControl checked={item.enabled} disabled={busy} label={`Toggle ${item.label}`} onToggle={() => toggleNavbar(i)} />
 						</div>
 					{/each}
 				</div>
@@ -325,10 +328,12 @@
 							<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#eae9e4] disabled:opacity-30" disabled={busy} onclick={() => openEditPanelModal(i)} aria-label={`Edit ${item.title}`}>
 								<Pencil class="h-3.5 w-3.5" />
 							</button>
-							<SwitchControl checked={item.enabled} disabled={busy} label={`Toggle ${item.title}`} onToggle={() => togglePanel(i)} />
 							{#if !['workspaces', 'releases', 'activity'].includes(item.id)}
-								<button class="shrink-0 text-[#5c5c5a] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removePanel(i)}><X class="h-3.5 w-3.5" /></button>
+								<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removePanel(i)} aria-label={`Delete ${item.title}`}>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
 							{/if}
+							<SwitchControl checked={item.enabled} disabled={busy} label={`Toggle ${item.title}`} onToggle={() => togglePanel(i)} />
 						</div>
 					{/each}
 				</div>

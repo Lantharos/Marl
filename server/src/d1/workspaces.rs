@@ -237,9 +237,12 @@ pub async fn set_workspace_metadata(
     linked_issues: &[String],
     locked: bool,
 ) -> Result<()> {
-    let reviewers_json = serde_json::to_string(reviewers).map_err(|error| err(error.to_string()))?;
-    let assignees_json = serde_json::to_string(assignees).map_err(|error| err(error.to_string()))?;
-    let linked_issues_json = serde_json::to_string(linked_issues).map_err(|error| err(error.to_string()))?;
+    let reviewers_json =
+        serde_json::to_string(reviewers).map_err(|error| err(error.to_string()))?;
+    let assignees_json =
+        serde_json::to_string(assignees).map_err(|error| err(error.to_string()))?;
+    let linked_issues_json =
+        serde_json::to_string(linked_issues).map_err(|error| err(error.to_string()))?;
     db.prepare(
         "UPDATE workspace_states SET reviewers_json = ?1, assignees_json = ?2, milestone = ?3, linked_issues_json = ?4, locked = ?5 \
          WHERE tenant = ?6 AND project = ?7 AND workspace = ?8"
@@ -414,7 +417,10 @@ pub async fn close_workspace(
     let message = reason
         .map(|value| format!("{status} workspace {workspace}: {value}"))
         .unwrap_or_else(|| format!("{status} workspace {workspace}"));
-    log_history(db, tenant, project, workspace, principal, status, &message, None, None).await?;
+    log_history(
+        db, tenant, project, workspace, principal, status, &message, None, None,
+    )
+    .await?;
     recompute_project_stats(db, tenant, project).await?;
     Ok(())
 }

@@ -13,7 +13,15 @@ pub(crate) async fn update_workspace_metadata(
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await.unwrap_or_default();
     let database = db(&ctx)?;
-    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:write").await?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "contributor",
+        "workspaces:write",
+    )
+    .await?;
     let state = d1::workspace_states(&database, &tenant, &project)
         .await?
         .into_iter()
@@ -21,8 +29,18 @@ pub(crate) async fn update_workspace_metadata(
     let Some(state) = state else {
         return json_error(404, "workspace not found");
     };
-    if body.get("locked").is_some() && body["locked"].as_bool().unwrap_or(state.locked) != state.locked {
-        check_project_write_capability(&database, &tenant, &project, &user, "maintainer", "workspaces:write").await?;
+    if body.get("locked").is_some()
+        && body["locked"].as_bool().unwrap_or(state.locked) != state.locked
+    {
+        check_project_write_capability(
+            &database,
+            &tenant,
+            &project,
+            &user,
+            "maintainer",
+            "workspaces:write",
+        )
+        .await?;
     }
     let reviewers = body
         .get("reviewers")

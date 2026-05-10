@@ -95,7 +95,8 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         return Ok(response);
     }
     let store = bucket(&ctx.env)?;
-    let cache_key = released_snapshot.then(|| release_source_cache_key(&tenant, &project, &head_id));
+    let cache_key =
+        released_snapshot.then(|| release_source_cache_key(&tenant, &project, &head_id));
     if let Some(cache_key) = cache_key.as_deref() {
         if let Some(object) = store.get(cache_key).execute().await? {
             if let Some(body) = object.body() {
@@ -145,13 +146,7 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
                 crate::release_support::safe_file_name(&format!("{tenant}-{project}.zip"))
             ),
         )?;
-        apply_cache_headers(
-            headers,
-            &etag,
-            public_cache,
-            cache_seconds,
-            pinned_snapshot,
-        )?;
+        apply_cache_headers(headers, &etag, public_cache, cache_seconds, pinned_snapshot)?;
         return Ok(response);
     }
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;

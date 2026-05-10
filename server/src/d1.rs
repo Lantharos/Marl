@@ -1,8 +1,9 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    Comment, HistoryEntry, HistorySignature, Issue, NavbarItem, PanelItem, ProjectSettings, ProjectStats,
-    ProjectSummary, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
+    Comment, HistoryEntry, HistorySignature, Issue, NavbarItem, PanelItem, ProjectSettings,
+    ProjectStats, ProjectSummary, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState,
+    validate_segment,
 };
 use uuid::Uuid;
 use worker::*;

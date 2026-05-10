@@ -334,8 +334,8 @@ pub async fn validate_snapshot_signature(
     database: &crate::request_context::Database,
     bytes: &[u8],
 ) -> Result<(), String> {
-    let snapshot: SignedSnapshot =
-        serde_json::from_slice(bytes).map_err(|_| "snapshot signature payload is invalid".to_string())?;
+    let snapshot: SignedSnapshot = serde_json::from_slice(bytes)
+        .map_err(|_| "snapshot signature payload is invalid".to_string())?;
     let Some(signature) = snapshot.signature else {
         return Ok(());
     };
@@ -348,7 +348,8 @@ pub async fn validate_snapshot_signature(
         .ok_or_else(|| "signing key is not registered".to_string())?;
     let public_key =
         decode_ed25519_public_key(&key.public_key).map_err(|error| error.to_string())?;
-    let signature_bytes = decode_signature(&signature.signature).map_err(|error| error.to_string())?;
+    let signature_bytes =
+        decode_signature(&signature.signature).map_err(|error| error.to_string())?;
     let id = snapshot_id_without_signature(bytes).map_err(|error| error.to_string())?;
     if public_key.verify(id.as_bytes(), &signature_bytes).is_err() {
         return Err("signature mismatch".to_string());
@@ -363,7 +364,8 @@ fn snapshot_id_without_signature(bytes: &[u8]) -> Result<String> {
         object.insert("id".to_string(), serde_json::Value::String(String::new()));
         object.remove("signature");
     }
-    let canonical = serde_json::to_vec(&snapshot).map_err(|error| Error::RustError(error.to_string()))?;
+    let canonical =
+        serde_json::to_vec(&snapshot).map_err(|error| Error::RustError(error.to_string()))?;
     Ok(hex::encode(Sha256::digest(canonical)))
 }
 

@@ -143,7 +143,9 @@ pub async fn principal_for_token(db: &Database, token: &str) -> Result<Option<To
         last_used_at: Option<String>,
     }
     let row: Option<Row> = db
-        .prepare("SELECT user, expires_at, revoked_at, last_used_at FROM tokens WHERE token_hash = ?1")
+        .prepare(
+            "SELECT user, expires_at, revoked_at, last_used_at FROM tokens WHERE token_hash = ?1",
+        )
         .bind(&[js_str(&hash)])?
         .first(None)
         .await?;

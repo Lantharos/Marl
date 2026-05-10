@@ -87,6 +87,23 @@ export interface ReleaseArtifact {
 	snapshot?: string | null;
 }
 
+export interface ProjectScreenshot {
+	id: string;
+	kind?: 'screenshot' | string;
+	title?: string | null;
+	name: string;
+	url?: string | null;
+	download_url: string;
+	size?: number | string | null;
+	digest?: string | null;
+	content_type?: string | null;
+	featured?: boolean;
+	uploaded_at?: string | null;
+	uploaded_by?: string | null;
+	created_at?: string;
+	updated_at?: string;
+}
+
 export interface TagInfo {
 	id?: string;
 	tag?: string;

@@ -165,7 +165,11 @@ pub async fn update_issue_status(
     } else {
         None
     };
-    let next_state_reason = if status == "closed" { state_reason } else { None };
+    let next_state_reason = if status == "closed" {
+        state_reason
+    } else {
+        None
+    };
     db.prepare(
         "UPDATE issues SET status = ?1, updated_at = ?2, closed_at = ?3, state_reason = ?4 WHERE tenant = ?5 AND project = ?6 AND id = ?7"
     )
@@ -241,7 +245,12 @@ pub async fn transfer_issue(
         .ok_or_else(|| err("issue not found"))
 }
 
-pub async fn delete_issue(db: &Database, tenant: &str, project: &str, issue_id: &str) -> Result<bool> {
+pub async fn delete_issue(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    issue_id: &str,
+) -> Result<bool> {
     let Some(issue) = list_issues(db, tenant, project)
         .await?
         .into_iter()

@@ -4,7 +4,7 @@ import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
 import type { AccessResponse, UserProfile } from './collaboratorTypes';
 import type { Issue } from './issueApi';
-import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
 export * from './collaboratorApi';
@@ -13,7 +13,7 @@ export type { AccessResponse, Collaborator, CollaboratorRole, UserProfile } from
 export * from './issueApi';
 export * from './objectApi';
 export * from './projectDataApi';
-export type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+export type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -104,6 +104,7 @@ export interface ProjectOverview {
 	};
 	recent_activity: Activity[];
 	releases: Release[];
+	featured_screenshot?: ProjectScreenshot | null;
 	default_workspace: string;
 }
 
@@ -616,6 +617,32 @@ export async function deleteProtocolItem(tenant: string, project: string, kind: 
 export async function searchProject(tenant: string, project: string, query: string, options: ApiOptions = {}): Promise<Paginated<ProtocolItem>> {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/search?q=${encodeURIComponent(query)}`, { signal: options.signal });
 	return (await response.json()) as Paginated<ProtocolItem>;
+}
+
+export async function listProjectScreenshots(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<ProjectScreenshot>> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/screenshots${pageQuery(options)}`, { signal: options.signal });
+	return (await response.json()) as Paginated<ProjectScreenshot>;
+}
+
+export async function uploadProjectScreenshot(tenant: string, project: string, file: File, title?: string, featured = false): Promise<ProjectScreenshot> {
+	const form = new FormData();
+	form.set('file', file);
+	if (title?.trim()) form.set('title', title.trim());
+	if (featured) form.set('featured', 'true');
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/screenshots`, {
+		method: 'POST',
+		body: form
+	});
+	return (await response.json()) as ProjectScreenshot;
+}
+
+export async function featureProjectScreenshot(tenant: string, project: string, id: string): Promise<ProjectScreenshot> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/screenshots/${encodeURIComponent(id)}/feature`, { method: 'POST' });
+	return (await response.json()) as ProjectScreenshot;
+}
+
+export async function deleteProjectScreenshot(tenant: string, project: string, id: string) {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/screenshots/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 function protocolEndpoint(kind: string) {

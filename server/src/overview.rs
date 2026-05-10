@@ -21,6 +21,7 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
     .await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let releases = latest_releases(&database, &tenant, &project, 5).await?;
+    let featured_screenshot = screenshots::featured_screenshot(&database, &tenant, &project).await?;
     let default_workspace = settings.default_workspace.clone();
     let default_head = d1::head(&database, &tenant, &project, &default_workspace).await?;
     let etag = overview_etag(
@@ -30,6 +31,7 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         &access,
         &stats,
         &releases,
+        featured_screenshot.as_ref(),
         default_head.as_deref(),
     )?;
     if let Some(response) = not_modified_response(&req, &etag, false, 15, false)? {
@@ -62,6 +64,7 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         "stats": stats,
         "recent_activity": recent_activity,
         "releases": releases,
+        "featured_screenshot": featured_screenshot,
         "default_workspace": default_workspace,
     }))?;
     apply_cache_headers(response.headers_mut(), &etag, false, 15, false)?;
@@ -131,6 +134,7 @@ fn overview_etag(
     access: &sty_protocol::AccessResponse,
     stats: &sty_protocol::ProjectStats,
     releases: &[serde_json::Value],
+    featured_screenshot: Option<&serde_json::Value>,
     default_head: Option<&str>,
 ) -> Result<String> {
     let body = serde_json::to_vec(&json!({
@@ -140,6 +144,7 @@ fn overview_etag(
         "access": access,
         "stats": stats,
         "releases": releases,
+        "featured_screenshot": featured_screenshot,
         "default_head": default_head,
     }))
     .map_err(|error| Error::RustError(error.to_string()))?;

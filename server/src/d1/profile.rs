@@ -318,7 +318,11 @@ async fn profile_following_project_cards(
     Ok(rows.into_iter().map(profile_project_card_item).collect())
 }
 
-async fn profile_tenants(db: &Database, user: &str, account_tenant: &str) -> Result<Vec<ProfileTenant>> {
+async fn profile_tenants(
+    db: &Database,
+    user: &str,
+    account_tenant: &str,
+) -> Result<Vec<ProfileTenant>> {
     let result = db
         .prepare(
             "SELECT t.name, t.kind, COUNT(DISTINCT p.project) AS public_project_count

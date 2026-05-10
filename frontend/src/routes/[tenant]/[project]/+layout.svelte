@@ -57,7 +57,7 @@
     const access = $derived<AccessResponse | null>(
         publicAccess ?? overview?.access ?? layoutChrome?.access ?? null,
     );
-    const tabs = $derived(() => projectTabs(settings?.navbar_items, "public"));
+    const tabs = $derived.by(() => projectTabs(settings?.navbar_items, "public"));
     const archivedAt = $derived(access?.archived_at ?? settings?.archived_at ?? null);
     const archivedBy = $derived(access?.archived_by ?? settings?.archived_by ?? null);
     const archivedByProfile = $derived(access?.archived_by_profile ?? settings?.archived_by_profile ?? null);
@@ -65,14 +65,20 @@
 
     $effect(() => {
         const key = `${tenant}/${project}/${signedIn ? "auth" : "public"}`;
-        if (layoutChrome || overview || (settings && stats && access)) {
-            publicChromeKey = "";
+        const hasCompleteChrome = settings !== null && stats !== null && access !== null;
+        const shouldRefreshAuthedChrome =
+            signedIn &&
+            project.length > 0 &&
+            publicChromeKey !== key &&
+            (!access || access.source === "public" || !settings || !stats);
+        const shouldLoadPublicChrome = !signedIn && !layoutChrome && !overview && !hasCompleteChrome;
+        if (!shouldRefreshAuthedChrome && !shouldLoadPublicChrome) {
             return;
         }
         if (publicChromeKey === key) return;
         publicChromeKey = key;
         const controller = new AbortController();
-        void loadPublicChrome(tenant, project, controller.signal);
+        void loadProjectChrome(tenant, project, controller.signal);
         return () => controller.abort();
     });
 
@@ -82,7 +88,7 @@
             : currentPath.startsWith(href);
     }
 
-    async function loadPublicChrome(
+    async function loadProjectChrome(
         tenant: string,
         project: string,
         signal: AbortSignal,
@@ -140,7 +146,7 @@
                 </button>
             </div>
             <nav class="flex gap-1 overflow-x-auto">
-                {#each tabs() as tab}
+                {#each tabs as tab (tab.id || tab.label)}
                     {#if tab.type === "link"}
                         {@const href = tab.url ?? "#"}
                         {@const isExternal = href.startsWith("http")}

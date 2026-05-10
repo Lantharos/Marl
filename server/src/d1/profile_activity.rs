@@ -8,7 +8,10 @@ pub async fn profile_activity(
 ) -> Result<Vec<HomeActivityItem>> {
     let history = profile_history_activity(db, user, limit).await?;
     let issues = profile_issue_activity(db, user, limit).await?;
-    let mut items = history.into_iter().chain(issues.into_iter()).collect::<Vec<_>>();
+    let mut items = history
+        .into_iter()
+        .chain(issues.into_iter())
+        .collect::<Vec<_>>();
     items.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
     items.truncate(limit);
     Ok(items)
@@ -29,10 +32,7 @@ async fn profile_history_activity(
              ORDER BY h.timestamp DESC
              LIMIT ?2",
         )
-        .bind(&[
-            js_str(user),
-            wasm_bindgen::JsValue::from_f64(limit as f64),
-        ])?
+        .bind(&[js_str(user), wasm_bindgen::JsValue::from_f64(limit as f64)])?
         .all()
         .await?;
     #[derive(Deserialize)]
@@ -79,10 +79,7 @@ async fn profile_issue_activity(
              ORDER BY activity_at DESC
              LIMIT ?2",
         )
-        .bind(&[
-            js_str(user),
-            wasm_bindgen::JsValue::from_f64(limit as f64),
-        ])?
+        .bind(&[js_str(user), wasm_bindgen::JsValue::from_f64(limit as f64)])?
         .all()
         .await?;
     #[derive(Deserialize)]
