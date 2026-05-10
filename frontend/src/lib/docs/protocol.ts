@@ -150,6 +150,8 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/tenants/:tenant/projects/:project/releases',
 			'POST /v1/tenants/:tenant/projects/:project/releases',
 			'GET /v1/tenants/:tenant/projects/:project/releases/:release',
+			'PATCH /v1/tenants/:tenant/projects/:project/releases/:release',
+			'DELETE /v1/tenants/:tenant/projects/:project/releases/:release',
 			'POST /v1/tenants/:tenant/projects/:project/releases/:release/artifacts',
 			'GET /v1/tenants/:tenant/projects/:project/releases/:release/artifacts/:artifact/download',
 			'GET /v1/account/keys',

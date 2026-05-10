@@ -111,7 +111,7 @@
 		{/if}
 	</div>
 
-	<div class="mb-4 flex h-9 items-center gap-2 border border-transparent bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
+	<div class="mb-4 flex h-9 items-center gap-2 border border-[#2a2a28] bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
 		<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 		<input class="label-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Search all labels" bind:value={query} />
 	</div>
@@ -129,7 +129,7 @@
 				<button class="text-[#8c887e] hover:text-[#eae9e4]">Sort</button>
 			</div>
 			<div class="divide-y divide-[#252522]">
-				{#each shownLabels as label}
+				{#each shownLabels as label (label.name)}
 					<a class="grid gap-2 px-4 py-3 hover:bg-[#141412] md:grid-cols-[260px_1fr_96px]" href="/{tenant}/{project}/issues?label={encodeURIComponent(label.name)}">
 						<div class="min-w-0">
 							<span class="inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-xs font-medium" style:background-color={color(label.color)} style:border-color={color(label.color)}>

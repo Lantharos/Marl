@@ -17,6 +17,7 @@
 	import SettingsDeveloperApps from '$lib/components/SettingsDeveloperApps.svelte';
 	import SettingsKeys from '$lib/components/SettingsKeys.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import SwitchControl from '$lib/components/SwitchControl.svelte';
 
 	let tab = $state<'preferences' | 'signing' | 'developer'>('preferences');
 	let loading = $state(true);
@@ -176,17 +177,7 @@
 							<h4 class="text-sm font-medium text-[#eae9e4]">Vigilant mode</h4>
 							<p class="mt-1 text-sm leading-5 text-[#8c887e]">Show unsigned badges on history saves and review diffs.</p>
 						</div>
-						<button
-								type="button"
-								role="switch"
-								aria-label="Toggle vigilant mode"
-								aria-checked={userSettings.vigilant_mode}
-							class="relative h-6 w-11 shrink-0 border border-[#2a2a28] bg-[#0f0f0d] transition-colors {userSettings.vigilant_mode ? 'border-[#d9a66c] bg-[#2f2a1c]' : 'hover:border-[#3a3a36]'}"
-							disabled={busy}
-							onclick={toggleVigilantMode}
-						>
-							<span class="absolute top-1 h-3.5 w-3.5 bg-[#8c887e] transition-[left,background-color] {userSettings.vigilant_mode ? 'left-6 bg-[#d9a66c]' : 'left-1'}"></span>
-						</button>
+						<SwitchControl checked={userSettings.vigilant_mode} disabled={busy} label="Toggle vigilant mode" onToggle={toggleVigilantMode} />
 					</div>
 				</section>
 			{:else if tab === 'signing'}

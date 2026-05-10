@@ -3,7 +3,9 @@ use sty_protocol::OkResponse;
 use worker::*;
 
 use crate::protocol_profiles::profile_json;
-use crate::support::{db, json_error, paginate_vec, param, project_params};
+use crate::support::{
+    db, json_error, paginate_vec, param, project_params, query_text, value_matches_query,
+};
 use crate::{
     check_project_capability, check_project_read_capability, check_project_write_capability, d1,
     optional_auth, require_auth,
@@ -68,8 +70,13 @@ pub async fn update_protocol_comment(
         return json_error(403, "project is archived and read-only");
     }
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
-    let next_body = body["body"].as_str().map(str::trim).filter(|value| !value.is_empty());
-    let next_state = body["state"].as_str().filter(|value| matches!(*value, "open" | "resolved"));
+    let next_body = body["body"]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let next_state = body["state"]
+        .as_str()
+        .filter(|value| matches!(*value, "open" | "resolved"));
     if next_body.is_none() && next_state.is_none() {
         return json_error(400, "missing comment update");
     }
@@ -452,16 +459,27 @@ async fn list_protocol_kind(
         data_json: String,
     }
     let rows: Vec<Row> = result.results()?;
-    let filters = protocol_item_filters(&req.url()?, kind);
+    let url = req.url()?;
+    let query = query_text(&url, "q").map(|value| value.to_ascii_lowercase());
+    let filters = protocol_item_filters(&url, kind);
     let mut items = rows
         .into_iter()
         .filter_map(|row| serde_json::from_str::<serde_json::Value>(&row.data_json).ok())
-        .filter(|item| filters.iter().all(|(key, expected)| protocol_item_matches(item, key, expected)))
+        .filter(|item| {
+            filters
+                .iter()
+                .all(|(key, expected)| protocol_item_matches(item, key, expected))
+        })
+        .filter(|item| {
+            query
+                .as_deref()
+                .is_none_or(|query| value_matches_query(item, query))
+        })
         .collect::<Vec<_>>();
     if kind == "comment" {
         enrich_protocol_comment_profiles(&database, &mut items).await?;
     }
-    Response::from_json(&paginate_vec(req.url()?, items))
+    Response::from_json(&paginate_vec(url, items))
 }
 
 async fn enrich_protocol_comment_profiles(

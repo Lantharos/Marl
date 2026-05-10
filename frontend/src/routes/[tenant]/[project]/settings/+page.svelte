@@ -15,6 +15,7 @@
 	import ProjectDangerZone from '$lib/components/ProjectDangerZone.svelte';
 	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
+	import SwitchControl from '$lib/components/SwitchControl.svelte';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronUp from 'lucide-svelte/icons/chevron-up';
@@ -66,7 +67,7 @@
 	let newPanel: PanelItem = $state({ id: '', title: '', type: 'text', content: '', enabled: true, order: 0 });
 	const CUSTOM_PANEL_TYPES: PanelItem['type'][] = ['text', 'button', 'link', 'info'];
 
-	async function persistSettings(items: { navbar_items?: NavbarItem[]; panels?: PanelItem[] }) {
+	async function persistSettings(items: { navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean }) {
 		busy = true;
 		try {
 			const result = await updateProjectSettings(tenant, project, items);
@@ -76,6 +77,13 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	async function togglePublicReleases() {
+		if (settings.visibility === 'public') return;
+		const public_releases = !settings.public_releases;
+		settings = { ...settings, public_releases };
+		await persistSettings({ public_releases });
 	}
 
 	async function toggleNavbar(index: number) {
@@ -229,7 +237,7 @@
 					</div>
 				{/if}
 				<div class="grid gap-1">
-					{#each navbarItems as item, i}
+					{#each navbarItems as item, i (item.id)}
 						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
 							<div class="flex items-center gap-0.5 shrink-0">
 								<button
@@ -269,6 +277,22 @@
 				</div>
 			</SettingsSection>
 
+			<SettingsSection title="Releases" description="Control release download access for private projects.">
+				<div class="flex items-center justify-between gap-4 rounded bg-[#0f0f0d] px-3 py-3">
+					<div class="min-w-0">
+						<div class="text-sm font-medium text-[#eae9e4]">Public downloads</div>
+						<p class="mt-1 text-xs text-[#6f6b5f]">
+							{settings.visibility === 'public'
+								? 'This project is public, so release downloads are already public.'
+								: settings.public_releases
+									? 'On: anyone can download published release files and source zips, including autoupdaters using the API.'
+									: 'Off: only people with project access can download release files and source zips.'}
+						</p>
+					</div>
+					<SwitchControl checked={settings.visibility === 'public' || settings.public_releases} disabled={busy || settings.visibility === 'public'} label="Toggle public release downloads" onToggle={togglePublicReleases} />
+				</div>
+			</SettingsSection>
+
 			<SettingsSection title="Overview panels" description="Add text, buttons, links, or built-in panels to the project overview.">
 				<div class="mb-3 flex justify-end">
 					<button class="flex items-center gap-1 rounded bg-[#2a2a28] pl-1.5 pr-2.5 py-1 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#3a3a36]" onclick={() => (showAddPanel = !showAddPanel)}>
@@ -290,7 +314,7 @@
 						<div>
 							<div class="text-[10px] text-[#6f6b5f] mb-1">Type</div>
 							<div class="flex flex-wrap gap-1">
-								{#each CUSTOM_PANEL_TYPES as type}
+								{#each CUSTOM_PANEL_TYPES as type (type)}
 									<button
 										class="rounded px-2.5 py-1 text-xs capitalize {newPanel.type === type ? 'bg-[#eae9e4] text-[#0f0f0d]' : 'bg-[#1e1e1c] text-[#a09d94] hover:bg-[#2a2a28] hover:text-[#eae9e4]'}"
 										onclick={() => setNewPanelType(type)}
@@ -331,7 +355,7 @@
 					</div>
 				{/if}
 				<div class="grid gap-1">
-					{#each panelItems as item, i}
+					{#each panelItems as item, i (item.id)}
 						<div class="flex items-center gap-2 rounded bg-[#0f0f0d] px-2.5 py-2">
 							<div class="flex items-center gap-0.5 shrink-0">
 								<button

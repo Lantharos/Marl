@@ -9,7 +9,19 @@ Content-Type: application/json
 {
   "tag": "v1.0.0",
   "name": "First public build",
-  "notes": "Changelog text"
+  "notes": "Changelog text",
+  "draft": false
+}`;
+
+	const updateRelease = `PATCH /v1/tenants/:tenant/projects/:project/releases/:release
+Authorization: Bearer <maintainer-token>
+Content-Type: application/json
+
+{
+  "name": "First public build",
+  "notes": "Updated notes",
+  "draft": false,
+  "prerelease": false
 }`;
 
 	const uploadArtifact = `POST /v1/tenants/:tenant/projects/:project/releases/:release/artifacts
@@ -30,7 +42,7 @@ file=<binary>`;
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Create a release</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">When a release is created, sty attaches the latest project snapshot so the code state remains inspectable even if the workspace moves later.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">When a release is created, sty attaches the latest project snapshot and stores a source zip alongside the uploaded artifacts.</p>
 		<div class="mt-4">
 			<CodeBlock code={createRelease} />
 		</div>
@@ -45,8 +57,16 @@ file=<binary>`;
 	</section>
 
 	<section>
+		<h2 class="text-lg font-semibold text-[#eae9e4]">Edit or publish a draft</h2>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Maintainers can update release notes, publish a draft by setting <code>draft</code> to <code>false</code>, or delete a release.</p>
+		<div class="mt-4">
+			<CodeBlock code={updateRelease} />
+		</div>
+	</section>
+
+	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Public downloads for private projects</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Project maintainers can enable public release metadata and artifact downloads without making the project public. Code, issues, workspaces, history, and settings still require normal project access.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Private projects can expose published release downloads for installers or autoupdaters without opening code browsing, issues, workspaces, history, or settings. Public projects already have public release downloads.</p>
 	</section>
 
 	<section>

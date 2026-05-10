@@ -172,7 +172,7 @@
 
 <div class="mx-auto max-w-6xl">
 	<div class="mb-5 flex flex-wrap items-center gap-3">
-		<div class="issue-search flex h-9 min-w-64 flex-1 items-center gap-2 border border-transparent bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
+		<div class="issue-search flex h-9 min-w-64 flex-1 items-center gap-2 border border-[#2a2a28] bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
 			<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 			<input class="issue-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Search issues" bind:value={query} />
 		</div>

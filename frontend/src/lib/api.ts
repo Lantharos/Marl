@@ -504,6 +504,27 @@ export async function createRelease(tenant: string, project: string, release: Pa
 	return item;
 }
 
+export async function getRelease(tenant: string, project: string, releaseId: string, options: ApiOptions = {}): Promise<Release> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/releases/${encodeURIComponent(releaseId)}`, { signal: options.signal });
+	return (await response.json()) as Release;
+}
+
+export async function updateRelease(tenant: string, project: string, releaseId: string, release: Partial<Release>): Promise<Release> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/releases/${encodeURIComponent(releaseId)}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(release)
+	});
+	const item = (await response.json()) as Release;
+	notifyProjectStatsChanged(tenant, project);
+	return item;
+}
+
+export async function deleteRelease(tenant: string, project: string, releaseId: string): Promise<void> {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/releases/${encodeURIComponent(releaseId)}`, { method: 'DELETE' });
+	notifyProjectStatsChanged(tenant, project);
+}
+
 export async function uploadReleaseArtifact(tenant: string, project: string, releaseId: string, file: File): Promise<Release> {
 	const form = new FormData();
 	form.set('file', file);

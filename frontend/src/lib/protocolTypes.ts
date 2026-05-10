@@ -83,6 +83,8 @@ export interface ReleaseArtifact {
 	content_type?: string | null;
 	uploaded_at?: string | null;
 	uploaded_by?: string | null;
+	source?: boolean;
+	snapshot?: string | null;
 }
 
 export interface TagInfo {

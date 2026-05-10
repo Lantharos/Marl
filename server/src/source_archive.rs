@@ -1,15 +1,38 @@
-use futures_util::{stream, StreamExt};
+use futures_util::{StreamExt, stream};
 use sty_protocol::TreeEntryInfo;
 use worker::*;
 
 use crate::request_context::AppRouteContext;
 use crate::support::{
-    apply_cache_headers, bucket, db, json_error, not_modified_response, object_key,
-    project_params, r2_bytes, validate_object_id,
+    apply_cache_headers, bucket, db, json_error, not_modified_response, object_key, project_params,
+    r2_bytes, validate_object_id,
 };
 
+pub(crate) async fn source_zip_bytes_for_snapshot(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+) -> Result<Vec<u8>> {
+    validate_object_id(snapshot_id)?;
+    let snapshot_bytes = r2_bytes(store, &object_key(tenant, project, snapshot_id)).await?;
+    let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
+        .map_err(|error| Error::RustError(error.to_string()))?;
+    let root_tree = snapshot["root_tree"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    validate_object_id(&root_tree)?;
+    let mut entries = Vec::new();
+    crate::walk_tree(store, tenant, project, "", &root_tree, &mut entries).await?;
+    let files = entries
+        .into_iter()
+        .filter(|entry| entry.entry_type == "blob")
+        .collect::<Vec<_>>();
+    source_zip_bytes(store, tenant, project, files).await
+}
+
 pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -> Result<Response> {
-    let user = crate::optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
     let url = req.url()?;
@@ -17,18 +40,42 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         .query_pairs()
         .find_map(|(key, value)| (key == "workspace").then(|| value.to_string()))
         .unwrap_or_else(|| "main".to_string());
-    crate::check_workspace_read_capability(
-        database,
-        &tenant,
-        &project,
-        user.as_deref(),
-        &workspace,
-    )
-    .await?;
     let snapshot_param = url
         .query_pairs()
         .find_map(|(key, value)| (key == "snapshot").then(|| value.to_string()));
     let pinned_snapshot = snapshot_param.is_some();
+    let released_snapshot = match snapshot_param.as_deref() {
+        Some(snapshot) => {
+            validate_object_id(snapshot)?;
+            crate::release_support::release_snapshot_is_published(
+                database, &tenant, &project, snapshot,
+            )
+            .await?
+        }
+        None => false,
+    };
+    let project_public = matches!(
+        crate::d1::project_visibility(database, &tenant, &project).await?,
+        Some(visibility) if visibility == "public"
+    );
+    let release_public = released_snapshot
+        && (project_public
+            || crate::d1::project_public_releases(database, &tenant, &project).await?);
+    let user = if release_public {
+        crate::optional_auth(&req, &ctx).await.unwrap_or(None)
+    } else {
+        crate::optional_auth(&req, &ctx).await?
+    };
+    if !release_public {
+        crate::check_workspace_read_capability(
+            database,
+            &tenant,
+            &project,
+            user.as_deref(),
+            &workspace,
+        )
+        .await?;
+    }
     let head_id = if let Some(snapshot) = snapshot_param {
         snapshot
     } else {
@@ -39,10 +86,7 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         }
     };
     validate_object_id(&head_id)?;
-    let public_cache = matches!(
-        crate::d1::project_visibility(database, &tenant, &project).await?,
-        Some(visibility) if visibility == "public"
-    );
+    let public_cache = project_public || release_public;
     let etag = format!("{head_id}-source-zip");
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =
@@ -51,10 +95,72 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         return Ok(response);
     }
     let store = bucket(&ctx.env)?;
+    let cache_key = released_snapshot.then(|| release_source_cache_key(&tenant, &project, &head_id));
+    if let Some(cache_key) = cache_key.as_deref() {
+        if let Some(object) = store.get(cache_key).execute().await? {
+            if let Some(body) = object.body() {
+                let mut response = Response::from_body(body.response_body()?)?;
+                let headers = response.headers_mut();
+                headers.set("content-type", "application/zip")?;
+                headers.set(
+                    "content-disposition",
+                    &format!(
+                        "attachment; filename=\"{}\"",
+                        crate::release_support::safe_file_name(&format!("{tenant}-{project}.zip"))
+                    ),
+                )?;
+                apply_cache_headers(
+                    headers,
+                    object.etag().as_str(),
+                    public_cache,
+                    cache_seconds,
+                    pinned_snapshot,
+                )?;
+                return Ok(response);
+            }
+        }
+    }
+    if let Some(cache_key) = cache_key {
+        let bytes = source_zip_bytes_for_snapshot(&store, &tenant, &project, &head_id).await?;
+        let metadata = HttpMetadata {
+            content_type: Some("application/zip".to_string()),
+            content_disposition: Some(format!(
+                "attachment; filename=\"{}\"",
+                crate::release_support::safe_file_name(&format!("{tenant}-{project}.zip"))
+            )),
+            ..Default::default()
+        };
+        store
+            .put(cache_key, bytes.clone())
+            .http_metadata(metadata)
+            .execute()
+            .await?;
+        let mut response = Response::from_bytes(bytes)?;
+        let headers = response.headers_mut();
+        headers.set("content-type", "application/zip")?;
+        headers.set(
+            "content-disposition",
+            &format!(
+                "attachment; filename=\"{}\"",
+                crate::release_support::safe_file_name(&format!("{tenant}-{project}.zip"))
+            ),
+        )?;
+        apply_cache_headers(
+            headers,
+            &etag,
+            public_cache,
+            cache_seconds,
+            pinned_snapshot,
+        )?;
+        return Ok(response);
+    }
     let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
         .map_err(|error| Error::RustError(error.to_string()))?;
-    let root_tree = snapshot["root_tree"].as_str().unwrap_or_default().to_string();
+    let root_tree = snapshot["root_tree"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
     validate_object_id(&root_tree)?;
     let mut entries = Vec::new();
     crate::walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
@@ -75,6 +181,49 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
     )?;
     apply_cache_headers(headers, &etag, public_cache, cache_seconds, pinned_snapshot)?;
     Ok(response)
+}
+
+fn release_source_cache_key(tenant: &str, project: &str, snapshot: &str) -> String {
+    format!("projects/{tenant}/{project}/source-archives/{snapshot}.zip")
+}
+
+async fn source_zip_bytes(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    files: Vec<TreeEntryInfo>,
+) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    let mut central = Vec::new();
+    let mut offset = 0u64;
+    for entry in files {
+        let name = source_zip_name(&entry.path)?;
+        let header = source_zip_local_header(&name)?;
+        let local_header_offset = offset;
+        offset = checked_zip_offset(offset + header.len() as u64)?;
+        output.extend_from_slice(&header);
+
+        let bytes = r2_bytes(store, &object_key(tenant, project, &entry.id)).await?;
+        let size = checked_zip_size(bytes.len() as u64)?;
+        let mut crc = Crc32::new();
+        crc.update(&bytes);
+        let crc = crc.finish();
+        offset = checked_zip_offset(offset + size)?;
+        output.extend_from_slice(&bytes);
+
+        let descriptor = source_zip_data_descriptor(crc, size)?;
+        offset = checked_zip_offset(offset + descriptor.len() as u64)?;
+        output.extend_from_slice(&descriptor);
+        central.push(SourceZipCentralRecord {
+            name,
+            crc,
+            size,
+            local_header_offset,
+        });
+    }
+    let central_directory = source_zip_central_directory(&central, offset)?;
+    output.extend_from_slice(&central_directory);
+    Ok(output)
 }
 
 fn source_zip_stream(
@@ -146,7 +295,10 @@ impl SourceZipState {
                         return Err(Error::RustError(format!("missing object {}", entry.id)));
                     };
                     let Some(body) = object.body() else {
-                        return Err(Error::RustError(format!("missing object body {}", entry.id)));
+                        return Err(Error::RustError(format!(
+                            "missing object body {}",
+                            entry.id
+                        )));
                     };
                     let header = source_zip_local_header(&name)?;
                     let local_header_offset = self.offset;
@@ -193,7 +345,9 @@ impl SourceZipState {
 fn source_zip_name(path: &str) -> Result<Vec<u8>> {
     let name = path.as_bytes().to_vec();
     if name.is_empty() || name.len() > u16::MAX as usize {
-        return Err(Error::RustError("file path is too long for zip".to_string()));
+        return Err(Error::RustError(
+            "file path is too long for zip".to_string(),
+        ));
     }
     Ok(name)
 }
@@ -277,7 +431,9 @@ fn checked_zip_size(value: u64) -> Result<u64> {
     if value <= u32::MAX as u64 {
         Ok(value)
     } else {
-        Err(Error::RustError("file is too large for zip download".to_string()))
+        Err(Error::RustError(
+            "file is too large for zip download".to_string(),
+        ))
     }
 }
 

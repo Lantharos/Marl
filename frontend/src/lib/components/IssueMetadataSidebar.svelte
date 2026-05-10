@@ -386,7 +386,7 @@
 			<div class="absolute right-0 top-7 z-30 w-[320px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Apply labels</div>
 				<div class="border-b border-[#2a2a28] p-2">
-					<div class="flex items-center gap-2 border border-transparent bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
+					<div class="flex items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
 						<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 						<input class="metadata-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Filter labels" bind:value={labelFilter} />
 					</div>
@@ -417,7 +417,7 @@
 			<div class="absolute right-0 top-7 z-30 w-[320px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Set milestone</div>
 				<div class="border-b border-[#2a2a28] p-2">
-					<div class="flex items-center gap-2 border border-transparent bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
+					<div class="flex items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
 						<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 						<input class="metadata-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Filter milestones" bind:value={milestoneFilter} />
 					</div>
@@ -457,7 +457,7 @@
 			<div class="absolute right-0 top-7 z-30 w-[320px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Select issue type</div>
 				<div class="border-b border-[#2a2a28] p-2">
-					<div class="flex items-center gap-2 border border-transparent bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
+					<div class="flex items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
 						<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 						<input class="metadata-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Filter types" bind:value={typeFilter} />
 					</div>
@@ -506,7 +506,7 @@
 				<div class="absolute right-0 top-7 z-30 w-[340px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 					<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Link a workspace</div>
 					<div class="border-b border-[#2a2a28] p-2">
-						<div class="flex items-center gap-2 border border-transparent bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
+						<div class="flex items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
 							<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 							<input class="metadata-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Search workspaces" bind:value={workspaceFilter} />
 						</div>
@@ -574,7 +574,7 @@
 							<button class="text-[#8c887e] hover:text-[#eae9e4]" aria-label="Close transfer panel" onclick={() => (openPanel = '')}>×</button>
 						</div>
 						<div class="border-b border-[#2a2a28] p-2">
-							<div class="flex items-center gap-2 border border-transparent bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
+							<div class="flex items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
 								<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 								<input class="metadata-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Select tenant/project" bind:value={projectFilter} />
 							</div>
@@ -600,7 +600,7 @@
 	<div class="absolute right-0 top-7 z-30 w-[320px] border border-[#2a2a28] bg-[#141412] shadow-lg">
 		<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">{title}</div>
 		<div class="border-b border-[#2a2a28] p-2">
-			<div class="flex items-center gap-2 border border-transparent bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
+			<div class="flex items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2 py-1.5 focus-within:border-[#d9a66c]">
 				<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 				<input class="metadata-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" {placeholder} value={userFilter} oninput={changeUserFilter} />
 			</div>

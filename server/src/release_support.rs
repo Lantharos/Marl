@@ -54,6 +54,42 @@ pub(crate) async fn list_release_values(
     list_protocol_values(database, tenant, project, "release").await
 }
 
+pub(crate) async fn clear_latest_releases(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    except_id: &str,
+) -> Result<()> {
+    for mut item in list_release_values(database, tenant, project).await? {
+        let Some(id) = item["id"].as_str().map(ToOwned::to_owned) else {
+            continue;
+        };
+        if id == except_id || !item["latest"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        item["latest"] = json!(false);
+        upsert_release(database, tenant, project, &id, item).await?;
+    }
+    Ok(())
+}
+
+pub(crate) async fn release_snapshot_is_published(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    snapshot: &str,
+) -> Result<bool> {
+    Ok(list_release_values(database, tenant, project)
+        .await?
+        .into_iter()
+        .any(|item| {
+            let item_snapshot = item["snapshot"]
+                .as_str()
+                .or_else(|| item["source"]["snapshot"].as_str());
+            item_snapshot == Some(snapshot) && !item["draft"].as_bool().unwrap_or(false)
+        }))
+}
+
 pub(crate) async fn list_protocol_values(
     database: &crate::request_context::Database,
     tenant: &str,
@@ -84,13 +120,29 @@ pub(crate) async fn release_item_by_id_or_tag(
     project: &str,
     id_or_tag: &str,
 ) -> Result<Option<serde_json::Value>> {
-    if let Some(item) = release_item(database, tenant, project, id_or_tag).await? {
-        return Ok(Some(item));
+    let decoded = percent_decode_component(id_or_tag);
+    let decoded_twice = percent_decode_component(&decoded);
+    let mut candidates = vec![id_or_tag.to_string()];
+    if decoded != id_or_tag {
+        candidates.push(decoded.clone());
+    }
+    if decoded_twice != decoded && decoded_twice != id_or_tag {
+        candidates.push(decoded_twice);
+    }
+    for candidate in &candidates {
+        if let Some(item) = release_item(database, tenant, project, candidate).await? {
+            return Ok(Some(item));
+        }
     }
     Ok(list_release_values(database, tenant, project)
         .await?
         .into_iter()
-        .find(|item| item["tag"].as_str() == Some(id_or_tag)))
+        .find(|item| {
+            let tag = item["tag"].as_str();
+            candidates
+                .iter()
+                .any(|candidate| tag == Some(candidate.as_str()))
+        }))
 }
 
 pub(crate) async fn upsert_release(
@@ -131,6 +183,36 @@ pub(crate) fn release_artifact_key(
     format!(
         "projects/{tenant}/{project}/releases/{release_key}/artifacts/{artifact_id}/{file_name}"
     )
+}
+
+pub(crate) fn release_source_artifact_id() -> &'static str {
+    "source-zip"
+}
+
+pub(crate) fn release_source_artifact_key(
+    tenant: &str,
+    project: &str,
+    release_id: &str,
+    file_name: &str,
+) -> String {
+    let release_key = release_id.replace(['/', '\\'], "_");
+    format!("projects/{tenant}/{project}/releases/{release_key}/source/{file_name}")
+}
+
+pub(crate) fn release_source_artifact_name(project: &str, tag: &str) -> String {
+    safe_file_name(&format!("{project}-{tag}.zip"))
+}
+
+pub(crate) fn release_has_source_artifact(release: &serde_json::Value) -> bool {
+    release["artifacts"]
+        .as_array()
+        .map(|items| {
+            items.iter().any(|artifact| {
+                artifact["source"].as_bool().unwrap_or(false)
+                    || artifact["id"].as_str() == Some(release_source_artifact_id())
+            })
+        })
+        .unwrap_or(false)
 }
 
 pub(crate) fn release_artifact_download_url(
@@ -176,6 +258,22 @@ pub(crate) fn now_iso() -> String {
         .to_iso_string()
         .as_string()
         .unwrap_or_default()
+}
+
+pub(crate) async fn delete_release_item(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    id: &str,
+) -> Result<()> {
+    database
+        .prepare(
+            "DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2 AND kind = 'release' AND id = ?3",
+        )
+        .bind(&[js_str(tenant), js_str(project), js_str(id)])?
+        .run()
+        .await?;
+    Ok(())
 }
 
 async fn release_item(
@@ -248,6 +346,35 @@ fn percent_encode_component(value: &str) -> String {
             byte => format!("%{byte:02X}").chars().collect(),
         })
         .collect()
+}
+
+fn percent_decode_component(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hi = hex_value(bytes[i + 1]);
+            let lo = hex_value(bytes[i + 2]);
+            if let (Some(hi), Some(lo)) = (hi, lo) {
+                output.push((hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        output.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(output).unwrap_or_else(|_| value.to_string())
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn js_str(value: &str) -> wasm_bindgen::JsValue {

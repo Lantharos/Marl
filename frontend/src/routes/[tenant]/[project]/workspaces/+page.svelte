@@ -166,7 +166,7 @@
 
 <div class="mx-auto max-w-6xl">
 	<div class="mb-5 flex flex-wrap items-center gap-3">
-		<div class="flex h-9 min-w-64 flex-1 items-center gap-2 border border-transparent bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
+		<div class="flex h-9 min-w-64 flex-1 items-center gap-2 border border-[#2a2a28] bg-[#141412] px-2.5 focus-within:border-[#d9a66c]">
 			<Search class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
 			<input class="workspace-search-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search workspaces" bind:value={query} />
 		</div>

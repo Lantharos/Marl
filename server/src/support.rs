@@ -385,6 +385,31 @@ pub(crate) fn query_usize(url: &Url, key: &str) -> Option<usize> {
         .find_map(|(name, value)| (name == key).then(|| value.parse().ok()).flatten())
 }
 
+pub(crate) fn query_text(url: &Url, key: &str) -> Option<String> {
+    url.query_pairs().find_map(|(name, value)| {
+        if name != key {
+            return None;
+        }
+        let value = value.trim();
+        (!value.is_empty()).then(|| value.to_string())
+    })
+}
+
+pub(crate) fn value_matches_query(value: &serde_json::Value, query: &str) -> bool {
+    match value {
+        serde_json::Value::String(value) => value.to_ascii_lowercase().contains(query),
+        serde_json::Value::Number(value) => value.to_string().contains(query),
+        serde_json::Value::Bool(value) => value.to_string().contains(query),
+        serde_json::Value::Array(values) => {
+            values.iter().any(|value| value_matches_query(value, query))
+        }
+        serde_json::Value::Object(values) => values
+            .values()
+            .any(|value| value_matches_query(value, query)),
+        _ => false,
+    }
+}
+
 pub(crate) fn query_limit(req: &Request, default: usize, max: usize) -> Result<usize> {
     let url = req.url()?;
     Ok(query_usize(&url, "limit").unwrap_or(default).clamp(1, max))

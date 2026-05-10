@@ -344,6 +344,14 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/releases/:item_id",
             get_release,
         )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/releases/:item_id",
+            update_release,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/releases/:item_id",
+            delete_release,
+        )
         .get_async("/v1/tenants/:tenant/projects/:project/keys", list_keys)
         .post_async("/v1/tenants/:tenant/projects/:project/keys", create_key)
         .delete_async(
