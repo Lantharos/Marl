@@ -9,9 +9,11 @@
 		type Release,
 		type TagInfo
 	} from '$lib/api';
+	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import ReleaseListItem from '$lib/components/ReleaseListItem.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { dateInRange } from '$lib/dateRange';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
 	import GitCommit from 'lucide-svelte/icons/git-commit';
 	import Plus from 'lucide-svelte/icons/plus';
@@ -36,6 +38,8 @@
 	let tab = $state<'releases' | 'tags'>('releases');
 	let searchInput = $state('');
 	let searchQuery = $state('');
+	let dateFrom = $state('');
+	let dateTo = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
@@ -49,7 +53,9 @@
 
 	const releaseByTag = $derived.by(() => new Map(releaseItems.map((release) => [release.tag, release])));
 	const searchPlaceholder = $derived(tab === 'tags' ? 'Search tags' : 'Search releases');
-	const hasQuery = $derived(Boolean(searchQuery.trim()));
+	const hasFilter = $derived(Boolean(searchQuery.trim() || dateFrom || dateTo));
+	const filteredReleases = $derived(releaseItems.filter((release) => dateInRange(release.created_at ?? release.updated_at, dateFrom, dateTo)));
+	const filteredTags = $derived(tags.filter((tag) => dateInRange(tag.created_at, dateFrom, dateTo)));
 
 	$effect(() => {
 		if (!tenant || !project) return;
@@ -182,6 +188,7 @@
 				oninput={(event) => updateSearch(event.currentTarget.value)}
 			/>
 		</div>
+		<DateRangePicker bind:from={dateFrom} bind:to={dateTo} placeholder="Any release date" />
 		{#if canMutate}
 			<a class="inline-flex h-9 shrink-0 items-center gap-1 bg-[#eae9e4] px-3 text-sm text-[#0f0f0d] hover:bg-[#d8d3c5]" href={`/${tenant}/${project}/releases/new`}>
 				<Plus class="h-4 w-4" /> New release
@@ -209,11 +216,11 @@
 		<div class="border border-[#2a2a28] bg-[#141412] p-4 text-sm text-[#d96c5a]">{error}</div>
 	{:else if tab === 'releases'}
 		<div class="grid gap-4">
-			{#each releaseItems as release (release.id ?? release.tag)}
+			{#each filteredReleases as release (release.id ?? release.tag)}
 				<ReleaseListItem {release} {tenant} {project} canMutate={canMutate} onDelete={handleDeleteRelease} />
 			{:else}
 				<div class="border border-[#2a2a28] bg-[#141412] p-8 text-center">
-					<p class="text-sm text-[#8c887e]">{hasQuery ? 'No releases match your search.' : 'No releases yet.'}</p>
+					<p class="text-sm text-[#8c887e]">{hasFilter ? 'No releases match your filters.' : 'No releases yet.'}</p>
 				</div>
 			{/each}
 		</div>
@@ -223,7 +230,7 @@
 			<div class="flex min-h-12 items-center justify-between border-b border-[#252522] px-4">
 				<div class="text-sm font-medium text-[#eae9e4]">{tagTotal} tags</div>
 			</div>
-			{#each tags as item (item.id ?? item.tag ?? item.name)}
+			{#each filteredTags as item (item.id ?? item.tag ?? item.name)}
 				{@const tagName = item.tag ?? item.name ?? item.id ?? ''}
 				{@const release = releaseByTag.get(tagName)}
 				<div class="grid gap-3 border-b border-[#252522] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
@@ -260,7 +267,7 @@
 					{/if}
 				</div>
 			{:else}
-				<div class="p-8 text-center text-sm text-[#8c887e]">{hasQuery ? 'No tags match your search.' : 'No tags yet.'}</div>
+				<div class="p-8 text-center text-sm text-[#8c887e]">{hasFilter ? 'No tags match your filters.' : 'No tags yet.'}</div>
 			{/each}
 		</div>
 		<InfiniteLoader active={Boolean(tagNext)} onVisible={loadMoreTags} />

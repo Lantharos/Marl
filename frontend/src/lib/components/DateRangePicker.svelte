@@ -1,122 +1,112 @@
 <script lang="ts">
+	import { dateRangeSuggestions, formatCanonicalRange, formatDateRangeLabel, parseNaturalDateRange } from '$lib/dateRange';
 	import CalendarDays from 'lucide-svelte/icons/calendar-days';
-	import ChevronLeft from 'lucide-svelte/icons/chevron-left';
-	import ChevronRight from 'lucide-svelte/icons/chevron-right';
+	import Check from 'lucide-svelte/icons/check';
 	import X from 'lucide-svelte/icons/x';
 
-	let { from = $bindable(''), to = $bindable('') } = $props();
+	let { from = $bindable(''), to = $bindable(''), placeholder = 'Any date' } = $props();
+
+	let root = $state<HTMLDivElement | null>(null);
 	let open = $state(false);
-	let cursor = $state(monthStart(from || to || todayKey()));
-	let choosing: 'from' | 'to' = $state('from');
+	let draft = $state('');
 
-	const days = $derived(monthDays(cursor));
-	const label = $derived(rangeLabel(from, to));
+	const label = $derived(formatDateRangeLabel(from, to));
+	const parsed = $derived(parseNaturalDateRange(draft));
+	const preview = $derived(parsed ? formatDateRangeLabel(parsed.from, parsed.to) : '');
+	const active = $derived(Boolean(from || to));
 
-	function todayKey() {
-		return new Date().toISOString().slice(0, 10);
+	function toggle() {
+		open = !open;
+		if (open) draft = formatCanonicalRange(from, to);
 	}
 
-	function monthStart(value: string) {
-		const date = new Date(`${value}T00:00:00`);
-		return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
-	}
-
-	function monthDays(value: string) {
-		const date = new Date(`${value}T00:00:00`);
-		const year = date.getFullYear();
-		const month = date.getMonth();
-		const firstOffset = new Date(year, month, 1).getDay();
-		const count = new Date(year, month + 1, 0).getDate();
-		return [
-			...Array.from({ length: firstOffset }, () => ''),
-			...Array.from({ length: count }, (_, index) => `${year}-${String(month + 1).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`)
-		];
-	}
-
-	function moveMonth(offset: number) {
-		const date = new Date(`${cursor}T00:00:00`);
-		const next = new Date(date.getFullYear(), date.getMonth() + offset, 1);
-		cursor = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
-	}
-
-	function choose(value: string) {
-		if (choosing === 'from') {
-			from = value;
-			if (to && value > to) to = value;
-			choosing = 'to';
-			return;
-		}
-		to = value;
-		if (from && value < from) from = value;
+	function apply(value = draft) {
+		const next = parseNaturalDateRange(value);
+		if (!next) return;
+		from = next.from;
+		to = next.to;
+		draft = formatCanonicalRange(from, to);
 		open = false;
 	}
 
 	function clear() {
 		from = '';
 		to = '';
-		choosing = 'from';
+		draft = '';
 		open = false;
 	}
 
-	function rangeLabel(start: string, end: string) {
-		if (start && end) return `${shortDate(start)} - ${shortDate(end)}`;
-		if (start) return `From ${shortDate(start)}`;
-		if (end) return `Until ${shortDate(end)}`;
-		return 'Any date';
+	function handleOutside(event: PointerEvent) {
+		if (!open || !root) return;
+		if (!root.contains(event.target as Node)) open = false;
 	}
 
-	function shortDate(value: string) {
-		return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-	}
-
-	function monthLabel(value: string) {
-		return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			apply();
+		}
+		if (event.key === 'Escape') open = false;
 	}
 </script>
 
-<div class="relative">
-	<button class="inline-flex h-9 items-center gap-2 border border-[#2a2a28] bg-[#141412] px-2.5 text-xs text-[#a09d94] hover:border-[#3a3a36] hover:text-[#eae9e4]" onclick={() => (open = !open)}>
-		<CalendarDays class="h-3.5 w-3.5" />
-		{label}
+<svelte:document onpointerdown={handleOutside} />
+
+<div bind:this={root} class="relative">
+	<button
+		class="inline-flex h-9 min-w-36 items-center gap-2 border border-[#2a2a28] bg-[#141412] px-2.5 text-xs hover:border-[#3a3a36] {active ? 'text-[#d9a66c]' : 'text-[#a09d94] hover:text-[#eae9e4]'}"
+		type="button"
+		onclick={toggle}
+	>
+		<CalendarDays class="h-3.5 w-3.5 shrink-0" />
+		<span class="truncate">{active ? label : placeholder}</span>
 	</button>
+
 	{#if open}
-		<div class="absolute left-0 z-20 mt-2 w-64 border border-[#2a2a28] bg-[#141412] p-3 shadow-xl shadow-black/30">
-			<div class="mb-3 flex items-center justify-between">
-				<button class="p-1 text-[#8c887e] hover:text-[#eae9e4]" onclick={() => moveMonth(-1)} aria-label="Previous month">
-					<ChevronLeft class="h-4 w-4" />
-				</button>
-				<div class="text-sm font-medium text-[#eae9e4]">{monthLabel(cursor)}</div>
-				<button class="p-1 text-[#8c887e] hover:text-[#eae9e4]" onclick={() => moveMonth(1)} aria-label="Next month">
-					<ChevronRight class="h-4 w-4" />
-				</button>
-			</div>
-			<div class="mb-2 flex gap-1">
-				<button class="flex-1 py-1 text-xs {choosing === 'from' ? 'bg-[#2a2a28] text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (choosing = 'from')}>Start</button>
-				<button class="flex-1 py-1 text-xs {choosing === 'to' ? 'bg-[#2a2a28] text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (choosing = 'to')}>End</button>
-			</div>
-			<div class="grid grid-cols-7 gap-1 text-center text-[11px] text-[#6f6b5f]">
-				{#each ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as day, index (index)}
-					<div class="py-1">{day}</div>
-				{/each}
-				{#each days as day, index (day || `blank-${index}`)}
-					{#if day}
-						<button
-							class="h-7 text-xs {day === from || day === to ? 'bg-[#eae9e4] text-[#0f0f0d]' : day > from && day < to ? 'bg-[#24231f] text-[#eae9e4]' : 'text-[#a09d94] hover:bg-[#1f1f1c] hover:text-[#eae9e4]'}"
-							onclick={() => choose(day)}
-						>
-							{Number(day.slice(8))}
-						</button>
+		<div class="absolute right-0 z-30 mt-2 w-80 border border-[#2a2a28] bg-[#141412] shadow-xl shadow-black/30">
+			<div class="border-b border-[#252522] p-3">
+				<div class="flex h-9 items-center gap-2 border border-[#2a2a28] bg-[#0f0f0d] px-2.5 focus-within:border-[#d9a66c]">
+					<CalendarDays class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
+					<input
+						class="date-range-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus-visible:outline-none"
+						placeholder="last 7 days, may 1 to may 10"
+						bind:value={draft}
+						onkeydown={handleKeydown}
+					/>
+				</div>
+				<div class="mt-2 min-h-4 text-xs {parsed ? 'text-[#8c887e]' : draft.trim() ? 'text-[#d96c5a]' : 'text-[#6f6b5f]'}">
+					{#if draft.trim()}
+						{parsed ? preview : 'No date match'}
 					{:else}
-						<div></div>
+						Type a date or range
 					{/if}
+				</div>
+			</div>
+
+			<div class="grid gap-1 p-2">
+				{#each dateRangeSuggestions as suggestion (suggestion)}
+					<button class="flex items-center justify-between px-2 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" type="button" onclick={() => apply(suggestion)}>
+						<span>{suggestion}</span>
+						<span class="text-xs text-[#6f6b5f]">{formatDateRangeLabel(parseNaturalDateRange(suggestion)?.from ?? '', parseNaturalDateRange(suggestion)?.to ?? '')}</span>
+					</button>
 				{/each}
 			</div>
-			<div class="mt-3 flex justify-between">
-				<button class="inline-flex items-center gap-1 px-2 py-1 text-xs text-[#8c887e] hover:text-[#eae9e4]" onclick={clear}>
-					<X class="h-3 w-3" /> Clear
+
+			<div class="flex items-center justify-between border-t border-[#252522] px-3 py-2">
+				<button class="inline-flex h-8 items-center gap-1.5 px-2 text-xs text-[#8c887e] hover:text-[#eae9e4]" type="button" onclick={clear}>
+					<X class="h-3.5 w-3.5" /> Clear
 				</button>
-				<button class="px-2 py-1 text-xs text-[#eae9e4]" onclick={() => (open = false)}>Done</button>
+				<button class="inline-flex h-8 items-center gap-1.5 bg-[#eae9e4] px-3 text-xs font-medium text-[#0f0f0d] disabled:opacity-50" type="button" disabled={!parsed} onclick={() => apply()}>
+					<Check class="h-3.5 w-3.5" /> Apply
+				</button>
 			</div>
 		</div>
 	{/if}
 </div>
+
+<style>
+	.date-range-input:focus,
+	.date-range-input:focus-visible {
+		outline: none;
+	}
+</style>

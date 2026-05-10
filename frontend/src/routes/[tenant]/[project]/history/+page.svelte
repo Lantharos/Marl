@@ -5,6 +5,7 @@
 	import { getProjectHistory, isAbortError, type HistoryEntry } from '$lib/api';
 	import { appData } from '$lib/appState';
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
+	import { dateInRange } from '$lib/dateRange';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import { userDisplayName, userInitials, withoutOpaqueUserIds } from '$lib/identity';
@@ -102,10 +103,7 @@
 	}
 
 	function inDateRange(timestamp: string) {
-		const date = timestamp.slice(0, 10);
-		if (dateFrom && date < dateFrom) return false;
-		if (dateTo && date > dateTo) return false;
-		return true;
+		return dateInRange(timestamp, dateFrom, dateTo);
 	}
 
 	function matchesFilters(entry: HistoryEntry) {
@@ -171,7 +169,7 @@
 			<input class="history-search-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search history" bind:value={query} />
 		</div>
 		{#if !loading && !error}
-			<DateRangePicker bind:from={dateFrom} bind:to={dateTo} />
+			<DateRangePicker bind:from={dateFrom} bind:to={dateTo} placeholder="Any history date" />
 		{/if}
 	</div>
 

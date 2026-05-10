@@ -9,9 +9,11 @@
 		type Label,
 		type WorkspaceStatus
 	} from '$lib/api';
+	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import LabelBadge from '$lib/components/LabelBadge.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { dateInRange } from '$lib/dateRange';
 	import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
 	import CircleDot from 'lucide-svelte/icons/circle-dot';
@@ -34,6 +36,8 @@
 	let error = $state('');
 	let filter = $state<'open' | 'changes' | 'ready' | 'merged' | 'closed' | 'all'>('open');
 	let query = $state('');
+	let dateFrom = $state('');
+	let dateTo = $state('');
 	let visibleCount = $state(chunkSize);
 
 	async function load(signal?: AbortSignal) {
@@ -86,7 +90,9 @@
 			? closedWorkspaces
 			: filter === 'all'
 			? workspaces
-			: openWorkspaces).filter((workspace) => matchesQuery(workspace))
+			: openWorkspaces)
+			.filter((workspace) => matchesQuery(workspace))
+			.filter((workspace) => dateInRange(workspace.last_activity_at, dateFrom, dateTo))
 	);
 	const visibleWorkspaces = $derived(filteredWorkspaces.slice(0, visibleCount));
 	const hasMore = $derived(visibleWorkspaces.length < filteredWorkspaces.length);
@@ -95,6 +101,8 @@
 	$effect(() => {
 		filter;
 		query;
+		dateFrom;
+		dateTo;
 		visibleCount = chunkSize;
 	});
 
@@ -170,6 +178,7 @@
 			<Search class="h-3.5 w-3.5 shrink-0 text-[#6f6b5f]" />
 			<input class="workspace-search-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] outline-none ring-0 placeholder:text-[#6f6b5f] focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none" placeholder="Search workspaces" bind:value={query} />
 		</div>
+		<DateRangePicker bind:from={dateFrom} bind:to={dateTo} placeholder="Any activity date" />
 		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
 		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 	</div>

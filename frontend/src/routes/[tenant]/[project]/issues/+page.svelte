@@ -9,9 +9,11 @@
 		type Issue,
 		type Label
 	} from '$lib/api';
+	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import InfiniteLoader from '$lib/components/InfiniteLoader.svelte';
 	import LabelBadge from '$lib/components/LabelBadge.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import { dateInRange, formatDateRangeLabel } from '$lib/dateRange';
 	import UserProfileLink from '$lib/components/UserProfileLink.svelte';
 	import { userName } from '$lib/identity';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
@@ -37,6 +39,8 @@
 	let query = $state('');
 	let selectedLabel = $state('');
 	let selectedAssignee = $state('');
+	let dateFrom = $state('');
+	let dateTo = $state('');
 	let openPanel = $state('');
 	let issueItems = $state<Issue[]>([]);
 	let labelItems = $state<Label[]>([]);
@@ -75,6 +79,7 @@
 			if (stateFilter !== 'all' && state !== stateFilter) return false;
 			if (selectedLabel && !issue.labels.includes(selectedLabel)) return false;
 			if (selectedAssignee && !(issue.assignees ?? []).includes(selectedAssignee)) return false;
+			if (!dateInRange(issue.updated_at ?? issue.created_at, dateFrom, dateTo)) return false;
 			const needle = query.trim().toLowerCase();
 			if (!needle) return true;
 			const haystack = `${issue.title} ${issue.body} ${issue.issue_type ?? ''} ${issue.labels.join(' ')} ${issue.assignees?.join(' ') ?? ''} ${userName(issue.author, issue.author_profile)}`.toLowerCase();
@@ -103,6 +108,8 @@
 		query;
 		selectedLabel;
 		selectedAssignee;
+		dateFrom;
+		dateTo;
 		visibleIssues = chunkSize;
 	});
 
@@ -163,6 +170,8 @@
 		query = '';
 		selectedLabel = '';
 		selectedAssignee = '';
+		dateFrom = '';
+		dateTo = '';
 	}
 
 	function issueTypeMeta(type: Issue['issue_type']) {
@@ -176,6 +185,7 @@
 			<Search class="h-3.5 w-3.5 text-[#6f6b5f]" />
 			<input class="issue-input min-w-0 flex-1 border-0 bg-transparent text-sm text-[#eae9e4] placeholder:text-[#6f6b5f]" placeholder="Search issues" bind:value={query} />
 		</div>
+		<DateRangePicker bind:from={dateFrom} bind:to={dateTo} placeholder="Any issue date" />
 		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/labels">Labels</a>
 		<a class="inline-flex h-9 items-center border border-[#2a2a28] bg-[#1e1e1c] px-3 text-sm text-[#eae9e4] hover:bg-[#2a2a28]" href="/{tenant}/{project}/issues/milestones">Milestones</a>
 		{#if canWrite}
@@ -221,11 +231,12 @@
 			</div>
 		{/if}
 
-		{#if selectedLabel || selectedAssignee || query.trim()}
+		{#if selectedLabel || selectedAssignee || dateFrom || dateTo || query.trim()}
 			<div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-[#8c887e]">
 				<span>{filteredIssues.length} matching {filteredIssues.length === 1 ? 'issue' : 'issues'}</span>
 				{#if selectedLabel}<button class="bg-[#1e1e1c] px-2 py-1 text-[#d9a66c]" onclick={() => (selectedLabel = '')}>label: {selectedLabel} ×</button>{/if}
 				{#if selectedAssignee}<button class="bg-[#1e1e1c] px-2 py-1 text-[#d9a66c]" onclick={() => (selectedAssignee = '')}>assignee: {selectedAssignee} ×</button>{/if}
+				{#if dateFrom || dateTo}<button class="bg-[#1e1e1c] px-2 py-1 text-[#d9a66c]" onclick={() => { dateFrom = ''; dateTo = ''; }}>date: {formatDateRangeLabel(dateFrom, dateTo)} ×</button>{/if}
 				<button class="text-[#eae9e4] hover:text-[#d9a66c]" onclick={clearFilters}>Clear</button>
 			</div>
 		{/if}
