@@ -59,11 +59,14 @@ export const pigCommandGroups: CommandGroup[] = [
 		intro: 'PIG saves snapshots locally first. Human output is readable by default; add --json for agents.',
 		rows: [
 			{ command: 'pig status', description: 'Show the current workspace, changed files, and pending work.' },
+			{ command: 'pig status --short', description: 'Show changed files as Git-style A/M/D lines.' },
 			{ command: 'pig save "message"', description: 'Create a local snapshot with intent metadata.' },
 			{ command: 'pig cram "message"', description: 'Squash local saves into one shareable snapshot.' },
 			{ command: 'pig cram --auto', description: 'Let PIG suggest the cram message.' },
 			{ command: 'pig log', description: 'Show local snapshot history.' },
 			{ command: 'pig diff [left] [right]', description: 'Compare snapshots or the working tree.' },
+			{ command: 'pig diff --stat', description: 'Show Git-style file stats for current changes.' },
+			{ command: 'pig diff --name-only', description: 'Print changed paths only.' },
 			{ command: 'pig undo [snapshot|path]', description: 'Restore a snapshot or file path.' },
 			{ command: 'pig query "text"', description: 'Search local history semantically.' },
 			{ command: 'pig suggest-save', description: 'Ask PIG for a save message from current changes.' }
