@@ -6,6 +6,8 @@
 		isAbortError,
 		listReleasesPage,
 		listTags,
+		type AccessResponse,
+		type ProjectSettings,
 		type Release,
 		type TagInfo
 	} from '$lib/api';
@@ -35,6 +37,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let canMutate = $state(false);
+	let projectAccess = $state<AccessResponse | null>(null);
 	let tab = $state<'releases' | 'tags'>('releases');
 	let searchInput = $state('');
 	let searchQuery = $state('');
@@ -43,6 +46,7 @@
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
+		projectAccess = value;
 		canMutate = Boolean(value?.can_maintain && !value?.archived);
 	});
 
@@ -56,6 +60,8 @@
 	const hasFilter = $derived(Boolean(searchQuery.trim() || dateFrom || dateTo));
 	const filteredReleases = $derived(releaseItems.filter((release) => dateInRange(release.created_at ?? release.updated_at, dateFrom, dateTo)));
 	const filteredTags = $derived(tags.filter((tag) => dateInRange(tag.created_at, dateFrom, dateTo)));
+	const projectChrome = $derived(($page.data as { projectChrome?: { settings: ProjectSettings | null; access: AccessResponse | null } }).projectChrome ?? null);
+	const canDownloadSource = $derived(projectChrome?.settings?.visibility === 'public' || Boolean(projectAccess?.can_read || projectChrome?.access?.can_read));
 
 	$effect(() => {
 		if (!tenant || !project) return;
@@ -217,7 +223,7 @@
 	{:else if tab === 'releases'}
 		<div class="grid gap-4">
 			{#each filteredReleases as release (release.id ?? release.tag)}
-				<ReleaseListItem {release} {tenant} {project} canMutate={canMutate} onDelete={handleDeleteRelease} />
+				<ReleaseListItem {release} {tenant} {project} canMutate={canMutate} showSourceDownloads={canDownloadSource} onDelete={handleDeleteRelease} />
 			{:else}
 				<div class="border border-[#2a2a28] bg-[#141412] p-8 text-center">
 					<p class="text-sm text-[#8c887e]">{hasFilter ? 'No releases match your filters.' : 'No releases yet.'}</p>

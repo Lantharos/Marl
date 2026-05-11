@@ -1,6 +1,6 @@
 <script lang="ts">
     import { page } from "$app/stores";
-    import { onDestroy } from "svelte";
+    import { onDestroy, onMount } from "svelte";
     import {
         getProjectAccess,
         getProjectSettings,
@@ -13,6 +13,7 @@
     } from "$lib/api";
     import { appData } from "$lib/appState";
     import { userDisplayName } from "$lib/identity";
+    import { projectAppearanceStyle } from "$lib/projectAppearance";
     import { projectTabCount, projectTabs } from "$lib/projectChrome";
     import { startLogin } from "$lib/session";
     import ExternalLink from "lucide-svelte/icons/external-link";
@@ -23,7 +24,9 @@
     let publicSettings = $state<ProjectSettings | null>(null);
     let publicStats = $state<ProjectStats | null>(null);
     let publicAccess = $state<AccessResponse | null>(null);
+    let settingsOverride = $state<ProjectSettings | null>(null);
     let publicChromeKey = "";
+    let settingsOverrideKey = "";
 
     const unsubscribe = appData.subscribe((value) => {
         signedIn = Boolean(value.me);
@@ -49,7 +52,7 @@
         ).projectChrome ?? null,
     );
     const settings = $derived(
-        publicSettings ?? overview?.settings ?? layoutChrome?.settings ?? null,
+        settingsOverride ?? publicSettings ?? overview?.settings ?? layoutChrome?.settings ?? null,
     );
     const stats = $derived<ProjectStats | null>(
         publicStats ?? overview?.stats ?? layoutChrome?.stats ?? null,
@@ -62,9 +65,15 @@
     const archivedBy = $derived(access?.archived_by ?? settings?.archived_by ?? null);
     const archivedByProfile = $derived(access?.archived_by_profile ?? settings?.archived_by_profile ?? null);
     const archivedByName = $derived(userDisplayName(archivedBy, archivedByProfile));
+    const themeStyle = $derived(projectAppearanceStyle(settings?.appearance));
 
     $effect(() => {
         const key = `${tenant}/${project}/${signedIn ? "auth" : "public"}`;
+        const projectKey = `${tenant}/${project}`;
+        if (projectKey !== settingsOverrideKey) {
+            settingsOverrideKey = projectKey;
+            settingsOverride = null;
+        }
         const hasCompleteChrome = settings !== null && stats !== null && access !== null;
         const shouldRefreshAuthedChrome =
             signedIn &&
@@ -80,6 +89,16 @@
         const controller = new AbortController();
         void loadProjectChrome(tenant, project, controller.signal);
         return () => controller.abort();
+    });
+
+    onMount(() => {
+        const handleSettingsChanged = (event: Event) => {
+            const detail = (event as CustomEvent<{ tenant: string; project: string; settings: ProjectSettings }>).detail;
+            if (!detail || detail.tenant !== tenant || detail.project !== project) return;
+            settingsOverride = detail.settings;
+        };
+        window.addEventListener("sty:project-settings-changed", handleSettingsChanged);
+        return () => window.removeEventListener("sty:project-settings-changed", handleSettingsChanged);
     });
 
     function active(href: string) {
@@ -116,8 +135,9 @@
     }
 </script>
 
+<div class="sty-project-theme min-h-screen bg-[#0f0f0d]" style={themeStyle}>
 {#if !signedIn}
-    <div class="border-b border-[#2a2a28] bg-[#0f0f0d]">
+    <div class="sty-project-nav border-b border-[#2a2a28] bg-[#0f0f0d]">
         <div class="px-32 md:px-48 lg:px-64 xl:px-80">
             <div class="flex items-center gap-4 py-2.5">
                 <a
@@ -193,11 +213,12 @@
     </div>
 {/if}
 
-<div class="px-4 py-6 md:px-48 lg:px-64 xl:px-80">
-    {#if archivedAt}
-        <div class="mb-4 rounded border border-[#2a2a28] bg-[#141412] px-4 py-3 text-sm text-[#a09d94]">
-            This project was archived by {archivedByName} on {archiveDate(archivedAt)}. It is read-only.
-        </div>
-    {/if}
-    {@render children()}
+    <div class="px-4 py-6 md:px-48 lg:px-64 xl:px-80">
+        {#if archivedAt}
+            <div class="mb-4 rounded border border-[#2a2a28] bg-[#141412] px-4 py-3 text-sm text-[#a09d94]">
+                This project was archived by {archivedByName} on {archiveDate(archivedAt)}. It is read-only.
+            </div>
+        {/if}
+        {@render children()}
+    </div>
 </div>

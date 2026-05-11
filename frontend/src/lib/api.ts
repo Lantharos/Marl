@@ -1,5 +1,5 @@
 import { getStyToken } from './session';
-import { authedFetch, notifyProjectStatsChanged, pageQuery, publicFetch } from './apiShared';
+import { authedFetch, notifyProjectSettingsChanged, notifyProjectStatsChanged, pageQuery, publicFetch } from './apiShared';
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
 import type { AccessResponse, UserProfile } from './collaboratorTypes';
@@ -58,6 +58,21 @@ export interface PanelItem {
 	order: number;
 }
 
+export interface ProjectAppearance {
+	accent_color: string;
+	background_color: string;
+	surface_color: string;
+	foreground_color: string;
+	muted_color: string;
+	border_color: string;
+	nav_background_color: string;
+	nav_foreground_color: string;
+	nav_muted_color: string;
+	primary_color: string;
+	primary_foreground_color: string;
+	code_background_color: string;
+}
+
 export interface ProjectSettings {
 	visibility: 'public' | 'private';
 	follower_count: number;
@@ -67,6 +82,7 @@ export interface ProjectSettings {
 	archived_by?: string | null;
 	archived_by_profile?: UserProfile | null;
 	default_workspace: string;
+	appearance: ProjectAppearance;
 	navbar_items: NavbarItem[];
 	panels: PanelItem[];
 }
@@ -665,7 +681,7 @@ export async function getProjectOverview(tenant: string, project: string, option
 }
 
 export async function getProjectSettings(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectSettings> {
-	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/settings`, { signal: options.signal });
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/settings`, { signal: options.signal });
 	return (await response.json()) as ProjectSettings;
 }
 
@@ -680,7 +696,9 @@ export async function updateProjectSettings(tenant: string, project: string, set
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(settings)
 	});
-	return (await response.json()) as ProjectSettings;
+	const updated = (await response.json()) as ProjectSettings;
+	notifyProjectSettingsChanged(tenant, project, updated);
+	return updated;
 }
 
 export async function getProjectFollow(tenant: string, project: string, options: ApiOptions = {}): Promise<FollowResponse> {

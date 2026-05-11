@@ -55,6 +55,7 @@ pub async fn project_settings(
                 archived_by: None,
                 archived_by_profile: None,
                 default_workspace: "main".to_string(),
+                appearance: ProjectAppearance::default(),
                 navbar_items: vec![],
                 panels: vec![],
             });
@@ -63,6 +64,7 @@ pub async fn project_settings(
 
     let mut settings: ProjectSettings =
         serde_json::from_str(&settings_json).map_err(|e| err(e.to_string()))?;
+    settings.appearance = normalize_project_appearance(settings.appearance);
 
     settings.follower_count = follower_count(db, tenant, project).await?;
     settings.is_following = is_following(db, tenant, project, principal).await?;
@@ -111,6 +113,7 @@ pub async fn update_project_settings(
     principal: &TokenPrincipal,
     visibility: &str,
     default_workspace: &str,
+    appearance: Option<ProjectAppearance>,
     navbar_items: Option<Vec<NavbarItem>>,
     panels: Option<Vec<PanelItem>>,
     archived: Option<bool>,
@@ -121,6 +124,9 @@ pub async fn update_project_settings(
     settings.default_workspace = default_workspace.to_string();
     if let Some(public) = public_releases {
         settings.public_releases = public;
+    }
+    if let Some(value) = appearance {
+        settings.appearance = normalize_project_appearance(value);
     }
     if let Some(items) = navbar_items {
         settings.navbar_items = items;
@@ -137,6 +143,49 @@ pub async fn update_project_settings(
         set_project_archived(db, tenant, project, principal, archive).await?;
     }
     project_settings(db, tenant, project, Some(principal)).await
+}
+
+fn normalize_project_appearance(appearance: ProjectAppearance) -> ProjectAppearance {
+    let default = ProjectAppearance::default();
+    ProjectAppearance {
+        accent_color: normalize_hex(&appearance.accent_color, &default.accent_color),
+        background_color: normalize_hex(&appearance.background_color, &default.background_color),
+        surface_color: normalize_hex(&appearance.surface_color, &default.surface_color),
+        foreground_color: normalize_hex(&appearance.foreground_color, &default.foreground_color),
+        muted_color: normalize_hex(&appearance.muted_color, &default.muted_color),
+        border_color: normalize_hex(&appearance.border_color, &default.border_color),
+        nav_background_color: normalize_hex(
+            &appearance.nav_background_color,
+            &default.nav_background_color,
+        ),
+        nav_foreground_color: normalize_hex(
+            &appearance.nav_foreground_color,
+            &default.nav_foreground_color,
+        ),
+        nav_muted_color: normalize_hex(&appearance.nav_muted_color, &default.nav_muted_color),
+        primary_color: normalize_hex(&appearance.primary_color, &default.primary_color),
+        primary_foreground_color: normalize_hex(
+            &appearance.primary_foreground_color,
+            &default.primary_foreground_color,
+        ),
+        code_background_color: normalize_hex(
+            &appearance.code_background_color,
+            &default.code_background_color,
+        ),
+    }
+}
+
+fn normalize_hex(value: &str, fallback: &str) -> String {
+    let trimmed = value.trim().trim_start_matches('#');
+    let expanded = match trimmed.len() {
+        3 if trimmed.chars().all(|char| char.is_ascii_hexdigit()) => trimmed
+            .chars()
+            .flat_map(|char| [char, char])
+            .collect::<String>(),
+        6 if trimmed.chars().all(|char| char.is_ascii_hexdigit()) => trimmed.to_string(),
+        _ => return fallback.to_string(),
+    };
+    format!("#{}", expanded.to_ascii_lowercase())
 }
 
 async fn set_project_archived(

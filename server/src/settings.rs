@@ -1,10 +1,11 @@
 pub(crate) async fn get_settings(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
-    let user = require_auth(&req, &ctx).await?;
+    let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
-    let principal = sty_protocol::TokenPrincipal { user: user.clone() };
-    check_project_capability(&database, &tenant, &project, &user, "maintainer", "settings:read").await?;
-    let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
+    check_project_access(&database, &tenant, &project, user.as_deref()).await?;
+    let principal = user
+        .map(|user| sty_protocol::TokenPrincipal { user });
+    let settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
     Response::from_json(&settings)
 }
 
@@ -27,6 +28,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: crate::request_contex
         &principal,
         &visibility,
         &default_workspace,
+        body.appearance,
         body.navbar_items,
         body.panels,
         body.archived,

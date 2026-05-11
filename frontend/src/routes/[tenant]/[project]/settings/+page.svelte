@@ -8,10 +8,13 @@
 		type AccessResponse,
 		type NavbarItem,
 		type PanelItem,
+		type ProjectAppearance,
 		type ProjectSettings
 	} from '$lib/api';
+	import { DEFAULT_PROJECT_APPEARANCE } from '$lib/projectAppearance';
 	import { DEFAULT_PROJECT_TABS, mergeProjectTabs } from '$lib/projectChrome';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
+	import ProjectAppearanceSettings from '$lib/components/ProjectAppearanceSettings.svelte';
 	import ProjectDangerZone from '$lib/components/ProjectDangerZone.svelte';
 	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
@@ -36,6 +39,7 @@
 		archived_by: null,
 		archived_by_profile: null,
 		default_workspace: 'main',
+		appearance: DEFAULT_PROJECT_APPEARANCE,
 		navbar_items: [],
 		panels: []
 	});
@@ -74,7 +78,7 @@
 		return { id: '', title: '', type: 'text', content: '', enabled: true, order: 0 };
 	}
 
-	async function persistSettings(items: { navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean }) {
+	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean }) {
 		busy = true;
 		try {
 			const result = await updateProjectSettings(tenant, project, items);
@@ -237,6 +241,14 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
+			<SettingsSection title="Appearance">
+				<ProjectAppearanceSettings
+					appearance={settings.appearance}
+					{busy}
+					onSave={(appearance) => persistSettings({ appearance })}
+				/>
+			</SettingsSection>
+
 			<SettingsSection title="Navigation">
 				{#snippet actions()}
 					<button class="flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] pl-1.5 pr-2.5 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#2a2a28]" onclick={() => (showAddNavbar = true)}>
@@ -286,10 +298,10 @@
 						<div class="text-sm font-medium text-[#eae9e4]">Public downloads</div>
 						<p class="mt-1 text-xs text-[#6f6b5f]">
 							{settings.visibility === 'public'
-								? 'This project is public, so release downloads are already public.'
+								? 'This project is public, so release files and source archives are already public.'
 								: settings.public_releases
-									? 'On: anyone can download published release files and source zips, including autoupdaters using the API.'
-									: 'Off: only people with project access can download release files and source zips.'}
+									? 'On: anyone can download published release files, including autoupdaters using the API. Source archives still require project access.'
+									: 'Off: only people with project access can download release files and source archives.'}
 						</p>
 					</div>
 					<SwitchControl checked={settings.visibility === 'public' || settings.public_releases} disabled={busy || settings.visibility === 'public'} label="Toggle public release downloads" onToggle={togglePublicReleases} />

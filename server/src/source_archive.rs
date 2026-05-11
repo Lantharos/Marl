@@ -58,9 +58,7 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         crate::d1::project_visibility(database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
     );
-    let release_public = released_snapshot
-        && (project_public
-            || crate::d1::project_public_releases(database, &tenant, &project).await?);
+    let release_public = released_snapshot && project_public;
     let user = if release_public {
         crate::optional_auth(&req, &ctx).await.unwrap_or(None)
     } else {

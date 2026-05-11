@@ -17,6 +17,7 @@
 	} from '$lib/api';
 	import { projectTabCount, projectTabs } from '$lib/projectChrome';
 	import { currentProjectAccess } from '$lib/projectAccessStore';
+	import { projectAppearanceStyle } from '$lib/projectAppearance';
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -46,6 +47,7 @@
 	let showCreateOrg = $state(false);
 	let follow = $state<FollowResponse | null>(null);
 	let statsOverride = $state<ProjectStats | null>(null);
+	let settingsOverride = $state<ProjectSettings | null>(null);
 	let followLoading = $state(false);
 	let settingsKey = '';
 	let newOrgName = $state('');
@@ -74,15 +76,16 @@
 			};
 		}).projectChrome ?? null
 	);
-	const settings = $derived(projectChrome?.settings ?? null);
+	const settings = $derived(settingsOverride ?? projectChrome?.settings ?? null);
 	const stats = $derived(statsOverride ?? projectChrome?.stats ?? null);
 	const access = $derived(projectChrome?.access ?? null);
+	const themeStyle = $derived(currentProject ? projectAppearanceStyle(settings?.appearance) : '');
 
-	const visibleTabs = $derived(() => {
+	const visibleTabs = $derived.by(() => {
 		return projectTabs(settings?.navbar_items, access?.can_maintain ? 'private' : 'public');
 	});
 
-	const currentTab = $derived(() => {
+	const currentTab = $derived.by(() => {
 		if (!currentProject) return null;
 		const parts = currentPath.split('/').filter(Boolean);
 		if (parts.length < 3) return '';
@@ -96,6 +99,7 @@
 			settingsKey = '';
 			follow = null;
 			statsOverride = null;
+			settingsOverride = null;
 			currentProjectAccess.set(null);
 			return;
 		}
@@ -103,6 +107,7 @@
 		settingsKey = key;
 		follow = null;
 		statsOverride = null;
+		settingsOverride = null;
 		const controller = new AbortController();
 		loadProjectFollow(currentTenant, currentProject ?? '', controller.signal);
 		return () => controller.abort();
@@ -118,8 +123,17 @@
 			if (!detail || detail.tenant !== currentTenant || detail.project !== currentProject) return;
 			void refreshProjectStats(detail.tenant, detail.project);
 		};
+		const handleSettingsChanged = (event: Event) => {
+			const detail = (event as CustomEvent<{ tenant: string; project: string; settings: ProjectSettings }>).detail;
+			if (!detail || detail.tenant !== currentTenant || detail.project !== currentProject) return;
+			settingsOverride = detail.settings;
+		};
 		window.addEventListener('sty:project-stats-changed', handleStatsChanged);
-		return () => window.removeEventListener('sty:project-stats-changed', handleStatsChanged);
+		window.addEventListener('sty:project-settings-changed', handleSettingsChanged);
+		return () => {
+			window.removeEventListener('sty:project-stats-changed', handleStatsChanged);
+			window.removeEventListener('sty:project-settings-changed', handleSettingsChanged);
+		};
 	});
 
 	async function loadProjectFollow(tenant: string, project: string, signal?: AbortSignal) {
@@ -177,7 +191,7 @@
 
 </script>
 
-<header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
+<header class="border-b border-[#2a2a28] bg-[#0f0f0d] {currentProject ? 'sty-project-theme sty-project-nav' : ''}" style={themeStyle}>
 	<div class="flex items-center gap-4 px-32 py-2.5 md:px-48 lg:px-64 xl:px-80">
 		<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
 
@@ -195,7 +209,7 @@
 					{#if tenants.length === 0}
 						<p class="px-3 py-2 text-xs text-[#6f6b5f]">No tenants yet.</p>
 					{:else}
-						{#each tenants as tenant}
+							{#each tenants as tenant (tenant.name)}
 							<button
 								class="block w-full px-3 py-1.5 text-left text-sm {!homePage && selectedTenant === tenant.name ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
 								onclick={() => { showTenantMenu = false; goto(`/${tenant.name}`); }}
@@ -227,7 +241,7 @@
 					{#if showProjectMenu}
 						<div class="absolute left-0 top-full z-50 mt-1 w-64 rounded border border-[#2a2a28] bg-[#141412] py-1 shadow-lg">
 							<div class="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#5c5c5a]">{selectedTenant} projects</div>
-							{#each tenantProjects as p}
+								{#each tenantProjects as p (`${p.tenant}/${p.project}`)}
 								<a
 									href="/{p.tenant}/{p.project}"
 									class="block px-3 py-1.5 text-sm {currentProject === p.project ? 'text-[#f0eee4]' : 'text-[#a09d94]'} hover:bg-[#1e1e1c]"
@@ -305,7 +319,7 @@
 
 	{#if currentProject}
 		<nav class="flex gap-1 px-32 md:px-48 lg:px-64 xl:px-80">
-			{#each visibleTabs() as tab}
+				{#each visibleTabs as tab (tab.id || tab.label)}
 				{#if tab.type === 'link'}
 					{@const href = tab.url ?? '#'}
 					{@const isExternal = href.startsWith('http')}
@@ -324,7 +338,7 @@
 					{@const count = projectTabCount(stats, tab.id)}
 					<a
 						{href}
-						class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium {currentTab() === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"
+							class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium {currentTab === tab.id ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#d9a66c]'}"
 					>
 						{tab.label}
 						{#if count !== null}

@@ -23,8 +23,8 @@ export const apiScopes: ApiScope[] = [
 	{ scope: 'releases:write', allows: 'Create releases, upload artifacts, and manage release metadata.' },
 	{ scope: 'webhooks:read', allows: 'List webhooks, integrations, and webhook delivery state.' },
 	{ scope: 'webhooks:write', allows: 'Create, test, trigger, and revoke project webhooks.' },
-	{ scope: 'settings:read', allows: 'Read project settings visible to maintainers.' },
-	{ scope: 'settings:write', allows: 'Change project settings, screenshots, archive state, visibility, and project automation settings.' }
+	{ scope: 'settings:read', allows: 'Read project settings visible to users with project access.' },
+	{ scope: 'settings:write', allows: 'Change project appearance, navigation, screenshots, archive state, visibility, and automation settings.' }
 ];
 
 export const endpointGroups: EndpointGroup[] = [
@@ -151,7 +151,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Releases and account keys',
-		note: 'Release artifacts are stored by sty. Signing keys are user-scoped, not project-scoped.',
+		note: 'Release artifacts are stored by sty. Private projects can make release files public, but source archives are public only when the project is public. Signing keys are user-scoped, not project-scoped.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/releases',
 			'POST /v1/tenants/:tenant/projects/:project/releases',

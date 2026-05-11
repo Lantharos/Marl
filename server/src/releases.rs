@@ -383,22 +383,14 @@ pub async fn download_release_artifact(
     let release_id = param(&ctx, "item_id")?;
     let artifact_id = param(&ctx, "artifact_id")?;
     let database = db(&ctx)?;
-    let public_cache = release_downloads_are_public(&database, &tenant, &project).await?;
-    let user = if public_cache {
+    let public_project = release_source_downloads_are_public(&database, &tenant, &project).await?;
+    let public_release_downloads = public_project
+        || d1::project_public_releases(&database, &tenant, &project).await?;
+    let user = if public_release_downloads {
         optional_auth(&req, &ctx).await.unwrap_or(None)
     } else {
         optional_auth(&req, &ctx).await?
     };
-    if !public_cache {
-        check_project_read_capability(
-            &database,
-            &tenant,
-            &project,
-            user.as_deref(),
-            "releases:read",
-        )
-        .await?;
-    }
     let Some(release) =
         release_item_by_id_or_tag(&database, &tenant, &project, &release_id).await?
     else {
@@ -412,6 +404,23 @@ pub async fn download_release_artifact(
     let Some(artifact) = release_artifact(&release, &artifact_id) else {
         return json_error(404, "artifact not found");
     };
+    let source_artifact = artifact["source"].as_bool().unwrap_or(false)
+        || artifact["id"].as_str() == Some(release_source_artifact_id());
+    let public_cache = if source_artifact {
+        public_project
+    } else {
+        public_release_downloads
+    };
+    if !public_cache {
+        check_project_read_capability(
+            &database,
+            &tenant,
+            &project,
+            user.as_deref(),
+            "releases:read",
+        )
+        .await?;
+    }
     let Some(storage_key) = artifact["storage_key"].as_str() else {
         return json_error(404, "artifact not found");
     };
@@ -461,11 +470,20 @@ async fn release_downloads_are_public(
     tenant: &str,
     project: &str,
 ) -> Result<bool> {
+    let public_project = release_source_downloads_are_public(database, tenant, project).await?;
+    Ok(public_project || d1::project_public_releases(database, tenant, project).await?)
+}
+
+async fn release_source_downloads_are_public(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+) -> Result<bool> {
     let public_project = matches!(
         d1::project_visibility(database, tenant, project).await?,
         Some(visibility) if visibility == "public"
     );
-    Ok(public_project || d1::project_public_releases(database, tenant, project).await?)
+    Ok(public_project)
 }
 
 async fn can_manage_releases(

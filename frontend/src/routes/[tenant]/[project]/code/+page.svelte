@@ -118,7 +118,7 @@
 			<div class="mb-3 font-mono text-xs text-[#8c887e]">Source snapshot {snapshot.slice(0, 12)}</div>
 		{/if}
 		<div class="grid gap-4 md:grid-cols-[320px_minmax(0,1fr)]" style="height: calc(100vh - 166px);">
-			<div class="min-h-0 overflow-hidden rounded border border-[#2a2a28] bg-[#10100e]">
+			<div class="min-h-0 overflow-hidden rounded border border-[#2a2a28] bg-[#141412]">
 				<div class="flex items-center justify-between gap-3 border-b border-[#242420] px-3 py-2 text-xs font-medium text-[#8c887e]">
 					<span>{treeEntries.length} {treeEntries.length === 1 ? 'item' : 'items'}</span>
 					<button

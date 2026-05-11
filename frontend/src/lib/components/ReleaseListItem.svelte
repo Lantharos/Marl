@@ -18,12 +18,14 @@
 		tenant,
 		project,
 		canMutate = false,
+		showSourceDownloads = true,
 		onDelete
 	}: {
 		release: Release;
 		tenant: string;
 		project: string;
 		canMutate?: boolean;
+		showSourceDownloads?: boolean;
 		onDelete?: (release: Release) => Promise<void> | void;
 	} = $props();
 
@@ -33,7 +35,9 @@
 	let downloadBusyKey = $state('');
 	let downloadError = $state('');
 
-	const artifacts = $derived(artifactList(release));
+	const rawArtifacts = $derived(artifactList(release));
+	const hiddenSourceDownload = $derived(!showSourceDownloads && rawArtifacts.some(isSourceArtifact));
+	const artifacts = $derived(showSourceDownloads ? rawArtifacts : rawArtifacts.filter((artifact) => !isSourceArtifact(artifact)));
 	const title = $derived(release.name?.trim() || release.tag);
 	const releasedAt = $derived(formatDate(release.created_at ?? release.updated_at));
 	const releasePath = $derived(encodeURIComponent(release.tag));
@@ -65,6 +69,10 @@
 		const href = artifact.download_url ?? artifact.url;
 		if (!href) return null;
 		return href.startsWith('/') ? `${apiBase()}${href}` : href;
+	}
+
+	function isSourceArtifact(artifact: ReleaseArtifact) {
+		return artifact.source || artifact.id === 'source-zip';
 	}
 
 	function artifactKey(artifact: ReleaseArtifact) {
@@ -268,6 +276,9 @@
 			{/each}
 			{#if !artifacts.length}
 				<p class="text-xs text-[#6f6b5f]">No downloads attached.</p>
+			{/if}
+			{#if hiddenSourceDownload}
+				<p class="text-xs text-[#6f6b5f]">Source archives are only public on public projects.</p>
 			{/if}
 			{#if downloadError}
 				<p class="text-xs text-[#d96c5a]">{downloadError}</p>

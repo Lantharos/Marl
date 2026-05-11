@@ -258,6 +258,7 @@ async fn insert_fork_shell(
         archived_by: None,
         archived_by_profile: None,
         default_workspace: "main".to_string(),
+        appearance: ProjectAppearance::default(),
         navbar_items: vec![],
         panels: vec![],
     })

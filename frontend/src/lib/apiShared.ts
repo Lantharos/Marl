@@ -74,3 +74,10 @@ export function notifyProjectStatsChanged(tenant: string, project: string) {
 	if (typeof window === 'undefined') return;
 	window.dispatchEvent(new CustomEvent('sty:project-stats-changed', { detail: { tenant, project } }));
 }
+
+export function notifyProjectSettingsChanged<T>(tenant: string, project: string, settings: T) {
+	if (typeof window === 'undefined') return;
+	window.dispatchEvent(
+		new CustomEvent('sty:project-settings-changed', { detail: { tenant, project, settings } })
+	);
+}
