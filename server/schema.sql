@@ -101,6 +101,26 @@ CREATE TABLE IF NOT EXISTS protocol_items (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_protocol_items_project_kind ON protocol_items(tenant, project, kind);
+CREATE TABLE IF NOT EXISTS leaves (
+    id TEXT PRIMARY KEY,
+    tenant TEXT NOT NULL,
+    project TEXT NOT NULL DEFAULT '',
+    slug TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    visibility TEXT NOT NULL DEFAULT 'tenant',
+    attached_type TEXT NOT NULL DEFAULT 'project',
+    attached_id TEXT,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    pinned INTEGER NOT NULL DEFAULT 0,
+    author TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (tenant, project, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_leaves_scope_updated ON leaves(tenant, project, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leaves_scope_pinned ON leaves(tenant, project, pinned, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leaves_attachment ON leaves(tenant, project, attached_type, attached_id);
 CREATE TABLE IF NOT EXISTS project_follows (
     tenant TEXT NOT NULL,
     project TEXT NOT NULL,
@@ -155,6 +175,7 @@ CREATE TABLE IF NOT EXISTS project_stats (
     ready_count INTEGER NOT NULL DEFAULT 0,
     release_count INTEGER NOT NULL DEFAULT 0,
     history_count INTEGER NOT NULL DEFAULT 0,
+    leaf_count INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (tenant, project)
 );

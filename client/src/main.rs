@@ -6,6 +6,7 @@ mod collaborators;
 mod fork_commands;
 mod http;
 mod interactive;
+mod leaf_commands;
 mod project_commands;
 mod spinner;
 

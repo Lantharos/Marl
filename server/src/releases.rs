@@ -384,8 +384,8 @@ pub async fn download_release_artifact(
     let artifact_id = param(&ctx, "artifact_id")?;
     let database = db(&ctx)?;
     let public_project = release_source_downloads_are_public(&database, &tenant, &project).await?;
-    let public_release_downloads = public_project
-        || d1::project_public_releases(&database, &tenant, &project).await?;
+    let public_release_downloads =
+        public_project || d1::project_public_releases(&database, &tenant, &project).await?;
     let user = if public_release_downloads {
         optional_auth(&req, &ctx).await.unwrap_or(None)
     } else {

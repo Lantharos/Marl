@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    Comment, HistoryEntry, HistorySignature, Issue, NavbarItem, PanelItem, ProjectSettings,
-    ProjectAppearance, ProjectStats, ProjectSummary, TenantSummary, TokenPrincipal, UserProfile,
+    Comment, HistoryEntry, HistorySignature, Issue, Leaf, NavbarItem, PanelItem, ProjectAppearance,
+    ProjectSettings, ProjectStats, ProjectSummary, TenantSummary, TokenPrincipal, UserProfile,
     WorkspaceState, validate_segment,
 };
 use uuid::Uuid;
@@ -67,6 +67,7 @@ mod history;
 mod home_activity;
 mod home_attention;
 mod issues;
+mod leaves;
 mod objects;
 mod profile;
 mod profile_activity;
@@ -88,6 +89,7 @@ pub use history::*;
 pub use home_activity::*;
 pub use home_attention::*;
 pub use issues::*;
+pub use leaves::*;
 pub use objects::*;
 pub use profile::*;
 pub use profile_activity::*;

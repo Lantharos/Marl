@@ -181,6 +181,7 @@ async fn user_public_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
+                    COALESCE(ps.leaf_count, 0) AS leaf_count,
                     (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json,
                     (SELECT COUNT(*) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project AND h.author = ?1) AS user_history_count
@@ -224,6 +225,7 @@ async fn user_tenant_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
+                    COALESCE(ps.leaf_count, 0) AS leaf_count,
                     (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM projects p
@@ -298,6 +300,7 @@ async fn profile_following_project_cards(
                     COALESCE(ps.ready_count, 0) AS ready_count,
                     COALESCE(ps.release_count, 0) AS release_count,
                     COALESCE(ps.history_count, 0) AS history_count,
+                    COALESCE(ps.leaf_count, 0) AS leaf_count,
                     (SELECT MAX(timestamp) FROM history h WHERE h.tenant = p.tenant AND h.project = p.project) AS last_activity_at,
                     (SELECT data_json FROM protocol_items pi WHERE pi.tenant = p.tenant AND pi.project = p.project AND pi.kind = 'release' ORDER BY pi.created_at DESC LIMIT 1) AS latest_release_json
              FROM project_follows f
@@ -414,6 +417,7 @@ struct ProfileProjectCardRow {
     ready_count: f64,
     release_count: f64,
     history_count: f64,
+    leaf_count: f64,
     last_activity_at: Option<String>,
     latest_release_json: Option<String>,
 }
@@ -430,6 +434,7 @@ fn profile_project_card_item(row: ProfileProjectCardRow) -> ProjectDiscoveryItem
             ready_count: row.ready_count as u64,
             release_count: row.release_count as u64,
             history_count: row.history_count as u64,
+            leaf_count: row.leaf_count as u64,
         },
         last_activity_at: row.last_activity_at,
         latest_release: row

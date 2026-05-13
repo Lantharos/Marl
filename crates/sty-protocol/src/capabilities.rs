@@ -30,6 +30,7 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "follows",
             "releases",
             "public_releases",
+            "leaves",
             "signed_snapshots",
             "profiles",
             "ssh_keys",

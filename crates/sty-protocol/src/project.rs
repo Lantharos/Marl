@@ -118,6 +118,51 @@ pub struct ProjectStats {
     pub ready_count: u64,
     pub release_count: u64,
     pub history_count: u64,
+    #[serde(default)]
+    pub leaf_count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Leaf {
+    pub id: String,
+    pub tenant: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    pub slug: String,
+    pub title: String,
+    pub body: String,
+    pub visibility: String,
+    pub attached_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_id: Option<String>,
+    pub tags: Vec<String>,
+    pub pinned: bool,
+    pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_profile: Option<UserProfile>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub href: String,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct LeafRequest {
+    #[serde(default)]
+    pub slug: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub visibility: Option<String>,
+    #[serde(default)]
+    pub attached_type: Option<String>,
+    #[serde(default)]
+    pub attached_id: Option<Option<String>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub pinned: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

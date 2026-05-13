@@ -169,6 +169,7 @@ pub async fn delete_project(db: &Database, tenant: &str, project: &str) -> Resul
         "DELETE FROM comments WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM issues WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM leaves WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM history WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM workspace_heads WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM workspace_states WHERE tenant = ?1 AND project = ?2",

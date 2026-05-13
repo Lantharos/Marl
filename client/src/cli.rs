@@ -5,12 +5,13 @@ use clap::{Parser, Subcommand};
 
 pub(crate) use crate::auth_commands::DEFAULT_REMOTE_URL;
 use crate::auth_commands::{login, whoami};
+use crate::clone_commands;
 use crate::collaborator_commands::{
     ProjectCollaboratorCommands, TenantCollaboratorCommands, project_collaborators,
     tenant_collaborators,
 };
-use crate::clone_commands;
 use crate::fork_commands::{self, ForkModeArg};
+use crate::leaf_commands::{self, LeafCommands};
 use crate::project_commands;
 
 #[derive(Parser)]
@@ -107,6 +108,11 @@ enum Commands {
     Tenant {
         #[command(subcommand)]
         command: TenantCommands,
+    },
+    #[command(alias = "leaves")]
+    Leaf {
+        #[command(subcommand)]
+        command: LeafCommands,
     },
 }
 
@@ -242,5 +248,6 @@ pub fn run() -> Result<()> {
             } => project_commands::create_tenant_command(name, name_flag, remote_url),
             TenantCommands::Collaborators { command } => tenant_collaborators(command),
         },
+        Commands::Leaf { command } => leaf_commands::run(command),
     }
 }

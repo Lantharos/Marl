@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { getProjectOverview, type ProjectOverview, type WorkspaceStatus, type ProjectSettings, type PanelItem, type Release } from '$lib/api';
+	import { getProjectOverview, type Leaf, type ProjectOverview, type WorkspaceStatus, type ProjectSettings, type PanelItem, type Release } from '$lib/api';
 	import { appData } from '$lib/appState';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
@@ -10,6 +10,7 @@
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import History from 'lucide-svelte/icons/history';
 	import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
+	import StickyNote from 'lucide-svelte/icons/sticky-note';
 	import Tag from 'lucide-svelte/icons/tag';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import type { PageProps } from './$types';
@@ -32,6 +33,7 @@
 			.slice(0, 3)
 	);
 	const releases = $derived<Release[]>(overview?.releases ?? []);
+	const pinnedLeaves = $derived<Leaf[]>(overview?.pinned_leaves ?? []);
 	const readme = $derived<string | null>(overview?.readme ?? null);
 	const featuredScreenshot = $derived(overview?.featured_screenshot ?? null);
 	const settings = $derived<ProjectSettings | null>(overview?.settings ?? null);
@@ -39,8 +41,9 @@
 
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
-		{ id: 'releases', title: 'Releases', type: 'releases', enabled: true, order: 1 },
-		{ id: 'activity', title: 'Activity', type: 'activity', enabled: true, order: 2 }
+		{ id: 'leaves', title: 'Pinned leaves', type: 'leaves', enabled: true, order: 1 },
+		{ id: 'releases', title: 'Releases', type: 'releases', enabled: true, order: 2 },
+		{ id: 'activity', title: 'Activity', type: 'activity', enabled: true, order: 3 }
 	];
 
 	function withDefaultPanels(items: PanelItem[]) {
@@ -62,6 +65,7 @@
 	const projectStats = $derived.by(() => [
 		{ label: 'Workspaces', value: stats?.workspace_count ?? 0, href: `/${tenant}/${project}/workspaces` },
 		{ label: 'Issues', value: stats?.open_issue_count ?? 0, href: `/${tenant}/${project}/issues` },
+		{ label: 'Leaves', value: stats?.leaf_count ?? 0, href: `/${tenant}/${project}/leaves` },
 		{ label: 'Releases', value: stats?.release_count ?? 0, href: `/${tenant}/${project}/releases` },
 		{ label: 'History', value: stats?.history_count ?? 0, href: `/${tenant}/${project}/history` }
 	]);
@@ -214,9 +218,9 @@
 						</div>
 					{/if}
 				</div>
-				<div class="mt-4 grid grid-cols-2 border border-[#252522]">
+				<div class="mt-4 flex flex-wrap border border-[#252522]">
 					{#each projectStats as item (item.label)}
-						<a class="border-b border-r border-[#252522] px-3 py-2 hover:bg-[#1a1a18] even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0" href={item.href}>
+						<a class="w-1/2 border-b border-r border-[#252522] px-3 py-2 hover:bg-[#1a1a18] even:border-r-0 last:w-full last:border-b-0 last:border-r-0" href={item.href}>
 							<div class="text-sm text-[#eae9e4]">{item.value}</div>
 							<div class="text-[11px] text-[#6f6b5f]">{item.label}</div>
 						</a>
@@ -230,6 +234,8 @@
 						<h3 class="text-sm font-medium text-[#eae9e4]">{panel.title}</h3>
 						{#if panel.type === 'workspaces'}
 							<a class="text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/workspaces`}>All</a>
+						{:else if panel.type === 'leaves'}
+							<a class="text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/leaves`}>All</a>
 						{:else if panel.type === 'releases'}
 							<a class="text-xs text-[#8c887e] hover:text-[#d9a66c]" href={`/${tenant}/${project}/releases`}>All</a>
 						{/if}
@@ -253,6 +259,29 @@
 									</a>
 								{:else}
 									<p class="px-4 py-3 text-xs text-[#6f6b5f]">No open workspaces.</p>
+								{/each}
+							</div>
+						{:else if panel.type === 'leaves'}
+							<div class="divide-y divide-[#252522]">
+								{#each pinnedLeaves.slice(0, 5) as leaf (leaf.id)}
+									<a
+										class="group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-4 py-2.5 hover:bg-[#1a1a18]"
+										href={leaf.href}
+									>
+										<StickyNote class="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d9a66c]" />
+										<span class="min-w-0 flex-1">
+											<span class="block truncate text-sm text-[#eae9e4]">{leaf.title}</span>
+											<span class="mt-0.5 flex min-w-0 gap-1.5 text-[11px] text-[#6f6b5f]">
+												<span>{leaf.visibility}</span>
+												{#if leaf.attached_type !== 'project'}
+													<span class="truncate">{leaf.attached_type}{leaf.attached_id ? `:${leaf.attached_id}` : ''}</span>
+												{/if}
+											</span>
+										</span>
+										<ChevronRight class="mt-0.5 h-4 w-4 text-[#6f6b5f] group-hover:text-[#eae9e4]" />
+									</a>
+								{:else}
+									<p class="px-4 py-3 text-xs text-[#6f6b5f]">No pinned leaves.</p>
 								{/each}
 							</div>
 						{:else if panel.type === 'releases'}

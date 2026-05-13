@@ -22,6 +22,12 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let releases = latest_releases(&database, &tenant, &project, 5).await?;
     let featured_screenshot = screenshots::featured_screenshot(&database, &tenant, &project).await?;
+    let pinned_leaves = visible_project_leaves(&database, &tenant, &project, user.as_deref())
+        .await?
+        .into_iter()
+        .filter(|leaf| leaf.pinned)
+        .take(5)
+        .collect::<Vec<_>>();
     let default_workspace = settings.default_workspace.clone();
     let default_head = d1::head(&database, &tenant, &project, &default_workspace).await?;
     let etag = overview_etag(
@@ -32,6 +38,7 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         &stats,
         &releases,
         featured_screenshot.as_ref(),
+        &pinned_leaves,
         default_head.as_deref(),
     )?;
     if let Some(response) = not_modified_response(&req, &etag, false, 15, false)? {
@@ -65,6 +72,7 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         "recent_activity": recent_activity,
         "releases": releases,
         "featured_screenshot": featured_screenshot,
+        "pinned_leaves": pinned_leaves,
         "default_workspace": default_workspace,
     }))?;
     apply_cache_headers(response.headers_mut(), &etag, false, 15, false)?;
@@ -78,12 +86,13 @@ pub(crate) async fn project_stats(req: Request, ctx: crate::request_context::App
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read").await?;
     let stats = d1::project_stats(&database, &tenant, &project).await?;
     let etag = format!(
-        "stats-{}-{}-{}-{}-{}",
+        "stats-{}-{}-{}-{}-{}-{}",
         stats.workspace_count,
         stats.open_issue_count,
         stats.ready_count,
         stats.release_count,
-        stats.history_count
+        stats.history_count,
+        stats.leaf_count
     );
     let public_cache = matches!(
         d1::project_visibility(&database, &tenant, &project).await?,
@@ -135,6 +144,7 @@ fn overview_etag(
     stats: &sty_protocol::ProjectStats,
     releases: &[serde_json::Value],
     featured_screenshot: Option<&serde_json::Value>,
+    pinned_leaves: &[sty_protocol::Leaf],
     default_head: Option<&str>,
 ) -> Result<String> {
     let body = serde_json::to_vec(&json!({
@@ -145,6 +155,7 @@ fn overview_etag(
         "stats": stats,
         "releases": releases,
         "featured_screenshot": featured_screenshot,
+        "pinned_leaves": pinned_leaves,
         "default_head": default_head,
     }))
     .map_err(|error| Error::RustError(error.to_string()))?;

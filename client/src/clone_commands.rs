@@ -158,7 +158,10 @@ fn extract_source_archive(archive: File, destination: &Path, force: bool) -> Res
 fn prepare_destination(path: &Path, force: bool) -> Result<()> {
     if path.exists() {
         if !path.is_dir() {
-            bail!("destination exists and is not a directory: {}", path.display());
+            bail!(
+                "destination exists and is not a directory: {}",
+                path.display()
+            );
         }
         if !force && path.read_dir()?.next().is_some() {
             bail!(

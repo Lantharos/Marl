@@ -4,7 +4,7 @@ import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
 import type { AccessResponse, UserProfile } from './collaboratorTypes';
 import type { Issue } from './issueApi';
-import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Leaf, LeafDraft, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
 export * from './collaboratorApi';
@@ -13,7 +13,7 @@ export type { AccessResponse, Collaborator, CollaboratorRole, UserProfile } from
 export * from './issueApi';
 export * from './objectApi';
 export * from './projectDataApi';
-export type { AccountKey, CapabilityResponse, DeveloperApp, Label, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+export type { AccountKey, CapabilityResponse, DeveloperApp, Label, Leaf, LeafDraft, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -50,7 +50,7 @@ export interface NavbarItem {
 export interface PanelItem {
 	id: string;
 	title: string;
-	type: 'text' | 'button' | 'link' | 'info' | 'workspaces' | 'releases' | 'activity';
+	type: 'text' | 'button' | 'link' | 'info' | 'workspaces' | 'leaves' | 'releases' | 'activity';
 	content?: string;
 	url?: string;
 	button_label?: string;
@@ -93,6 +93,7 @@ export interface ProjectStats {
 	ready_count: number;
 	release_count: number;
 	history_count: number;
+	leaf_count: number;
 }
 
 export interface Activity {
@@ -117,10 +118,12 @@ export interface ProjectOverview {
 		ready_count: number;
 		release_count: number;
 		history_count: number;
+		leaf_count: number;
 	};
 	recent_activity: Activity[];
 	releases: Release[];
 	featured_screenshot?: ProjectScreenshot | null;
+	pinned_leaves?: Leaf[];
 	default_workspace: string;
 }
 
@@ -508,6 +511,73 @@ export async function listReleasesPage(tenant: string, project: string, options:
 
 export async function listReleases(tenant: string, project: string, options: PageOptions = {}): Promise<Release[]> {
 	return (await listReleasesPage(tenant, project, options)).items;
+}
+
+export async function listProjectLeavesPage(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<Leaf>> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/leaves${pageQuery(options)}`, { signal: options.signal });
+	return (await response.json()) as Paginated<Leaf>;
+}
+
+export async function getProjectLeaf(tenant: string, project: string, leaf: string, options: ApiOptions = {}): Promise<Leaf> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/leaves/${encodeURIComponent(leaf)}`, { signal: options.signal });
+	return (await response.json()) as Leaf;
+}
+
+export async function createProjectLeaf(tenant: string, project: string, leaf: LeafDraft): Promise<Leaf> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/leaves`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(leaf)
+	});
+	notifyProjectStatsChanged(tenant, project);
+	return (await response.json()) as Leaf;
+}
+
+export async function updateProjectLeaf(tenant: string, project: string, leafId: string, leaf: LeafDraft): Promise<Leaf> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/leaves/${encodeURIComponent(leafId)}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(leaf)
+	});
+	notifyProjectStatsChanged(tenant, project);
+	return (await response.json()) as Leaf;
+}
+
+export async function deleteProjectLeaf(tenant: string, project: string, leafId: string): Promise<void> {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/leaves/${encodeURIComponent(leafId)}`, { method: 'DELETE' });
+	notifyProjectStatsChanged(tenant, project);
+}
+
+export async function listTenantLeavesPage(tenant: string, options: PageOptions = {}): Promise<Paginated<Leaf>> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/leaves${pageQuery(options)}`, { signal: options.signal });
+	return (await response.json()) as Paginated<Leaf>;
+}
+
+export async function createTenantLeaf(tenant: string, leaf: LeafDraft): Promise<Leaf> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/leaves`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(leaf)
+	});
+	return (await response.json()) as Leaf;
+}
+
+export async function getTenantLeaf(tenant: string, leaf: string, options: ApiOptions = {}): Promise<Leaf> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/leaves/${encodeURIComponent(leaf)}`, { signal: options.signal });
+	return (await response.json()) as Leaf;
+}
+
+export async function updateTenantLeaf(tenant: string, leafId: string, leaf: LeafDraft): Promise<Leaf> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/leaves/${encodeURIComponent(leafId)}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(leaf)
+	});
+	return (await response.json()) as Leaf;
+}
+
+export async function deleteTenantLeaf(tenant: string, leafId: string): Promise<void> {
+	await authedFetch(`/v1/tenants/${tenant}/leaves/${encodeURIComponent(leafId)}`, { method: 'DELETE' });
 }
 
 export async function createRelease(tenant: string, project: string, release: Partial<Release>): Promise<Release> {

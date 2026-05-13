@@ -16,6 +16,7 @@ mod collaborators;
 pub(crate) mod d1;
 mod developer;
 mod forks;
+mod leaves;
 mod protocol;
 mod protocol_profiles;
 mod protocol_ready;
@@ -32,6 +33,7 @@ use auth::verify_ave_id_token;
 use collaborators::*;
 use developer::*;
 use forks::*;
+use leaves::*;
 use protocol::*;
 use protocol_ready::*;
 use releases::*;
@@ -114,6 +116,11 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .put_async("/v1/profiles/:tenant/pins", update_user_profile_pins)
         .get_async("/v1/tenants/:tenant/folders", list_tenant_folders)
         .post_async("/v1/tenants/:tenant/folders", create_tenant_folder)
+        .get_async("/v1/tenants/:tenant/leaves", list_tenant_leaves)
+        .post_async("/v1/tenants/:tenant/leaves", create_tenant_leaf)
+        .get_async("/v1/tenants/:tenant/leaves/:leaf", get_tenant_leaf)
+        .patch_async("/v1/tenants/:tenant/leaves/:leaf", update_tenant_leaf)
+        .delete_async("/v1/tenants/:tenant/leaves/:leaf", delete_tenant_leaf)
         .get_async("/v1/tenants/:tenant/projects", tenant_projects)
         .post_async("/v1/tenants/:tenant/projects/:project", create_project)
         .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
@@ -145,6 +152,26 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async(
             "/v1/tenants/:tenant/projects/:project/overview",
             project_overview,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/leaves",
+            list_project_leaves,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/leaves",
+            create_project_leaf,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/leaves/:leaf",
+            get_project_leaf,
+        )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/leaves/:leaf",
+            update_project_leaf,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/leaves/:leaf",
+            delete_project_leaf,
         )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/screenshots",

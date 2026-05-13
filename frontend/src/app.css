@@ -227,6 +227,20 @@ select:focus-visible:not(.focus-visible\:outline-none) {
 	color: var(--sty-project-nav-muted);
 }
 
+.sty-project-theme.sty-project-nav .hover\:text-\[\#d9a66c\]:hover,
+.sty-project-theme .sty-project-nav .hover\:text-\[\#d9a66c\]:hover {
+	color: var(--sty-project-accent);
+}
+
+.sty-project-theme.sty-project-nav .hover\:text-\[\#f0eee4\]:hover,
+.sty-project-theme.sty-project-nav .hover\:text-\[\#eae9e4\]:hover,
+.sty-project-theme.sty-project-nav .hover\:text-\[\#d8d5ca\]:hover,
+.sty-project-theme .sty-project-nav .hover\:text-\[\#f0eee4\]:hover,
+.sty-project-theme .sty-project-nav .hover\:text-\[\#eae9e4\]:hover,
+.sty-project-theme .sty-project-nav .hover\:text-\[\#d8d5ca\]:hover {
+	color: var(--sty-project-nav-fg);
+}
+
 .sty-project-theme .sty-settings-section {
 	background-color: var(--sty-project-surface);
 	border-color: var(--sty-project-border);

@@ -50,8 +50,9 @@
 
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
-		{ id: 'releases', title: 'Releases', type: 'releases', enabled: true, order: 1 },
-		{ id: 'activity', title: 'Activity', type: 'activity', enabled: true, order: 2 }
+		{ id: 'leaves', title: 'Pinned leaves', type: 'leaves', enabled: true, order: 1 },
+		{ id: 'releases', title: 'Releases', type: 'releases', enabled: true, order: 2 },
+		{ id: 'activity', title: 'Activity', type: 'activity', enabled: true, order: 3 }
 	];
 
 	function withDefaultPanels(items: PanelItem[]) {
@@ -281,7 +282,7 @@
 									{/if}
 								</div>
 							</div>
-							{#if !['', 'code', 'workspaces', 'issues', 'releases', 'automation', 'history', 'settings'].includes(item.id)}
+							{#if !['', 'code', 'workspaces', 'issues', 'leaves', 'screenshots', 'releases', 'automation', 'history', 'settings'].includes(item.id)}
 								<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removeNavbar(i)} aria-label={`Delete ${item.label}`}>
 									<Trash2 class="h-3.5 w-3.5" />
 								</button>
@@ -340,7 +341,7 @@
 							<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#eae9e4] disabled:opacity-30" disabled={busy} onclick={() => openEditPanelModal(i)} aria-label={`Edit ${item.title}`}>
 								<Pencil class="h-3.5 w-3.5" />
 							</button>
-							{#if !['workspaces', 'releases', 'activity'].includes(item.id)}
+							{#if !['workspaces', 'leaves', 'releases', 'activity'].includes(item.id)}
 								<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removePanel(i)} aria-label={`Delete ${item.title}`}>
 									<Trash2 class="h-3.5 w-3.5" />
 								</button>

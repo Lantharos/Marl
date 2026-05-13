@@ -8,7 +8,7 @@ use crate::support::{
 };
 use crate::{
     check_project_capability, check_project_read_capability, check_project_write_capability, d1,
-    optional_auth, require_auth,
+    optional_auth, require_auth, visible_project_leaves,
 };
 pub async fn list_labels(
     req: Request,
@@ -192,6 +192,17 @@ pub async fn search_project(
     for entry in d1::project_history(&database, &tenant, &project).await? {
         if entry.message.to_ascii_lowercase().contains(&query) {
             results.push(json!({ "type": "snapshot", "score": 0.8, "data": entry }));
+        }
+    }
+    for leaf in visible_project_leaves(&database, &tenant, &project, user.as_deref()).await? {
+        if leaf.title.to_ascii_lowercase().contains(&query)
+            || leaf.body.to_ascii_lowercase().contains(&query)
+            || leaf
+                .tags
+                .iter()
+                .any(|tag| tag.to_ascii_lowercase().contains(&query))
+        {
+            results.push(json!({ "type": "leaf", "score": 0.9, "data": leaf }));
         }
     }
     Response::from_json(&paginate_vec(url, results))

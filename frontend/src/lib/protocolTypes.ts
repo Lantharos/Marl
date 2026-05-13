@@ -42,6 +42,29 @@ export interface Label {
 	description?: string | null;
 }
 
+export interface Leaf {
+	id: string;
+	tenant: string;
+	project?: string | null;
+	slug: string;
+	title: string;
+	body: string;
+	visibility: 'private' | 'tenant' | 'public' | string;
+	attached_type: 'tenant' | 'project' | 'branch' | 'commit' | 'issue' | 'workspace' | 'release' | string;
+	attached_id?: string | null;
+	tags: string[];
+	pinned: boolean;
+	author: string;
+	author_profile?: import('./collaboratorTypes').UserProfile | null;
+	created_at: string;
+	updated_at: string;
+	href: string;
+}
+
+export type LeafDraft = Partial<
+	Pick<Leaf, 'slug' | 'title' | 'body' | 'visibility' | 'attached_type' | 'attached_id' | 'tags' | 'pinned'>
+>;
+
 export interface Milestone {
 	id: string;
 	title: string;
