@@ -231,8 +231,32 @@ pub async fn list_reactions(
     req: Request,
     ctx: crate::request_context::AppRouteContext,
 ) -> Result<Response> {
-    let _ = optional_auth(&req, &ctx).await?;
-    Response::from_json(&Vec::<serde_json::Value>::new())
+    let user = optional_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    check_project_read_capability(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "issues:read",
+    )
+    .await?;
+    let Some((target_kind, target_id)) =
+        resolve_reaction_target(&database, &tenant, &project, &ctx).await?
+    else {
+        return json_error(404, "reaction target not found");
+    };
+    let reactions = d1::list_reactions(
+        &database,
+        &tenant,
+        &project,
+        &target_kind,
+        &target_id,
+        user.as_deref(),
+    )
+    .await?;
+    Response::from_json(&reactions)
 }
 
 pub async fn add_reaction(
@@ -252,8 +276,27 @@ pub async fn add_reaction(
     )
     .await?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
-    let emoji = body["emoji"].as_str().unwrap_or("+1");
-    Response::from_json(&json!([{ "emoji": emoji, "count": 1, "reacted": true }]))
+    let emoji = body["emoji"]
+        .as_str()
+        .or_else(|| body["content"].as_str())
+        .unwrap_or("+1");
+    let emoji = normalize_reaction(emoji)?;
+    let Some((target_kind, target_id)) =
+        resolve_reaction_target(&database, &tenant, &project, &ctx).await?
+    else {
+        return json_error(404, "reaction target not found");
+    };
+    let reactions = d1::add_reaction(
+        &database,
+        &tenant,
+        &project,
+        &target_kind,
+        &target_id,
+        &user,
+        &emoji,
+    )
+    .await?;
+    Response::from_json(&reactions)
 }
 
 pub async fn delete_reaction(
@@ -272,7 +315,58 @@ pub async fn delete_reaction(
         "issues:write",
     )
     .await?;
+    let emoji = normalize_reaction(&param(&ctx, "reaction")?)?;
+    let Some((target_kind, target_id)) =
+        resolve_reaction_target(&database, &tenant, &project, &ctx).await?
+    else {
+        return json_error(404, "reaction target not found");
+    };
+    d1::delete_reaction(
+        &database,
+        &tenant,
+        &project,
+        &target_kind,
+        &target_id,
+        &user,
+        &emoji,
+    )
+    .await?;
     Response::from_json(&OkResponse { ok: true })
+}
+
+async fn resolve_reaction_target(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    ctx: &crate::request_context::AppRouteContext,
+) -> Result<Option<(String, String)>> {
+    if let Some(item_id) = ctx.param("item_id") {
+        let Some(item) = protocol_item(database, tenant, project, item_id).await? else {
+            return Ok(None);
+        };
+        if item["kind"].as_str() != Some("comment") {
+            return Ok(None);
+        }
+        return Ok(Some(("comment".to_string(), item_id.to_string())));
+    }
+    if let Some(issue_id) = ctx.param("issue_id") {
+        let issue = d1::list_issues(database, tenant, project)
+            .await?
+            .into_iter()
+            .find(|issue| {
+                issue.id == issue_id.as_str() || issue.number.to_string() == issue_id.as_str()
+            });
+        return Ok(issue.map(|issue| ("issue".to_string(), issue.id)));
+    }
+    Ok(None)
+}
+
+fn normalize_reaction(value: &str) -> Result<String> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 32 || value.chars().any(char::is_control) {
+        return Err(Error::RustError("invalid reaction".to_string()));
+    }
+    Ok(value.to_string())
 }
 
 pub async fn verify_snapshot(
@@ -387,6 +481,9 @@ pub async fn delete_protocol_item(
         ])?
         .run()
         .await?;
+    if kind.as_deref() == Some("comment") {
+        d1::delete_reactions_for_target(&database, &tenant, &project, "comment", &id).await?;
+    }
     if kind.as_deref() == Some("release") {
         d1::recompute_project_stats(&database, &tenant, &project).await?;
     }

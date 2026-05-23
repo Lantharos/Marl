@@ -31,8 +31,27 @@ pub(crate) async fn update_settings(mut req: Request, ctx: crate::request_contex
         body.appearance,
         body.navbar_items,
         body.panels,
+        body.merge_rules,
+        body.protected_workspaces,
         body.archived,
         body.public_releases,
+    )
+    .await?;
+    d1::record_audit_event(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "project.settings_update",
+        "project",
+        &project,
+        serde_json::json!({
+            "visibility": settings.visibility.clone(),
+            "default_workspace": settings.default_workspace.clone(),
+            "public_releases": settings.public_releases,
+            "merge_rules": settings.merge_rules.clone(),
+            "protected_workspaces": settings.protected_workspaces.clone(),
+        }),
     )
     .await?;
     Response::from_json(&settings)

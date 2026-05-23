@@ -42,6 +42,14 @@ pub struct LogHistoryRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct RewriteHistoryRequest {
+    pub old_snapshot_ids: Vec<String>,
+    pub kind: String,
+    pub message: String,
+    pub snapshot_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ChangedFile {
     pub path: String,
     pub change_type: String,

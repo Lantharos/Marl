@@ -61,15 +61,18 @@ export const pigCommandGroups: CommandGroup[] = [
 			{ command: 'pig status', description: 'Show the current workspace, changed files, and pending work.' },
 			{ command: 'pig status --short', description: 'Show changed files as Git-style A/M/D lines.' },
 			{ command: 'pig save "message"', description: 'Create a local snapshot with intent metadata.' },
-			{ command: 'pig cram "message"', description: 'Squash local saves into one shareable snapshot.' },
-			{ command: 'pig cram --auto', description: 'Let PIG suggest the cram message.' },
+			{ command: 'pig pack', description: 'Pack the current session into one shareable snapshot with an automatic message.' },
+			{ command: 'pig pack 3', description: 'Pack the last three saves into one snapshot.' },
+			{ command: 'pig pack 2 --force && pig sync --force', description: 'Rewrite already-synced local and remote save history intentionally.' },
 			{ command: 'pig log', description: 'Show local snapshot history.' },
 			{ command: 'pig diff [left] [right]', description: 'Compare snapshots or the working tree.' },
 			{ command: 'pig diff --stat', description: 'Show Git-style file stats for current changes.' },
 			{ command: 'pig diff --name-only', description: 'Print changed paths only.' },
 			{ command: 'pig undo [snapshot|path]', description: 'Restore a snapshot or file path.' },
 			{ command: 'pig query "text"', description: 'Search local history semantically.' },
-			{ command: 'pig suggest-save', description: 'Ask PIG for a save message from current changes.' }
+			{ command: 'pig suggest-save', description: 'Ask PIG for a save message from current changes.' },
+			{ command: 'pig doctor && pig fsck', description: 'Inspect repository health and validate reachable objects.' },
+			{ command: 'pig gc --force', description: 'Remove unreachable local objects after fsck passes.' }
 		]
 	},
 	{
@@ -83,7 +86,8 @@ export const pigCommandGroups: CommandGroup[] = [
 			{ command: 'pig work new <name> --from-snapshot <id>', description: 'Create a workspace from an older snapshot.' },
 			{ command: 'pig work new <name> --isolated', description: 'Create the workspace in a separate folder while respecting .gitignore and .oink ignores.' },
 			{ command: 'pig work switch <name>', description: 'Switch the current folder to another workspace.' },
-			{ command: 'pig work ready [name]', description: 'Mark work ready for review. PIG can prompt to cram first.' },
+			{ command: 'pig work move [name] --onto <workspace|snapshot>', description: 'Move a child workspace onto a newer workspace or snapshot base.' },
+			{ command: 'pig work ready [name]', description: 'Mark work ready for review. PIG can prompt to pack first.' },
 			{ command: 'pig work merge <name>', description: 'Merge a local workspace into the current workspace.' }
 		]
 	},
@@ -97,6 +101,8 @@ export const pigCommandGroups: CommandGroup[] = [
 			{ command: 'pig auth import <url> --token-stdin', description: 'Import a token from another tool without printing it.' },
 			{ command: 'pig auth logout', description: 'Remove stored remote auth.' },
 			{ command: 'pig sync', description: 'Upload missing objects, compare heads, push or pull, and resolve conflicts when needed.' },
+			{ command: 'pig sync --force', description: 'Preview and replace the remote workspace head with the local head.' },
+			{ command: 'pig remote prune', description: 'Remove stale local remote-object cache entries.' },
 			{ command: 'pig repos list', description: 'List cached top-level child repositories when the current folder is a repo group.' },
 			{ command: 'pig repos refresh', description: 'Refresh the top-level child repository cache stored in the root .pig directory.' },
 			{ command: 'pig capabilities', description: 'Show the features advertised by the connected remote.' }

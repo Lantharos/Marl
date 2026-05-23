@@ -58,6 +58,8 @@ pub async fn project_settings(
                 appearance: ProjectAppearance::default(),
                 navbar_items: vec![],
                 panels: vec![],
+                merge_rules: MergeRules::default(),
+                protected_workspaces: vec![],
             });
         }
     };
@@ -116,6 +118,8 @@ pub async fn update_project_settings(
     appearance: Option<ProjectAppearance>,
     navbar_items: Option<Vec<NavbarItem>>,
     panels: Option<Vec<PanelItem>>,
+    merge_rules: Option<MergeRules>,
+    protected_workspaces: Option<Vec<String>>,
     archived: Option<bool>,
     public_releases: Option<bool>,
 ) -> Result<ProjectSettings> {
@@ -134,6 +138,12 @@ pub async fn update_project_settings(
     if let Some(p) = panels {
         settings.panels = p;
     }
+    if let Some(rules) = merge_rules {
+        settings.merge_rules = normalize_merge_rules(rules);
+    }
+    if let Some(workspaces) = protected_workspaces {
+        settings.protected_workspaces = normalize_protected_workspaces(workspaces);
+    }
     let json = serde_json::to_string(&settings).map_err(|e| err(e.to_string()))?;
     db.prepare("UPDATE projects SET settings_json = ?1 WHERE tenant = ?2 AND project = ?3")
         .bind(&[js_str(&json), js_str(tenant), js_str(project)])?
@@ -143,6 +153,32 @@ pub async fn update_project_settings(
         set_project_archived(db, tenant, project, principal, archive).await?;
     }
     project_settings(db, tenant, project, Some(principal)).await
+}
+
+fn normalize_merge_rules(rules: MergeRules) -> MergeRules {
+    MergeRules {
+        required_approvals: rules.required_approvals.min(6),
+        require_passing_checks: rules.require_passing_checks,
+        dismiss_stale_approvals: rules.dismiss_stale_approvals,
+        block_unresolved_comments: rules.block_unresolved_comments,
+    }
+}
+
+fn normalize_protected_workspaces(workspaces: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for workspace in workspaces {
+        let workspace = workspace.trim();
+        if workspace.is_empty() || validate_segment(workspace).is_err() {
+            continue;
+        }
+        if !normalized.iter().any(|item| item == workspace) {
+            normalized.push(workspace.to_string());
+        }
+        if normalized.len() >= 20 {
+            break;
+        }
+    }
+    normalized
 }
 
 fn normalize_project_appearance(appearance: ProjectAppearance) -> ProjectAppearance {

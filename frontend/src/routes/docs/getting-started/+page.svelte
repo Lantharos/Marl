@@ -97,8 +97,8 @@ pig sync`;
 				<p class="text-sm leading-6 text-[#8c887e]">A copy of a public project in your tenant. Contribution forks remember the parent so <code>sty sendwork</code> can publish your workspace back for review.</p>
 			</div>
 			<div class="grid gap-2 px-4 py-3 md:grid-cols-[150px_1fr]">
-				<h3 class="text-sm font-medium text-[#f0eee4]">Save and cram</h3>
-				<p class="text-sm leading-6 text-[#8c887e]">A save is a local snapshot. A cram turns noisy local saves into one shareable checkpoint.</p>
+				<h3 class="text-sm font-medium text-[#f0eee4]">Save and pack</h3>
+				<p class="text-sm leading-6 text-[#8c887e]">A save is a local snapshot. A pack turns noisy local saves into one shareable checkpoint.</p>
 			</div>
 		</div>
 	</section>

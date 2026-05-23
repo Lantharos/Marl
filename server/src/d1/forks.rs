@@ -261,6 +261,8 @@ async fn insert_fork_shell(
         appearance: ProjectAppearance::default(),
         navbar_items: vec![],
         panels: vec![],
+        merge_rules: MergeRules::default(),
+        protected_workspaces: vec![],
     })
     .map_err(|error| err(error.to_string()))?;
     db.prepare(

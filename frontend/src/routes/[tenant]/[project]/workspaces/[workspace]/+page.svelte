@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
 	import {
@@ -16,6 +17,7 @@
 		mergeWorkspace,
 		reopenWorkspace,
 		requestWorkspaceChanges,
+		submitWorkspaceReview,
 		updateReviewComment,
 		updateReviewCommentState,
 		updateWorkspaceMetadata,
@@ -235,7 +237,7 @@
 				await mergeWorkspace(tenant, project, workspaceName);
 			} else if (action === 'delete') {
 				await deleteDraftWorkspace(tenant, project, workspaceName);
-				goto(`/${tenant}/${project}/workspaces`);
+				goto(resolve('/[tenant]/[project]/workspaces', { tenant, project }));
 				return;
 			}
 			await load();
@@ -271,9 +273,10 @@
 				await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, body);
 			}
 			if (action === 'request_changes') {
+				await submitWorkspaceReview(tenant, project, workspaceName, action, body || 'Changes requested');
 				await requestWorkspaceChanges(tenant, project, workspaceName, body || 'Changes requested');
-			} else if (action === 'approve' && !body) {
-				await createReviewComment(tenant, project, { target_type: 'workspace', workspace: workspaceName }, 'Approved');
+			} else if (action === 'approve') {
+				await submitWorkspaceReview(tenant, project, workspaceName, action, body);
 			}
 			pendingReviewComments = [];
 			reviewSubmitOpen = false;
@@ -407,7 +410,7 @@
 					['conversation', 'Conversation', reviewComments.length],
 					['files', 'Files changed', changedFiles.length],
 					['history', 'History', detail.history.length]
-				] as tab}
+				] as tab (tab[0])}
 					<button class="border-b px-3 py-2 text-sm {activeTab === tab[0] ? 'border-[#d9a66c] text-[#f0eee4]' : 'border-transparent text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => setTab(tab[0] as Tab)}>
 						{tab[1]} <span class="ml-1 text-xs text-[#6f6b5f]">{tab[2]}</span>
 					</button>
@@ -473,10 +476,10 @@
 				onResolveComment={resolveReviewComment}
 			/>
 		{:else}
-			<WorkspaceHistoryTimeline entries={visibleHistoryEntries} {historyFiles} hasMore={visibleHistoryEntries.length < historyTotal} onOpenEntry={(entry) => goto(`/${tenant}/${project}/history/${entry.id}`)} onLoadMore={() => (historyVisibleCount = Math.min(historyVisibleCount + historyChunkSize, historyTotal))} />
+			<WorkspaceHistoryTimeline entries={visibleHistoryEntries} {historyFiles} hasMore={visibleHistoryEntries.length < historyTotal} onOpenEntry={(entry) => goto(resolve('/[tenant]/[project]/history/[entryId]', { tenant, project, entryId: entry.id }))} onLoadMore={() => (historyVisibleCount = Math.min(historyVisibleCount + historyChunkSize, historyTotal))} />
 		{/if}
 	</div>
 	{#if reviewSubmitOpen}
-		<ReviewSubmitDialog count={pendingReviewComments.length} {canMaintain} onCancel={() => (reviewSubmitOpen = false)} onSubmit={submitPendingReview} />
+		<ReviewSubmitDialog count={pendingReviewComments.length} canMaintain={canMaintain && detail.is_ready} onCancel={() => (reviewSubmitOpen = false)} onSubmit={submitPendingReview} />
 	{/if}
 {/if}

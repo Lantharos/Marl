@@ -36,12 +36,12 @@
     <title>pig - isn't git</title>
     <meta
         name="description"
-        content="PIG is workspace-first version control: save often, cram when it matters, sync when you are ready."
+        content="PIG is workspace-first version control: save often, pack when it matters, sync when you are ready."
     />
     <meta property="og:title" content="pig - isn't git" />
     <meta
         property="og:description"
-        content="Save often, cram when it matters, sync when you are ready."
+        content="Save often, pack when it matters, sync when you are ready."
     />
     <meta property="og:type" content="website" />
 </svelte:head>
@@ -84,7 +84,7 @@
                 >
             </p>
             <p>
-                <code class="text-[#d9a66c]">pig cram "actually done"</code>
+                <code class="text-[#d9a66c]">pig pack</code>
                 <span class="text-[#8c887e]">
                     - squash the noise into something meaningful.</span
                 >
@@ -98,7 +98,7 @@
         </div>
 
         <p class="mt-10 max-w-2xl text-lg leading-8 text-[#a09d94]">
-            workspaces, not branches. save often, cram when it matters, sync
+            workspaces, not branches. save often, pack when it matters, sync
             when you're ready. your history stays clean without you having to
             manage it.
         </p>

@@ -85,6 +85,15 @@ export interface ProjectSettings {
 	appearance: ProjectAppearance;
 	navbar_items: NavbarItem[];
 	panels: PanelItem[];
+	merge_rules: MergeRules;
+	protected_workspaces: string[];
+}
+
+export interface MergeRules {
+	required_approvals: number;
+	require_passing_checks: boolean;
+	dismiss_stale_approvals: boolean;
+	block_unresolved_comments: boolean;
 }
 
 export interface ProjectStats {
@@ -98,7 +107,7 @@ export interface ProjectStats {
 
 export interface Activity {
 	id: string;
-	kind: 'save' | 'ship' | 'cram' | 'issue' | 'ready' | 'merge';
+	kind: 'save' | 'ship' | 'pack' | 'cram' | 'issue' | 'ready' | 'merge';
 	actor: string;
 	actor_profile?: UserProfile | null;
 	message: string;

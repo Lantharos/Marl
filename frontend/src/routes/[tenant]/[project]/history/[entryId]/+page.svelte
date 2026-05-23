@@ -82,7 +82,8 @@
 		switch (kind) {
 			case 'save': return 'saved';
 			case 'ship': return 'shipped';
-			case 'cram': return 'crammed';
+			case 'pack':
+			case 'cram': return 'packed';
 			case 'merge': return 'merged';
 			case 'ready': return 'marked ready';
 			default: return kind;

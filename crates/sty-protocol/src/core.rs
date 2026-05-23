@@ -71,6 +71,8 @@ pub struct ChunkCompleteRequest {
 pub struct HeadUpdateRequest {
     pub expected_head: Option<String>,
     pub new_head: String,
+    #[serde(default)]
+    pub force: bool,
 }
 
 #[derive(Debug, Serialize)]

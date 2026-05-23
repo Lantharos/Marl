@@ -60,7 +60,7 @@
 		'manual',
 		'sync',
 		'snapshot.saved',
-		'snapshot.crammed',
+		'snapshot.packed',
 		'snapshot.shipped',
 		'workspace.ready',
 		'workspace.merged',

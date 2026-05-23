@@ -21,6 +21,15 @@ pub(crate) async fn update_head(mut req: Request, ctx: crate::request_context::A
     let database = db(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
+    let principal = sty_protocol::TokenPrincipal { user: user.clone() };
+    let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
+    if settings
+        .protected_workspaces
+        .iter()
+        .any(|protected| protected == &workspace)
+    {
+        return json_error(403, "workspace is protected; merge a ready workspace instead");
+    }
     if let Some(expected) = body.expected_head.as_deref() {
         validate_object_id(expected)?;
     }
@@ -36,8 +45,25 @@ pub(crate) async fn update_head(mut req: Request, ctx: crate::request_context::A
         return json_error(409, "workspace was deleted remotely");
     }
     ensure_snapshot_refs_uploaded(&ctx.env, &database, &tenant, &project, &body.new_head).await?;
-    let ok = d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?;
+    let ok = if body.force {
+        d1::force_update_head(&database, &tenant, &project, &workspace, &body.new_head).await?
+    } else {
+        d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?
+    };
     if ok {
+        if body.force {
+            d1::record_audit_event(
+                &database,
+                &tenant,
+                &project,
+                &user,
+                "workspace.force_update_head",
+                "workspace",
+                &workspace,
+                serde_json::json!({ "expected_head": body.expected_head.clone(), "new_head": body.new_head.clone() }),
+            )
+            .await?;
+        }
         let _ = crate::developer::emit_project_event(&ctx,
             &tenant,
             &project,
@@ -188,24 +214,115 @@ pub(crate) async fn log_history(mut req: Request, ctx: crate::request_context::A
         metadata.as_ref(),
     )
     .await?;
-    let event = match body.kind.as_str() {
-        "ship" => "snapshot.shipped",
-        "cram" => "snapshot.crammed",
-        _ => "snapshot.saved",
-    };
-    let _ = crate::developer::emit_project_event(&ctx,
+    emit_history_event(
+        &ctx,
         &tenant,
         &project,
+        &workspace,
+        &body.kind,
+        &body.message,
+        body.snapshot_id.as_deref(),
+        &actor,
+    );
+    Response::from_json(&OkResponse { ok: true })
+}
+
+pub(crate) async fn rewrite_history(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let actor = user.clone();
+    let (tenant, project) = project_params(&ctx)?;
+    let workspace = param(&ctx, "workspace")?;
+    let body: RewriteHistoryRequest = req.json().await?;
+    let database = db(&ctx)?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
+    for snapshot_id in &body.old_snapshot_ids {
+        validate_object_id(snapshot_id)?;
+    }
+    if let Some(snapshot_id) = body.snapshot_id.as_deref() {
+        validate_object_id(snapshot_id)?;
+        match d1::object_kind(&database, &tenant, &project, snapshot_id).await? {
+            Some(kind) if kind == "snapshot" => {}
+            Some(_) => return json_error(400, "history snapshot must point to a snapshot object"),
+            None => return json_error(400, "history snapshot object is missing"),
+        }
+    }
+    let metadata = if let Some(snapshot_id) = body.snapshot_id.as_deref() {
+        Some(snapshot_history_metadata(&ctx.env, &tenant, &project, snapshot_id).await?)
+    } else {
+        None
+    };
+    d1::rewrite_history(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        &sty_protocol::TokenPrincipal { user },
+        &body.old_snapshot_ids,
+        &body.kind,
+        &body.message,
+        body.snapshot_id.as_deref(),
+        metadata.as_ref(),
+    )
+    .await?;
+    d1::record_audit_event(
+        &database,
+        &tenant,
+        &project,
+        &actor,
+        "history.rewrite",
+        "workspace",
+        &workspace,
+        serde_json::json!({
+            "old_snapshot_ids": body.old_snapshot_ids.clone(),
+            "snapshot_id": body.snapshot_id.clone(),
+            "kind": body.kind.clone()
+        }),
+    )
+    .await?;
+    emit_history_event(
+        &ctx,
+        &tenant,
+        &project,
+        &workspace,
+        &body.kind,
+        &body.message,
+        body.snapshot_id.as_deref(),
+        &actor,
+    );
+    Response::from_json(&OkResponse { ok: true })
+}
+
+fn emit_history_event(
+    ctx: &crate::request_context::AppRouteContext,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    kind: &str,
+    message: &str,
+    snapshot_id: Option<&str>,
+    actor: &str,
+) {
+    let event = match kind {
+        "ship" => "snapshot.shipped",
+        "pack" => "snapshot.packed",
+        "cram" => "snapshot.packed",
+        _ => "snapshot.saved",
+    };
+    let _ = crate::developer::emit_project_event(ctx,
+        tenant,
+        project,
         event,
         serde_json::json!({
             "workspace": workspace,
-            "kind": body.kind,
-            "message": body.message,
-            "snapshot": body.snapshot_id,
+            "kind": kind,
+            "message": message,
+            "snapshot": snapshot_id,
             "actor": actor
         }),
     );
-    Response::from_json(&OkResponse { ok: true })
 }
 
 pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
@@ -227,7 +344,54 @@ pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRou
     if matches!(state.status.as_str(), "merged" | "closed" | "not_planned") {
         return json_error(409, "workspace is closed");
     }
-    d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user }).await?;
+    d1::mark_workspace_ready(&database, &tenant, &project, &workspace, &sty_protocol::TokenPrincipal { user: user.clone() }).await?;
+    let settings = d1::project_settings(
+        &database,
+        &tenant,
+        &project,
+        Some(&sty_protocol::TokenPrincipal { user: user.clone() }),
+    )
+    .await?;
+    let merge_status = crate::governance::workspace_merge_status(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        state.head.as_deref(),
+        &settings,
+    )
+    .await?;
+    d1::set_workspace_mergeable(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        merge_status.can_merge,
+    )
+    .await?;
+    d1::record_audit_event(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "workspace.ready",
+        "workspace",
+        &workspace,
+        serde_json::json!({ "head": state.head.clone() }),
+    )
+    .await?;
+    crate::governance::notify_users(
+        &database,
+        state.reviewers.clone(),
+        &user,
+        &tenant,
+        &project,
+        "workspace.ready",
+        &format!("{workspace} is ready"),
+        "A workspace is ready for review.",
+        &format!("/{tenant}/{project}/workspaces/{workspace}"),
+    )
+    .await?;
     let _ = crate::developer::emit_project_event(&ctx,
         &tenant,
         &project,
@@ -263,9 +427,23 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
         .head
         .clone()
         .ok_or_else(|| Error::RustError("workspace has no head".to_string()))?;
+    let principal = sty_protocol::TokenPrincipal { user: user.clone() };
+    let settings = d1::project_settings(&database, &tenant, &project, Some(&principal)).await?;
+    if let Some(response) = crate::governance::require_workspace_mergeable(
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        Some(&workspace_head),
+        &settings,
+    )
+    .await?
+    {
+        return Ok(response);
+    }
     let parent = state.parent_workspace.as_deref().unwrap_or("main").to_string();
     let parent_head = d1::head(&database, &tenant, &project, &parent).await?;
-    let merge_head = create_cram_merge_snapshot(
+    let merge = create_workspace_merge_snapshot(
         &ctx.env,
         &database,
         &tenant,
@@ -277,6 +455,36 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
         &user,
     )
     .await?;
+    if !merge.conflicts.is_empty() {
+        d1::upsert_workspace_check(
+            &database,
+            &tenant,
+            &project,
+            &workspace,
+            Some(&workspace_head),
+            "merge",
+            "completed",
+            Some("failure"),
+            Some("Server merge found conflicts."),
+            None,
+        )
+        .await?;
+        return json_error(
+            409,
+            &format!(
+                "workspace has merge conflicts: {}",
+                merge.conflicts
+                    .iter()
+                    .take(8)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
+    }
+    let merge_head = merge
+        .snapshot_id
+        .ok_or_else(|| Error::RustError("server merge did not produce a snapshot".to_string()))?;
     let updated = d1::update_head(
         &database,
         &tenant,
@@ -289,7 +497,6 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
     if !updated {
         return json_error(409, "parent workspace head changed");
     }
-    let principal = sty_protocol::TokenPrincipal { user: user.clone() };
     d1::log_history(
         &database,
         &tenant,
@@ -311,11 +518,45 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
         &merge_head,
     )
     .await?;
-    let _ = crate::developer::emit_project_event(&ctx,
+    d1::record_audit_event(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "workspace.merge",
+        "workspace",
+        &workspace,
+        serde_json::json!({ "parent": parent, "head": merge_head }),
+    )
+    .await?;
+    crate::governance::notify_users(
+        &database,
+        state
+            .reviewers
+            .iter()
+            .chain(state.assignees.iter())
+            .cloned()
+            .collect::<Vec<_>>(),
+        &user,
         &tenant,
         &project,
         "workspace.merged",
-        serde_json::json!({ "workspace": workspace, "parent": parent, "head": merge_head }),
+        &format!("{workspace} was merged"),
+        "A workspace you follow was merged.",
+        &format!("/{tenant}/{project}/workspaces/{workspace}"),
+    )
+    .await?;
+    let _ = crate::developer::emit_project_event(
+        &ctx,
+        &tenant,
+        &project,
+        "workspace.merged",
+        serde_json::json!({
+            "workspace": workspace,
+            "parent": parent,
+            "head": merge_head,
+            "auto_merged_files": merge.auto_merged_files
+        }),
     );
     Response::from_json(&serde_json::json!({
         "ok": true,
@@ -539,75 +780,6 @@ pub(crate) async fn compare(mut req: Request, ctx: crate::request_context::AppRo
         parent_workspace: None,
         parent_head: None,
     })
-}
-
-async fn create_cram_merge_snapshot(
-    env: &Env,
-    database: &crate::request_context::Database,
-    tenant: &str,
-    project: &str,
-    workspace: &str,
-    parent: &str,
-    workspace_head: &str,
-    parent_head: Option<&str>,
-    actor: &str,
-) -> Result<String> {
-    validate_object_id(workspace_head)?;
-    if let Some(parent_head) = parent_head {
-        validate_object_id(parent_head)?;
-        match d1::object_kind(database, tenant, project, parent_head).await? {
-            Some(kind) if kind == "snapshot" => {}
-            Some(_) => return Err(Error::RustError("parent head is not a snapshot".to_string())),
-            None => return Err(Error::RustError("parent head is missing".to_string())),
-        }
-    }
-    match d1::object_kind(database, tenant, project, workspace_head).await? {
-        Some(kind) if kind == "snapshot" => {}
-        Some(_) => return Err(Error::RustError("workspace head is not a snapshot".to_string())),
-        None => return Err(Error::RustError("workspace head is missing".to_string())),
-    }
-    let store = bucket(env)?;
-    let workspace_snapshot_bytes = r2_bytes(&store, &object_key(tenant, project, workspace_head)).await?;
-    let workspace_snapshot: serde_json::Value =
-        serde_json::from_slice(&workspace_snapshot_bytes).map_err(|error| Error::RustError(error.to_string()))?;
-    let root_tree = workspace_snapshot["root_tree"]
-        .as_str()
-        .ok_or_else(|| Error::RustError("workspace snapshot root_tree is missing".to_string()))?;
-    validate_object_id(root_tree)?;
-    validate_tree_closure(&store, database, tenant, project, root_tree).await?;
-    let message = workspace_snapshot["message"]
-        .as_str()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| format!("merge {workspace}: {value}"))
-        .unwrap_or_else(|| format!("merge workspace {workspace} into {parent}"));
-    let intents = workspace_snapshot["intents"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let time: String = js_sys::Date::new_0().to_iso_string().into();
-    let mut snapshot = serde_json::json!({
-        "id": "",
-        "parents": parent_head.into_iter().collect::<Vec<_>>(),
-        "kind": "cram",
-        "author": actor,
-        "agent": null,
-        "agent_model": null,
-        "time": time,
-        "message": message,
-        "root_tree": root_tree,
-        "workspace_id": parent,
-        "intents": intents,
-    });
-    let canonical_bytes =
-        serde_json::to_vec(&snapshot).map_err(|error| Error::RustError(error.to_string()))?;
-    let snapshot_id = object_digest_for_kind(&canonical_bytes, "snapshot")?;
-    snapshot["id"] = serde_json::json!(snapshot_id);
-    let bytes = serde_json::to_vec(&snapshot).map_err(|error| Error::RustError(error.to_string()))?;
-    put_bytes(&store, &object_key(tenant, project, &snapshot_id), bytes.clone()).await?;
-    d1::record_object(database, tenant, project, &snapshot_id, "snapshot", bytes.len()).await?;
-    ensure_snapshot_refs_uploaded(env, database, tenant, project, &snapshot_id).await?;
-    Ok(snapshot_id)
 }
 
 async fn ensure_snapshot_refs_uploaded(

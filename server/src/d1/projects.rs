@@ -48,6 +48,8 @@ pub async fn ensure_project(
         appearance: ProjectAppearance::default(),
         navbar_items: vec![],
         panels: vec![],
+        merge_rules: MergeRules::default(),
+        protected_workspaces: vec![],
     })
     .map_err(|e| err(e.to_string()))?;
     db.prepare(
@@ -165,10 +167,17 @@ pub async fn delete_project(db: &Database, tenant: &str, project: &str) -> Resul
         return Ok(false);
     }
     ensure_developer_schema(db).await?;
+    ensure_review_schema(db).await?;
+    ensure_governance_schema(db).await?;
     for query in [
         "DELETE FROM comments WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM issues WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM protocol_items WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM protocol_reactions WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM workspace_reviews WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM workspace_checks WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM audit_log WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM notifications WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM leaves WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM history WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM workspace_heads WHERE tenant = ?1 AND project = ?2",

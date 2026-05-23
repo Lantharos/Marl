@@ -92,7 +92,13 @@ pub async fn active_project_webhooks(
     Ok(rows
         .into_iter()
         .map(webhook_from_row)
-        .filter(|hook| hook.events.iter().any(|item| item == "*" || item == event))
+        .filter(|hook| {
+            hook.events.iter().any(|item| {
+                item == "*"
+                    || item == event
+                    || (event == "snapshot.packed" && item == "snapshot.crammed")
+            })
+        })
         .collect())
 }
 

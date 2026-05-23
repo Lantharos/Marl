@@ -231,13 +231,16 @@
 	}
 
 	function isReviewHistoryEvent(entry: HistoryEntry) {
-		if (['ready', 'merge', 'closed', 'not_planned', 'changes_requested'].includes(entry.kind)) return true;
+		if (['ready', 'merge', 'review', 'closed', 'not_planned', 'changes_requested'].includes(entry.kind)) return true;
 		return /marked workspace|rejected workspace|closed workspace|not_planned workspace|merged workspace/.test(entry.message);
 	}
 
 	function reviewEventLabel(entry: HistoryEntry) {
 		const message = entry.message.toLowerCase();
 		if (entry.kind === 'merge' || message.includes('merged workspace')) return 'merged';
+		if (entry.kind === 'review' && message.includes('approved workspace')) return 'approved';
+		if (entry.kind === 'review' && message.includes('requested changes')) return 'requested changes';
+		if (entry.kind === 'review') return 'reviewed';
 		if (entry.kind === 'closed' || message.includes('closed workspace')) return 'closed';
 		if (entry.kind === 'not_planned' || message.includes('not_planned workspace')) return 'closed as not planned';
 		if (message.includes('rejected workspace')) return 'requested changes';
@@ -247,7 +250,7 @@
 
 	function historyEventLabel(entry: HistoryEntry) {
 		if (isReviewHistoryEvent(entry)) return reviewEventLabel(entry);
-		if (entry.kind === 'cram') return 'crammed changes';
+		if (entry.kind === 'pack' || entry.kind === 'cram') return 'packed changes';
 		if (entry.kind === 'ship') return 'shipped changes';
 		if (entry.kind === 'save') return 'saved changes';
 		return withoutOpaqueUserIds(entry.message);
@@ -324,7 +327,7 @@
 								<span class="text-[#6f6b5f]">{new Date(event.lastAt).toLocaleString()}</span>
 							</div>
 							<div class="mt-1 grid gap-1 text-xs text-[#6f6b5f]">
-								{#each event.comments.slice(0, 3) as comment}
+								{#each event.comments.slice(0, 3) as comment (comment.id)}
 									<div class="flex min-w-0 gap-2">
 										<span class="min-w-0 truncate text-[#a09d94]">{comment.file}</span>
 										<span class="shrink-0">{lineLabel(comment)}</span>

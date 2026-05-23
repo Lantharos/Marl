@@ -6,6 +6,7 @@
 		isAbortError,
 		updateProjectSettings,
 		type AccessResponse,
+		type MergeRules,
 		type NavbarItem,
 		type PanelItem,
 		type ProjectAppearance,
@@ -17,6 +18,7 @@
 	import ProjectAppearanceSettings from '$lib/components/ProjectAppearanceSettings.svelte';
 	import ProjectDangerZone from '$lib/components/ProjectDangerZone.svelte';
 	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
+	import ProjectMergeRulesSettings from '$lib/components/ProjectMergeRulesSettings.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
 	import SwitchControl from '$lib/components/SwitchControl.svelte';
 	import X from 'lucide-svelte/icons/x';
@@ -41,7 +43,14 @@
 		default_workspace: 'main',
 		appearance: DEFAULT_PROJECT_APPEARANCE,
 		navbar_items: [],
-		panels: []
+		panels: [],
+		merge_rules: {
+			required_approvals: 0,
+			require_passing_checks: false,
+			dismiss_stale_approvals: true,
+			block_unresolved_comments: true
+		},
+		protected_workspaces: []
 	});
 	let loading = $state(true);
 	let error = $state('');
@@ -79,7 +88,7 @@
 		return { id: '', title: '', type: 'text', content: '', enabled: true, order: 0 };
 	}
 
-	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean }) {
+	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean; merge_rules?: MergeRules; protected_workspaces?: string[] }) {
 		busy = true;
 		try {
 			const result = await updateProjectSettings(tenant, project, items);
@@ -307,6 +316,10 @@
 					</div>
 					<SwitchControl checked={settings.visibility === 'public' || settings.public_releases} disabled={busy || settings.visibility === 'public'} label="Toggle public release downloads" onToggle={togglePublicReleases} />
 				</div>
+			</SettingsSection>
+
+			<SettingsSection title="Merge rules">
+				<ProjectMergeRulesSettings {settings} {busy} onSave={persistSettings} />
 			</SettingsSection>
 
 			<SettingsSection title="Overview panels">

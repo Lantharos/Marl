@@ -262,6 +262,7 @@ pub async fn delete_issue(
         .bind(&[js_str(tenant), js_str(project), js_str(&issue.id)])?
         .run()
         .await?;
+    delete_reactions_for_target(db, tenant, project, "issue", &issue.id).await?;
     db.prepare("DELETE FROM issues WHERE tenant = ?1 AND project = ?2 AND id = ?3")
         .bind(&[js_str(tenant), js_str(project), js_str(&issue.id)])?
         .run()

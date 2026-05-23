@@ -97,7 +97,7 @@
                 <p class="mt-4 text-sm leading-6 text-[#8c887e] md:text-base">
                     Version control for humans who think in workspaces, not
                     branches.<br class="hidden md:block" />
-                    Save, cram, and ship your code with confidence.
+                    Save, pack, and ship your code with confidence.
                 </p>
                 <div class="mt-8 flex flex-wrap justify-center gap-3">
                     <button
@@ -173,8 +173,8 @@
 <span class="text-[#6f6b5f]"># save your progress</span>
 <span class="text-[#eae9e4]">$ pig save "add user auth"</span>
 
-<span class="text-[#6f6b5f]"># squash unsaved work</span>
-<span class="text-[#eae9e4]">$ pig cram "polish auth flow"</span>
+<span class="text-[#6f6b5f]"># pack local saves</span>
+<span class="text-[#eae9e4]">$ pig pack</span>
 
 <span class="text-[#6f6b5f]"># sync to sty</span>
 <span class="text-[#eae9e4]">$ pig sync</span>
@@ -301,7 +301,7 @@
                         class="rounded border border-[#2a2a28] bg-[#141412] p-5"
                     >
                         <div class="text-lg font-semibold text-[#eae9e4]">
-                            Saves & Crams
+                            Saves & Packs
                         </div>
                         <p class="mt-2 text-sm text-[#8c887e]">
                             Lightweight checkpoints you can squash. No more WIP
@@ -337,7 +337,7 @@
                             History
                         </div>
                         <p class="mt-2 text-sm text-[#8c887e]">
-                            Full history with diffs for every save, cram, and
+                            Full history with diffs for every save, pack, and
                             ship. See exactly what changed.
                         </p>
                     </div>

@@ -45,7 +45,7 @@
 	const isStandaloneRoute = $derived(isAuthRoute || $page.url.pathname.startsWith('/verify/') || $page.url.pathname.startsWith('/oauth/') || isDocsRoute || isPigRoute || isLegalRoute);
 	const isErrorPage = $derived($page.status >= 400);
 	const pathParts = $derived($page.url.pathname.split('/').filter(Boolean));
-	const reservedRoot = $derived(['auth', 'settings', 'verify', 'oauth', 'docs', 'pig', 'privacy', 'terms', 'u'].includes(pathParts[0] ?? ''));
+	const reservedRoot = $derived(['auth', 'settings', 'notifications', 'verify', 'oauth', 'docs', 'pig', 'privacy', 'terms', 'u'].includes(pathParts[0] ?? ''));
 	const projectSection = $derived(pathParts[2] ?? '');
 	const isPublicProjectSection = $derived(!['settings', 'automation', 'protocol'].includes(projectSection));
 	const isLandingPage = $derived($page.url.pathname === '/');
@@ -209,7 +209,7 @@
 				<p class="mt-4 text-xl text-[#d9a66c] md:text-2xl">where pigs ship code</p>
 				<p class="mt-4 text-sm leading-6 text-[#8c887e] md:text-base">
 					Version control for humans who think in workspaces, not branches.<br class="hidden md:block" />
-					Save, cram, and ship your code with confidence.
+					Save, pack, and ship your code with confidence.
 				</p>
 				<div class="mt-8 flex justify-center gap-3">
 					<button class="rounded bg-[#eae9e4] px-6 py-2.5 text-sm font-medium text-[#0f0f0d] hover:bg-[#d9d5c6]" onclick={() => import('$lib/session').then((m) => m.startLogin())}>
@@ -242,8 +242,8 @@
 <span class="text-[#6f6b5f]"># save your progress</span>
 <span class="text-[#eae9e4]">$ pig save "add user auth"</span>
 
-<span class="text-[#6f6b5f]"># squash unsaved work</span>
-<span class="text-[#eae9e4]">$ pig cram "polish auth flow"</span>
+<span class="text-[#6f6b5f]"># pack local saves</span>
+<span class="text-[#eae9e4]">$ pig pack</span>
 
 <span class="text-[#6f6b5f]"># sync to sty</span>
 <span class="text-[#eae9e4]">$ pig sync</span>
@@ -264,7 +264,7 @@
 						<p class="mt-2 text-sm text-[#8c887e]">Branch-less version control. Create workspaces from any parent, not just main.</p>
 					</div>
 					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
-						<div class="text-lg font-semibold text-[#eae9e4]">Saves & Crams</div>
+						<div class="text-lg font-semibold text-[#eae9e4]">Saves & Packs</div>
 						<p class="mt-2 text-sm text-[#8c887e]">Lightweight checkpoints you can squash. No more WIP commits.</p>
 					</div>
 					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
@@ -277,7 +277,7 @@
 					</div>
 					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
 						<div class="text-lg font-semibold text-[#eae9e4]">History</div>
-						<p class="mt-2 text-sm text-[#8c887e]">Full history with diffs for every save, cram, and ship. See exactly what changed.</p>
+						<p class="mt-2 text-sm text-[#8c887e]">Full history with diffs for every save, pack, and ship. See exactly what changed.</p>
 					</div>
 					<div class="rounded border border-[#2a2a28] bg-[#141412] p-5">
 						<div class="text-lg font-semibold text-[#eae9e4]">Issues</div>
@@ -302,7 +302,7 @@
 				Your Ave handle is @{aveHandle}, but /{aveHandle} is already taken on sty.
 			</p>
 			<div class="mt-4 flex flex-wrap gap-2">
-				{#each setupSuggestions as suggestion}
+				{#each setupSuggestions as suggestion (suggestion)}
 					<button class="bg-[#1e1e1c] px-2.5 py-1 text-sm {setupName === suggestion ? 'text-[#d9a66c]' : 'text-[#a09d94] hover:text-[#eae9e4]'}" onclick={() => (setupName = suggestion)}>
 						/{suggestion}
 					</button>

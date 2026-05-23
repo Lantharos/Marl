@@ -8,7 +8,7 @@ pub struct HistorySnapshotMetadata {
 }
 
 #[derive(Deserialize)]
-struct HistoryRow {
+pub(super) struct HistoryRow {
     id: String,
     kind: String,
     message: String,
@@ -26,7 +26,7 @@ struct HistoryRow {
     signature_json: Option<String>,
 }
 
-fn history_entry_from_row(row: HistoryRow) -> HistoryEntry {
+pub(super) fn history_entry_from_row(row: HistoryRow) -> HistoryEntry {
     HistoryEntry {
         id: row.id,
         kind: row.kind,
@@ -175,6 +175,47 @@ pub async fn log_history(
     .run()
     .await?;
     recompute_project_stats(db, tenant, project).await?;
+    Ok(())
+}
+
+pub async fn rewrite_history(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    principal: &TokenPrincipal,
+    old_snapshot_ids: &[String],
+    kind: &str,
+    message: &str,
+    snapshot_id: Option<&str>,
+    metadata: Option<&HistorySnapshotMetadata>,
+) -> Result<()> {
+    for snapshot_id in old_snapshot_ids {
+        db.prepare(
+            "DELETE FROM history
+             WHERE tenant = ?1 AND project = ?2 AND workspace = ?3 AND snapshot_id = ?4",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(project),
+            js_str(workspace),
+            js_str(snapshot_id),
+        ])?
+        .run()
+        .await?;
+    }
+    log_history(
+        db,
+        tenant,
+        project,
+        workspace,
+        principal,
+        kind,
+        message,
+        snapshot_id,
+        metadata,
+    )
+    .await?;
     Ok(())
 }
 

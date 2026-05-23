@@ -5,8 +5,9 @@ use sty_protocol::{
     CreateIssueRequest, CreateProjectRequest, HeadResponse, HeadUpdateRequest, HistoryEntry,
     HistoryResponse, HistorySignature, LogHistoryRequest, MeResponse, MissingRequest,
     MissingResponse, ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
-    ProjectTreeResponse, SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
-    UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary, validate_segment,
+    ProjectTreeResponse, RewriteHistoryRequest, SessionExchangeRequest, TokenResponse,
+    TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest, WorkspaceStateResponse,
+    WorkspaceSummary, validate_segment,
 };
 use worker::*;
 
@@ -16,6 +17,7 @@ mod collaborators;
 pub(crate) mod d1;
 mod developer;
 mod forks;
+mod governance;
 mod leaves;
 mod protocol;
 mod protocol_profiles;
@@ -33,6 +35,7 @@ use auth::verify_ave_id_token;
 use collaborators::*;
 use developer::*;
 use forks::*;
+use governance::*;
 use leaves::*;
 use protocol::*;
 use protocol_ready::*;
@@ -57,6 +60,7 @@ include!("identity.rs");
 include!("issues.rs");
 include!("objects.rs");
 include!("overview.rs");
+include!("server_merge.rs");
 include!("settings.rs");
 include!("sync.rs");
 
@@ -108,6 +112,11 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             delete_tenant_collaborator,
         )
         .get_async("/v1/home", home)
+        .get_async("/v1/notifications", list_notifications)
+        .post_async(
+            "/v1/notifications/:notification/read",
+            mark_notification_read,
+        )
         .get_async("/v1/follows", follows)
         .get_async("/v1/discover/projects", discover_projects)
         .post_async("/v1/forks", fork_project)
@@ -464,6 +473,26 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history",
             log_history,
         )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history/rewrite",
+            rewrite_history,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews",
+            list_workspace_reviews,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews",
+            submit_workspace_review,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks",
+            list_workspace_checks,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks",
+            submit_workspace_check,
+        )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge-preview",
             merge_preview,
@@ -516,6 +545,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .patch_async(
             "/v1/tenants/:tenant/projects/:project/settings",
             update_settings,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/audit-log",
+            list_audit_log,
         )
         .get_async("/v1/tenants/:tenant/projects/:project/follow", project_follow)
         .post_async("/v1/tenants/:tenant/projects/:project/follow", follow_project)

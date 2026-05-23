@@ -305,6 +305,9 @@
 						{/if}
 					</div>
 					<div class="border-t border-[#2a2a28]">
+						<a class="block w-full px-3 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" href="/notifications" onclick={() => (showProfile = false)}>
+							Notifications
+						</a>
 						<a class="block w-full px-3 py-1.5 text-left text-sm text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" href="/settings" onclick={() => (showProfile = false)}>
 							User settings
 						</a>

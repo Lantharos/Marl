@@ -143,6 +143,10 @@ pub struct ProjectSettings {
     pub navbar_items: Vec<NavbarItem>,
     #[serde(default)]
     pub panels: Vec<PanelItem>,
+    #[serde(default)]
+    pub merge_rules: MergeRules,
+    #[serde(default)]
+    pub protected_workspaces: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -154,6 +158,39 @@ pub struct UpdateSettingsRequest {
     pub appearance: Option<ProjectAppearance>,
     pub navbar_items: Option<Vec<NavbarItem>>,
     pub panels: Option<Vec<PanelItem>>,
+    pub merge_rules: Option<MergeRules>,
+    pub protected_workspaces: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MergeRules {
+    #[serde(default)]
+    pub required_approvals: u8,
+    #[serde(default)]
+    pub require_passing_checks: bool,
+    #[serde(default = "default_dismiss_stale_approvals")]
+    pub dismiss_stale_approvals: bool,
+    #[serde(default = "default_block_unresolved_comments")]
+    pub block_unresolved_comments: bool,
+}
+
+impl Default for MergeRules {
+    fn default() -> Self {
+        Self {
+            required_approvals: 0,
+            require_passing_checks: false,
+            dismiss_stale_approvals: true,
+            block_unresolved_comments: true,
+        }
+    }
+}
+
+fn default_dismiss_stale_approvals() -> bool {
+    true
+}
+
+fn default_block_unresolved_comments() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize, Serialize)]

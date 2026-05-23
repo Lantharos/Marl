@@ -21,7 +21,7 @@
 			</a>
 			<a class="block border-b border-[#252522] px-4 py-4 hover:bg-[#141412]" href="/docs/pig">
 				<div class="text-sm font-medium text-[#f0eee4]">I want to understand PIG commands</div>
-				<p class="mt-1 text-sm leading-6 text-[#8c887e]">Workspaces, saves, crams, stash, signing, ready review, and agent-friendly JSON output.</p>
+				<p class="mt-1 text-sm leading-6 text-[#8c887e]">Workspaces, saves, packs, stash, signing, ready review, and agent-friendly JSON output.</p>
 			</a>
 			<a class="block px-4 py-4 hover:bg-[#141412]" href="/docs/api">
 				<div class="text-sm font-medium text-[#f0eee4]">I want to build an integration</div>

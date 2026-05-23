@@ -24,7 +24,7 @@ export const apiScopes: ApiScope[] = [
 	{ scope: 'webhooks:read', allows: 'List webhooks, integrations, and webhook delivery state.' },
 	{ scope: 'webhooks:write', allows: 'Create, test, trigger, and revoke project webhooks.' },
 	{ scope: 'settings:read', allows: 'Read project settings visible to users with project access.' },
-	{ scope: 'settings:write', allows: 'Change project appearance, navigation, screenshots, archive state, visibility, and automation settings.' }
+	{ scope: 'settings:write', allows: 'Change project appearance, navigation, screenshots, archive state, visibility, merge rules, protection, and automation settings.' }
 ];
 
 export const endpointGroups: EndpointGroup[] = [
@@ -39,6 +39,8 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/me',
 			'GET /v1/account/settings',
 			'PATCH /v1/account/settings',
+			'GET /v1/notifications',
+			'POST /v1/notifications/:notification/read',
 			'GET /v1/home',
 			'GET /v1/discover/projects?q=<query>',
 			'GET /v1/users/search?q=<query>'
@@ -66,12 +68,13 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/tenants/:tenant/projects/:project/screenshots/:item_id/download',
 			'GET /v1/tenants/:tenant/projects/:project/stats',
 			'GET /v1/tenants/:tenant/projects/:project/settings',
-			'PATCH /v1/tenants/:tenant/projects/:project/settings'
+			'PATCH /v1/tenants/:tenant/projects/:project/settings',
+			'GET /v1/tenants/:tenant/projects/:project/audit-log'
 		]
 	},
 	{
 		title: 'Code, objects, and sync',
-		note: 'Object ids are immutable. Uploaded trees must use safe path segments and workspace heads are accepted only when their tree objects are complete. Tree listing supports path, depth, limit, and cursor query parameters for bounded browsing. Source archive downloads stream a zip of the selected workspace.',
+		note: 'Object ids are immutable. Uploaded trees must use safe path segments and workspace heads are accepted only when their tree objects are complete. Head updates use compare-and-swap unless a client explicitly force-syncs rewritten history. Tree listing supports path, depth, limit, and cursor query parameters for bounded browsing. Source archive downloads stream a zip of the selected workspace.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/tree?workspace=main&path=src&depth=1&limit=500',
 			'GET /v1/tenants/:tenant/projects/:project/source.zip?workspace=main',
@@ -87,15 +90,20 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. Review states include draft, ready, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, and lock state.',
+		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, and lock state. Merge rules can require approvals, passing checks, current-head approvals, and resolved file conversations.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',
 			'GET /v1/tenants/:tenant/projects/:project/workspaces/:workspace/history',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/history',
+			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/history/rewrite',
 			'GET /v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge-preview',
 			'GET /v1/tenants/:tenant/projects/:project/ready',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready',
+			'GET /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews',
+			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews',
+			'GET /v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks',
+			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks',
 			'POST /v1/tenants/:tenant/projects/:project/sendwork',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject',
@@ -112,7 +120,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Issues and project records',
-		note: 'Issues support filtered listing, comments, metadata activity, labels, assignees, milestones, linked workspaces, issue types, lock or pin state, transfer, deletion, and open, closed, or closed-as-not-planned state updates. Labels, milestones, hooks, and tags use standard paginated protocol collections. Project comments can also carry review target fields when they belong to code review.',
+		note: 'Issues support filtered listing, comments, persisted reactions, metadata activity, labels, assignees, milestones, linked workspaces, issue types, lock or pin state, transfer, deletion, and open, closed, or closed-as-not-planned state updates. Labels, milestones, hooks, and tags use standard paginated protocol collections. Project comments can also carry review target fields when they belong to code review.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/issues',
 			'POST /v1/tenants/:tenant/projects/:project/issues',
@@ -124,11 +132,17 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/transfer',
 			'GET /v1/tenants/:tenant/projects/:project/issues/:issue_id/comments',
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/comments',
+			'GET /v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions',
+			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions',
+			'DELETE /v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions/:reaction',
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/assignees',
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/labels',
 			'GET /v1/tenants/:tenant/projects/:project/labels',
 			'GET /v1/tenants/:tenant/projects/:project/milestones',
 			'GET /v1/tenants/:tenant/projects/:project/comments',
+			'GET /v1/tenants/:tenant/projects/:project/comments/:comment_id/reactions',
+			'POST /v1/tenants/:tenant/projects/:project/comments/:comment_id/reactions',
+			'DELETE /v1/tenants/:tenant/projects/:project/comments/:comment_id/reactions/:reaction',
 			'GET /v1/tenants/:tenant/projects/:project/tags'
 		]
 	},
@@ -173,7 +187,7 @@ export const webhookEvents = [
 	{ event: 'manual', meaning: 'A maintainer triggered a webhook from automation settings.' },
 	{ event: 'sync', meaning: 'A sync completed for a project.' },
 	{ event: 'snapshot.saved', meaning: 'A save snapshot was recorded remotely.' },
-	{ event: 'snapshot.crammed', meaning: 'A cram snapshot was recorded remotely.' },
+	{ event: 'snapshot.packed', meaning: 'A pack snapshot was recorded remotely.' },
 	{ event: 'snapshot.shipped', meaning: 'A shipped snapshot or tag was recorded.' },
 	{ event: 'workspace.ready', meaning: 'A workspace was marked ready for review.' },
 	{ event: 'workspace.merged', meaning: 'A workspace was merged.' },

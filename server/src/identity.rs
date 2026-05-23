@@ -256,7 +256,32 @@ pub(crate) async fn list_workspaces(req: Request, ctx: crate::request_context::A
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "workspaces:read").await?;
     let mut workspaces = d1::workspace_states(&database, &tenant, &project).await?;
     enrich_workspace_change_summaries(&ctx, &tenant, &project, &mut workspaces).await.ok();
+    enrich_workspace_mergeability(&database, &tenant, &project, &mut workspaces).await.ok();
     Response::from_json(&WorkspaceStateResponse { workspaces })
+}
+
+async fn enrich_workspace_mergeability(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    workspaces: &mut [sty_protocol::WorkspaceState],
+) -> Result<()> {
+    let settings = d1::project_settings(database, tenant, project, None).await?;
+    for workspace in workspaces.iter_mut().filter(|workspace| {
+        workspace.is_ready && workspace.status == "ready" && workspace.name != "main"
+    }) {
+        let status = crate::governance::workspace_merge_status(
+            database,
+            tenant,
+            project,
+            &workspace.name,
+            workspace.head.as_deref(),
+            &settings,
+        )
+        .await?;
+        workspace.mergeable = status.can_merge;
+    }
+    Ok(())
 }
 
 async fn enrich_workspace_change_summaries(

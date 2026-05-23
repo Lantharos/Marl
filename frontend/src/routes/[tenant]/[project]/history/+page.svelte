@@ -23,7 +23,7 @@
 	let visibleCount = $state(chunkSize);
 	let vigilantMode = $state(false);
 	let query = $state('');
-	let kindFilter = $state<'all' | 'save' | 'cram' | 'merge' | 'ship' | 'ready'>('all');
+	let kindFilter = $state<'all' | 'save' | 'pack' | 'merge' | 'ship' | 'ready'>('all');
 
 	const unsubscribeAppData = appData.subscribe((value) => {
 		vigilantMode = Boolean(value.me?.settings?.vigilant_mode);
@@ -57,8 +57,9 @@
 				return 'saved';
 			case 'ship':
 				return 'shipped';
+			case 'pack':
 			case 'cram':
-				return 'crammed';
+				return 'packed';
 			case 'merge':
 				return 'merged';
 			case 'ready':
@@ -75,16 +76,20 @@
 	const hasMore = $derived(visibleEntries.length < filtered.length);
 	const groupedEntries = $derived(groupByDay(visibleEntries));
 	const kindCounts = $derived.by(() => {
-		const counts: Record<string, number> = { all: entries.length, save: 0, cram: 0, merge: 0, ship: 0, ready: 0 };
+		const counts: Record<string, number> = { all: entries.length, save: 0, pack: 0, merge: 0, ship: 0, ready: 0 };
 		for (const entry of entries) {
-			if (entry.kind in counts) counts[entry.kind] += 1;
+			if (entry.kind === 'pack' || entry.kind === 'cram') {
+				counts.pack += 1;
+			} else if (entry.kind in counts) {
+				counts[entry.kind] += 1;
+			}
 		}
 		return counts;
 	});
 	const filterItems = $derived([
 		{ id: 'all', label: 'All', count: kindCounts.all },
 		{ id: 'save', label: 'Saves', count: kindCounts.save },
-		{ id: 'cram', label: 'Crams', count: kindCounts.cram },
+		{ id: 'pack', label: 'Packs', count: kindCounts.pack },
 		{ id: 'merge', label: 'Merges', count: kindCounts.merge },
 		{ id: 'ship', label: 'Ships', count: kindCounts.ship },
 		{ id: 'ready', label: 'Ready', count: kindCounts.ready }
@@ -108,7 +113,8 @@
 
 	function matchesFilters(entry: HistoryEntry) {
 		if (!inDateRange(entry.timestamp)) return false;
-		if (kindFilter !== 'all' && entry.kind !== kindFilter) return false;
+		if (kindFilter === 'pack' && entry.kind !== 'pack' && entry.kind !== 'cram') return false;
+		if (kindFilter !== 'all' && kindFilter !== 'pack' && entry.kind !== kindFilter) return false;
 		const needle = query.trim().toLowerCase();
 		if (!needle) return true;
 		const haystack = [

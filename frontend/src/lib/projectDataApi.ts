@@ -76,7 +76,7 @@ export interface MergeRequest {
 
 export interface HistoryEntry {
 	id: string;
-	kind: 'save' | 'ship' | 'cram' | 'merge' | 'ready' | string;
+	kind: 'save' | 'ship' | 'pack' | 'cram' | 'merge' | 'ready' | string;
 	message: string;
 	author: string;
 	author_profile?: UserProfile | null;
@@ -119,6 +119,60 @@ export interface ReviewComment {
 	end_line?: number | null;
 	side?: 'old' | 'new' | string;
 	state?: 'open' | 'resolved' | string;
+}
+
+export interface WorkspaceReview {
+	id: string;
+	workspace: string;
+	author: string;
+	author_profile?: UserProfile | null;
+	state: 'approved' | 'changes_requested' | 'commented' | string;
+	body?: string | null;
+	head?: string | null;
+	submitted_at: string;
+}
+
+export interface WorkspaceCheck {
+	id: string;
+	workspace: string;
+	head?: string | null;
+	name: string;
+	status: 'queued' | 'in_progress' | 'completed' | string;
+	conclusion?: string | null;
+	summary?: string | null;
+	details_url?: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface WorkspaceCheckSummary {
+	state: 'not_configured' | 'pending' | 'passing' | 'failing' | string;
+	total: number;
+	passing: number;
+	failing: number;
+	pending: number;
+}
+
+export interface AuditEvent {
+	id: string;
+	actor: string;
+	action: string;
+	target_type: string;
+	target_id: string;
+	metadata: Record<string, unknown>;
+	created_at: string;
+}
+
+export interface NotificationItem {
+	id: string;
+	tenant: string;
+	project: string;
+	kind: string;
+	title: string;
+	body: string;
+	href: string;
+	read_at?: string | null;
+	created_at: string;
 }
 
 export interface ReviewCommentTarget {
@@ -263,6 +317,63 @@ export async function deleteReviewComment(tenant: string, project: string, comme
 	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/comments/${encodeURIComponent(commentId)}`, {
 		method: 'DELETE'
 	});
+}
+
+export async function submitWorkspaceReview(
+	tenant: string,
+	project: string,
+	workspace: string,
+	state: 'comment' | 'approve' | 'request_changes',
+	body = ''
+): Promise<WorkspaceReview> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/reviews`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ state, body })
+	});
+	return (await response.json()) as WorkspaceReview;
+}
+
+export async function listWorkspaceChecks(
+	tenant: string,
+	project: string,
+	workspace: string,
+	options: ApiOptions & { head?: string } = {}
+): Promise<{ checks: WorkspaceCheck[]; summary: WorkspaceCheckSummary }> {
+	let url = `/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/checks`;
+	if (options.head) url += `?head=${encodeURIComponent(options.head)}`;
+	const response = await publicFetch(url, { signal: options.signal });
+	return (await response.json()) as { checks: WorkspaceCheck[]; summary: WorkspaceCheckSummary };
+}
+
+export async function submitWorkspaceCheck(
+	tenant: string,
+	project: string,
+	workspace: string,
+	check: Partial<WorkspaceCheck> & { name: string; status?: string }
+): Promise<WorkspaceCheck> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/checks`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(check)
+	});
+	return (await response.json()) as WorkspaceCheck;
+}
+
+export async function listProjectAuditLog(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<AuditEvent>> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/audit-log${pageQuery(options)}`, {
+		signal: options.signal
+	});
+	return (await response.json()) as Paginated<AuditEvent>;
+}
+
+export async function listNotifications(options: PageOptions = {}): Promise<Paginated<NotificationItem>> {
+	const response = await authedFetch(`/v1/notifications${pageQuery(options)}`, { signal: options.signal });
+	return (await response.json()) as Paginated<NotificationItem>;
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+	await authedFetch(`/v1/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
 }
 
 export async function requestWorkspaceChanges(tenant: string, project: string, workspace: string, reason: string) {

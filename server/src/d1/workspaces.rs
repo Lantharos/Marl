@@ -137,6 +137,40 @@ pub async fn update_head(
     Ok(true)
 }
 
+pub async fn force_update_head(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    new_head: &str,
+) -> Result<bool> {
+    db.prepare(
+        "INSERT INTO workspace_heads (tenant, project, workspace, head)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(tenant, project, workspace) DO UPDATE SET head = excluded.head",
+    )
+    .bind(&[
+        js_str(tenant),
+        js_str(project),
+        js_str(workspace),
+        js_str(new_head),
+    ])?
+    .run()
+    .await?;
+
+    db.prepare(
+        "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable)
+         VALUES (?1, ?2, ?3, 'active', 0, NULL, 0)
+         ON CONFLICT(tenant, project, workspace) DO NOTHING",
+    )
+    .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+    .run()
+    .await?;
+    recompute_project_stats(db, tenant, project).await?;
+
+    Ok(true)
+}
+
 // -- Workspace state --------------------------------------
 
 pub async fn workspace_states(

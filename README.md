@@ -4,7 +4,7 @@ sty is a hosted collaboration service for PIG projects, operated by Lantharos. I
 
 Most users do not run sty infrastructure. Run the installer, choose both tools, sign in, connect a repository, and use PIG normally.
 
-E2EE and CI are intentionally deferred.
+E2EE and built-in CI execution are intentionally deferred. External systems can report workspace status checks through the API.
 
 ## Using sty
 
@@ -92,7 +92,8 @@ Use `--json` on PIG commands when agents or scripts need machine-readable output
 - Private projects by default, with public project discovery when maintainers opt in
 - Tenant and project collaborators with viewer, contributor, and maintainer roles
 - Browser project pages with code, workspaces, issues, releases, history, and settings
-- Ready review for workspaces, saves, files, and line comments
+- Ready review for workspaces, saves, files, and line comments, with persisted approvals and status checks
+- Merge rules for required approvals, passing checks, unresolved file conversations, and protected workspaces
 - Public project forks, linked contribution forks, detached project copies, and `sendwork`
 - Release notes, pinned source snapshots, uploaded artifacts, and optional public release downloads
 - Project API keys with granular scopes for agents and integrations
@@ -100,6 +101,7 @@ Use `--json` on PIG commands when agents or scripts need machine-readable output
 - OAuth-style developer apps that mint project-scoped tokens after maintainer approval
 - User-scoped signing keys and signed snapshot verification
 - Project archive state that keeps projects readable while blocking mutations
+- Audit log and a notifications inbox for review and merge activity
 
 ## Developing From Source
 
@@ -167,7 +169,7 @@ cd server
 bunx wrangler d1 migrations apply sty-db --local
 ```
 
-Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, fork contribution links, history metadata columns, project folders, and user profile pins.
+Run this again whenever a new migration is added. The current migrations create account keys, remote approvals, private project follows, cached project statistics, tenant/project collaborators, project archive state, project API keys, webhooks, developer apps, fork contribution links, history metadata columns, project folders, user profile pins, workspace reviews, reactions, status checks, audit events, and notifications.
 
 Then start the Worker:
 
@@ -236,7 +238,7 @@ Maintainers can make release metadata and release artifact downloads public even
 
 Public projects can be forked from the CLI. A linked fork remembers its parent, keeps the contribution workspace private in the fork, and only creates ready work in the parent when `sty sendwork` runs. A detached fork copies the project history into the chosen tenant and breaks the parent link.
 
-Workspace review happens in the browser. Reviewers can comment on the whole workspace, a save in history, a file, an individual line, or a dragged line range in the code and diff panes. Maintainers can request changes on a ready workspace, which moves it out of the ready queue and records the reason in the review thread.
+Workspace review happens in the browser. Reviewers can comment on the whole workspace, a save in history, a file, an individual line, or a dragged line range in the code and diff panes. Maintainer approvals and changes-requested reviews are stored as review records tied to the ready workspace head. Maintainers can require approvals, require passing external checks, block unresolved file conversations, and protect workspaces such as `main` from direct sync pushes. Maintainers can request changes on a ready workspace, which moves it out of the ready queue and records the reason in the review thread.
 
 CLI examples:
 
@@ -260,6 +262,7 @@ The Worker exposes `/v1/capabilities` and advertises the implemented PIG protoco
 
 - issues, comments, labels, and milestones
 - ready queues, workspace merge metadata, and targeted review comments
+- workspace reviews, status checks, merge rules, audit log, and notifications
 - hooks and webhooks
 - granular project API keys and developer app integrations
 - search
@@ -303,7 +306,7 @@ POST /v1/tenants/:tenant/projects/:project/sendwork
 
 `POST /v1/forks` accepts a source project, target project, and mode. `mode: "contribute"` stores a parent link and creates a contribution workspace in the fork. `mode: "detached"` copies the project into the target tenant without a parent link. `sendwork` is only valid for linked forks; it publishes the fork workspace head and title/message back to the parent project as ready work.
 
-The dashboard keeps ready review inside the Workspaces view. It uses `GET /v1/tenants/:tenant/projects/:project/stats` for tab counters, and those counts are maintained in D1 when workspaces, issues, releases, and history change, so the UI does not need to fetch every list just to show navigation totals. Project comments can be filtered by `target_type`, `workspace`, `history_entry_id`, `file`, and `line` so review panes only load the discussion for the active save or file position.
+The dashboard keeps ready review inside the Workspaces view. It uses `GET /v1/tenants/:tenant/projects/:project/stats` for tab counters, and those counts are maintained in D1 when workspaces, issues, releases, and history change, so the UI does not need to fetch every list just to show navigation totals. Project comments can be filtered by `target_type`, `workspace`, `history_entry_id`, `file`, and `line` so review panes only load the discussion for the active save or file position. Issue and comment reactions are persisted per user and returned as grouped reaction counts.
 
 ## Verification
 
