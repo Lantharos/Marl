@@ -90,7 +90,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, and lock state. Merge rules can require approvals, passing checks, current-head approvals, and resolved file conversations.',
+		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, lock state, and private, team, or public visibility. Merge rules can require approvals, passing checks, current-head approvals, and resolved file conversations.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',

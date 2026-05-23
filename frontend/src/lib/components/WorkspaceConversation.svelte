@@ -73,7 +73,7 @@
 		onDeleteComment: (comment: ReviewComment) => Promise<void> | void;
 		onOpenFileConversation: (comment: ReviewComment) => void;
 		onOpenHistory: () => void;
-		onSaveMetadata: (metadata: Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked'>>) => Promise<void> | void;
+		onSaveMetadata: (metadata: Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked' | 'visibility'>>) => Promise<void> | void;
 		onSaveLabels: (labels: string[]) => Promise<void> | void;
 	} = $props();
 
@@ -396,5 +396,5 @@
 		/>
 	</section>
 
-	<WorkspaceReviewSidebar {tenant} {project} {detail} {reviewers} {participants} {authorEntry} {canWrite} {canMaintain} {busy} {onSaveLabels} {onSaveMetadata} />
+	<WorkspaceReviewSidebar {tenant} {project} {detail} {reviewers} {participants} {currentUser} {canWrite} {canMaintain} {busy} {onSaveLabels} {onSaveMetadata} />
 </div>

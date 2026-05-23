@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { HistoryEntry, WorkspaceStatus } from '$lib/api';
+	import type { WorkspaceStatus } from '$lib/api';
 	import type { Label, Milestone, UserProfile } from '$lib/api';
 	import { createLabel, listIssuesPage, listLabels, listMilestones, searchUsers } from '$lib/api';
 	import type { Issue } from '$lib/issueApi';
@@ -13,9 +13,8 @@
 	import Lock from 'lucide-svelte/icons/lock';
 	import Settings from 'lucide-svelte/icons/settings';
 
-	type WorkspaceDetail = WorkspaceStatus & { history?: HistoryEntry[] };
 	type Reviewer = { author: string; profile?: UserProfile | null; state: string; stateClass: string };
-	type MetadataPatch = Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked'>>;
+	type MetadataPatch = Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked' | 'visibility'>>;
 
 	let {
 		tenant,
@@ -23,7 +22,7 @@
 		detail,
 		reviewers,
 		participants,
-		authorEntry,
+		currentUser,
 		canWrite,
 		canMaintain,
 		busy,
@@ -32,10 +31,10 @@
 	}: {
 		tenant: string;
 		project: string;
-		detail: WorkspaceDetail;
+		detail: WorkspaceStatus;
 		reviewers: Reviewer[];
 		participants: { user: string; profile?: UserProfile | null }[];
-		authorEntry: HistoryEntry | null;
+		currentUser: string | null;
 		canWrite: boolean;
 		canMaintain: boolean;
 		busy: boolean;
@@ -82,6 +81,13 @@
 	const exactLabel = $derived(labels.find((label) => label.name.toLowerCase() === labelFilter.trim().toLowerCase()));
 	const labelByName = $derived.by(() => new Map(labels.map((label) => [label.name, label])));
 	const subscriptionKey = $derived(`sty:workspace-subscription:${tenant}/${project}/${detail.name}`);
+	const visibilityOptions = [
+		{ value: 'private', label: 'Private', detail: 'Only you and maintainers can read it.' },
+		{ value: 'team', label: 'Team', detail: 'Project collaborators can read it.' },
+		{ value: 'public', label: 'Public', detail: 'Visible when the project is public.' }
+	] as const;
+	const visibilityDetail = $derived(visibilityOptions.find((option) => option.value === detail.visibility)?.detail ?? visibilityOptions[1].detail);
+	const canManageVisibility = $derived(detail.name !== 'main' && (canMaintain || currentUser === detail.created_by));
 
 	onMount(() => {
 		function closePanel(event: PointerEvent) {
@@ -260,6 +266,11 @@
 		openPanel = '';
 	}
 
+	async function saveVisibility(value: WorkspaceStatus['visibility']) {
+		if (value === detail.visibility || busy) return;
+		await onSaveMetadata({ visibility: value });
+	}
+
 	function issueLabel(id: string) {
 		const issue = issues.find((item) => item.id === id || String(item.number) === id);
 		return issue ? `#${issue.number} ${issue.title}` : id;
@@ -295,6 +306,22 @@
 </script>
 
 <aside bind:this={root} class="grid h-fit gap-5">
+	<section class="border-b border-[#2a2a28] pb-4">
+		<div class="mb-2 text-sm font-medium text-[#eae9e4]">Visibility</div>
+		<p class="text-xs leading-5 text-[#8c887e]">{visibilityDetail}</p>
+		{#if canManageVisibility}
+			<div class="mt-2 grid grid-cols-3 border border-[#2a2a28]">
+				{#each visibilityOptions as option (option.value)}
+					<button class="px-2 py-1.5 text-xs {detail.visibility === option.value ? 'bg-[#242420] text-[#eae9e4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" disabled={busy} onclick={() => saveVisibility(option.value)}>
+						{option.label}
+					</button>
+				{/each}
+			</div>
+		{:else}
+			<div class="mt-1 text-xs text-[#6f6b5f]">{detail.visibility}</div>
+		{/if}
+	</section>
+
 	<section class="relative border-b border-[#2a2a28] pb-4">
 		<div class="mb-3 flex items-center justify-between gap-3">
 			<div class="text-sm font-medium text-[#eae9e4]">Reviewers</div>

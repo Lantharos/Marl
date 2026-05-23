@@ -5,8 +5,8 @@ use worker::*;
 
 use crate::support::{db, json_error, paginate_vec, param, project_params, query_limit};
 use crate::{
-    check_project_capability, check_project_read_capability, check_project_write_capability, d1,
-    optional_auth, require_auth,
+    check_project_capability, check_workspace_read_capability, check_workspace_write_capability,
+    d1, optional_auth, require_auth,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,14 +71,8 @@ pub async fn list_workspace_checks(
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx)?;
-    check_project_read_capability(
-        &database,
-        &tenant,
-        &project,
-        user.as_deref(),
-        "workspaces:read",
-    )
-    .await?;
+    check_workspace_read_capability(&database, &tenant, &project, user.as_deref(), &workspace)
+        .await?;
     let Some(state) = d1::workspace_state(&database, &tenant, &project, &workspace).await? else {
         return json_error(404, "workspace not found");
     };
@@ -106,15 +100,7 @@ pub async fn submit_workspace_check(
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
     let database = db(&ctx)?;
-    check_project_write_capability(
-        &database,
-        &tenant,
-        &project,
-        &user,
-        "contributor",
-        "workspaces:write",
-    )
-    .await?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     let Some(state) = d1::workspace_state(&database, &tenant, &project, &workspace).await? else {
         return json_error(404, "workspace not found");
     };

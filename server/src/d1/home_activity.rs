@@ -71,7 +71,7 @@ async fn followed_history_activity(
         .all()
         .await?;
     let rows: Vec<ActivityHistoryRow> = result.results()?;
-    Ok(rows.into_iter().map(history_activity_item).collect())
+    visible_history_activity_items(db, rows, Some(&principal.user)).await
 }
 
 async fn followed_issue_activity(
@@ -159,7 +159,7 @@ async fn project_history_activity(
         .all()
         .await?;
     let rows: Vec<ActivityHistoryRow> = result.results()?;
-    Ok(rows.into_iter().map(history_activity_item).collect())
+    visible_history_activity_items(db, rows, Some(&principal.user)).await
 }
 
 async fn project_issue_activity(
@@ -308,6 +308,20 @@ fn history_activity_item(row: ActivityHistoryRow) -> HomeActivityItem {
         actor: Some(row.author),
         workspace: Some(row.workspace),
     }
+}
+
+async fn visible_history_activity_items(
+    db: &Database,
+    rows: Vec<ActivityHistoryRow>,
+    user: Option<&str>,
+) -> Result<Vec<HomeActivityItem>> {
+    let mut items = Vec::new();
+    for row in rows {
+        if workspace_can_read(db, &row.tenant, &row.project, user, &row.workspace).await? {
+            items.push(history_activity_item(row));
+        }
+    }
+    Ok(items)
 }
 
 fn issue_activity_item(row: ActivityIssueRow) -> HomeActivityItem {

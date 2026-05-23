@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS workspace_states (
     parent_workspace TEXT,
     mergeable INTEGER NOT NULL DEFAULT 0,
     labels_json TEXT NOT NULL DEFAULT '[]',
+    visibility TEXT NOT NULL DEFAULT 'team',
+    created_by TEXT,
     PRIMARY KEY (tenant, project, workspace)
 );
 CREATE TABLE IF NOT EXISTS history (

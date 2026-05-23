@@ -354,7 +354,11 @@ pub(crate) async fn check_workspace_read_capability(
     } else {
         "workspaces:read"
     };
-    check_project_read_capability(db, tenant, project, user, capability).await
+    check_project_read_capability(db, tenant, project, user, capability).await?;
+    if d1::workspace_can_read(db, tenant, project, user, workspace).await? {
+        return Ok(());
+    }
+    Err(Error::RustError("workspace access denied".to_string()))
 }
 
 pub(crate) async fn check_workspace_write_capability(
@@ -364,12 +368,17 @@ pub(crate) async fn check_workspace_write_capability(
     user: &str,
     workspace: &str,
 ) -> Result<()> {
+    let exists = d1::workspace_exists(db, tenant, project, workspace).await?;
     let capability = if workspace == "main" {
         "main:write"
-    } else if d1::workspace_exists(db, tenant, project, workspace).await? {
+    } else if exists {
         "workspaces:write"
     } else {
         "workspaces:create"
     };
-    check_project_write_capability(db, tenant, project, user, "contributor", capability).await
+    check_project_write_capability(db, tenant, project, user, "contributor", capability).await?;
+    if !exists || d1::workspace_can_write(db, tenant, project, user, workspace).await? {
+        return Ok(());
+    }
+    Err(Error::RustError("workspace access denied".to_string()))
 }

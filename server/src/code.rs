@@ -54,10 +54,8 @@ pub(crate) async fn project_tree(req: Request, ctx: crate::request_context::AppR
             }
         }
     };
-    let public_cache = matches!(
-        d1::project_visibility(&database, &tenant, &project).await?,
-        Some(visibility) if visibility == "public"
-    );
+    let public_cache =
+        d1::workspace_is_publicly_readable(&database, &tenant, &project, &workspace).await?;
     validate_object_id(&head_id)?;
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     let tree_etag = tree_cache_etag(
@@ -167,10 +165,8 @@ pub(crate) async fn project_file(req: Request, ctx: crate::request_context::AppR
     if entry.entry_type != "blob" {
         return json_error(400, "path is not a file");
     }
-    let public_cache = matches!(
-        d1::project_visibility(&database, &tenant, &project).await?,
-        Some(visibility) if visibility == "public"
-    );
+    let public_cache =
+        d1::workspace_is_publicly_readable(&database, &tenant, &project, &workspace).await?;
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =
         not_modified_response(&req, &entry.id, public_cache, cache_seconds, pinned_snapshot)?

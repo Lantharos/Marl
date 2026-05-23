@@ -84,7 +84,9 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         }
     };
     validate_object_id(&head_id)?;
-    let public_cache = project_public || release_public;
+    let public_cache = release_public
+        || crate::d1::workspace_is_publicly_readable(database, &tenant, &project, &workspace)
+            .await?;
     let etag = format!("{head_id}-source-zip");
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =

@@ -230,6 +230,8 @@ sty has tenant-scoped and project-scoped collaborators.
 
 Tenant collaborators inherit access into every project in that tenant. Project collaborators apply only to one project. Tenant owners can manage tenant collaborators; project owners, tenant maintainers, and project maintainers can manage project collaborators.
 
+Workspaces can be `private`, `team`, or `public` inside a project. `main` is public within the project, non-main workspaces default to team visibility, and a public workspace is only public to the internet when the project itself is public. Private workspaces are readable by their creator and maintainers; team workspaces are readable by project collaborators.
+
 Project maintainers can archive a project from Settings. Archived projects stay readable, but code sync, object uploads, issues, comments, releases, ready actions, and other project mutations are rejected until a maintainer unarchives the project. Project owners can delete a project from Settings after confirming the action.
 
 Project API keys are maintainer-managed tokens for tools and agents. Keys are scoped to one project and use explicit permissions such as `main:read`, `main:write`, `workspaces:create`, `workspaces:write`, `issues:write`, `releases:write`, and `webhooks:write`. This lets an agent work in feature workspaces without being able to advance `main`; add `issues:write` when the agent should leave review comments. Webhooks are also project-scoped and can subscribe to manual, sync, snapshot, workspace, release, and issue events. Event webhooks are delivered after the project mutation response, and deliveries include `x-sty-event`, `x-sty-delivery`, and an HMAC-SHA256 `x-sty-signature-256` when a secret exists.
@@ -238,7 +240,7 @@ Maintainers can make release metadata and release artifact downloads public even
 
 Public projects can be forked from the CLI. A linked fork remembers its parent, keeps the contribution workspace private in the fork, and only creates ready work in the parent when `sty sendwork` runs. A detached fork copies the project history into the chosen tenant and breaks the parent link.
 
-Workspace review happens in the browser. Reviewers can comment on the whole workspace, a save in history, a file, an individual line, or a dragged line range in the code and diff panes. Maintainer approvals and changes-requested reviews are stored as review records tied to the ready workspace head. Maintainers can require approvals, require passing external checks, block unresolved file conversations, and protect workspaces such as `main` from direct sync pushes. Maintainers can request changes on a ready workspace, which moves it out of the ready queue and records the reason in the review thread.
+Workspace review happens in the browser. Reviewers can comment on the whole workspace, a save in history, a file, an individual line, or a dragged line range in the code and diff panes. Workspace metadata stores reviewers, assignees, milestone, linked issues, lock state, and visibility. Maintainer approvals and changes-requested reviews are stored as review records tied to the ready workspace head. Maintainers can require approvals, require passing external checks, block unresolved file conversations, and protect workspaces such as `main` from direct sync pushes. Maintainers can request changes on a ready workspace, which moves it out of the ready queue and records the reason in the review thread.
 
 CLI examples:
 

@@ -2,7 +2,7 @@ use serde_json::json;
 use worker::*;
 
 use crate::support::{db, json_error, param, project_params};
-use crate::{check_project_write_capability, d1, require_auth};
+use crate::{check_project_write_capability, check_workspace_write_capability, d1, require_auth};
 
 pub(crate) async fn update_workspace_metadata(
     mut req: Request,
@@ -13,15 +13,7 @@ pub(crate) async fn update_workspace_metadata(
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await.unwrap_or_default();
     let database = db(&ctx)?;
-    check_project_write_capability(
-        &database,
-        &tenant,
-        &project,
-        &user,
-        "contributor",
-        "workspaces:write",
-    )
-    .await?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     let state = d1::workspace_states(&database, &tenant, &project)
         .await?
         .into_iter()
@@ -42,6 +34,26 @@ pub(crate) async fn update_workspace_metadata(
         )
         .await?;
     }
+    let visibility = if let Some(value) = body.get("visibility") {
+        let Some(value) = value.as_str() else {
+            return json_error(400, "invalid workspace visibility");
+        };
+        let next = d1::normalize_workspace_visibility(value)?;
+        if workspace == "main" && next != d1::WORKSPACE_VISIBILITY_PUBLIC {
+            return json_error(400, "main workspace must stay public within the project");
+        }
+        if next != state.visibility {
+            if !d1::workspace_can_manage_visibility(&database, &tenant, &project, &user, &workspace)
+                .await?
+            {
+                return json_error(403, "workspace visibility access denied");
+            }
+            d1::set_workspace_visibility(&database, &tenant, &project, &workspace, &next).await?;
+        }
+        next
+    } else {
+        state.visibility.clone()
+    };
     let reviewers = body
         .get("reviewers")
         .and_then(|value| value.as_array())
@@ -87,7 +99,8 @@ pub(crate) async fn update_workspace_metadata(
         "assignees": assignees,
         "milestone": milestone,
         "linked_issues": linked_issues,
-        "locked": locked
+        "locked": locked,
+        "visibility": visibility
     }))
 }
 

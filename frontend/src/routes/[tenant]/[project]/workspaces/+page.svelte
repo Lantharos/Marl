@@ -155,6 +155,7 @@
 		const haystack = [
 			workspace.name,
 			workspace.status,
+			workspace.visibility,
 			baseName(workspace),
 			workspace.milestone ?? '',
 			...(workspace.labels ?? [])
@@ -233,6 +234,7 @@
 							<Icon class="h-4 w-4 shrink-0 {statusClass(workspace)}" />
 							<span class="truncate text-sm font-medium text-[#eae9e4]">{workspace.name}</span>
 							<span class="text-xs {statusClass(workspace)}">{statusLabel(workspace)}</span>
+							<span class="text-xs text-[#6f6b5f]">{workspace.visibility}</span>
 							{#each workspace.labels ?? [] as label (label)}
 								<LabelBadge name={label} color={labelByName.get(label)?.color} />
 							{/each}

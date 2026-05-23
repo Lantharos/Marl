@@ -46,9 +46,9 @@ pub(crate) async fn update_head(mut req: Request, ctx: crate::request_context::A
     }
     ensure_snapshot_refs_uploaded(&ctx.env, &database, &tenant, &project, &body.new_head).await?;
     let ok = if body.force {
-        d1::force_update_head(&database, &tenant, &project, &workspace, &body.new_head).await?
+        d1::force_update_head(&database, &tenant, &project, &workspace, &body.new_head, Some(&user)).await?
     } else {
-        d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head).await?
+        d1::update_head(&database, &tenant, &project, &workspace, body.expected_head.as_deref(), &body.new_head, Some(&user)).await?
     };
     if ok {
         if body.force {
@@ -110,9 +110,16 @@ pub(crate) async fn history_entry(req: Request, ctx: crate::request_context::App
     let (tenant, project) = project_params(&ctx)?;
     let entry_id = param(&ctx, "entry_id")?;
     let database = db(&ctx)?;
-    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "history:read").await?;
     let mut entry = d1::get_history_entry(&database, &tenant, &project, &entry_id).await?;
     if let Some(entry) = &mut entry {
+        check_workspace_read_capability(
+            &database,
+            &tenant,
+            &project,
+            user.as_deref(),
+            &entry.workspace,
+        )
+        .await?;
         enrich_history_entry(&ctx.env, &tenant, &project, entry).await?;
     }
     match entry {
@@ -330,6 +337,7 @@ pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRou
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx)?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:ready").await?;
     let state = d1::workspace_states(&database, &tenant, &project)
         .await?
@@ -492,6 +500,7 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
         &parent,
         parent_head.as_deref(),
         &merge_head,
+        Some(&user),
     )
     .await?;
     if !updated {
@@ -583,7 +592,7 @@ pub(crate) async fn update_workspace_labels(mut req: Request, ctx: crate::reques
         })
         .unwrap_or_default();
     let database = db(&ctx)?;
-    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:write").await?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     if !d1::workspace_exists(&database, &tenant, &project, &workspace).await? {
         return json_error(404, "workspace not found");
     }
@@ -650,7 +659,7 @@ pub(crate) async fn delete_draft_workspace(req: Request, ctx: crate::request_con
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx)?;
-    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:write").await?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     let state = d1::workspace_states(&database, &tenant, &project)
         .await?
         .into_iter()
@@ -723,7 +732,7 @@ pub(crate) async fn set_parent(mut req: Request, ctx: crate::request_context::Ap
     let workspace = param(&ctx, "workspace")?;
     let body: serde_json::Value = req.json().await?;
     let database = db(&ctx)?;
-    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "workspaces:write").await?;
+    check_workspace_write_capability(&database, &tenant, &project, &user, &workspace).await?;
     let parent = body["parent_workspace"].as_str();
     d1::set_parent_workspace(&database, &tenant, &project, &workspace, parent).await?;
     Response::from_json(&OkResponse { ok: true })

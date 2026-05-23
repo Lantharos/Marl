@@ -206,7 +206,7 @@ async fn user_public_project_cards(
         .all()
         .await?;
     let rows: Vec<ProfileProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(profile_project_card_item).collect())
+    visible_profile_project_card_items(db, rows, None).await
 }
 
 async fn user_tenant_project_cards(
@@ -252,7 +252,8 @@ async fn user_tenant_project_cards(
         .all()
         .await?;
     let rows: Vec<ProfileProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(profile_project_card_item).collect())
+    let viewer = (!viewer.is_empty()).then_some(viewer);
+    visible_profile_project_card_items(db, rows, viewer).await
 }
 
 async fn pinned_project_cards(
@@ -318,7 +319,7 @@ async fn profile_following_project_cards(
         .all()
         .await?;
     let rows: Vec<ProfileProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(profile_project_card_item).collect())
+    visible_profile_project_card_items(db, rows, None).await
 }
 
 async fn profile_tenants(
@@ -441,4 +442,32 @@ fn profile_project_card_item(row: ProfileProjectCardRow) -> ProjectDiscoveryItem
             .latest_release_json
             .and_then(|value| serde_json::from_str(&value).ok()),
     }
+}
+
+async fn visible_profile_project_card_items(
+    db: &Database,
+    rows: Vec<ProfileProjectCardRow>,
+    user: Option<&str>,
+) -> Result<Vec<ProjectDiscoveryItem>> {
+    let mut items = Vec::new();
+    for row in rows {
+        let tenant = row.tenant.clone();
+        let project = row.project.clone();
+        let mut item = profile_project_card_item(row);
+        let (workspace_count, ready_count) =
+            visible_workspace_counts(db, &tenant, &project, user).await?;
+        item.stats.workspace_count = workspace_count;
+        item.stats.ready_count = ready_count;
+        item.stats.history_count = visible_history_count(db, &tenant, &project, user).await?;
+        item.last_activity_at = visible_history_last_activity(db, &tenant, &project, user).await?;
+        items.push(item);
+    }
+    items.sort_by(|a, b| {
+        b.last_activity_at
+            .cmp(&a.last_activity_at)
+            .then_with(|| a.tenant.cmp(&b.tenant))
+            .then_with(|| a.folder.cmp(&b.folder))
+            .then_with(|| a.project.cmp(&b.project))
+    });
+    Ok(items)
 }

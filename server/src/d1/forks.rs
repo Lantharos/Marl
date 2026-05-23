@@ -116,7 +116,15 @@ pub async fn create_fork_project(
     )
     .await?;
     if let Some(workspace) = workspace {
-        create_contribution_workspace(db, target_tenant, target_project, workspace, "main").await?;
+        create_contribution_workspace(
+            db,
+            target_tenant,
+            target_project,
+            workspace,
+            "main",
+            &principal.user,
+        )
+        .await?;
         db.prepare(
             "INSERT INTO project_forks
              (tenant, project, source_tenant, source_project, workspace, created_by, created_at)
@@ -193,8 +201,8 @@ pub async fn publish_fork_workspace(
     .await?;
     db.prepare(
         "INSERT INTO workspace_states
-         (tenant, project, workspace, status, is_ready, parent_workspace, mergeable)
-         VALUES (?1, ?2, ?3, 'ready', 1, 'main', 0)
+         (tenant, project, workspace, status, is_ready, parent_workspace, mergeable, visibility, created_by)
+         VALUES (?1, ?2, ?3, 'ready', 1, 'main', 0, ?4, ?5)
          ON CONFLICT(tenant, project, workspace) DO UPDATE SET
              status = 'ready',
              is_ready = 1,
@@ -205,6 +213,8 @@ pub async fn publish_fork_workspace(
         js_str(&fork.source_tenant),
         js_str(&fork.source_project),
         js_str(&fork.workspace),
+        js_str(default_workspace_visibility(&fork.workspace)),
+        js_str(&principal.user),
     ])?
     .run()
     .await?;
@@ -290,10 +300,14 @@ async fn copy_main_workspace(
     let head = head(db, source_tenant, source_project, "main").await?;
     db.prepare(
         "INSERT INTO workspace_states
-         (tenant, project, workspace, status, is_ready, parent_workspace, mergeable)
-         VALUES (?1, ?2, 'main', 'active', 0, NULL, 0)",
+         (tenant, project, workspace, status, is_ready, parent_workspace, mergeable, visibility, created_by)
+         VALUES (?1, ?2, 'main', 'active', 0, NULL, 0, ?3, NULL)",
     )
-    .bind(&[js_str(target_tenant), js_str(target_project)])?
+    .bind(&[
+        js_str(target_tenant),
+        js_str(target_project),
+        js_str(WORKSPACE_VISIBILITY_PUBLIC),
+    ])?
     .run()
     .await?;
     if let Some(head) = head.as_deref() {
@@ -382,18 +396,21 @@ async fn create_contribution_workspace(
     project: &str,
     workspace: &str,
     parent: &str,
+    creator: &str,
 ) -> Result<()> {
     let head = head(db, tenant, project, parent).await?;
     db.prepare(
         "INSERT INTO workspace_states
-         (tenant, project, workspace, status, is_ready, parent_workspace, mergeable)
-         VALUES (?1, ?2, ?3, 'active', 0, ?4, 0)",
+         (tenant, project, workspace, status, is_ready, parent_workspace, mergeable, visibility, created_by)
+         VALUES (?1, ?2, ?3, 'active', 0, ?4, 0, ?5, ?6)",
     )
     .bind(&[
         js_str(tenant),
         js_str(project),
         js_str(workspace),
         js_str(parent),
+        js_str(default_workspace_visibility(workspace)),
+        js_str(creator),
     ])?
     .run()
     .await?;

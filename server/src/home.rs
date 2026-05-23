@@ -52,7 +52,7 @@ pub(crate) async fn tenant_projects(req: Request, ctx: crate::request_context::A
     };
     let scope = if can_access { "all" } else { "public" };
     let projects = if can_access {
-        d1::tenant_project_cards(&database, &tenant, &query, 500).await?
+        d1::tenant_project_cards(&database, &tenant, &query, user.as_deref(), 500).await?
     } else {
         d1::tenant_public_project_cards(&database, &tenant, &query, 500).await?
     };

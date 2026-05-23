@@ -27,8 +27,10 @@ async fn profile_history_activity(
             "SELECT h.id, h.tenant, h.project, h.kind, h.message, h.workspace, h.timestamp
              FROM history h
              JOIN projects p ON p.tenant = h.tenant AND p.project = h.project
+             LEFT JOIN workspace_states ws ON ws.tenant = h.tenant AND ws.project = h.project AND ws.workspace = h.workspace
              WHERE h.author = ?1
              AND COALESCE(json_extract(p.settings_json, '$.visibility'), 'private') = 'public'
+             AND (h.workspace = 'main' OR (ws.status != 'deleted' AND ws.visibility = 'public'))
              ORDER BY h.timestamp DESC
              LIMIT ?2",
         )

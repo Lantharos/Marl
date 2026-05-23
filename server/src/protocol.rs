@@ -8,7 +8,7 @@ use crate::support::{
 };
 use crate::{
     check_project_capability, check_project_read_capability, check_project_write_capability, d1,
-    optional_auth, require_auth, visible_project_leaves,
+    check_workspace_read_capability, optional_auth, require_auth, visible_project_leaves,
 };
 pub async fn list_labels(
     req: Request,
@@ -64,6 +64,9 @@ pub async fn update_protocol_comment(
         return json_error(404, "item not found");
     };
     if item["kind"].as_str() != Some("comment") {
+        return json_error(404, "item not found");
+    }
+    if !protocol_comment_visible(&database, &tenant, &project, Some(&user), &item).await? {
         return json_error(404, "item not found");
     }
     if d1::project_is_archived(&database, &tenant, &project).await? {
@@ -247,6 +250,18 @@ pub async fn list_reactions(
     else {
         return json_error(404, "reaction target not found");
     };
+    if target_kind == "comment"
+        && !protocol_comment_id_visible(
+            &database,
+            &tenant,
+            &project,
+            user.as_deref(),
+            &target_id,
+        )
+        .await?
+    {
+        return json_error(404, "reaction target not found");
+    }
     let reactions = d1::list_reactions(
         &database,
         &tenant,
@@ -286,6 +301,12 @@ pub async fn add_reaction(
     else {
         return json_error(404, "reaction target not found");
     };
+    if target_kind == "comment"
+        && !protocol_comment_id_visible(&database, &tenant, &project, Some(&user), &target_id)
+            .await?
+    {
+        return json_error(404, "reaction target not found");
+    }
     let reactions = d1::add_reaction(
         &database,
         &tenant,
@@ -321,6 +342,12 @@ pub async fn delete_reaction(
     else {
         return json_error(404, "reaction target not found");
     };
+    if target_kind == "comment"
+        && !protocol_comment_id_visible(&database, &tenant, &project, Some(&user), &target_id)
+            .await?
+    {
+        return json_error(404, "reaction target not found");
+    }
     d1::delete_reaction(
         &database,
         &tenant,
@@ -427,6 +454,12 @@ pub async fn get_protocol_item(
         read_scope_for_kind(kind),
     )
     .await?;
+    if kind == "comment"
+        && !protocol_comment_visible(&database, &tenant, &project, user.as_deref(), &item)
+            .await?
+    {
+        return json_error(404, "item not found");
+    }
     Response::from_json(&item)
 }
 
@@ -446,6 +479,9 @@ pub async fn delete_protocol_item(
         let Some(item) = protocol_item(&database, &tenant, &project, &id).await? else {
             return json_error(404, "item not found");
         };
+        if !protocol_comment_visible(&database, &tenant, &project, Some(&user), &item).await? {
+            return json_error(404, "item not found");
+        }
         if item["author"].as_str() == Some(user.as_str()) {
             if d1::project_is_archived(&database, &tenant, &project).await? {
                 return json_error(403, "project is archived and read-only");
@@ -585,9 +621,34 @@ async fn list_protocol_kind(
         })
         .collect::<Vec<_>>();
     if kind == "comment" {
+        items = filter_visible_protocol_comments(
+            &database,
+            &tenant,
+            &project,
+            user.as_deref(),
+            items,
+        )
+        .await?;
         enrich_protocol_comment_profiles(&database, &mut items).await?;
     }
     Response::from_json(&paginate_vec(url, items))
+}
+
+async fn filter_visible_protocol_comments(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+    items: Vec<serde_json::Value>,
+) -> Result<Vec<serde_json::Value>> {
+    let mut visible = Vec::new();
+    for item in items {
+        if !protocol_comment_visible(database, tenant, project, user, &item).await? {
+            continue;
+        }
+        visible.push(item);
+    }
+    Ok(visible)
 }
 
 async fn enrich_protocol_comment_profiles(
@@ -642,6 +703,41 @@ fn protocol_item_matches(item: &serde_json::Value, key: &str, expected: &str) ->
     }
 }
 
+fn protocol_comment_workspace(item: &serde_json::Value) -> Option<&str> {
+    item["workspace"].as_str().filter(|value| !value.is_empty()).or_else(|| {
+        item["target_type"]
+            .as_str()
+            .filter(|value| *value == "workspace")
+            .and_then(|_| item["target_id"].as_str().filter(|value| !value.is_empty()))
+    })
+}
+
+async fn protocol_comment_visible(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+    item: &serde_json::Value,
+) -> Result<bool> {
+    let Some(workspace) = protocol_comment_workspace(item) else {
+        return Ok(true);
+    };
+    d1::workspace_can_read(database, tenant, project, user, workspace).await
+}
+
+async fn protocol_comment_id_visible(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+    id: &str,
+) -> Result<bool> {
+    let Some(item) = protocol_item(database, tenant, project, id).await? else {
+        return Ok(false);
+    };
+    protocol_comment_visible(database, tenant, project, user, &item).await
+}
+
 async fn create_protocol_kind(
     mut req: Request,
     ctx: crate::request_context::AppRouteContext,
@@ -660,6 +756,12 @@ async fn create_protocol_kind(
         write_scope_for_kind(kind),
     )
     .await?;
+    if kind == "comment" {
+        if let Some(workspace) = protocol_comment_workspace(&body) {
+            check_workspace_read_capability(&database, &tenant, &project, Some(&user), workspace)
+                .await?;
+        }
+    }
     let id = body["id"]
         .as_str()
         .map(ToOwned::to_owned)

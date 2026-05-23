@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS workspace_states (
     milestone TEXT,
     linked_issues_json TEXT NOT NULL DEFAULT '[]',
     locked INTEGER NOT NULL DEFAULT 0,
+    visibility TEXT NOT NULL DEFAULT 'team',
+    created_by TEXT,
     PRIMARY KEY (tenant, project, workspace)
 );
 

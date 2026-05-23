@@ -48,6 +48,8 @@ export interface WorkspaceStatus {
 	head: string | null;
 	status: 'draft' | 'ready' | 'merged' | string;
 	parent_workspace: string | null;
+	visibility: 'private' | 'team' | 'public' | string;
+	created_by?: string | null;
 	last_activity_at?: string | null;
 	labels: string[];
 	reviewers: string[];
@@ -423,14 +425,14 @@ export async function updateWorkspaceMetadata(
 	tenant: string,
 	project: string,
 	workspace: string,
-	metadata: Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked'>>
+	metadata: Partial<Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked' | 'visibility'>>
 ) {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/workspaces/${encodeURIComponent(workspace)}/metadata`, {
 		method: 'PATCH',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(metadata)
 	});
-	return (await response.json()) as Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked'>;
+	return (await response.json()) as Pick<WorkspaceStatus, 'reviewers' | 'assignees' | 'milestone' | 'linked_issues' | 'locked' | 'visibility'>;
 }
 
 export async function getWorkspaceMergePreview(tenant: string, project: string, workspace: string, options: ApiOptions = {}) {

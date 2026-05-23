@@ -78,6 +78,7 @@ mod reviews;
 mod settings;
 mod stats;
 mod user_keys;
+mod workspace_visibility;
 mod workspaces;
 
 pub use auth::*;
@@ -102,4 +103,5 @@ pub use reviews::*;
 pub use settings::*;
 pub use stats::*;
 pub use user_keys::*;
+pub use workspace_visibility::*;
 pub use workspaces::*;

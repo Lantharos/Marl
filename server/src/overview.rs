@@ -9,8 +9,22 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
     let project_summary = d1::get_project(&database, &tenant, &project)
         .await?
         .ok_or_else(|| Error::RustError("project not found".to_string()))?;
-    let workspaces = d1::workspace_states(&database, &tenant, &project).await?;
-    let settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
+    let workspaces = d1::filter_visible_workspaces(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        d1::workspace_states(&database, &tenant, &project).await?,
+    )
+    .await?;
+    let mut settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
+    let visible_workspace_names = workspaces
+        .iter()
+        .map(|workspace| workspace.name.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    settings
+        .protected_workspaces
+        .retain(|workspace| visible_workspace_names.contains(workspace.as_str()));
     let access = d1::project_access_response(
         &database,
         &tenant,
@@ -19,7 +33,7 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         settings.visibility == "public",
     )
     .await?;
-    let stats = d1::project_stats(&database, &tenant, &project).await?;
+    let stats = visible_project_stats(&database, &tenant, &project, user.as_deref()).await?;
     let releases = latest_releases(&database, &tenant, &project, 5).await?;
     let featured_screenshot = screenshots::featured_screenshot(&database, &tenant, &project).await?;
     let pinned_leaves = visible_project_leaves(&database, &tenant, &project, user.as_deref())
@@ -28,8 +42,27 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         .filter(|leaf| leaf.pinned)
         .take(5)
         .collect::<Vec<_>>();
-    let default_workspace = settings.default_workspace.clone();
-    let default_head = d1::head(&database, &tenant, &project, &default_workspace).await?;
+    let mut default_workspace = settings.default_workspace.clone();
+    if !d1::workspace_can_read(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &default_workspace,
+    )
+    .await?
+    {
+        default_workspace = "main".to_string();
+        settings.default_workspace = default_workspace.clone();
+    }
+    let default_workspace_visible =
+        d1::workspace_can_read(&database, &tenant, &project, user.as_deref(), &default_workspace)
+            .await?;
+    let default_head = if default_workspace_visible {
+        d1::head(&database, &tenant, &project, &default_workspace).await?
+    } else {
+        None
+    };
     let etag = overview_etag(
         &project_summary,
         &workspaces,
@@ -45,8 +78,11 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         return Ok(response);
     }
     let history = d1::project_history_with_limit(&database, &tenant, &project, Some(10)).await?;
-    let readme =
-        project_readme_text(&ctx.env, &database, &tenant, &project, &default_workspace).await?;
+    let readme = if default_workspace_visible {
+        project_readme_text(&ctx.env, &database, &tenant, &project, &default_workspace).await?
+    } else {
+        None
+    };
     let recent_activity = history
         .into_iter()
         .take(10)
@@ -84,7 +120,7 @@ pub(crate) async fn project_stats(req: Request, ctx: crate::request_context::App
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read").await?;
-    let stats = d1::project_stats(&database, &tenant, &project).await?;
+    let stats = visible_project_stats(&database, &tenant, &project, user.as_deref()).await?;
     let etag = format!(
         "stats-{}-{}-{}-{}-{}-{}",
         stats.workspace_count,
@@ -94,7 +130,8 @@ pub(crate) async fn project_stats(req: Request, ctx: crate::request_context::App
         stats.history_count,
         stats.leaf_count
     );
-    let public_cache = matches!(
+    let public_cache = user.is_none()
+        && matches!(
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
     );
@@ -104,6 +141,33 @@ pub(crate) async fn project_stats(req: Request, ctx: crate::request_context::App
     let mut response = Response::from_json(&stats)?;
     apply_cache_headers(response.headers_mut(), &etag, public_cache, 15, false)?;
     Ok(response)
+}
+
+async fn visible_project_stats(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+) -> Result<sty_protocol::ProjectStats> {
+    let mut stats = d1::project_stats(database, tenant, project).await?;
+    let full_project_access = match user {
+        Some(user) if user.starts_with("api-key:") => true,
+        Some(user) => d1::role_allows(
+            d1::project_effective_role(database, tenant, project, user)
+                .await?
+                .as_deref(),
+            "maintainer",
+        ),
+        None => false,
+    };
+    if !full_project_access {
+        let (workspace_count, ready_count) =
+            d1::visible_workspace_counts(database, tenant, project, user).await?;
+        stats.workspace_count = workspace_count;
+        stats.ready_count = ready_count;
+        stats.history_count = d1::visible_history_count(database, tenant, project, user).await?;
+    }
+    Ok(stats)
 }
 
 async fn project_readme_text(

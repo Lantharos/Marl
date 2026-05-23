@@ -222,7 +222,14 @@ pub(crate) async fn project_detail(req: Request, ctx: crate::request_context::Ap
             owner: String::new(),
             folder: None,
         });
-    let states = d1::workspace_states(&database, &tenant, &project).await?;
+    let states = d1::filter_visible_workspaces(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        d1::workspace_states(&database, &tenant, &project).await?,
+    )
+    .await?;
     let workspaces: Vec<WorkspaceSummary> = states
         .into_iter()
         .map(|s| WorkspaceSummary {
@@ -254,7 +261,14 @@ pub(crate) async fn list_workspaces(req: Request, ctx: crate::request_context::A
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "workspaces:read").await?;
-    let mut workspaces = d1::workspace_states(&database, &tenant, &project).await?;
+    let mut workspaces = d1::filter_visible_workspaces(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        d1::workspace_states(&database, &tenant, &project).await?,
+    )
+    .await?;
     enrich_workspace_change_summaries(&ctx, &tenant, &project, &mut workspaces).await.ok();
     enrich_workspace_mergeability(&database, &tenant, &project, &mut workspaces).await.ok();
     Response::from_json(&WorkspaceStateResponse { workspaces })

@@ -84,6 +84,7 @@ pub async fn update_head(
     workspace: &str,
     expected_head: Option<&str>,
     new_head: &str,
+    actor: Option<&str>,
 ) -> Result<bool> {
     let result = db
         .prepare(
@@ -125,11 +126,17 @@ pub async fn update_head(
     }
 
     db.prepare(
-        "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable) \
-         VALUES (?1, ?2, ?3, 'active', 0, NULL, 0) \
+        "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable, visibility, created_by) \
+         VALUES (?1, ?2, ?3, 'active', 0, NULL, 0, ?4, ?5) \
          ON CONFLICT(tenant, project, workspace) DO NOTHING"
     )
-    .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+    .bind(&[
+        js_str(tenant),
+        js_str(project),
+        js_str(workspace),
+        js_str(default_workspace_visibility(workspace)),
+        js_opt(actor),
+    ])?
     .run()
     .await?;
     recompute_project_stats(db, tenant, project).await?;
@@ -143,6 +150,7 @@ pub async fn force_update_head(
     project: &str,
     workspace: &str,
     new_head: &str,
+    actor: Option<&str>,
 ) -> Result<bool> {
     db.prepare(
         "INSERT INTO workspace_heads (tenant, project, workspace, head)
@@ -159,11 +167,17 @@ pub async fn force_update_head(
     .await?;
 
     db.prepare(
-        "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable)
-         VALUES (?1, ?2, ?3, 'active', 0, NULL, 0)
+        "INSERT INTO workspace_states (tenant, project, workspace, status, is_ready, parent_workspace, mergeable, visibility, created_by)
+         VALUES (?1, ?2, ?3, 'active', 0, NULL, 0, ?4, ?5)
          ON CONFLICT(tenant, project, workspace) DO NOTHING",
     )
-    .bind(&[js_str(tenant), js_str(project), js_str(workspace)])?
+    .bind(&[
+        js_str(tenant),
+        js_str(project),
+        js_str(workspace),
+        js_str(default_workspace_visibility(workspace)),
+        js_opt(actor),
+    ])?
     .run()
     .await?;
     recompute_project_stats(db, tenant, project).await?;
@@ -191,13 +205,15 @@ pub async fn workspace_states(
         milestone: Option<String>,
         linked_issues_json: Option<String>,
         locked: Option<i64>,
+        visibility: Option<String>,
+        created_by: Option<String>,
         is_ready: i64,
         mergeable: i64,
     }
     let result = db
         .prepare(
             "SELECT ws.workspace, ws.status, wh.head, ws.parent_workspace, ws.labels_json, ws.reviewers_json, \
-                ws.assignees_json, ws.milestone, ws.linked_issues_json, ws.locked, ws.is_ready, ws.mergeable, \
+                ws.assignees_json, ws.milestone, ws.linked_issues_json, ws.locked, ws.visibility, ws.created_by, ws.is_ready, ws.mergeable, \
                 (SELECT MAX(timestamp) FROM history h WHERE h.tenant = ws.tenant AND h.project = ws.project AND h.workspace = ws.workspace) AS last_activity_at \
              FROM workspace_states ws \
              LEFT JOIN workspace_heads wh ON wh.tenant = ws.tenant AND wh.project = ws.project AND wh.workspace = ws.workspace \
@@ -215,6 +231,10 @@ pub async fn workspace_states(
             status: r.status,
             head: r.head,
             parent_workspace: r.parent_workspace.clone(),
+            visibility: r
+                .visibility
+                .unwrap_or_else(|| default_workspace_visibility(&r.workspace).to_string()),
+            created_by: r.created_by,
             last_activity_at: r.last_activity_at,
             labels: workspace_labels(r.labels_json),
             reviewers: workspace_string_list(r.reviewers_json, 15),
@@ -293,6 +313,22 @@ pub async fn set_workspace_metadata(
     ])?
     .run()
     .await?;
+    Ok(())
+}
+
+pub async fn set_workspace_visibility(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    visibility: &str,
+) -> Result<()> {
+    let visibility = normalize_workspace_visibility(visibility)?;
+    db.prepare("UPDATE workspace_states SET visibility = ?1 WHERE tenant = ?2 AND project = ?3 AND workspace = ?4")
+        .bind(&[js_str(&visibility), js_str(tenant), js_str(project), js_str(workspace)])?
+        .run()
+        .await?;
+    recompute_project_stats(db, tenant, project).await?;
     Ok(())
 }
 

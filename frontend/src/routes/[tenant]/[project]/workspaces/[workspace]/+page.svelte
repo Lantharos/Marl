@@ -398,6 +398,7 @@
 				<h2 class="text-xl font-semibold text-[#f0eee4]">{detail.name}</h2>
 				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#6f6b5f]">
 					<span>{workspaceName} into {detail.parent_workspace ?? 'main'}</span>
+					<span>{detail.visibility}</span>
 					<span class="font-mono">{detail.head?.slice(0, 12) ?? 'empty'}</span>
 					<span>{detail.changed_file_count} files</span>
 					<span class="text-[#7cb97c]">+{detail.additions}</span>

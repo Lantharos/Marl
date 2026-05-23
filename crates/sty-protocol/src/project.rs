@@ -342,6 +342,10 @@ pub struct WorkspaceState {
     pub status: String,
     pub head: Option<String>,
     pub parent_workspace: Option<String>,
+    #[serde(default = "default_workspace_visibility")]
+    pub visibility: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_activity_at: Option<String>,
     #[serde(default)]
@@ -365,6 +369,10 @@ pub struct WorkspaceState {
     pub child_workspaces: Vec<String>,
     pub is_ready: bool,
     pub mergeable: bool,
+}
+
+fn default_workspace_visibility() -> String {
+    "team".to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize)]

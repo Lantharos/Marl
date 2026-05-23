@@ -36,7 +36,7 @@ pub async fn dashboard_project_cards(
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(project_card_item).collect())
+    visible_project_card_items(db, rows, Some(&principal.user)).await
 }
 
 pub async fn followed_project_cards(
@@ -71,7 +71,7 @@ pub async fn followed_project_cards(
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(project_card_item).collect())
+    visible_project_card_items(db, rows, Some(&principal.user)).await
 }
 
 pub async fn public_project_cards(
@@ -108,7 +108,7 @@ pub async fn public_project_cards(
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(project_card_item).collect())
+    visible_project_card_items(db, rows, None).await
 }
 
 pub async fn popular_public_project_cards(
@@ -154,7 +154,7 @@ pub async fn popular_public_project_cards(
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(project_card_item).collect())
+    visible_project_card_items(db, rows, None).await
 }
 
 pub async fn tenant_public_project_cards(
@@ -194,13 +194,14 @@ pub async fn tenant_public_project_cards(
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(project_card_item).collect())
+    visible_project_card_items(db, rows, None).await
 }
 
 pub async fn tenant_project_cards(
     db: &Database,
     tenant: &str,
     query: &str,
+    user: Option<&str>,
     limit: usize,
 ) -> Result<Vec<ProjectDiscoveryItem>> {
     let trimmed = query.trim().to_ascii_lowercase();
@@ -233,7 +234,7 @@ pub async fn tenant_project_cards(
         .all()
         .await?;
     let rows: Vec<ProjectCardRow> = result.results()?;
-    Ok(rows.into_iter().map(project_card_item).collect())
+    visible_project_card_items(db, rows, user).await
 }
 
 pub async fn followed_release_feed(
@@ -298,6 +299,34 @@ struct ReleaseRow {
     owner: String,
     release_json: String,
     released_at: String,
+}
+
+async fn visible_project_card_items(
+    db: &Database,
+    rows: Vec<ProjectCardRow>,
+    user: Option<&str>,
+) -> Result<Vec<ProjectDiscoveryItem>> {
+    let mut items = Vec::new();
+    for row in rows {
+        let tenant = row.tenant.clone();
+        let project = row.project.clone();
+        let mut item = project_card_item(row);
+        let (workspace_count, ready_count) =
+            visible_workspace_counts(db, &tenant, &project, user).await?;
+        item.stats.workspace_count = workspace_count;
+        item.stats.ready_count = ready_count;
+        item.stats.history_count = visible_history_count(db, &tenant, &project, user).await?;
+        item.last_activity_at = visible_history_last_activity(db, &tenant, &project, user).await?;
+        items.push(item);
+    }
+    items.sort_by(|a, b| {
+        b.last_activity_at
+            .cmp(&a.last_activity_at)
+            .then_with(|| a.tenant.cmp(&b.tenant))
+            .then_with(|| a.folder.cmp(&b.folder))
+            .then_with(|| a.project.cmp(&b.project))
+    });
+    Ok(items)
 }
 
 fn project_card_item(row: ProjectCardRow) -> ProjectDiscoveryItem {

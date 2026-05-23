@@ -26,8 +26,14 @@ pub async fn list_ready(
     )
     .await?;
     let mut ready = Vec::new();
-    for workspace in d1::workspace_states(&database, &tenant, &project)
-        .await?
+    for workspace in d1::filter_visible_workspaces(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        d1::workspace_states(&database, &tenant, &project).await?,
+    )
+    .await?
         .into_iter()
         .filter(|workspace| workspace.is_ready && workspace.name != "main")
     {
@@ -44,12 +50,12 @@ pub async fn get_ready(
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx)?;
-    check_project_read_capability(
+    crate::check_workspace_read_capability(
         &database,
         &tenant,
         &project,
         user.as_deref(),
-        "workspaces:read",
+        &workspace,
     )
     .await?;
     let state = d1::workspace_states(&database, &tenant, &project)
@@ -73,12 +79,12 @@ pub async fn list_workspace_reviews(
     let (tenant, project) = project_params(&ctx)?;
     let workspace = param(&ctx, "workspace")?;
     let database = db(&ctx)?;
-    check_project_read_capability(
+    crate::check_workspace_read_capability(
         &database,
         &tenant,
         &project,
         user.as_deref(),
-        "workspaces:read",
+        &workspace,
     )
     .await?;
     if !workspace_exists(&database, &tenant, &project, &workspace).await? {
