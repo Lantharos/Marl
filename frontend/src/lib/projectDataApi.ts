@@ -78,7 +78,7 @@ export interface MergeRequest {
 
 export interface HistoryEntry {
 	id: string;
-	kind: 'save' | 'ship' | 'pack' | 'cram' | 'merge' | 'ready' | string;
+	kind: 'save' | 'ship' | 'pack' | 'merge' | 'ready' | string;
 	message: string;
 	author: string;
 	author_profile?: UserProfile | null;

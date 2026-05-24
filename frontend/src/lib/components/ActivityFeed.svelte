@@ -9,7 +9,7 @@
 			case 'save': return 'S';
 			case 'ship': return 'SHIP';
 			case 'pack':
-			case 'cram': return 'C';
+			case 'cram': return 'P';
 			case 'issue': return 'I';
 			case 'ready': return 'R';
 			case 'merge': return 'M';

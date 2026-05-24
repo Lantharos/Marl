@@ -315,7 +315,6 @@ fn emit_history_event(
     let event = match kind {
         "ship" => "snapshot.shipped",
         "pack" => "snapshot.packed",
-        "cram" => "snapshot.packed",
         _ => "snapshot.saved",
     };
     let _ = crate::developer::emit_project_event(ctx,

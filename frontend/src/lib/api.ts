@@ -107,7 +107,7 @@ export interface ProjectStats {
 
 export interface Activity {
 	id: string;
-	kind: 'save' | 'ship' | 'pack' | 'cram' | 'issue' | 'ready' | 'merge';
+	kind: 'save' | 'ship' | 'pack' | 'issue' | 'ready' | 'merge' | string;
 	actor: string;
 	actor_profile?: UserProfile | null;
 	message: string;
