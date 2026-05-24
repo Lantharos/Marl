@@ -33,6 +33,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: crate::request_contex
         body.panels,
         body.merge_rules,
         body.protected_workspaces,
+        body.ci,
         body.archived,
         body.public_releases,
     )
@@ -51,6 +52,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: crate::request_contex
             "public_releases": settings.public_releases,
             "merge_rules": settings.merge_rules.clone(),
             "protected_workspaces": settings.protected_workspaces.clone(),
+            "ci": settings.ci.clone(),
         }),
     )
     .await?;

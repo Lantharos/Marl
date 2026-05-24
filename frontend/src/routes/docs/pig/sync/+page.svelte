@@ -43,7 +43,7 @@ pig sync --force`;
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[180px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Objects</h3>
-				<p class="text-sm leading-6 text-[#8c887e]">Missing blobs, trees, snapshots, and derived metadata are uploaded or downloaded by immutable object id.</p>
+				<p class="text-sm leading-6 text-[#8c887e]">Missing blobs, trees, snapshots, and derived metadata are uploaded or downloaded by immutable object id. Uploads use bounded batches when the remote supports them, fall back to single-object uploads when needed, and mark completed batches locally so interrupted syncs can resume cleanly.</p>
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[180px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Heads</h3>

@@ -252,7 +252,10 @@ pub async fn submit_workspace_review(
     .await?;
 
     let message = review_history_message(state, workspace, body);
-    log_history(db, tenant, project, workspace, principal, "review", &message, head, None).await?;
+    log_history(
+        db, tenant, project, workspace, principal, "review", &message, head, None,
+    )
+    .await?;
     if state == "approved" {
         db.prepare(
             "UPDATE workspace_states

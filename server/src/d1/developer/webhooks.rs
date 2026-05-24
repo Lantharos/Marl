@@ -50,6 +50,28 @@ pub async fn create_project_webhook(
     })
 }
 
+pub async fn active_project_webhook_count(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+) -> Result<u32> {
+    ensure_developer_schema(db).await?;
+    #[derive(Deserialize)]
+    struct Row {
+        count: f64,
+    }
+    let row: Option<Row> = db
+        .prepare(
+            "SELECT COUNT(*) AS count
+             FROM project_webhooks
+             WHERE tenant = ?1 AND project = ?2 AND active = 1",
+        )
+        .bind(&[js_str(tenant), js_str(project)])?
+        .first(None)
+        .await?;
+    Ok(row.map(|row| row.count as u32).unwrap_or(0))
+}
+
 pub async fn list_project_webhooks(
     db: &Database,
     tenant: &str,
@@ -92,9 +114,7 @@ pub async fn active_project_webhooks(
     Ok(rows
         .into_iter()
         .map(webhook_from_row)
-        .filter(|hook| {
-            hook.events.iter().any(|item| item == "*" || item == event)
-        })
+        .filter(|hook| hook.events.iter().any(|item| item == "*" || item == event))
         .collect())
 }
 
@@ -139,14 +159,19 @@ pub async fn record_webhook_delivery(
     tenant: &str,
     project: &str,
     id: &str,
+    delivery_id: &str,
+    event: &str,
     status: i64,
+    payload_hash: &str,
+    last_error: Option<&str>,
 ) -> Result<()> {
     ensure_developer_schema(db).await?;
+    let now = now_rfc3339();
     db.prepare(
         "UPDATE project_webhooks SET last_delivery_at = ?1, last_delivery_status = ?2, updated_at = ?1 WHERE tenant = ?3 AND project = ?4 AND id = ?5",
     )
     .bind(&[
-        js_str(&now_rfc3339()),
+        js_str(&now),
         wasm_bindgen::JsValue::from_f64(status as f64),
         js_str(tenant),
         js_str(project),
@@ -154,5 +179,70 @@ pub async fn record_webhook_delivery(
     ])?
     .run()
     .await?;
+    db.prepare(
+        "INSERT INTO project_webhook_deliveries
+         (delivery_id, hook_id, tenant, project, event, status, attempts, last_error, payload_hash, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9, ?9)
+         ON CONFLICT(delivery_id) DO UPDATE SET
+             status = excluded.status,
+             attempts = project_webhook_deliveries.attempts + 1,
+             last_error = excluded.last_error,
+             updated_at = excluded.updated_at",
+    )
+    .bind(&[
+        js_str(delivery_id),
+        js_str(id),
+        js_str(tenant),
+        js_str(project),
+        js_str(event),
+        wasm_bindgen::JsValue::from_f64(status as f64),
+        js_opt(last_error),
+        js_str(payload_hash),
+        js_str(&now),
+    ])?
+    .run()
+    .await?;
     Ok(())
+}
+
+pub async fn webhook_delivery_succeeded(db: &Database, delivery_id: &str) -> Result<bool> {
+    ensure_developer_schema(db).await?;
+    #[derive(Deserialize)]
+    struct Row {
+        status: f64,
+    }
+    let row: Option<Row> = db
+        .prepare("SELECT status FROM project_webhook_deliveries WHERE delivery_id = ?1")
+        .bind(&[js_str(delivery_id)])?
+        .first(None)
+        .await?;
+    Ok(row.is_some_and(|row| (200.0..300.0).contains(&row.status)))
+}
+
+pub async fn list_project_webhook_deliveries(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    hook_id: &str,
+    limit: u64,
+) -> Result<Vec<ProjectWebhookDelivery>> {
+    ensure_developer_schema(db).await?;
+    let result = db
+        .prepare(
+            "SELECT delivery_id, hook_id, event, status, attempts, last_error, payload_hash, created_at, updated_at
+             FROM project_webhook_deliveries
+             WHERE tenant = ?1 AND project = ?2 AND hook_id = ?3
+             ORDER BY updated_at DESC
+             LIMIT ?4",
+        )
+        .bind(&[
+            js_str(tenant),
+            js_str(project),
+            js_str(hook_id),
+            wasm_bindgen::JsValue::from_f64(limit as f64),
+        ])?
+        .all()
+        .await?;
+    let rows: Vec<WebhookDeliveryRow> = result.results()?;
+    Ok(rows.into_iter().map(webhook_delivery_from_row).collect())
 }

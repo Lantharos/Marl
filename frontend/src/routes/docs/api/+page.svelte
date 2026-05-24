@@ -18,7 +18,7 @@
 
 <DocsPage
 	title="API"
-	description="The sty API is a versioned REST surface at /v1. PIG uses it for remote sync, and external tools can use it with user sessions, project API keys, or OAuth-issued project tokens."
+	description="The sty API is a versioned REST surface at /v1. PIG uses it for remote sync, and external tools can use it with user sessions, project API keys, OAuth-issued project tokens, or CI runner tokens."
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Base URL and auth</h2>

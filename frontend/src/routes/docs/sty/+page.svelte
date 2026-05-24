@@ -28,7 +28,7 @@
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[180px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Automation</h3>
-				<p class="text-sm leading-6 text-[#8c887e]">Granular API keys, OAuth developer apps, webhooks, hooks, release artifacts, and public release downloads for installers and updaters.</p>
+				<p class="text-sm leading-6 text-[#8c887e]">Granular API keys, OAuth developer apps, webhooks, hooks, CI runners, release artifacts, and public release downloads for installers and updaters.</p>
 			</div>
 			<div class="grid gap-2 px-4 py-3 md:grid-cols-[180px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Protocol</h3>
@@ -49,7 +49,7 @@
 			<li>The <code>main</code> workspace is the public/default line inside a project. Feature work happens in named workspaces.</li>
 			<li>Workspaces can be private, team-visible, or public, so security patches and early collaboration do not need to be exposed before they are ready.</li>
 			<li>Public projects can be forked. Linked forks can send work back with <code>sty sendwork</code>.</li>
-			<li>External systems can report checks through the API. Built-in CI execution is intentionally deferred.</li>
+			<li>Project CI can queue jobs for ready workspaces. Self-hosted runners execute jobs outside sty and report results into checks.</li>
 		</ul>
 	</section>
 </DocsPage>

@@ -1,6 +1,6 @@
 import { authedFetch, pageQuery, publicFetch } from './apiShared';
 import type { ApiOptions, PageOptions, Paginated } from './apiShared';
-import type { DeveloperApp, ProjectApiKey, ProjectIntegration, ProjectWebhook } from './protocolTypes';
+import type { DeveloperApp, ProjectApiKey, ProjectIntegration, ProjectWebhook, ProjectWebhookDelivery } from './protocolTypes';
 
 export async function listProjectApiKeys(
 	tenant: string,
@@ -54,14 +54,26 @@ export async function deleteProjectWebhook(tenant: string, project: string, id: 
 	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+export async function listProjectWebhookDeliveries(
+	tenant: string,
+	project: string,
+	id: string,
+	options: PageOptions = {}
+): Promise<Paginated<ProjectWebhookDelivery>> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/webhooks/${encodeURIComponent(id)}/deliveries${pageQuery(options)}`, {
+		signal: options.signal
+	});
+	return (await response.json()) as Paginated<ProjectWebhookDelivery>;
+}
+
 export async function testProjectWebhook(tenant: string, project: string, id: string) {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/webhooks/${encodeURIComponent(id)}/test`, { method: 'POST' });
-	return (await response.json()) as { ok: boolean; status: number };
+	return (await response.json()) as { ok: boolean; queued?: boolean; status: number };
 }
 
 export async function triggerProjectWebhook(tenant: string, project: string, id: string) {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/webhooks/${encodeURIComponent(id)}/trigger`, { method: 'POST' });
-	return (await response.json()) as { ok: boolean; status: number };
+	return (await response.json()) as { ok: boolean; queued?: boolean; status: number };
 }
 
 export async function listProjectIntegrations(

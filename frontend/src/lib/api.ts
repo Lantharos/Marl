@@ -4,7 +4,7 @@ import type { ApiOptions, PageOptions, Paginated } from './apiShared';
 import type { WorkspaceStatus } from './projectDataApi';
 import type { AccessResponse, UserProfile } from './collaboratorTypes';
 import type { Issue } from './issueApi';
-import type { AccountKey, CapabilityResponse, DeveloperApp, Label, Leaf, LeafDraft, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+import type { AccountKey, CapabilityResponse, CiArtifact, CiJob, CiLogLine, CiRunner, DeveloperApp, Label, Leaf, LeafDraft, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProjectWebhookDelivery, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 export { isAbortError } from './apiShared';
 export type { ApiOptions, PageOptions, Paginated } from './apiShared';
 export * from './collaboratorApi';
@@ -13,7 +13,7 @@ export type { AccessResponse, Collaborator, CollaboratorRole, UserProfile } from
 export * from './issueApi';
 export * from './objectApi';
 export * from './projectDataApi';
-export type { AccountKey, CapabilityResponse, DeveloperApp, Label, Leaf, LeafDraft, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
+export type { AccountKey, CapabilityResponse, CiArtifact, CiJob, CiLogLine, CiRunner, DeveloperApp, Label, Leaf, LeafDraft, Milestone, ProjectApiKey, ProjectIntegration, ProjectScreenshot, ProjectWebhook, ProjectWebhookDelivery, ProtocolDraft, ProtocolItem, Release, ReleaseArtifact, TagInfo } from './protocolTypes';
 
 export interface ProjectSummary {
 	tenant: string;
@@ -87,6 +87,7 @@ export interface ProjectSettings {
 	panels: PanelItem[];
 	merge_rules: MergeRules;
 	protected_workspaces: string[];
+	ci: ProjectCiSettings;
 }
 
 export interface MergeRules {
@@ -94,6 +95,30 @@ export interface MergeRules {
 	require_passing_checks: boolean;
 	dismiss_stale_approvals: boolean;
 	block_unresolved_comments: boolean;
+}
+
+export interface ProjectCiSettings {
+	enabled: boolean;
+	commands: CiCommand[];
+	max_concurrent_jobs?: number;
+	max_jobs_per_head?: number;
+	max_attempts?: number;
+	lease_grace_seconds?: number;
+	artifact_retention_days?: number;
+	cache_retention_days?: number;
+}
+
+export interface CiCommand {
+	name: string;
+	run: string;
+	timeout_seconds: number;
+	artifacts?: string[];
+	cache?: CiCacheEntry[];
+}
+
+export interface CiCacheEntry {
+	key: string;
+	path: string;
 }
 
 export interface ProjectStats {
@@ -778,6 +803,79 @@ export async function updateProjectSettings(tenant: string, project: string, set
 	const updated = (await response.json()) as ProjectSettings;
 	notifyProjectSettingsChanged(tenant, project, updated);
 	return updated;
+}
+
+export async function listCiRunners(tenant: string, project: string, options: PageOptions = {}): Promise<Paginated<CiRunner>> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/runners${pageQuery(options)}`, {
+		signal: options.signal
+	});
+	return (await response.json()) as Paginated<CiRunner>;
+}
+
+export async function createCiRunner(tenant: string, project: string, name: string, concurrency = 1): Promise<CiRunner> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/runners`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ name, concurrency })
+	});
+	return (await response.json()) as CiRunner;
+}
+
+export async function deleteCiRunner(tenant: string, project: string, id: string): Promise<void> {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/runners/${encodeURIComponent(id)}`, {
+		method: 'DELETE'
+	});
+}
+
+export async function listCiJobs(tenant: string, project: string, options: PageOptions & { workspace?: string } = {}): Promise<Paginated<CiJob>> {
+	const params = new URLSearchParams(pageQuery(options).replace(/^\?/, ''));
+	if (options.workspace) params.set('workspace', options.workspace);
+	const query = params.toString();
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/jobs${query ? `?${query}` : ''}`, {
+		signal: options.signal
+	});
+	return (await response.json()) as Paginated<CiJob>;
+}
+
+export async function getCiJobLogs(tenant: string, project: string, jobId: string, options: ApiOptions = {}): Promise<CiLogLine[]> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/jobs/${encodeURIComponent(jobId)}/logs`, {
+		signal: options.signal
+	});
+	const data = (await response.json()) as { logs: CiLogLine[] };
+	return data.logs;
+}
+
+export async function listCiJobArtifacts(tenant: string, project: string, jobId: string, options: ApiOptions = {}): Promise<CiArtifact[]> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/jobs/${encodeURIComponent(jobId)}/artifacts`, {
+		signal: options.signal
+	});
+	const data = (await response.json()) as { artifacts: CiArtifact[] };
+	return data.artifacts;
+}
+
+export async function downloadCiJobArtifact(
+	tenant: string,
+	project: string,
+	jobId: string,
+	artifactId: string,
+	options: ApiOptions = {}
+): Promise<{ blob: Blob; filename?: string }> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/jobs/${encodeURIComponent(jobId)}/artifacts/${encodeURIComponent(artifactId)}/download`, {
+		signal: options.signal
+	});
+	return {
+		blob: await response.blob(),
+		filename: contentDispositionFilename(response.headers.get('content-disposition'))
+	};
+}
+
+function contentDispositionFilename(value: string | null) {
+	if (!value) return undefined;
+	for (const part of value.split(';')) {
+		const filename = part.trim().match(/^filename="?([^"]+)"?$/)?.[1]?.trim();
+		if (filename && !filename.includes('/') && !filename.includes('\\')) return filename;
+	}
+	return undefined;
 }
 
 export async function getProjectFollow(tenant: string, project: string, options: ApiOptions = {}): Promise<FollowResponse> {

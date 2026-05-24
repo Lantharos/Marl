@@ -167,6 +167,18 @@ export interface ProjectWebhook {
 	secret?: string;
 }
 
+export interface ProjectWebhookDelivery {
+	delivery_id: string;
+	hook_id: string;
+	event: string;
+	status: number;
+	attempts: number;
+	last_error?: string | null;
+	payload_hash: string;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface DeveloperApp {
 	id: string;
 	owner: string;
@@ -191,4 +203,65 @@ export interface ProjectIntegration {
 	installed_by: string;
 	created_at: string;
 	revoked_at?: string | null;
+}
+
+export interface CiRunner {
+	id: string;
+	tenant: string;
+	project: string;
+	name: string;
+	prefix: string;
+	created_by: string;
+	created_at: string;
+	concurrency: number;
+	last_seen_at?: string | null;
+	disabled_at?: string | null;
+	token?: string;
+}
+
+export interface CiJob {
+	id: string;
+	tenant: string;
+	project: string;
+	workspace: string;
+	head: string;
+	name: string;
+	command: string;
+	timeout_seconds: number;
+	status: 'queued' | 'in_progress' | 'completed' | string;
+	conclusion?: string | null;
+	summary?: string | null;
+	runner_id?: string | null;
+	lease_expires_at?: string | null;
+	attempt?: number;
+	max_attempts?: number;
+	artifacts?: string[];
+	cache?: CiCacheEntry[];
+	queued_at: string;
+	started_at?: string | null;
+	completed_at?: string | null;
+	updated_at: string;
+}
+
+export interface CiCacheEntry {
+	key: string;
+	path: string;
+}
+
+export interface CiLogLine {
+	seq: number;
+	stream: 'stdout' | 'stderr' | 'system' | string;
+	text: string;
+	created_at: string;
+}
+
+export interface CiArtifact {
+	id: string;
+	job_id: string;
+	name: string;
+	size: number;
+	digest: string;
+	content_type: string;
+	created_at: string;
+	download_url?: string;
 }

@@ -20,6 +20,8 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "ready",
             "merge_rules",
             "status_checks",
+            "ci",
+            "ci_runners",
             "comments",
             "reactions",
             "hooks",
@@ -44,6 +46,7 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "project_archive",
             "forks",
             "sendwork",
+            "object_batch_upload",
             "object_batch_download",
             "object_path_closure",
         ]

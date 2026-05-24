@@ -1,4 +1,5 @@
 mod auth_commands;
+mod ci_commands;
 mod cli;
 mod clone_commands;
 mod collaborator_commands;

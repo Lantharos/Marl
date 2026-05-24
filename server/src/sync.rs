@@ -64,12 +64,48 @@ pub(crate) async fn update_head(mut req: Request, ctx: crate::request_context::A
             )
             .await?;
         }
-        let _ = crate::developer::emit_project_event(&ctx,
+        let _ = crate::webhooks::emit_project_event(&ctx,
             &tenant,
             &project,
             "sync",
-            serde_json::json!({ "workspace": workspace, "head": body.new_head, "actor": user }),
+            serde_json::json!({ "workspace": workspace, "head": body.new_head.clone(), "actor": user }),
         );
+        if let Some(state) = d1::workspace_state(&database, &tenant, &project, &workspace).await?
+            && state.status == "ready"
+        {
+            crate::ci::enqueue_ci_for_ready_head(
+                &ctx,
+                &tenant,
+                &project,
+                &workspace,
+                Some(&body.new_head),
+            )
+            .await?;
+            let settings = d1::project_settings(
+                &database,
+                &tenant,
+                &project,
+                Some(&sty_protocol::TokenPrincipal { user: user.clone() }),
+            )
+            .await?;
+            let merge_status = crate::governance::workspace_merge_status(
+                &database,
+                &tenant,
+                &project,
+                &workspace,
+                Some(&body.new_head),
+                &settings,
+            )
+            .await?;
+            d1::set_workspace_mergeable(
+                &database,
+                &tenant,
+                &project,
+                &workspace,
+                merge_status.can_merge,
+            )
+            .await?;
+        }
         Response::from_json(&OkResponse { ok: true })
     } else {
         json_error(409, "workspace head changed")
@@ -317,7 +353,7 @@ fn emit_history_event(
         "pack" => "snapshot.packed",
         _ => "snapshot.saved",
     };
-    let _ = crate::developer::emit_project_event(ctx,
+    let _ = crate::webhooks::emit_project_event(ctx,
         tenant,
         project,
         event,
@@ -357,6 +393,14 @@ pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRou
         &tenant,
         &project,
         Some(&sty_protocol::TokenPrincipal { user: user.clone() }),
+    )
+    .await?;
+    crate::ci::enqueue_ci_for_ready_head(
+        &ctx,
+        &tenant,
+        &project,
+        &workspace,
+        state.head.as_deref(),
     )
     .await?;
     let merge_status = crate::governance::workspace_merge_status(
@@ -399,7 +443,7 @@ pub(crate) async fn mark_ready(req: Request, ctx: crate::request_context::AppRou
         &format!("/{tenant}/{project}/workspaces/{workspace}"),
     )
     .await?;
-    let _ = crate::developer::emit_project_event(&ctx,
+    let _ = crate::webhooks::emit_project_event(&ctx,
         &tenant,
         &project,
         "workspace.ready",
@@ -554,7 +598,7 @@ pub(crate) async fn merge_workspace(req: Request, ctx: crate::request_context::A
         &format!("/{tenant}/{project}/workspaces/{workspace}"),
     )
     .await?;
-    let _ = crate::developer::emit_project_event(
+    let _ = crate::webhooks::emit_project_event(
         &ctx,
         &tenant,
         &project,

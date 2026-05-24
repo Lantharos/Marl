@@ -1,9 +1,9 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
-    Comment, HistoryEntry, HistorySignature, Issue, Leaf, MergeRules, NavbarItem, PanelItem,
-    ProjectAppearance, ProjectSettings, ProjectStats, ProjectSummary, TenantSummary,
-    TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
+    CiCommand, Comment, HistoryEntry, HistorySignature, Issue, Leaf, MergeRules, NavbarItem,
+    PanelItem, ProjectAppearance, ProjectCiSettings, ProjectSettings, ProjectStats, ProjectSummary,
+    TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
 };
 use uuid::Uuid;
 use worker::*;
@@ -34,6 +34,20 @@ fn now_rfc3339() -> String {
     d.to_iso_string().into()
 }
 
+fn rfc3339_seconds_ago(seconds: u64) -> String {
+    let millis = js_sys::Date::now() - (seconds as f64 * 1000.0);
+    js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(millis))
+        .to_iso_string()
+        .into()
+}
+
+fn rfc3339_seconds_from_now(seconds: u64) -> String {
+    let millis = js_sys::Date::now() + (seconds as f64 * 1000.0);
+    js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(millis))
+        .to_iso_string()
+        .into()
+}
+
 fn user_profile_from_parts(
     user: &str,
     display_name: Option<String>,
@@ -57,6 +71,7 @@ fn user_profile_from_parts(
 // -- Auth -------------------------------------------------
 
 mod auth;
+mod ci;
 mod collaborator_support;
 mod collaborators;
 mod developer;
@@ -82,6 +97,7 @@ mod workspace_visibility;
 mod workspaces;
 
 pub use auth::*;
+pub use ci::*;
 pub use collaborator_support::*;
 pub use collaborators::*;
 pub use developer::*;

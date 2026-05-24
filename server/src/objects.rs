@@ -11,6 +11,9 @@ pub(crate) async fn missing(mut req: Request, ctx: crate::request_context::AppRo
             ids.push(id);
         }
     }
+    if ids.len() > 512 {
+        return json_error(413, "object missing batch is too large");
+    }
     let known = d1::object_kinds(&database, &tenant, &project, &ids).await?;
     let missing = ids
         .into_iter()
@@ -71,6 +74,78 @@ pub(crate) async fn download_objects(
         });
     }
     Response::from_json(&DownloadResponse { objects })
+}
+
+const OBJECT_UPLOAD_BATCH_LIMIT: usize = 64;
+const OBJECT_UPLOAD_BATCH_BYTES: usize = 8 * 1024 * 1024;
+
+pub(crate) async fn upload_objects(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    check_project_write_capability(&database, &tenant, &project, &user, "contributor", "objects:write").await?;
+    let body: UploadRequest = req.json().await?;
+    if body.objects.len() > OBJECT_UPLOAD_BATCH_LIMIT {
+        return json_error(413, "object upload batch is too large");
+    }
+    let max_object_size = object_size_limit(&ctx.env);
+    let batch_size_limit = max_object_size.min(OBJECT_UPLOAD_BATCH_BYTES);
+    let mut total_size = 0usize;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut objects = Vec::with_capacity(body.objects.len());
+    for object in body.objects {
+        validate_object_metadata(&object.id, &object.kind)?;
+        if !seen.insert(object.id.clone()) {
+            continue;
+        }
+        let bytes = BASE64_STANDARD
+            .decode(object.bytes_base64)
+            .map_err(|error| Error::RustError(error.to_string()))?;
+        if bytes.len() > max_object_size {
+            return json_error(413, "object is larger than the configured upload limit");
+        }
+        total_size += bytes.len();
+        if total_size > batch_size_limit {
+            return json_error(413, "object upload batch payload is too large");
+        }
+        objects.push((object.id, object.kind, bytes));
+    }
+
+    let ids = objects
+        .iter()
+        .map(|(id, _, _)| id.clone())
+        .collect::<Vec<_>>();
+    let known = d1::object_kinds(&database, &tenant, &project, &ids).await?;
+    let store = bucket(&ctx.env)?;
+    let mut stored = 0usize;
+    let mut skipped = 0usize;
+    for (id, kind, bytes) in objects {
+        if let Some(existing_kind) = known.get(&id) {
+            if existing_kind != &kind {
+                return json_error(409, "object kind does not match existing object");
+            }
+            skipped += 1;
+            continue;
+        }
+        let digest = object_digest_for_kind(&bytes, &kind)?;
+        if digest != id {
+            return json_error(400, "object id does not match SHA-256 digest");
+        }
+        validate_object_payload(&kind, &bytes)?;
+        if kind == "snapshot" {
+            if let Err(reason) = validate_snapshot_signature(&database, &bytes).await {
+                return json_error(400, &format!("invalid snapshot signature: {reason}"));
+            }
+        }
+        let size = bytes.len();
+        put_bytes(&store, &object_key(&tenant, &project, &id), bytes).await?;
+        d1::record_object(&database, &tenant, &project, &id, &kind, size).await?;
+        stored += 1;
+    }
+    Response::from_json(&json!({ "ok": true, "stored": stored, "skipped": skipped }))
 }
 
 const PATH_CLOSURE_OBJECT_LIMIT: usize = 10_000;
@@ -527,6 +602,18 @@ pub(crate) async fn check_project_read_capability(
             "api key is missing `{capability}` permission"
         )));
     }
+    if let Some(user) = user.filter(|value| value.starts_with("ci-runner:")) {
+        ensure_project_target(db, tenant, project).await?;
+        if d1::ci_runner_allows(db, tenant, project, user, capability)
+            .await?
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        return Err(Error::RustError(format!(
+            "ci runner is missing `{capability}` permission"
+        )));
+    }
     check_project_access(db, tenant, project, user).await
 }
 
@@ -548,6 +635,18 @@ pub(crate) async fn check_project_capability(
         }
         return Err(Error::RustError(format!(
             "api key is missing `{capability}` permission"
+        )));
+    }
+    if user.starts_with("ci-runner:") {
+        ensure_project_target(db, tenant, project).await?;
+        if d1::ci_runner_allows(db, tenant, project, user, capability)
+            .await?
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        return Err(Error::RustError(format!(
+            "ci runner is missing `{capability}` permission"
         )));
     }
     check_project_role(db, tenant, project, user, minimum).await

@@ -18,7 +18,21 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "objects": ["<snapshot-id>", "<tree-id>", "<blob-id>"]
+  "ids": ["<snapshot-id>", "<tree-id>", "<blob-id>"]
+}`;
+
+	const batchUpload = `POST /v1/tenants/:tenant/projects/:project/objects/upload
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "objects": [
+    {
+      "id": "<blob-id>",
+      "kind": "blob",
+      "bytes_base64": "<base64>"
+    }
+  ]
 }`;
 </script>
 
@@ -46,6 +60,9 @@ Content-Type: application/json
 		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Snapshots, trees, blobs, and derived metadata are addressed by immutable ids. A server should reject a workspace head if the referenced object graph is incomplete.</p>
 		<div class="mt-4">
 			<CodeBlock code={batchDownload} />
+		</div>
+		<div class="mt-4">
+			<CodeBlock code={batchUpload} />
 		</div>
 	</section>
 

@@ -59,6 +59,7 @@ PIG model:
 - pig resolve --reuse applies a previously recorded conflict resolution when the same conflict shape appears again.
 - pig fetch path <path> fetches one remote file or directory by object closure. Use --no-hydrate to cache without writing files.
 - pig sync --force intentionally replaces the remote workspace head after local history was packed or rewritten.
+- sty ci runner new creates self-hosted runner tokens. pig ci run claims leased jobs, restores configured file or directory caches, runs commands, uploads logs/artifacts, saves caches, and reports the result.
 - Use --json for commands an agent needs to parse.
 
 Forking:
@@ -77,7 +78,7 @@ Access model:
 - Workspace visibility can be private, team, or public.
 - Project API keys are granular and project-scoped.
 - main:write is separate from workspace write scopes.
-- External systems report checks through the checks API. sty records check results but does not run arbitrary CI jobs itself.
+- sty can queue CI jobs for ready workspace heads. Self-hosted runners use runner tokens, wait on WebSocket wakeups when available, fall back to adaptive polling, execute commands outside the Worker, upload batched logs, artifacts, and directory caches, and report results into workspace checks. CI artifacts and caches follow the project retention window. External systems can still report checks directly through the checks API.
 
 Pagination envelope:
 - items, page, per_page, total, total_pages, next, prev.

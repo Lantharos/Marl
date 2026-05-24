@@ -147,6 +147,8 @@ pub struct ProjectSettings {
     pub merge_rules: MergeRules,
     #[serde(default)]
     pub protected_workspaces: Vec<String>,
+    #[serde(default)]
+    pub ci: ProjectCiSettings,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -160,6 +162,7 @@ pub struct UpdateSettingsRequest {
     pub panels: Option<Vec<PanelItem>>,
     pub merge_rules: Option<MergeRules>,
     pub protected_workspaces: Option<Vec<String>>,
+    pub ci: Option<ProjectCiSettings>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -191,6 +194,87 @@ fn default_dismiss_stale_approvals() -> bool {
 
 fn default_block_unresolved_comments() -> bool {
     true
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProjectCiSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub commands: Vec<CiCommand>,
+    #[serde(default = "default_ci_max_concurrent_jobs")]
+    pub max_concurrent_jobs: u32,
+    #[serde(default = "default_ci_max_jobs_per_head")]
+    pub max_jobs_per_head: u32,
+    #[serde(default = "default_ci_max_attempts")]
+    pub max_attempts: u32,
+    #[serde(default = "default_ci_lease_grace_seconds")]
+    pub lease_grace_seconds: u32,
+    #[serde(default = "default_ci_artifact_retention_days")]
+    pub artifact_retention_days: u32,
+    #[serde(default = "default_ci_cache_retention_days")]
+    pub cache_retention_days: u32,
+}
+
+impl Default for ProjectCiSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            commands: Vec::new(),
+            max_concurrent_jobs: default_ci_max_concurrent_jobs(),
+            max_jobs_per_head: default_ci_max_jobs_per_head(),
+            max_attempts: default_ci_max_attempts(),
+            lease_grace_seconds: default_ci_lease_grace_seconds(),
+            artifact_retention_days: default_ci_artifact_retention_days(),
+            cache_retention_days: default_ci_cache_retention_days(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CiCommand {
+    pub name: String,
+    pub run: String,
+    #[serde(default = "default_ci_timeout_seconds")]
+    pub timeout_seconds: u32,
+    #[serde(default)]
+    pub artifacts: Vec<String>,
+    #[serde(default)]
+    pub cache: Vec<CiCacheEntry>,
+}
+
+fn default_ci_timeout_seconds() -> u32 {
+    900
+}
+
+fn default_ci_max_concurrent_jobs() -> u32 {
+    8
+}
+
+fn default_ci_max_jobs_per_head() -> u32 {
+    50
+}
+
+fn default_ci_max_attempts() -> u32 {
+    3
+}
+
+fn default_ci_lease_grace_seconds() -> u32 {
+    120
+}
+
+fn default_ci_artifact_retention_days() -> u32 {
+    30
+}
+
+fn default_ci_cache_retention_days() -> u32 {
+    30
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CiCacheEntry {
+    pub key: String,
+    pub path: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

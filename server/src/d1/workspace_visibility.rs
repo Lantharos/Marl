@@ -72,14 +72,18 @@ pub async fn workspace_can_read(
     let Some(state) = workspace_visibility(db, tenant, project, workspace).await? else {
         return Ok(false);
     };
-    if user.is_some_and(|value| value.starts_with("api-key:")) {
+    if user.is_some_and(|value| value.starts_with("api-key:") || value.starts_with("ci-runner:")) {
         return Ok(true);
     }
     let role = match user {
         Some(user) => project_effective_role(db, tenant, project, user).await?,
         None => None,
     };
-    Ok(workspace_visibility_allows_read(&state, user, role.as_deref()))
+    Ok(workspace_visibility_allows_read(
+        &state,
+        user,
+        role.as_deref(),
+    ))
 }
 
 pub async fn workspace_can_write(
@@ -95,7 +99,7 @@ pub async fn workspace_can_write(
     let Some(state) = workspace_visibility(db, tenant, project, workspace).await? else {
         return Ok(true);
     };
-    if user.starts_with("api-key:") {
+    if user.starts_with("api-key:") || user.starts_with("ci-runner:") {
         return Ok(true);
     }
     if state.visibility != WORKSPACE_VISIBILITY_PRIVATE {
@@ -132,7 +136,7 @@ pub async fn filter_visible_workspaces(
         Some(user) => project_effective_role(db, tenant, project, user).await?,
         None => None,
     };
-    if user.is_some_and(|value| value.starts_with("api-key:")) {
+    if user.is_some_and(|value| value.starts_with("api-key:") || value.starts_with("ci-runner:")) {
         return Ok(workspaces);
     }
     Ok(workspaces
@@ -180,7 +184,7 @@ pub async fn visible_history_count(
     project: &str,
     user: Option<&str>,
 ) -> Result<u64> {
-    if user.is_some_and(|value| value.starts_with("api-key:")) {
+    if user.is_some_and(|value| value.starts_with("api-key:") || value.starts_with("ci-runner:")) {
         return history_count_where(db, tenant, project, "1 = 1", None).await;
     }
     let role = match user {
@@ -216,7 +220,7 @@ pub async fn visible_history_last_activity(
     project: &str,
     user: Option<&str>,
 ) -> Result<Option<String>> {
-    if user.is_some_and(|value| value.starts_with("api-key:")) {
+    if user.is_some_and(|value| value.starts_with("api-key:") || value.starts_with("ci-runner:")) {
         return history_last_activity_where(db, tenant, project, "1 = 1", None).await;
     }
     let role = match user {

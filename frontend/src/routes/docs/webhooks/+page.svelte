@@ -26,11 +26,16 @@ if (expected !== request.headers.get("x-sty-signature-256")) {
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Delivery</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Each delivery is a JSON POST to a public HTTPS endpoint. Localhost, private network, and link-local targets are rejected. If a webhook has a secret, sty signs the raw payload with HMAC-SHA256 and sends the result in <code>x-sty-signature-256</code>.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Each delivery is queued, retried for transient failures, recorded with its delivery id, and sent as a JSON POST to a public HTTPS endpoint. Localhost, private network, and link-local targets are rejected. If a webhook has a secret, sty signs the raw payload with HMAC-SHA256 and sends the result in <code>x-sty-signature-256</code>.</p>
 		<div class="mt-4 grid gap-4 lg:grid-cols-2">
 			<CodeBlock code={headers} />
 			<CodeBlock code={webhookPayloadJson} />
 		</div>
+	</section>
+
+	<section>
+		<h2 class="text-lg font-semibold text-[#eae9e4]">Delivery history</h2>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">sty stores the last delivery status, retry count, payload hash, and error summary per delivery id. Queue retries reuse the same delivery id, so a delivery that already succeeded is not sent again.</p>
 	</section>
 
 	<section>
@@ -62,7 +67,7 @@ if (expected !== request.headers.get("x-sty-signature-256")) {
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[250px_1fr]">
 				<code class="text-sm text-[#d9a66c]">pig webhook test &lt;id&gt;</code>
-				<p class="text-sm leading-6 text-[#a09d94]">Send a test delivery.</p>
+				<p class="text-sm leading-6 text-[#a09d94]">Queue a test delivery.</p>
 			</div>
 			<div class="grid gap-2 px-4 py-3 md:grid-cols-[250px_1fr]">
 				<code class="text-sm text-[#d9a66c]">pig webhook delete &lt;id&gt;</code>

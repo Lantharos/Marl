@@ -58,6 +58,21 @@ export const styCommandGroups: CommandGroup[] = [
 		]
 	},
 	{
+		title: 'CI',
+		intro: 'Sty owns CI configuration, runner tokens, and job history. PIG runs self-hosted jobs because it understands repository snapshots.',
+		rows: [
+			{ command: 'sty ci runner new <tenant>/<project> linux-builder', description: 'Create a project-scoped self-hosted CI runner token.' },
+			{ command: 'sty ci runner new <tenant>/<project> linux-builder --concurrency 2', description: 'Allow a runner token to lease up to two jobs at once when multiple runner processes use it.' },
+			{ command: 'sty ci runner list <tenant>/<project>', description: 'List active and disabled CI runners.' },
+			{ command: 'sty ci runner delete <tenant>/<project> <runner-id>', description: 'Disable a runner token.' },
+			{ command: 'sty ci jobs <tenant>/<project>', description: 'List recent CI jobs for the project.' },
+			{ command: 'sty ci jobs <tenant>/<project> --workspace feature-auth', description: 'List CI jobs for one workspace.' },
+			{ command: 'sty ci logs <tenant>/<project> <job-id>', description: 'Print uploaded logs for one CI job.' },
+			{ command: 'sty ci artifacts <tenant>/<project> <job-id>', description: 'List files uploaded by one CI job.' },
+			{ command: 'sty ci artifacts <tenant>/<project> <job-id> --download <artifact-id>', description: 'Download one CI artifact.' }
+		]
+	},
+	{
 		title: 'Leaves',
 		intro: 'Leaves are lightweight docs/notes that can attach to tenants, projects, issues, workspaces, or releases.',
 		rows: [
@@ -175,6 +190,10 @@ export const pigCommandGroups: CommandGroup[] = [
 			{ command: 'pig webhook list', description: 'List project webhooks.' },
 			{ command: 'pig webhook new <event> <url>', description: 'Create a webhook for a project event.' },
 			{ command: 'pig webhook test <id>', description: 'Send a test webhook delivery.' },
+			{ command: 'sty ci runner new <tenant>/<project> linux-builder', description: 'Create a project-scoped self-hosted CI runner token.' },
+			{ command: 'STY_CI_TOKEN=<token> pig ci run', description: 'Wait for CI wakeups, claim leased jobs, run commands in temp checkouts, restore/save file or directory caches, and upload logs, artifacts, and results.' },
+			{ command: 'pig ci run --once --project <tenant>/<project> --remote-url <url> --token-stdin', description: 'Run one CI claim cycle without relying on saved repo auth.' },
+			{ command: 'pig ci run --no-websocket --interval 60 --max-interval 300', description: 'Run with adaptive polling only.' },
 			{ command: 'pig follow', description: 'Follow a public project for release feed updates.' },
 			{ command: 'pig unfollow', description: 'Stop following the project.' }
 		]

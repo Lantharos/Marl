@@ -1,0 +1,1 @@
+ALTER TABLE ci_caches ADD COLUMN format TEXT NOT NULL DEFAULT 'raw';

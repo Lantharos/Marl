@@ -6,17 +6,20 @@ use sty_protocol::{
     AuthCheckResponse, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
     CreateIssueRequest, CreateProjectRequest, DownloadRequest, DownloadResponse, HeadResponse,
     HeadUpdateRequest, HistoryEntry, HistoryResponse, HistorySignature, LogHistoryRequest,
-    MeResponse, MissingRequest, MissingResponse, ObjectFileResponse, OkResponse,
-    PathClosureFile, PathClosureObject, PathClosureRequest, PathClosureResponse,
-    ProjectDetailResponse, ProjectSummary, ProjectTreeResponse, RemoteObject,
-    RewriteHistoryRequest, SessionExchangeRequest, TokenResponse, TreeEntryInfo,
-    UpdateIssueRequest, UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary,
+    MeResponse, MissingRequest, MissingResponse, ObjectFileResponse, OkResponse, PathClosureFile,
+    PathClosureObject, PathClosureRequest, PathClosureResponse, ProjectDetailResponse,
+    ProjectSummary, ProjectTreeResponse, RemoteObject, RewriteHistoryRequest,
+    SessionExchangeRequest, TokenResponse, TreeEntryInfo, UpdateIssueRequest,
+    UpdateSettingsRequest, UploadRequest, WorkspaceStateResponse, WorkspaceSummary,
     validate_segment,
 };
 use worker::*;
 
 mod account_keys;
 mod auth;
+mod ci;
+mod ci_runner_pool;
+mod ci_storage;
 mod collaborators;
 pub(crate) mod d1;
 mod developer;
@@ -32,10 +35,14 @@ mod request_context;
 mod screenshots;
 mod source_archive;
 mod support;
+mod webhooks;
+mod work_queue;
 mod workspace_metadata;
 
 use account_keys::*;
 use auth::verify_ave_id_token;
+use ci::*;
+use ci_storage::*;
 use collaborators::*;
 use developer::*;
 use forks::*;
@@ -370,6 +377,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
             "/v1/tenants/:tenant/projects/:project/webhooks/:item_id",
             delete_project_webhook,
         )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/deliveries",
+            list_project_webhook_deliveries,
+        )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/test",
             test_project_webhook,
@@ -385,6 +396,66 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .delete_async(
             "/v1/tenants/:tenant/projects/:project/integrations/:item_id",
             delete_project_integration,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/runners",
+            list_ci_runners,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/ci/runners",
+            create_ci_runner,
+        )
+        .delete_async(
+            "/v1/tenants/:tenant/projects/:project/ci/runners/:runner_id",
+            delete_ci_runner,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/runners/events",
+            ci_runner_events,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/claim",
+            claim_ci_job,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs",
+            list_ci_jobs,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts",
+            list_ci_job_artifacts,
+        )
+        .put_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact_name",
+            upload_ci_job_artifact,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact_id/download",
+            download_ci_job_artifact,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/cache/:cache_key",
+            restore_ci_cache,
+        )
+        .put_async(
+            "/v1/tenants/:tenant/projects/:project/ci/cache/:cache_key",
+            save_ci_cache,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs",
+            append_ci_job_log,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs/batch",
+            append_ci_job_logs,
+        )
+        .get_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs",
+            ci_job_logs,
+        )
+        .patch_async(
+            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id",
+            complete_ci_job,
         )
         .get_async(
             "/v1/tenants/:tenant/projects/:project/search",
@@ -571,6 +642,10 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async(
             "/v1/tenants/:tenant/projects/:project/objects/download",
             download_objects,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/objects/upload",
+            upload_objects,
         )
         .post_async(
             "/v1/tenants/:tenant/projects/:project/objects/path-closure",

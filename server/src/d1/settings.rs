@@ -60,6 +60,7 @@ pub async fn project_settings(
                 panels: vec![],
                 merge_rules: MergeRules::default(),
                 protected_workspaces: vec![],
+                ci: ProjectCiSettings::default(),
             });
         }
     };
@@ -67,6 +68,7 @@ pub async fn project_settings(
     let mut settings: ProjectSettings =
         serde_json::from_str(&settings_json).map_err(|e| err(e.to_string()))?;
     settings.appearance = normalize_project_appearance(settings.appearance);
+    settings.ci = normalize_ci_settings(settings.ci);
 
     settings.follower_count = follower_count(db, tenant, project).await?;
     settings.is_following = is_following(db, tenant, project, principal).await?;
@@ -120,6 +122,7 @@ pub async fn update_project_settings(
     panels: Option<Vec<PanelItem>>,
     merge_rules: Option<MergeRules>,
     protected_workspaces: Option<Vec<String>>,
+    ci: Option<ProjectCiSettings>,
     archived: Option<bool>,
     public_releases: Option<bool>,
 ) -> Result<ProjectSettings> {
@@ -143,6 +146,9 @@ pub async fn update_project_settings(
     }
     if let Some(workspaces) = protected_workspaces {
         settings.protected_workspaces = normalize_protected_workspaces(workspaces);
+    }
+    if let Some(ci) = ci {
+        settings.ci = normalize_ci_settings(ci);
     }
     let json = serde_json::to_string(&settings).map_err(|e| err(e.to_string()))?;
     db.prepare("UPDATE projects SET settings_json = ?1 WHERE tenant = ?2 AND project = ?3")
@@ -175,6 +181,98 @@ fn normalize_protected_workspaces(workspaces: Vec<String>) -> Vec<String> {
             normalized.push(workspace.to_string());
         }
         if normalized.len() >= 20 {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_ci_settings(settings: ProjectCiSettings) -> ProjectCiSettings {
+    let mut commands = Vec::new();
+    for command in settings.commands {
+        let name = command.name.trim();
+        let run = command.run.trim();
+        if name.is_empty() || run.is_empty() {
+            continue;
+        }
+        if commands.iter().any(|item: &CiCommand| item.name == name) {
+            continue;
+        }
+        commands.push(CiCommand {
+            name: name.chars().take(80).collect(),
+            run: run.chars().take(4_000).collect(),
+            timeout_seconds: command.timeout_seconds.clamp(1, 14_400),
+            artifacts: normalize_ci_paths(command.artifacts, 20),
+            cache: normalize_ci_cache(command.cache, 20),
+        });
+        if commands.len() >= settings.max_jobs_per_head.clamp(1, 100) as usize {
+            break;
+        }
+    }
+    ProjectCiSettings {
+        enabled: settings.enabled && !commands.is_empty(),
+        commands,
+        max_concurrent_jobs: settings.max_concurrent_jobs.clamp(1, 100),
+        max_jobs_per_head: settings.max_jobs_per_head.clamp(1, 100),
+        max_attempts: settings.max_attempts.clamp(1, 10),
+        lease_grace_seconds: settings.lease_grace_seconds.clamp(30, 3_600),
+        artifact_retention_days: settings.artifact_retention_days.clamp(1, 365),
+        cache_retention_days: settings.cache_retention_days.clamp(1, 365),
+    }
+}
+
+fn normalize_ci_paths(paths: Vec<String>, limit: usize) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for path in paths {
+        let path = path.trim();
+        if path.is_empty()
+            || path.starts_with('/')
+            || path.contains("..")
+            || path.contains('\\')
+            || path.chars().any(char::is_control)
+        {
+            continue;
+        }
+        if !normalized.iter().any(|item| item == path) {
+            normalized.push(path.chars().take(200).collect());
+        }
+        if normalized.len() >= limit {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_ci_cache(
+    entries: Vec<sty_protocol::CiCacheEntry>,
+    limit: usize,
+) -> Vec<sty_protocol::CiCacheEntry> {
+    let mut normalized = Vec::new();
+    for entry in entries {
+        let key = entry.key.trim();
+        if key.is_empty()
+            || key.len() > 160
+            || key.contains('/')
+            || key.contains('\\')
+            || key.contains("..")
+            || key.chars().any(char::is_control)
+        {
+            continue;
+        }
+        let paths = normalize_ci_paths(vec![entry.path], 1);
+        let Some(path) = paths.into_iter().next() else {
+            continue;
+        };
+        if !normalized
+            .iter()
+            .any(|item: &sty_protocol::CiCacheEntry| item.key == key)
+        {
+            normalized.push(sty_protocol::CiCacheEntry {
+                key: key.to_string(),
+                path,
+            });
+        }
+        if normalized.len() >= limit {
             break;
         }
     }

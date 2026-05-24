@@ -50,6 +50,7 @@ pub async fn ensure_project(
         panels: vec![],
         merge_rules: MergeRules::default(),
         protected_workspaces: vec![],
+        ci: ProjectCiSettings::default(),
     })
     .map_err(|e| err(e.to_string()))?;
     db.prepare(
@@ -169,6 +170,7 @@ pub async fn delete_project(db: &Database, tenant: &str, project: &str) -> Resul
     ensure_developer_schema(db).await?;
     ensure_review_schema(db).await?;
     ensure_governance_schema(db).await?;
+    ensure_ci_schema(db).await?;
     for query in [
         "DELETE FROM comments WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM issues WHERE tenant = ?1 AND project = ?2",
@@ -188,7 +190,13 @@ pub async fn delete_project(db: &Database, tenant: &str, project: &str) -> Resul
         "DELETE FROM project_stats WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM project_api_keys WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM project_webhooks WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM project_webhook_deliveries WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM project_integrations WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM ci_job_logs WHERE job_id IN (SELECT id FROM ci_jobs WHERE tenant = ?1 AND project = ?2)",
+        "DELETE FROM ci_artifacts WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM ci_caches WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM ci_jobs WHERE tenant = ?1 AND project = ?2",
+        "DELETE FROM ci_runners WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM oauth_codes WHERE tenant = ?1 AND project = ?2",
         "DELETE FROM projects WHERE tenant = ?1 AND project = ?2",
     ] {

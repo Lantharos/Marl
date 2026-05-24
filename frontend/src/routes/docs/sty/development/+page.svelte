@@ -7,6 +7,10 @@ bunx wrangler d1 migrations apply sty-db --local
 bunx wrangler dev`;
 
 	const workerRemote = `cd sty/server
+bunx wrangler queues create sty-webhooks
+bunx wrangler queues create sty-webhooks-dlq
+bunx wrangler queues create sty-ci
+bunx wrangler queues create sty-ci-dlq
 bunx wrangler d1 migrations apply sty-db --remote
 bunx wrangler deploy --dry-run
 bunx wrangler deploy`;
@@ -44,7 +48,7 @@ cargo build`;
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[180px_1fr]">
 				<code class="text-sm text-[#d9a66c]">sty/server</code>
-				<p class="text-sm leading-6 text-[#8c887e]">The Cloudflare Worker API using D1 for metadata and R2 for immutable objects and release artifacts.</p>
+				<p class="text-sm leading-6 text-[#8c887e]">The Cloudflare Worker API using D1 for metadata and R2 for immutable objects, release artifacts, CI artifacts, and CI file caches.</p>
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[180px_1fr]">
 				<code class="text-sm text-[#d9a66c]">sty/frontend</code>
@@ -59,7 +63,7 @@ cargo build`;
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Run the Worker</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Apply migrations before using local or remote Cloudflare resources.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Apply migrations before using local or remote Cloudflare resources. Remote deploys also need the webhook and CI queues, their dead-letter queues, the object bucket, and the runner wakeup Durable Object migration.</p>
 		<div class="mt-4 grid gap-4 lg:grid-cols-2">
 			<CodeBlock label="Local" code={workerLocal} />
 			<CodeBlock label="Remote" code={workerRemote} />

@@ -111,7 +111,7 @@ pub async fn create_release(
     }
     upsert_release(&database, &tenant, &project, &id, body.clone()).await?;
     d1::recompute_project_stats(&database, &tenant, &project).await?;
-    let _ = crate::developer::emit_project_event(
+    let _ = crate::webhooks::emit_project_event(
         &ctx,
         &tenant,
         &project,
@@ -196,7 +196,7 @@ pub async fn update_release(
     )
     .await?;
     d1::recompute_project_stats(&database, &tenant, &project).await?;
-    let _ = crate::developer::emit_project_event(
+    let _ = crate::webhooks::emit_project_event(
         &ctx,
         &tenant,
         &project,
@@ -237,7 +237,7 @@ pub async fn delete_release(
     let prefix = format!("projects/{tenant}/{project}/releases/{release_key}/");
     delete_prefix(&bucket(&ctx.env)?, &prefix).await?;
     d1::recompute_project_stats(&database, &tenant, &project).await?;
-    let _ = crate::developer::emit_project_event(
+    let _ = crate::webhooks::emit_project_event(
         &ctx,
         &tenant,
         &project,
@@ -365,7 +365,7 @@ pub async fn upload_release_artifact(
         release.clone(),
     )
     .await?;
-    let _ = crate::developer::emit_project_event(
+    let _ = crate::webhooks::emit_project_event(
         &ctx,
         &tenant,
         &project,

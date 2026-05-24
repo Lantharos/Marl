@@ -44,6 +44,19 @@ pub struct ProjectWebhook {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ProjectWebhookDelivery {
+    pub delivery_id: String,
+    pub hook_id: String,
+    pub event: String,
+    pub status: i64,
+    pub attempts: u32,
+    pub last_error: Option<String>,
+    pub payload_hash: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct DeveloperApp {
     pub id: String,
     pub owner: String,
@@ -115,6 +128,19 @@ pub(super) struct WebhookRow {
 }
 
 #[derive(Deserialize)]
+pub(super) struct WebhookDeliveryRow {
+    pub delivery_id: String,
+    pub hook_id: String,
+    pub event: String,
+    pub status: f64,
+    pub attempts: f64,
+    pub last_error: Option<String>,
+    pub payload_hash: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize)]
 pub(super) struct DeveloperAppRow {
     pub id: String,
     pub owner: String,
@@ -151,6 +177,8 @@ pub async fn ensure_developer_schema(db: &Database) -> Result<()> {
     .await?;
     db.prepare("CREATE TABLE IF NOT EXISTS project_webhooks (id TEXT PRIMARY KEY, tenant TEXT NOT NULL, project TEXT NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, events_json TEXT NOT NULL, secret TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_delivery_at TEXT, last_delivery_status INTEGER, active INTEGER NOT NULL DEFAULT 1)").run().await?;
     db.prepare("CREATE INDEX IF NOT EXISTS idx_project_webhooks_project ON project_webhooks(tenant, project, active)").run().await?;
+    db.prepare("CREATE TABLE IF NOT EXISTS project_webhook_deliveries (delivery_id TEXT PRIMARY KEY, hook_id TEXT NOT NULL, tenant TEXT NOT NULL, project TEXT NOT NULL, event TEXT NOT NULL, status INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, payload_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)").run().await?;
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_project_webhook_deliveries_hook ON project_webhook_deliveries(tenant, project, hook_id, updated_at DESC)").run().await?;
     db.prepare("CREATE TABLE IF NOT EXISTS developer_apps (id TEXT PRIMARY KEY, owner TEXT NOT NULL, name TEXT NOT NULL, description TEXT, homepage_url TEXT, redirect_uri TEXT NOT NULL, client_id TEXT NOT NULL UNIQUE, client_secret_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revoked_at TEXT)").run().await?;
     db.prepare(
         "CREATE INDEX IF NOT EXISTS idx_developer_apps_owner ON developer_apps(owner, revoked_at)",
@@ -201,6 +229,20 @@ pub(super) fn webhook_from_row(row: WebhookRow) -> ProjectWebhook {
         last_delivery_status: row.last_delivery_status,
         active: row.active != 0,
         secret: row.secret,
+    }
+}
+
+pub(super) fn webhook_delivery_from_row(row: WebhookDeliveryRow) -> ProjectWebhookDelivery {
+    ProjectWebhookDelivery {
+        delivery_id: row.delivery_id,
+        hook_id: row.hook_id,
+        event: row.event,
+        status: row.status as i64,
+        attempts: row.attempts as u32,
+        last_error: row.last_error,
+        payload_hash: row.payload_hash,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
     }
 }
 
@@ -260,6 +302,8 @@ const ALL_SCOPES: &[&str] = &[
     "issues:write",
     "releases:read",
     "releases:write",
+    "status_checks",
+    "ci:write",
     "webhooks:read",
     "webhooks:write",
     "settings:read",
@@ -280,6 +324,8 @@ const WRITE_SCOPES: &[&str] = &[
     "workspaces:ready",
     "issues:write",
     "releases:write",
+    "status_checks",
+    "ci:write",
 ];
 
 pub(super) fn normalize_scopes(scopes: &[String]) -> Vec<String> {
@@ -298,6 +344,7 @@ pub(super) fn normalize_scopes(scopes: &[String]) -> Vec<String> {
 pub(super) fn role_for_scopes(scopes: &[String]) -> &'static str {
     if scope_allows(scopes, "settings:write")
         || scope_allows(scopes, "workspaces:merge")
+        || scope_allows(scopes, "ci:write")
         || scope_allows(scopes, "webhooks:write")
     {
         ROLE_MAINTAINER
@@ -307,6 +354,7 @@ pub(super) fn role_for_scopes(scopes: &[String]) -> &'static str {
         || scope_allows(scopes, "workspaces:ready")
         || scope_allows(scopes, "issues:write")
         || scope_allows(scopes, "releases:write")
+        || scope_allows(scopes, "status_checks")
     {
         ROLE_CONTRIBUTOR
     } else {
@@ -331,6 +379,7 @@ pub(super) fn scope_allows(scopes: &[String], required: &str) -> bool {
         }),
         "issues:read" => scopes.iter().any(|scope| scope == "issues:write"),
         "releases:read" => scopes.iter().any(|scope| scope == "releases:write"),
+        "status_checks" => scopes.iter().any(|scope| scope == "ci:write"),
         "webhooks:read" => scopes.iter().any(|scope| scope == "webhooks:write"),
         "settings:read" => scopes.iter().any(|scope| scope == "settings:write"),
         "objects:read" | "history:read" => scopes.iter().any(|scope| {

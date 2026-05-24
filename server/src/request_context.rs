@@ -1,6 +1,9 @@
 use std::{future::Future, rc::Rc};
 
-use worker::{Context, D1DatabaseSession, Env, Method, Request, Response, Result, RouteContext};
+use worker::{
+    Context, D1DatabaseSession, Env, Method, ObjectNamespace, Queue, Request, Response, Result,
+    RouteContext,
+};
 
 pub const D1_BOOKMARK_HEADER: &str = "x-d1-bookmark";
 
@@ -10,6 +13,7 @@ pub type AppRouteContext = RouteContext<AppContext>;
 #[derive(Clone)]
 pub struct AppContext {
     database: Rc<Database>,
+    env: Env,
     wait_context: Rc<Context>,
 }
 
@@ -20,6 +24,7 @@ impl AppContext {
         let session = database.with_session(anchor.as_deref())?;
         Ok(Self {
             database: Rc::new(session),
+            env: env.clone(),
             wait_context: Rc::new(wait_context),
         })
     }
@@ -28,8 +33,12 @@ impl AppContext {
         self.database.as_ref()
     }
 
-    pub fn database_handle(&self) -> Rc<Database> {
-        Rc::clone(&self.database)
+    pub fn queue(&self, binding: &str) -> Result<Queue> {
+        self.env.queue(binding)
+    }
+
+    pub fn durable_object(&self, binding: &str) -> Result<ObjectNamespace> {
+        self.env.durable_object(binding)
     }
 
     pub fn wait_until<F>(&self, future: F)

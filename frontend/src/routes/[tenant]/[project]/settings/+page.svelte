@@ -50,7 +50,11 @@
 			dismiss_stale_approvals: true,
 			block_unresolved_comments: true
 		},
-		protected_workspaces: []
+		protected_workspaces: [],
+		ci: {
+			enabled: false,
+			commands: []
+		}
 	});
 	let loading = $state(true);
 	let error = $state('');

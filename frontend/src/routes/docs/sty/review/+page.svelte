@@ -28,14 +28,14 @@
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Status checks</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">sty stores status checks reported by external systems. A CI runner can be hosted by you, a deployment platform, or any service that can call the checks API. Built-in execution is intentionally not part of the current product surface.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">sty stores status checks and can queue CI jobs for ready workspace heads. Self-hosted runners wait for runner wakeups, claim jobs with project runner tokens, execute commands in an isolated checkout, upload batched logs and artifacts, restore or save file and directory caches, and report the result back to the workspace. CI artifacts and caches are retained for the project CI retention window. External systems can still call the checks API directly.</p>
 	</section>
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Merge rules</h2>
 		<ul class="mt-3 grid gap-2 text-sm leading-6 text-[#8c887e]">
 			<li>Require a minimum number of maintainer approvals.</li>
-			<li>Require passing external status checks.</li>
+			<li>Require passing CI or externally reported status checks.</li>
 			<li>Require approvals to apply to the current workspace head.</li>
 			<li>Block merge while file conversations are unresolved.</li>
 			<li>Protect selected workspaces such as <code>main</code> from direct pushes.</li>

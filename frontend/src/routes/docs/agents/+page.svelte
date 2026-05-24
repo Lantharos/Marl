@@ -32,7 +32,7 @@ Content-Type: application/json
 			<li>Prefer project API keys or OAuth-issued project tokens for automation.</li>
 			<li>Use <code>--json</code> for CLI output that a program needs to parse.</li>
 			<li>Save at meaningful boundaries, pack before review, and sync only when the workspace is ready to share.</li>
-			<li>Report status checks through the API. sty records check results but does not run arbitrary CI jobs itself.</li>
+			<li>Use runner tokens for self-hosted CI. Runners wait for wakeups when available, claim queued jobs, execute commands outside sty, upload batched logs, and report results into workspace checks.</li>
 		</ul>
 	</section>
 
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">CI and checks</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">A runner can be self-hosted, vendor-hosted, or product-provided later. The common contract is the checks API: run tests outside sty, then report the result to the workspace.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Project CI commands enqueue jobs for ready workspace heads. Self-hosted runners use <code>pig ci run</code> with a runner token; the runner waits on WebSocket wakeups when available and falls back to adaptive polling. External systems can also report checks directly through the checks API.</p>
 		<div class="mt-4">
 			<CodeBlock code={ciCheck} />
 		</div>

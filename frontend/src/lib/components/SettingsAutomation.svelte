@@ -1,9 +1,11 @@
 <script lang="ts">
-	import type { ProjectApiKey, ProjectIntegration, ProjectWebhook } from '$lib/api';
+	import type { CiArtifact, CiJob, CiRunner, ProjectApiKey, ProjectCiSettings, ProjectIntegration, ProjectWebhook, ProjectWebhookDelivery } from '$lib/api';
+	import SettingsCi from '$lib/components/SettingsCi.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
 	import AlertCircle from 'lucide-svelte/icons/alert-circle';
 	import Check from 'lucide-svelte/icons/check';
 	import Copy from 'lucide-svelte/icons/copy';
+	import History from 'lucide-svelte/icons/history';
 	import KeyRound from 'lucide-svelte/icons/key-round';
 	import Link2 from 'lucide-svelte/icons/link-2';
 	import Play from 'lucide-svelte/icons/play';
@@ -48,6 +50,8 @@
 		{
 			label: 'Automation',
 			options: [
+				{ id: 'status_checks', label: 'Checks' },
+				{ id: 'ci:write', label: 'CI' },
 				{ id: 'webhooks:read', label: 'Read webhooks' },
 				{ id: 'webhooks:write', label: 'Write webhooks' },
 				{ id: 'settings:read', label: 'Read settings' },
@@ -74,14 +78,26 @@
 		apiKeys,
 		webhooks,
 		integrations,
+		runners,
+		ciJobs,
+		ciArtifactsByJob,
+		webhookDeliveriesByHook,
+		ci,
 		busy,
 		generatedKey,
 		createdWebhook,
+		createdRunner,
 		keyName = $bindable(),
 		keyScopes = $bindable(),
 		webhookName = $bindable(),
 		webhookUrl = $bindable(),
 		webhookEvents = $bindable(),
+		runnerName = $bindable(),
+		ciCommandName = $bindable(),
+		ciCommandRun = $bindable(),
+		ciCommandTimeout = $bindable(),
+		ciCommandArtifacts = $bindable(),
+		ciCommandCaches = $bindable(),
 		testMessage,
 		addApiKey,
 		removeApiKey,
@@ -89,19 +105,39 @@
 		removeWebhook,
 		testWebhook,
 		triggerWebhook,
-		removeIntegration
+		removeIntegration,
+		loadCiArtifacts,
+		downloadCiArtifact,
+		loadWebhookDeliveries,
+		toggleCi,
+		addCiCommand,
+		removeCiCommand,
+		addRunner,
+		removeRunner
 	}: {
 		apiKeys: ProjectApiKey[];
 		webhooks: ProjectWebhook[];
 		integrations: ProjectIntegration[];
+		runners: CiRunner[];
+		ciJobs: CiJob[];
+		ciArtifactsByJob: Record<string, CiArtifact[]>;
+		webhookDeliveriesByHook: Record<string, ProjectWebhookDelivery[]>;
+		ci: ProjectCiSettings;
 		busy: boolean;
 		generatedKey: ProjectApiKey | null;
 		createdWebhook: ProjectWebhook | null;
+		createdRunner: CiRunner | null;
 		keyName: string;
 		keyScopes: string[];
 		webhookName: string;
 		webhookUrl: string;
 		webhookEvents: string[];
+		runnerName: string;
+		ciCommandName: string;
+		ciCommandRun: string;
+		ciCommandTimeout: number;
+		ciCommandArtifacts: string;
+		ciCommandCaches: string;
 		testMessage: string;
 		addApiKey: () => void;
 		removeApiKey: (id: string) => void;
@@ -110,6 +146,14 @@
 		testWebhook: (id: string) => void;
 		triggerWebhook: (id: string) => void;
 		removeIntegration: (id: string) => void;
+		loadCiArtifacts: (jobId: string) => void | Promise<void>;
+		downloadCiArtifact: (jobId: string, artifact: CiArtifact) => void | Promise<void>;
+		loadWebhookDeliveries: (id: string) => void | Promise<void>;
+		toggleCi: () => void;
+		addCiCommand: () => void;
+		removeCiCommand: (name: string) => void;
+		addRunner: () => void;
+		removeRunner: (id: string) => void;
 	} = $props();
 
 	let copied = $state('');
@@ -153,6 +197,18 @@
 		return webhookFailed(hook) ? 'text-[#d96c5a]' : 'text-[#7cb97c]';
 	}
 
+	function webhookDeliveries(id: string) {
+		return webhookDeliveriesByHook[id] ?? [];
+	}
+
+	function deliveryStatusClass(delivery: ProjectWebhookDelivery) {
+		return delivery.status >= 200 && delivery.status < 300 ? 'text-[#7cb97c]' : 'text-[#d96c5a]';
+	}
+
+	function deliveryStatusLabel(delivery: ProjectWebhookDelivery) {
+		return delivery.status ? String(delivery.status) : 'no response';
+	}
+
 	function scopeSummary(scopes: string[]) {
 		if (!scopes.length) return 'No scopes';
 		const groups = new Set(scopes.map((scope) => scope.split(':')[0]));
@@ -193,6 +249,7 @@
 		await addWebhook();
 		webhookCreatedInModal = true;
 	}
+
 </script>
 
 <div class="grid gap-4">
@@ -202,6 +259,28 @@
 			<span>{failedWebhooks.length} webhook {failedWebhooks.length === 1 ? 'delivery is' : 'deliveries are'} failing. Test the endpoint or check its receiver logs.</span>
 		</div>
 	{/if}
+
+	<SettingsCi
+		{runners}
+		{ciJobs}
+		{ci}
+		{busy}
+		{createdRunner}
+		bind:runnerName
+		bind:ciCommandName
+		bind:ciCommandRun
+		bind:ciCommandTimeout
+		bind:ciCommandArtifacts
+		bind:ciCommandCaches
+		{ciArtifactsByJob}
+		{loadCiArtifacts}
+		{downloadCiArtifact}
+		{toggleCi}
+		{addCiCommand}
+		{removeCiCommand}
+		{addRunner}
+		{removeRunner}
+	/>
 
 	<SettingsSection title="API keys" open>
 		{#snippet actions()}
@@ -246,31 +325,55 @@
 
 			<div class="border border-[#252522] bg-[#0f0f0d]">
 				{#each webhooks as hook (hook.id)}
-					<div class="flex items-start gap-3 border-b border-[#252522] px-3 py-2 last:border-b-0">
-						<Send class="mt-0.5 h-4 w-4 shrink-0 text-[#8c887e]" />
-						<div class="min-w-0 flex-1">
-							<div class="flex flex-wrap items-center gap-2">
-								<span class="truncate text-sm text-[#eae9e4]">{hook.name}</span>
-								<span class="text-xs {webhookStatusClass(hook)}">{webhookStatusLabel(hook)}</span>
+					<div class="border-b border-[#252522] last:border-b-0">
+						<div class="flex items-start gap-3 px-3 py-2">
+							<Send class="mt-0.5 h-4 w-4 shrink-0 text-[#8c887e]" />
+							<div class="min-w-0 flex-1">
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="truncate text-sm text-[#eae9e4]">{hook.name}</span>
+									<span class="text-xs {webhookStatusClass(hook)}">{webhookStatusLabel(hook)}</span>
+								</div>
+								<div class="truncate font-mono text-[11px] text-[#6f6b5f]">{hook.url}</div>
+								<div class="mt-1 flex flex-wrap gap-1.5">
+									{#each hook.events as event (event)}
+										<span class="font-mono text-[11px] text-[#8c887e]">{event}</span>
+									{/each}
+								</div>
 							</div>
-							<div class="truncate font-mono text-[11px] text-[#6f6b5f]">{hook.url}</div>
-							<div class="mt-1 flex flex-wrap gap-1.5">
-								{#each hook.events as event (event)}
-									<span class="font-mono text-[11px] text-[#8c887e]">{event}</span>
+							{#if hook.events.includes('manual')}
+								<button class="inline-flex h-7 items-center gap-1 border border-[#2a2a28] px-2 text-xs text-[#a09d94] hover:bg-[#252522] hover:text-[#eae9e4]" disabled={busy} onclick={() => triggerWebhook(hook.id)} aria-label="Trigger manual event">
+									<Play class="h-3.5 w-3.5" /> Trigger
+								</button>
+							{/if}
+							<button class="flex h-7 w-7 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#eae9e4]" disabled={busy} onclick={() => loadWebhookDeliveries(hook.id)} aria-label="Load webhook deliveries">
+								<History class="h-3.5 w-3.5" />
+							</button>
+							<button class="flex h-7 w-7 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#eae9e4]" disabled={busy} onclick={() => testWebhook(hook.id)} aria-label="Test webhook">
+								<PlugZap class="h-3.5 w-3.5" />
+							</button>
+							<button class="flex h-7 w-7 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeWebhook(hook.id)} aria-label="Delete webhook">
+								<Trash2 class="h-3.5 w-3.5" />
+							</button>
+						</div>
+						{#if webhookDeliveriesByHook[hook.id]}
+							<div class="border-t border-[#1f1f1c] px-10 py-2">
+								{#each webhookDeliveries(hook.id) as delivery (delivery.delivery_id)}
+									<div class="grid gap-2 py-1 text-[11px] md:grid-cols-[minmax(0,1fr)_4rem_4rem_8rem]">
+										<div class="min-w-0">
+											<div class="truncate font-mono text-[#a09d94]">{delivery.event}</div>
+											{#if delivery.last_error}
+												<div class="truncate text-[#d96c5a]">{delivery.last_error}</div>
+											{/if}
+										</div>
+										<div class={deliveryStatusClass(delivery)}>{deliveryStatusLabel(delivery)}</div>
+										<div class="text-[#8c887e]">{delivery.attempts} {delivery.attempts === 1 ? 'try' : 'tries'}</div>
+										<div class="text-[#6f6b5f]">{date(delivery.updated_at)}</div>
+									</div>
+								{:else}
+									<div class="py-1 text-xs text-[#6f6b5f]">No deliveries.</div>
 								{/each}
 							</div>
-						</div>
-						{#if hook.events.includes('manual')}
-							<button class="inline-flex h-7 items-center gap-1 border border-[#2a2a28] px-2 text-xs text-[#a09d94] hover:bg-[#252522] hover:text-[#eae9e4]" disabled={busy} onclick={() => triggerWebhook(hook.id)} aria-label="Trigger manual event">
-								<Play class="h-3.5 w-3.5" /> Trigger
-							</button>
 						{/if}
-						<button class="flex h-7 w-7 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#eae9e4]" disabled={busy} onclick={() => testWebhook(hook.id)} aria-label="Test webhook">
-							<PlugZap class="h-3.5 w-3.5" />
-						</button>
-						<button class="flex h-7 w-7 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a]" disabled={busy} onclick={() => removeWebhook(hook.id)} aria-label="Delete webhook">
-							<Trash2 class="h-3.5 w-3.5" />
-						</button>
 					</div>
 				{:else}
 					<p class="px-3 py-3 text-sm text-[#6f6b5f]">No webhooks.</p>

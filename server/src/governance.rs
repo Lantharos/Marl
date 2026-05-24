@@ -51,8 +51,15 @@ pub async fn list_audit_log(
     let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
-    check_project_capability(&database, &tenant, &project, &user, "maintainer", "settings:read")
-        .await?;
+    check_project_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "maintainer",
+        "settings:read",
+    )
+    .await?;
     let events = d1::list_audit_events(
         &database,
         &tenant,
@@ -77,14 +84,9 @@ pub async fn list_workspace_checks(
         return json_error(404, "workspace not found");
     };
     let head = query_text(&req, "head").or(state.head);
-    let checks = d1::list_workspace_checks(
-        &database,
-        &tenant,
-        &project,
-        &workspace,
-        head.as_deref(),
-    )
-    .await?;
+    let checks =
+        d1::list_workspace_checks(&database, &tenant, &project, &workspace, head.as_deref())
+            .await?;
     Response::from_json(&json!({
         "checks": checks,
         "summary": d1::workspace_check_summary(&database, &tenant, &project, &workspace, head.as_deref()).await?,
@@ -117,7 +119,10 @@ pub async fn submit_workspace_check(
         &name,
         status,
         conclusion,
-        body["summary"].as_str().map(str::trim).filter(|value| !value.is_empty()),
+        body["summary"]
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty()),
         body["details_url"]
             .as_str()
             .map(str::trim)
@@ -170,12 +175,17 @@ pub async fn require_workspace_mergeable(
     head: Option<&str>,
     settings: &ProjectSettings,
 ) -> Result<Option<Response>> {
-    let status = workspace_merge_status(database, tenant, project, workspace, head, settings).await?;
+    let status =
+        workspace_merge_status(database, tenant, project, workspace, head, settings).await?;
     d1::set_workspace_mergeable(database, tenant, project, workspace, status.can_merge).await?;
     if status.can_merge {
         return Ok(None);
     }
-    json_error(409, &format!("merge blocked: {}", status.blocked_by.join(", "))).map(Some)
+    json_error(
+        409,
+        &format!("merge blocked: {}", status.blocked_by.join(", ")),
+    )
+    .map(Some)
 }
 
 pub async fn workspace_merge_status(
@@ -198,7 +208,11 @@ pub async fn workspace_merge_status(
         blocked_by.push(format!(
             "{} approval{} required",
             rules.required_approvals,
-            if rules.required_approvals == 1 { "" } else { "s" }
+            if rules.required_approvals == 1 {
+                ""
+            } else {
+                "s"
+            }
         ));
     }
     if rules.require_passing_checks && checks.state != "passing" {
@@ -240,9 +254,12 @@ pub async fn notify_users(
 }
 
 fn query_text(req: &Request, key: &str) -> Option<String> {
-    req.url().ok()?.query_pairs().find_map(|(candidate, value)| {
-        (candidate == key && !value.trim().is_empty()).then(|| value.to_string())
-    })
+    req.url()
+        .ok()?
+        .query_pairs()
+        .find_map(|(candidate, value)| {
+            (candidate == key && !value.trim().is_empty()).then(|| value.to_string())
+        })
 }
 
 fn normalize_name(value: &str) -> Result<String> {

@@ -70,7 +70,7 @@ pub(crate) async fn create_issue(mut req: Request, ctx: crate::request_context::
         body.milestone.as_deref(),
         sanitize_issue_type(body.issue_type.as_deref())?,
     ).await?;
-    let _ = crate::developer::emit_project_event(&ctx,
+    let _ = crate::webhooks::emit_project_event(&ctx,
         &tenant,
         &project,
         "issue.created",
@@ -135,7 +135,7 @@ pub(crate) async fn update_issue(mut req: Request, ctx: crate::request_context::
         body.pinned,
     ).await?;
     record_issue_metadata_activity(&database, &tenant, &project, &issue.id, &user, &before, &issue).await?;
-    let _ = crate::developer::emit_project_event(&ctx,
+    let _ = crate::webhooks::emit_project_event(&ctx,
         &tenant,
         &project,
         "issue.updated",
@@ -189,7 +189,7 @@ pub(crate) async fn set_issue_state(mut req: Request, ctx: crate::request_contex
         }
     };
     record_issue_activity(&database, &tenant, &project, &issue.id, &user, &message, Some("state")).await?;
-    let _ = crate::developer::emit_project_event(&ctx,
+    let _ = crate::webhooks::emit_project_event(&ctx,
         &tenant,
         &project,
         "issue.updated",

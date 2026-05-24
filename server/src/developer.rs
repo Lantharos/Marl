@@ -1,10 +1,6 @@
-use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use serde_json::json;
-use sha2::Sha256;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use sty_protocol::OkResponse;
-use wasm_bindgen::{JsCast, closure::Closure};
 use worker::*;
 
 use crate::support::{db, json_error, paginate_vec, param, project_params};
@@ -12,6 +8,10 @@ use crate::{
     check_project_capability, check_project_write_capability, check_project_write_role, d1,
     require_auth,
 };
+
+#[path = "developer_webhook_routes.rs"]
+mod developer_webhook_routes;
+pub use developer_webhook_routes::*;
 
 #[derive(Deserialize)]
 struct ApiKeyRequest {
@@ -58,8 +58,6 @@ struct OAuthTokenRequest {
     #[serde(rename = "grantType")]
     grant_type_camel: Option<String>,
 }
-
-const WEBHOOK_TIMEOUT_MS: i32 = 5_000;
 
 pub async fn list_project_api_keys(
     req: Request,
@@ -169,7 +167,7 @@ pub async fn create_project_webhook(
     if name.is_empty() || body.url.trim().is_empty() {
         return json_error(400, "webhook name and url are required");
     }
-    validate_webhook_url(&body.url)?;
+    crate::webhooks::validate_webhook_url(&body.url)?;
     let database = db(&ctx)?;
     check_project_write_capability(
         &database,
@@ -180,6 +178,9 @@ pub async fn create_project_webhook(
         "webhooks:write",
     )
     .await?;
+    if d1::active_project_webhook_count(&database, &tenant, &project).await? >= 20 {
+        return json_error(429, "project webhook limit reached");
+    }
     let item = d1::create_project_webhook(
         &database,
         &tenant,
@@ -236,17 +237,18 @@ pub async fn test_project_webhook(
     let Some(hook) = d1::project_webhook_by_id(&database, &tenant, &project, &id).await? else {
         return json_error(404, "webhook not found");
     };
-    let payload = event_payload(
+    let result = crate::webhooks::enqueue_webhook_delivery(
+        &ctx,
         &tenant,
         &project,
+        &hook,
         "webhook.test",
         json!({ "tested_by": user }),
-    );
-    let status = send_webhook(&hook, "webhook.test", &payload)
-        .await
-        .unwrap_or(0);
-    d1::record_webhook_delivery(&database, &tenant, &project, &id, status).await?;
-    Response::from_json(&json!({ "ok": (200..300).contains(&status), "status": status }))
+    )
+    .await?;
+    Response::from_json(
+        &json!({ "ok": result.ok(), "queued": result.queued, "status": result.status }),
+    )
 }
 
 pub async fn trigger_project_webhook(
@@ -272,10 +274,18 @@ pub async fn trigger_project_webhook(
     if !hook.events.iter().any(|event| event == "manual") {
         return json_error(400, "webhook is not subscribed to manual events");
     }
-    let payload = event_payload(&tenant, &project, "manual", json!({ "triggered_by": user }));
-    let status = send_webhook(&hook, "manual", &payload).await.unwrap_or(0);
-    d1::record_webhook_delivery(&database, &tenant, &project, &id, status).await?;
-    Response::from_json(&json!({ "ok": (200..300).contains(&status), "status": status }))
+    let result = crate::webhooks::enqueue_webhook_delivery(
+        &ctx,
+        &tenant,
+        &project,
+        &hook,
+        "manual",
+        json!({ "triggered_by": user }),
+    )
+    .await?;
+    Response::from_json(
+        &json!({ "ok": result.ok(), "queued": result.queued, "status": result.status }),
+    )
 }
 
 pub async fn list_project_integrations(
@@ -448,132 +458,6 @@ pub async fn oauth_token(
     }))
 }
 
-pub fn emit_project_event(
-    ctx: &crate::request_context::AppRouteContext,
-    tenant: &str,
-    project: &str,
-    event: &str,
-    data: serde_json::Value,
-) -> Result<()> {
-    let database = ctx.data.database_handle();
-    let tenant = tenant.to_string();
-    let project = project.to_string();
-    let event = event.to_string();
-    ctx.data.wait_until(async move {
-        let _ = deliver_project_event(&database, &tenant, &project, &event, data).await;
-    });
-    Ok(())
-}
-
-async fn deliver_project_event(
-    database: &crate::request_context::Database,
-    tenant: &str,
-    project: &str,
-    event: &str,
-    data: serde_json::Value,
-) -> Result<()> {
-    let hooks = d1::active_project_webhooks(database, tenant, project, event).await?;
-    if hooks.is_empty() {
-        return Ok(());
-    }
-    let payload = event_payload(tenant, project, event, data);
-    for hook in hooks {
-        let status = send_webhook_with_retries(&hook, event, &payload).await;
-        d1::record_webhook_delivery(database, tenant, project, &hook.id, status).await?;
-    }
-    Ok(())
-}
-
-fn event_payload(
-    tenant: &str,
-    project: &str,
-    event: &str,
-    data: serde_json::Value,
-) -> serde_json::Value {
-    json!({
-        "event": event,
-        "delivery": uuid::Uuid::new_v4().to_string(),
-        "tenant": tenant,
-        "project": project,
-        "sent_at": js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default(),
-        "data": data
-    })
-}
-
-async fn send_webhook(
-    hook: &d1::ProjectWebhook,
-    event: &str,
-    payload: &serde_json::Value,
-) -> Result<i64> {
-    validate_webhook_url(&hook.url)?;
-    let payload_text =
-        serde_json::to_string(payload).map_err(|e| Error::RustError(e.to_string()))?;
-    let headers = Headers::new();
-    headers.set("content-type", "application/json")?;
-    headers.set("user-agent", "sty-webhooks/1")?;
-    headers.set("x-sty-event", event)?;
-    headers.set(
-        "x-sty-delivery",
-        payload["delivery"].as_str().unwrap_or_default(),
-    )?;
-    if let Some(secret) = hook.secret.as_deref() {
-        headers.set(
-            "x-sty-signature-256",
-            &webhook_signature(secret, &payload_text)?,
-        )?;
-    }
-    let mut init = RequestInit::new();
-    init.with_method(Method::Post)
-        .with_headers(headers)
-        .with_body(Some(wasm_bindgen::JsValue::from_str(&payload_text)));
-    let request = Request::new_with_init(&hook.url, &init)?;
-    let controller = AbortController::default();
-    let signal = controller.signal();
-    let timeout = {
-        let callback = Closure::once(move || {
-            controller.abort_with_reason("webhook request timed out");
-        });
-        let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
-        let timeout = global
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                callback.as_ref().unchecked_ref(),
-                WEBHOOK_TIMEOUT_MS,
-            )
-            .map_err(|error| Error::RustError(format!("{error:?}")))?;
-        callback.forget();
-        (global, timeout)
-    };
-    let response = Fetch::Request(request).send_with_signal(&signal).await;
-    timeout.0.clear_timeout_with_handle(timeout.1);
-    let response = response?;
-    Ok(response.status_code() as i64)
-}
-
-async fn send_webhook_with_retries(
-    hook: &d1::ProjectWebhook,
-    event: &str,
-    payload: &serde_json::Value,
-) -> i64 {
-    let mut status = 0;
-    for _ in 0..3 {
-        status = send_webhook(hook, event, payload).await.unwrap_or(0);
-        if (200..300).contains(&status) || (400..500).contains(&status) {
-            break;
-        }
-    }
-    status
-}
-
-fn webhook_signature(secret: &str, payload: &str) -> Result<String> {
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
-        .map_err(|_| Error::RustError("invalid webhook secret".to_string()))?;
-    mac.update(payload.as_bytes());
-    Ok(format!(
-        "sha256={}",
-        hex::encode(mac.finalize().into_bytes())
-    ))
-}
-
 fn validate_callback_url(value: &str) -> Result<()> {
     let url = Url::parse(value.trim()).map_err(|_| Error::RustError("invalid url".to_string()))?;
     let host = url.host_str().unwrap_or_default();
@@ -584,63 +468,6 @@ fn validate_callback_url(value: &str) -> Result<()> {
         ));
     }
     Ok(())
-}
-
-fn validate_webhook_url(value: &str) -> Result<()> {
-    let url = Url::parse(value.trim()).map_err(|_| Error::RustError("invalid url".to_string()))?;
-    if url.scheme() != "https" {
-        return Err(Error::RustError("webhook url must use https".to_string()));
-    }
-    let host = url
-        .host_str()
-        .ok_or_else(|| Error::RustError("webhook url must include a host".to_string()))?;
-    if is_restricted_webhook_host(host) {
-        return Err(Error::RustError(
-            "webhook url must not target localhost or private networks".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn is_restricted_webhook_host(host: &str) -> bool {
-    let lower = host
-        .trim_matches(|ch| ch == '[' || ch == ']')
-        .to_ascii_lowercase();
-    if lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") {
-        return true;
-    }
-    lower.parse::<IpAddr>().is_ok_and(is_restricted_webhook_ip)
-}
-
-fn is_restricted_webhook_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(value) => is_restricted_ipv4(value),
-        IpAddr::V6(value) => is_restricted_ipv6(value),
-    }
-}
-
-fn is_restricted_ipv4(ip: Ipv4Addr) -> bool {
-    let octets = ip.octets();
-    ip.is_private()
-        || ip.is_loopback()
-        || ip.is_link_local()
-        || ip.is_unspecified()
-        || ip.is_broadcast()
-        || ip.is_multicast()
-        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
-        || (octets[0] == 198 && matches!(octets[1], 18 | 19))
-}
-
-fn is_restricted_ipv6(ip: Ipv6Addr) -> bool {
-    if let Some(mapped) = ip.to_ipv4_mapped() {
-        return is_restricted_ipv4(mapped);
-    }
-    let first = ip.segments()[0];
-    ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_multicast()
-        || (first & 0xfe00) == 0xfc00
-        || (first & 0xffc0) == 0xfe80
 }
 
 fn oauth_redirect(redirect_uri: &str, code: &str, state: Option<&str>) -> Result<String> {

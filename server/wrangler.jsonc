@@ -29,4 +29,48 @@
       "database_id": "local-sty-db",
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "STY_CI_RUNNER_POOL",
+        "class_name": "CiRunnerPool",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "ci-runner-pool-v1",
+      "new_sqlite_classes": ["CiRunnerPool"],
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "STY_WEBHOOK_QUEUE",
+        "queue": "sty-webhooks",
+      },
+      {
+        "binding": "STY_CI_QUEUE",
+        "queue": "sty-ci",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "sty-webhooks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 60,
+        "dead_letter_queue": "sty-webhooks-dlq",
+      },
+      {
+        "queue": "sty-ci",
+        "max_batch_size": 20,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 30,
+        "dead_letter_queue": "sty-ci-dlq",
+      },
+    ],
+  },
 }

@@ -389,7 +389,11 @@ pub async fn create_notification(
     Ok(())
 }
 
-pub async fn list_notifications(db: &Database, user: &str, limit: u64) -> Result<Vec<Notification>> {
+pub async fn list_notifications(
+    db: &Database,
+    user: &str,
+    limit: u64,
+) -> Result<Vec<Notification>> {
     ensure_governance_schema(db).await?;
     let result = db
         .prepare(
@@ -399,10 +403,7 @@ pub async fn list_notifications(db: &Database, user: &str, limit: u64) -> Result
              ORDER BY read_at IS NOT NULL, created_at DESC
              LIMIT ?2",
         )
-        .bind(&[
-            js_str(user),
-            wasm_bindgen::JsValue::from_f64(limit as f64),
-        ])?
+        .bind(&[js_str(user), wasm_bindgen::JsValue::from_f64(limit as f64)])?
         .all()
         .await?;
     let rows: Vec<NotificationRow> = result.results()?;
@@ -470,7 +471,8 @@ fn audit_from_row(row: AuditRow) -> AuditEvent {
         action: row.action,
         target_type: row.target_type,
         target_id: row.target_id,
-        metadata: serde_json::from_str(&row.metadata_json).unwrap_or_else(|_| serde_json::json!({})),
+        metadata: serde_json::from_str(&row.metadata_json)
+            .unwrap_or_else(|_| serde_json::json!({})),
         created_at: row.created_at,
     }
 }

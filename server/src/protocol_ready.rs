@@ -34,8 +34,8 @@ pub async fn list_ready(
         d1::workspace_states(&database, &tenant, &project).await?,
     )
     .await?
-        .into_iter()
-        .filter(|workspace| workspace.is_ready && workspace.name != "main")
+    .into_iter()
+    .filter(|workspace| workspace.is_ready && workspace.name != "main")
     {
         ready.push(ready_workspace_json(&ctx, &tenant, &project, workspace).await?);
     }
@@ -324,10 +324,7 @@ async fn snapshot_intents(
     let bytes = r2_bytes(&store, &object_key(tenant, project, head)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|error| Error::RustError(format!("invalid snapshot payload: {error}")))?;
-    Ok(snapshot["intents"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default())
+    Ok(snapshot["intents"].as_array().cloned().unwrap_or_default())
 }
 
 async fn workspace_exists(

@@ -7,8 +7,8 @@ use crate::support::{
     db, json_error, paginate_vec, param, project_params, query_text, value_matches_query,
 };
 use crate::{
-    check_project_capability, check_project_read_capability, check_project_write_capability, d1,
-    check_workspace_read_capability, optional_auth, require_auth, visible_project_leaves,
+    check_project_capability, check_project_read_capability, check_project_write_capability,
+    check_workspace_read_capability, d1, optional_auth, require_auth, visible_project_leaves,
 };
 pub async fn list_labels(
     req: Request,
@@ -237,28 +237,16 @@ pub async fn list_reactions(
     let user = optional_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
     let database = db(&ctx)?;
-    check_project_read_capability(
-        &database,
-        &tenant,
-        &project,
-        user.as_deref(),
-        "issues:read",
-    )
-    .await?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "issues:read")
+        .await?;
     let Some((target_kind, target_id)) =
         resolve_reaction_target(&database, &tenant, &project, &ctx).await?
     else {
         return json_error(404, "reaction target not found");
     };
     if target_kind == "comment"
-        && !protocol_comment_id_visible(
-            &database,
-            &tenant,
-            &project,
-            user.as_deref(),
-            &target_id,
-        )
-        .await?
+        && !protocol_comment_id_visible(&database, &tenant, &project, user.as_deref(), &target_id)
+            .await?
     {
         return json_error(404, "reaction target not found");
     }
@@ -455,8 +443,7 @@ pub async fn get_protocol_item(
     )
     .await?;
     if kind == "comment"
-        && !protocol_comment_visible(&database, &tenant, &project, user.as_deref(), &item)
-            .await?
+        && !protocol_comment_visible(&database, &tenant, &project, user.as_deref(), &item).await?
     {
         return json_error(404, "item not found");
     }
@@ -621,14 +608,9 @@ async fn list_protocol_kind(
         })
         .collect::<Vec<_>>();
     if kind == "comment" {
-        items = filter_visible_protocol_comments(
-            &database,
-            &tenant,
-            &project,
-            user.as_deref(),
-            items,
-        )
-        .await?;
+        items =
+            filter_visible_protocol_comments(&database, &tenant, &project, user.as_deref(), items)
+                .await?;
         enrich_protocol_comment_profiles(&database, &mut items).await?;
     }
     Response::from_json(&paginate_vec(url, items))
@@ -704,12 +686,15 @@ fn protocol_item_matches(item: &serde_json::Value, key: &str, expected: &str) ->
 }
 
 fn protocol_comment_workspace(item: &serde_json::Value) -> Option<&str> {
-    item["workspace"].as_str().filter(|value| !value.is_empty()).or_else(|| {
-        item["target_type"]
-            .as_str()
-            .filter(|value| *value == "workspace")
-            .and_then(|_| item["target_id"].as_str().filter(|value| !value.is_empty()))
-    })
+    item["workspace"]
+        .as_str()
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            item["target_type"]
+                .as_str()
+                .filter(|value| *value == "workspace")
+                .and_then(|_| item["target_id"].as_str().filter(|value| !value.is_empty()))
+        })
 }
 
 async fn protocol_comment_visible(

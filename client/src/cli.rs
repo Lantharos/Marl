@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 
 pub(crate) use crate::auth_commands::DEFAULT_REMOTE_URL;
 use crate::auth_commands::{login, whoami};
+use crate::ci_commands::{self, CiCommands};
 use crate::clone_commands;
 use crate::collaborator_commands::{
     ProjectCollaboratorCommands, TenantCollaboratorCommands, project_collaborators,
@@ -103,6 +104,10 @@ enum Commands {
         pig: String,
     },
     Whoami,
+    Ci {
+        #[command(subcommand)]
+        command: CiCommands,
+    },
     Project {
         #[command(subcommand)]
         command: ProjectCommands,
@@ -224,6 +229,7 @@ pub fn run() -> Result<()> {
             pig,
         } => fork_commands::sendwork(title, message, workspace, yes, remote_url, pig),
         Commands::Whoami => whoami(),
+        Commands::Ci { command } => ci_commands::run(command),
         Commands::Project { command } => match command {
             ProjectCommands::Create {
                 target,
