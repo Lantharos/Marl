@@ -54,12 +54,17 @@
 		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Immutable object reads are cacheable by object id. Code trees, files, stats, and overview responses use ETags tied to the relevant snapshot or project state. Private projects use private cache headers; public project reads can use shared cache headers when the response is safe to share.</p>
 	</section>
 
-	{#each endpointGroups as group}
+	<section>
+		<h2 class="text-lg font-semibold text-[#eae9e4]">Remote protocol</h2>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">PIG clients use the same REST surface, but sync has stricter rules around capabilities, immutable objects, workspace heads, and history rewrites. See <a class="text-[#d9a66c] hover:text-[#e6bd86]" href="/docs/protocol">Remote protocol</a> for that contract.</p>
+	</section>
+
+	{#each endpointGroups as group (group.title)}
 		<section>
 			<h2 class="text-lg font-semibold text-[#eae9e4]">{group.title}</h2>
 			<p class="mt-2 text-sm leading-6 text-[#8c887e]">{group.note}</p>
 			<div class="mt-4 overflow-hidden rounded border border-[#2a2a28]">
-				{#each group.endpoints as endpoint}
+				{#each group.endpoints as endpoint (endpoint)}
 					<div class="border-b border-[#252522] px-4 py-2.5 text-sm text-[#d8d6cc] last:border-b-0">
 						<code>{endpoint}</code>
 					</div>

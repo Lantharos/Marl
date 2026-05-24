@@ -4,7 +4,7 @@
 
 	let { children } = $props();
 	const path = $derived($page.url.pathname.replace(/\/$/, '') || '/docs');
-	const groups = ['Start', 'Work', 'Build'];
+	const groups = $derived([...new Set(docsNav.map((item) => item.group))]);
 </script>
 
 <svelte:head>
@@ -25,11 +25,11 @@
 	<div class="mx-auto grid max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[250px_minmax(0,1fr)]">
 		<aside class="lg:sticky lg:top-6 lg:self-start">
 			<nav class="grid gap-5">
-				{#each groups as group}
+				{#each groups as group (group)}
 					<div>
 						<div class="px-3 text-xs font-medium text-[#6f6b5f]">{group}</div>
 						<div class="mt-1 grid gap-1">
-							{#each docsNav.filter((item) => item.group === group) as item}
+							{#each docsNav.filter((item) => item.group === group) as item (item.href)}
 								<a
 									href={item.href}
 									class="rounded px-3 py-2 text-sm {path === item.href ? 'bg-[#1a1a18] text-[#f0eee4]' : 'text-[#8c887e] hover:bg-[#141412] hover:text-[#eae9e4]'}"

@@ -25,6 +25,9 @@ pig save "my change"
 pig sync
 sty sendwork`;
 
+	const readOnlyClone = `sty clone lantharos/example ./example
+sty clone lantharos/example ./parser-only --include src/parser`;
+
 	const daily = `pig status
 pig work new feature-name
 pig save "describe the change"
@@ -62,6 +65,14 @@ pig sync`;
 		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Forks can stay linked for a contribution or become independent copies in your tenant. Linked forks keep the parent hidden from your workspace until you send the work back.</p>
 		<div class="mt-4">
 			<CodeBlock code={forkProject} />
+		</div>
+	</section>
+
+	<section>
+		<h2 class="text-lg font-semibold text-[#eae9e4]">Clone without connecting a remote</h2>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Use <code>sty clone</code> when you only need files. Add <code>--include</code> to download one file or directory through the path-closure API instead of pulling the whole tree.</p>
+		<div class="mt-4">
+			<CodeBlock code={readOnlyClone} />
 		</div>
 	</section>
 

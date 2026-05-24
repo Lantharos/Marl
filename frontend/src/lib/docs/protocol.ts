@@ -9,6 +9,41 @@ export type EndpointGroup = {
 	endpoints: string[];
 };
 
+export const protocolCapabilities = [
+	'issues',
+	'milestones',
+	'labels',
+	'ready',
+	'merge_rules',
+	'status_checks',
+	'comments',
+	'reactions',
+	'hooks',
+	'webhooks',
+	'api_keys',
+	'granular_api_keys',
+	'developer_apps',
+	'oauth_apps',
+	'search',
+	'follows',
+	'releases',
+	'public_releases',
+	'leaves',
+	'signed_snapshots',
+	'profiles',
+	'ssh_keys',
+	'remote_approvals',
+	'audit_log',
+	'notifications',
+	'permissions',
+	'collaborators',
+	'project_archive',
+	'forks',
+	'sendwork',
+	'object_batch_download',
+	'object_path_closure'
+];
+
 export const apiScopes: ApiScope[] = [
 	{ scope: 'main:read', allows: 'Read the default workspace, project overview, code, screenshots, history, stats, and release source metadata.' },
 	{ scope: 'main:write', allows: 'Advance the default workspace head. This is intentionally separate from workspace feature work.' },
@@ -39,10 +74,16 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/me',
 			'GET /v1/account/settings',
 			'PATCH /v1/account/settings',
+			'POST /v1/account/tenant',
+			'GET /v1/profiles/:tenant',
+			'PUT /v1/profiles/:tenant/pins',
 			'GET /v1/notifications',
 			'POST /v1/notifications/:notification/read',
 			'GET /v1/home',
+			'GET /v1/follows',
 			'GET /v1/discover/projects?q=<query>',
+			'GET /v1/projects',
+			'GET /v1/users/:handle/profile',
 			'GET /v1/users/search?q=<query>'
 		]
 	},
@@ -53,14 +94,33 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/orgs',
 			'POST /v1/forks',
 			'GET /v1/projects',
+			'GET /v1/tenants/:tenant/collaborators',
+			'POST /v1/tenants/:tenant/collaborators',
+			'PATCH /v1/tenants/:tenant/collaborators/:user',
+			'DELETE /v1/tenants/:tenant/collaborators/:user',
 			'GET /v1/tenants/:tenant/folders',
 			'POST /v1/tenants/:tenant/folders',
+			'GET /v1/tenants/:tenant/leaves',
+			'POST /v1/tenants/:tenant/leaves',
+			'GET /v1/tenants/:tenant/leaves/:leaf',
+			'PATCH /v1/tenants/:tenant/leaves/:leaf',
+			'DELETE /v1/tenants/:tenant/leaves/:leaf',
 			'GET /v1/tenants/:tenant/projects',
 			'POST /v1/tenants/:tenant/projects/:project',
 			'GET /v1/tenants/:tenant/projects/:project',
 			'DELETE /v1/tenants/:tenant/projects/:project',
 			'PATCH /v1/tenants/:tenant/projects/:project/folder',
 			'GET /v1/tenants/:tenant/projects/:project/access',
+			'GET /v1/tenants/:tenant/projects/:project/collaborators',
+			'POST /v1/tenants/:tenant/projects/:project/collaborators',
+			'PATCH /v1/tenants/:tenant/projects/:project/collaborators/:user',
+			'DELETE /v1/tenants/:tenant/projects/:project/collaborators/:user',
+			'GET /v1/tenants/:tenant/projects/:project/overview',
+			'GET /v1/tenants/:tenant/projects/:project/leaves',
+			'POST /v1/tenants/:tenant/projects/:project/leaves',
+			'GET /v1/tenants/:tenant/projects/:project/leaves/:leaf',
+			'PATCH /v1/tenants/:tenant/projects/:project/leaves/:leaf',
+			'DELETE /v1/tenants/:tenant/projects/:project/leaves/:leaf',
 			'GET /v1/tenants/:tenant/projects/:project/screenshots',
 			'POST /v1/tenants/:tenant/projects/:project/screenshots',
 			'POST /v1/tenants/:tenant/projects/:project/screenshots/:item_id/feature',
@@ -79,11 +139,15 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/tenants/:tenant/projects/:project/tree?workspace=main&path=src&depth=1&limit=500',
 			'GET /v1/tenants/:tenant/projects/:project/source.zip?workspace=main',
 			'GET /v1/tenants/:tenant/projects/:project/files/:path',
+			'GET /v1/tenants/:tenant/projects/:project/files?path=src/app.ts',
 			'GET /v1/tenants/:tenant/projects/:project/workspaces',
 			'GET /v1/tenants/:tenant/projects/:project/workspaces/:workspace/head',
 			'PUT /v1/tenants/:tenant/projects/:project/workspaces/:workspace/head',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare',
 			'POST /v1/tenants/:tenant/projects/:project/objects/missing',
+			'POST /v1/tenants/:tenant/projects/:project/objects/check',
+			'POST /v1/tenants/:tenant/projects/:project/objects/download',
+			'POST /v1/tenants/:tenant/projects/:project/objects/path-closure',
 			'PUT /v1/tenants/:tenant/projects/:project/objects/:object',
 			'GET /v1/tenants/:tenant/projects/:project/objects/:object'
 		]
@@ -139,6 +203,11 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/tenants/:tenant/projects/:project/issues/:issue_id/labels',
 			'GET /v1/tenants/:tenant/projects/:project/labels',
 			'GET /v1/tenants/:tenant/projects/:project/milestones',
+			'POST /v1/tenants/:tenant/projects/:project/milestones',
+			'GET /v1/tenants/:tenant/projects/:project/milestones/:item_id',
+			'POST /v1/tenants/:tenant/projects/:project/milestones/:item_id/close',
+			'POST /v1/tenants/:tenant/projects/:project/labels',
+			'DELETE /v1/tenants/:tenant/projects/:project/labels/:item_id',
 			'GET /v1/tenants/:tenant/projects/:project/comments',
 			'GET /v1/tenants/:tenant/projects/:project/comments/:comment_id/reactions',
 			'POST /v1/tenants/:tenant/projects/:project/comments/:comment_id/reactions',
@@ -152,13 +221,22 @@ export const endpointGroups: EndpointGroup[] = [
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/api-keys',
 			'POST /v1/tenants/:tenant/projects/:project/api-keys',
+			'DELETE /v1/tenants/:tenant/projects/:project/api-keys/:item_id',
+			'GET /v1/tenants/:tenant/projects/:project/hooks',
+			'POST /v1/tenants/:tenant/projects/:project/hooks',
+			'DELETE /v1/tenants/:tenant/projects/:project/hooks/:item_id',
+			'POST /v1/tenants/:tenant/projects/:project/hooks/:item_id/test',
 			'GET /v1/tenants/:tenant/projects/:project/webhooks',
 			'POST /v1/tenants/:tenant/projects/:project/webhooks',
+			'DELETE /v1/tenants/:tenant/projects/:project/webhooks/:id',
 			'POST /v1/tenants/:tenant/projects/:project/webhooks/:id/test',
 			'POST /v1/tenants/:tenant/projects/:project/webhooks/:id/trigger',
 			'GET /v1/tenants/:tenant/projects/:project/integrations',
+			'DELETE /v1/tenants/:tenant/projects/:project/integrations/:item_id',
 			'GET /v1/developer/apps',
 			'POST /v1/developer/apps',
+			'DELETE /v1/developer/apps/:app_id',
+			'GET /v1/oauth/apps/:client_id',
 			'POST /v1/oauth/authorize',
 			'POST /v1/oauth/token'
 		]
@@ -177,6 +255,18 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/account/keys',
 			'POST /v1/account/keys',
 			'DELETE /v1/account/keys/:key_id',
+			'GET /v1/account/ssh-keys',
+			'POST /v1/account/ssh-keys',
+			'DELETE /v1/account/ssh-keys/:key_id',
+			'GET /v1/tenants/:tenant/projects/:project/keys',
+			'POST /v1/tenants/:tenant/projects/:project/keys',
+			'DELETE /v1/tenants/:tenant/projects/:project/keys/:item_id',
+			'GET /v1/tenants/:tenant/projects/:project/snapshots/verify',
+			'GET /v1/tenants/:tenant/projects/:project/snapshots/:item_id/verify',
+			'GET /v1/tenants/:tenant/projects/:project/ssh-keys',
+			'POST /v1/tenants/:tenant/projects/:project/ssh-keys',
+			'DELETE /v1/tenants/:tenant/projects/:project/ssh-keys/:item_id',
+			'POST /v1/remote-approvals',
 			'GET /v1/remote-approvals/:approval_id',
 			'POST /v1/remote-approvals/:approval_id/approve'
 		]
@@ -205,6 +295,27 @@ export const paginationJson = `{
   "total_pages": 1,
   "next": null,
   "prev": null
+}`;
+
+export const pathClosureJson = `{
+  "workspace": "main",
+  "snapshot": null,
+  "path": "src/parser"
+}`;
+
+export const pathClosureResponseJson = `{
+  "workspace": "main",
+  "head": "<snapshot-id>",
+  "root_tree": "<tree-id>",
+  "path": "src/parser",
+  "objects": [
+    { "id": "<snapshot-id>", "kind": "snapshot" },
+    { "id": "<tree-id>", "kind": "tree" },
+    { "id": "<blob-id>", "kind": "blob" }
+  ],
+  "files": [
+    { "path": "src/parser/mod.rs", "id": "<blob-id>" }
+  ]
 }`;
 
 export const apiKeyCreateJson = `{

@@ -80,6 +80,8 @@ enum Commands {
         workspace: String,
         #[arg(long)]
         snapshot: Option<String>,
+        #[arg(long = "include", value_name = "PATH")]
+        include: Option<String>,
         #[arg(long)]
         force: bool,
         #[arg(long)]
@@ -207,9 +209,12 @@ pub fn run() -> Result<()> {
             path,
             workspace,
             snapshot,
+            include,
             force,
             remote_url,
-        } => clone_commands::clone_project(source, path, workspace, snapshot, force, remote_url),
+        } => clone_commands::clone_project(
+            source, path, workspace, snapshot, include, force, remote_url,
+        ),
         Commands::Sendwork {
             title,
             message,

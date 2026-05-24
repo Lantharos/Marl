@@ -1,21 +1,17 @@
 # sty frontend
 
-SvelteKit frontend for sty.
+SvelteKit frontend for sty. The docs surface lives under `src/routes/docs`.
 
-## Development
-
-Install dependencies from the sty workspace with bun, then run the frontend:
+Development:
 
 ```sh
 bun install
 bun run dev
 ```
 
-## Checks
+Checks:
 
 ```sh
 bun run check
 bun run build
 ```
-
-Project creation, project forks, and sending work back from linked forks are done from the sty CLI, not from the web UI.

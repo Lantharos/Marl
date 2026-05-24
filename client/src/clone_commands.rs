@@ -4,8 +4,15 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use reqwest::blocking::{Client, RequestBuilder};
-use sty_protocol::{is_hex_id, validate_segment, validate_target};
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
+use sty_protocol::{
+    DownloadRequest, DownloadResponse, PathClosureRequest, PathClosureResponse, is_hex_id,
+    validate_segment, validate_target,
+};
 use url::Url;
 use zip::ZipArchive;
 
@@ -19,6 +26,7 @@ pub(crate) fn clone_project(
     path: Option<PathBuf>,
     workspace: String,
     snapshot: Option<String>,
+    include: Option<String>,
     force: bool,
     remote_url: Option<String>,
 ) -> Result<()> {
@@ -33,9 +41,21 @@ pub(crate) fn clone_project(
     prepare_destination(&destination, force)?;
 
     let session = CloneSession::new(remote_url)?;
-    let archive =
-        session.download_source_archive(tenant, project, &workspace, snapshot.as_deref())?;
-    let file_count = extract_source_archive(archive, &destination, force)?;
+    let file_count = if let Some(include) = include.as_deref() {
+        session.download_path(
+            tenant,
+            project,
+            &workspace,
+            snapshot.as_deref(),
+            include,
+            &destination,
+            force,
+        )?
+    } else {
+        let archive =
+            session.download_source_archive(tenant, project, &workspace, snapshot.as_deref())?;
+        extract_source_archive(archive, &destination, force)?
+    };
 
     println!(
         "Downloaded {} {} from {}/{} into {}",
@@ -106,11 +126,131 @@ impl CloneSession {
         Ok(archive)
     }
 
+    fn download_path(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        snapshot: Option<&str>,
+        include: &str,
+        destination: &Path,
+        force: bool,
+    ) -> Result<usize> {
+        let closure = self.path_closure(tenant, project, workspace, snapshot, include)?;
+        let ids = closure
+            .files
+            .iter()
+            .map(|file| file.id.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let objects = self.download_objects(tenant, project, &ids)?;
+        let mut file_count = 0usize;
+        for file in closure.files {
+            let bytes = objects
+                .get(&file.id)
+                .ok_or_else(|| anyhow::anyhow!("remote did not return object {}", file.id))?;
+            let target = destination_path(destination, &file.path)?;
+            if target.exists() && !force {
+                bail!("refusing to overwrite {}", target.display());
+            }
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&target, bytes)
+                .with_context(|| format!("failed to write {}", target.display()))?;
+            file_count += 1;
+        }
+        Ok(file_count)
+    }
+
+    fn path_closure(
+        &self,
+        tenant: &str,
+        project: &str,
+        workspace: &str,
+        snapshot: Option<&str>,
+        include: &str,
+    ) -> Result<PathClosureResponse> {
+        let response = self
+            .auth(
+                self.client
+                    .post(self.project_url(tenant, project, "/objects/path-closure")?),
+            )
+            .json(&PathClosureRequest {
+                workspace: Some(workspace.to_string()),
+                snapshot: snapshot.map(ToOwned::to_owned),
+                path: include.to_string(),
+            })
+            .send()
+            .context("failed to request path closure")?;
+        if !response.status().is_success() {
+            bail!("clone failed with status {}", response_error(response));
+        }
+        response
+            .json()
+            .context("failed to read path closure response")
+    }
+
+    fn download_objects(
+        &self,
+        tenant: &str,
+        project: &str,
+        ids: &[String],
+    ) -> Result<BTreeMap<String, Vec<u8>>> {
+        let mut objects = BTreeMap::new();
+        for chunk in ids.chunks(96) {
+            let response = self
+                .auth(
+                    self.client
+                        .post(self.project_url(tenant, project, "/objects/download")?),
+                )
+                .json(&DownloadRequest {
+                    ids: chunk.to_vec(),
+                })
+                .send()
+                .context("failed to download objects")?;
+            if !response.status().is_success() {
+                bail!("clone failed with status {}", response_error(response));
+            }
+            let response: DownloadResponse = response
+                .json()
+                .context("failed to read object download response")?;
+            for object in response.objects {
+                if object.kind != "blob" {
+                    bail!("path clone expected a blob object, got {}", object.kind);
+                }
+                let bytes = BASE64_STANDARD
+                    .decode(object.bytes_base64)
+                    .context("failed to decode object bytes")?;
+                let digest = hex::encode(Sha256::digest(&bytes));
+                if digest != object.id {
+                    bail!(
+                        "remote object {} does not match its content digest",
+                        object.id
+                    );
+                }
+                objects.insert(object.id, bytes);
+            }
+        }
+        Ok(objects)
+    }
+
     fn auth(&self, request: RequestBuilder) -> RequestBuilder {
         match self.token.as_deref() {
             Some(token) => request.bearer_auth(token),
             None => request,
         }
+    }
+
+    fn project_url(&self, tenant: &str, project: &str, path: &str) -> Result<String> {
+        Ok(format!(
+            "{}/v1/tenants/{}/projects/{}{}",
+            self.remote_url.trim_end_matches('/'),
+            tenant,
+            project,
+            path
+        ))
     }
 }
 

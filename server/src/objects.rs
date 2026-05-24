@@ -19,6 +19,123 @@ pub(crate) async fn missing(mut req: Request, ctx: crate::request_context::AppRo
     Response::from_json(&MissingResponse { missing })
 }
 
+pub(crate) async fn download_objects(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    check_project_read_capability(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "objects:read",
+    )
+    .await?;
+    let body: DownloadRequest = req.json().await?;
+    let mut ids = Vec::new();
+    for id in body.ids {
+        validate_object_id(&id)?;
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    if ids.len() > 128 {
+        return json_error(413, "object download batch is too large");
+    }
+    let kinds = d1::object_kinds(&database, &tenant, &project, &ids).await?;
+    let store = bucket(&ctx.env)?;
+    let mut objects = Vec::with_capacity(ids.len());
+    let mut total_size = 0usize;
+    for id in ids {
+        let Some(kind) = kinds.get(&id).cloned() else {
+            return json_error(404, "object not found");
+        };
+        let Some(object) = store.get(object_key(&tenant, &project, &id)).execute().await? else {
+            return json_error(404, "object not found");
+        };
+        let Some(body) = object.body() else {
+            return json_error(404, "object not found");
+        };
+        let bytes = body.bytes().await?;
+        total_size += bytes.len();
+        if total_size > 8 * 1024 * 1024 {
+            return json_error(413, "object download batch payload is too large");
+        }
+        objects.push(RemoteObject {
+            id,
+            kind,
+            bytes_base64: BASE64_STANDARD.encode(bytes),
+        });
+    }
+    Response::from_json(&DownloadResponse { objects })
+}
+
+const PATH_CLOSURE_OBJECT_LIMIT: usize = 10_000;
+
+pub(crate) async fn object_path_closure(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    let body: PathClosureRequest = req.json().await?;
+    let workspace = body.workspace.unwrap_or_else(|| "main".to_string());
+    validate_segment(&workspace).map_err(|error| Error::RustError(error.to_string()))?;
+    check_workspace_read_capability(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        &workspace,
+    )
+    .await?;
+
+    let workspace_head = d1::head(&database, &tenant, &project, &workspace).await?;
+    let Some(workspace_head) = workspace_head else {
+        return json_error(404, "workspace has no head");
+    };
+    let head_id = body.snapshot.unwrap_or_else(|| workspace_head.clone());
+    validate_object_id(&head_id)?;
+    if head_id != workspace_head
+        && !is_ancestor(&ctx.env, &tenant, &project, &head_id, &workspace_head).await?
+    {
+        return json_error(403, "snapshot is not reachable from workspace");
+    }
+
+    let path = normalize_tree_prefix(&body.path)?;
+    let store = bucket(&ctx.env)?;
+    let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
+    let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
+        .map_err(|error| Error::RustError(error.to_string()))?;
+    let root_tree = snapshot["root_tree"]
+        .as_str()
+        .ok_or_else(|| Error::RustError("malformed snapshot object".to_string()))?
+        .to_string();
+    validate_object_id(&root_tree)?;
+
+    let mut closure = ObjectPathClosure::default();
+    closure.add_object(head_id.clone(), "snapshot".to_string())?;
+    closure.add_object(root_tree.clone(), "tree".to_string())?;
+    if !collect_path_closure(&store, &tenant, &project, &root_tree, &path, &mut closure).await? {
+        return json_error(404, "path not found");
+    }
+
+    let (objects, mut files) = closure.into_parts();
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Response::from_json(&PathClosureResponse {
+        workspace,
+        head: head_id,
+        root_tree,
+        path,
+        objects,
+        files,
+    })
+}
+
 pub(crate) async fn put_object(mut req: Request, ctx: crate::request_context::AppRouteContext) -> Result<Response> {
     let user = require_auth(&req, &ctx).await?;
     let (tenant, project) = project_params(&ctx)?;
@@ -134,6 +251,147 @@ fn object_digest_for_kind(bytes: &[u8], kind: &str) -> Result<String> {
 
 fn default_snapshot_kind() -> String {
     "save".to_string()
+}
+
+#[derive(Default)]
+struct ObjectPathClosure {
+    objects: std::collections::BTreeMap<String, String>,
+    files: Vec<PathClosureFile>,
+}
+
+impl ObjectPathClosure {
+    fn add_object(&mut self, id: String, kind: String) -> Result<()> {
+        validate_object_metadata(&id, &kind)?;
+        if let Some(existing_kind) = self.objects.get(&id) {
+            if existing_kind != &kind {
+                return Err(Error::RustError(
+                    "object referenced with conflicting kinds".to_string(),
+                ));
+            }
+            return Ok(());
+        }
+        if self.objects.len() >= PATH_CLOSURE_OBJECT_LIMIT {
+            return Err(Error::RustError("path object closure limit exceeded".to_string()));
+        }
+        self.objects.insert(id, kind);
+        Ok(())
+    }
+
+    fn add_file(&mut self, path: String, id: String) -> Result<()> {
+        validate_object_metadata(&id, "blob")?;
+        self.files.push(PathClosureFile { path, id });
+        Ok(())
+    }
+
+    fn into_parts(self) -> (Vec<PathClosureObject>, Vec<PathClosureFile>) {
+        let objects = self
+            .objects
+            .into_iter()
+            .map(|(id, kind)| PathClosureObject { id, kind })
+            .collect();
+        (objects, self.files)
+    }
+}
+
+async fn collect_path_closure(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    root_tree: &str,
+    path: &str,
+    closure: &mut ObjectPathClosure,
+) -> Result<bool> {
+    if path.is_empty() {
+        collect_tree_subtree(store, tenant, project, root_tree, "", closure).await?;
+        return Ok(true);
+    }
+
+    let mut tree_id = root_tree.to_string();
+    let mut prefix = String::new();
+    let parts = path.split('/').collect::<Vec<_>>();
+    for (index, part) in parts.iter().enumerate() {
+        let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
+        let entries = parse_tree_entries(&bytes)?;
+        let Some(entry) = entries.into_iter().find(|entry| entry.name == *part) else {
+            return Ok(false);
+        };
+        closure.add_object(entry.id.clone(), entry.entry_type.clone())?;
+        let current_path = if prefix.is_empty() {
+            (*part).to_string()
+        } else {
+            format!("{prefix}/{part}")
+        };
+        if index + 1 == parts.len() {
+            if entry.entry_type == "blob" {
+                closure.add_file(current_path, entry.id)?;
+            } else {
+                collect_tree_subtree(
+                    store,
+                    tenant,
+                    project,
+                    &entry.id,
+                    &current_path,
+                    closure,
+                )
+                .await?;
+            }
+            return Ok(true);
+        }
+        if entry.entry_type != "tree" {
+            return Ok(false);
+        }
+        tree_id = entry.id;
+        prefix = current_path;
+    }
+    Ok(false)
+}
+
+async fn collect_tree_subtree(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    start_tree: &str,
+    start_prefix: &str,
+    closure: &mut ObjectPathClosure,
+) -> Result<()> {
+    let mut stack = vec![(
+        start_prefix.to_string(),
+        start_tree.to_string(),
+        0usize,
+        std::collections::BTreeSet::new(),
+    )];
+    let mut visited_entries = 0usize;
+    while let Some((prefix, tree_id, depth, mut ancestors)) = stack.pop() {
+        validate_object_id(&tree_id)?;
+        if depth > MAX_TREE_DEPTH {
+            return Err(Error::RustError("tree depth limit exceeded".to_string()));
+        }
+        if !ancestors.insert(tree_id.clone()) {
+            return Err(Error::RustError("tree cycle detected".to_string()));
+        }
+        closure.add_object(tree_id.clone(), "tree".to_string())?;
+        let bytes = r2_bytes(store, &object_key(tenant, project, &tree_id)).await?;
+        let mut entries = parse_tree_entries(&bytes)?;
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        for entry in entries.into_iter().rev() {
+            visited_entries += 1;
+            if visited_entries > MAX_TREE_ENTRIES {
+                return Err(Error::RustError("tree entry limit exceeded".to_string()));
+            }
+            let path = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{prefix}/{}", entry.name)
+            };
+            closure.add_object(entry.id.clone(), entry.entry_type.clone())?;
+            match entry.entry_type.as_str() {
+                "blob" => closure.add_file(path, entry.id)?,
+                "tree" => stack.push((path, entry.id, depth + 1, ancestors.clone())),
+                _ => return Err(Error::RustError("unknown tree entry type".to_string())),
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) async fn require_auth(

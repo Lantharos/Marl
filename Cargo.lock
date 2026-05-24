@@ -1478,6 +1478,7 @@ dependencies = [
  "base64",
  "clap",
  "dialoguer",
+ "hex",
  "reqwest",
  "serde",
  "serde_json",

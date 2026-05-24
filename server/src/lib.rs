@@ -1,13 +1,17 @@
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     AuthCheckResponse, CommentsResponse, CompareRequest, CompareResponse, CreateCommentRequest,
-    CreateIssueRequest, CreateProjectRequest, HeadResponse, HeadUpdateRequest, HistoryEntry,
-    HistoryResponse, HistorySignature, LogHistoryRequest, MeResponse, MissingRequest,
-    MissingResponse, ObjectFileResponse, OkResponse, ProjectDetailResponse, ProjectSummary,
-    ProjectTreeResponse, RewriteHistoryRequest, SessionExchangeRequest, TokenResponse,
-    TreeEntryInfo, UpdateIssueRequest, UpdateSettingsRequest, WorkspaceStateResponse,
-    WorkspaceSummary, validate_segment,
+    CreateIssueRequest, CreateProjectRequest, DownloadRequest, DownloadResponse, HeadResponse,
+    HeadUpdateRequest, HistoryEntry, HistoryResponse, HistorySignature, LogHistoryRequest,
+    MeResponse, MissingRequest, MissingResponse, ObjectFileResponse, OkResponse,
+    PathClosureFile, PathClosureObject, PathClosureRequest, PathClosureResponse,
+    ProjectDetailResponse, ProjectSummary, ProjectTreeResponse, RemoteObject,
+    RewriteHistoryRequest, SessionExchangeRequest, TokenResponse, TreeEntryInfo,
+    UpdateIssueRequest, UpdateSettingsRequest, WorkspaceStateResponse, WorkspaceSummary,
+    validate_segment,
 };
 use worker::*;
 
@@ -563,6 +567,14 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async(
             "/v1/tenants/:tenant/projects/:project/objects/check",
             missing,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/objects/download",
+            download_objects,
+        )
+        .post_async(
+            "/v1/tenants/:tenant/projects/:project/objects/path-closure",
+            object_path_closure,
         )
         .put_async(
             "/v1/tenants/:tenant/projects/:project/objects/:object",

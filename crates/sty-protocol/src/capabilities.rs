@@ -44,6 +44,8 @@ pub fn protocol_capabilities() -> CapabilitiesResponse {
             "project_archive",
             "forks",
             "sendwork",
+            "object_batch_download",
+            "object_path_closure",
         ]
         .into_iter()
         .map(ToOwned::to_owned)

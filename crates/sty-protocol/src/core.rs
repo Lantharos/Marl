@@ -48,7 +48,7 @@ pub struct DownloadRequest {
     pub ids: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DownloadResponse {
     pub objects: Vec<RemoteObject>,
 }
@@ -58,6 +58,38 @@ pub struct RemoteObject {
     pub id: String,
     pub kind: String,
     pub bytes_base64: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PathClosureRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<String>,
+    #[serde(default)]
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PathClosureObject {
+    pub id: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PathClosureFile {
+    pub path: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PathClosureResponse {
+    pub workspace: String,
+    pub head: String,
+    pub root_tree: String,
+    pub path: String,
+    pub objects: Vec<PathClosureObject>,
+    pub files: Vec<PathClosureFile>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

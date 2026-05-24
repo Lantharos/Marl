@@ -36,7 +36,7 @@ if (expected !== request.headers.get("x-sty-signature-256")) {
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Events</h2>
 		<div class="mt-4 overflow-hidden rounded border border-[#2a2a28]">
-			{#each webhookEvents as event}
+			{#each webhookEvents as event (event.event)}
 				<div class="grid gap-2 border-b border-[#252522] px-4 py-3 last:border-b-0 md:grid-cols-[220px_1fr]">
 					<code class="text-sm text-[#d9a66c]">{event.event}</code>
 					<p class="text-sm leading-6 text-[#a09d94]">{event.meaning}</p>

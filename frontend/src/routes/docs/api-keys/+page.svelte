@@ -29,7 +29,7 @@ Content-Type: application/json`;
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Scopes</h2>
 		<div class="mt-4 overflow-hidden rounded border border-[#2a2a28]">
-			{#each apiScopes as scope}
+			{#each apiScopes as scope (scope.scope)}
 				<div class="grid gap-2 border-b border-[#252522] px-4 py-3 last:border-b-0 md:grid-cols-[190px_1fr]">
 					<code class="text-sm text-[#d9a66c]">{scope.scope}</code>
 					<p class="text-sm leading-6 text-[#a09d94]">{scope.allows}</p>

@@ -184,6 +184,9 @@ fn status_for_error(message: &str) -> u16 {
     {
         return 404;
     }
+    if lower.contains("limit exceeded") || lower.contains("too large") {
+        return 413;
+    }
     if lower.contains("invalid")
         || lower.contains("missing route param")
         || lower.contains("missing field")
