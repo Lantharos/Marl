@@ -60,6 +60,7 @@ pub async fn project_settings(
                 panels: vec![],
                 merge_rules: MergeRules::default(),
                 protected_workspaces: vec![],
+                path_visibility: vec![],
                 ci: ProjectCiSettings::default(),
             });
         }
@@ -69,6 +70,7 @@ pub async fn project_settings(
         serde_json::from_str(&settings_json).map_err(|e| err(e.to_string()))?;
     settings.appearance = normalize_project_appearance(settings.appearance);
     settings.ci = normalize_ci_settings(settings.ci);
+    settings.path_visibility = normalize_path_visibility(settings.path_visibility);
 
     settings.follower_count = follower_count(db, tenant, project).await?;
     settings.is_following = is_following(db, tenant, project, principal).await?;
@@ -122,6 +124,7 @@ pub async fn update_project_settings(
     panels: Option<Vec<PanelItem>>,
     merge_rules: Option<MergeRules>,
     protected_workspaces: Option<Vec<String>>,
+    path_visibility: Option<Vec<PathVisibilityRule>>,
     ci: Option<ProjectCiSettings>,
     archived: Option<bool>,
     public_releases: Option<bool>,
@@ -147,6 +150,9 @@ pub async fn update_project_settings(
     if let Some(workspaces) = protected_workspaces {
         settings.protected_workspaces = normalize_protected_workspaces(workspaces);
     }
+    if let Some(rules) = path_visibility {
+        settings.path_visibility = normalize_path_visibility(rules);
+    }
     if let Some(ci) = ci {
         settings.ci = normalize_ci_settings(ci);
     }
@@ -159,6 +165,63 @@ pub async fn update_project_settings(
         set_project_archived(db, tenant, project, principal, archive).await?;
     }
     project_settings(db, tenant, project, Some(principal)).await
+}
+
+#[derive(Debug, Clone)]
+pub struct PathVisibilityPolicy {
+    rules: Vec<PathVisibilityRule>,
+    role: Option<String>,
+}
+
+pub async fn path_visibility_policy(
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+) -> Result<PathVisibilityPolicy> {
+    let settings = project_settings(db, tenant, project, None).await?;
+    let role = match user {
+        Some(user) => project_effective_role(db, tenant, project, user).await?,
+        None => None,
+    };
+    Ok(PathVisibilityPolicy {
+        rules: settings.path_visibility,
+        role,
+    })
+}
+
+pub fn path_can_read(policy: &PathVisibilityPolicy, path: &str) -> bool {
+    match path_visibility_for(policy, path).as_str() {
+        "public" => true,
+        "team" => policy.role.is_some(),
+        "private" | "local" => role_allows(policy.role.as_deref(), ROLE_MAINTAINER),
+        _ => false,
+    }
+}
+
+pub fn path_policy_restricts_objects(policy: &PathVisibilityPolicy) -> bool {
+    policy
+        .rules
+        .iter()
+        .any(|rule| rule.visibility != "public")
+}
+
+pub fn path_policy_can_read_all(policy: &PathVisibilityPolicy) -> bool {
+    policy
+        .rules
+        .iter()
+        .all(|rule| path_can_read(policy, &rule.path))
+}
+
+fn path_visibility_for(policy: &PathVisibilityPolicy, path: &str) -> String {
+    let path = normalize_visibility_path_text(path);
+    policy
+        .rules
+        .iter()
+        .filter(|rule| path_rule_matches(&rule.path, &path))
+        .max_by_key(|rule| rule.path.len())
+        .map(|rule| rule.visibility.clone())
+        .unwrap_or_else(|| "public".to_string())
 }
 
 fn normalize_merge_rules(rules: MergeRules) -> MergeRules {
@@ -185,6 +248,63 @@ fn normalize_protected_workspaces(workspaces: Vec<String>) -> Vec<String> {
         }
     }
     normalized
+}
+
+fn normalize_path_visibility(rules: Vec<PathVisibilityRule>) -> Vec<PathVisibilityRule> {
+    let mut normalized: Vec<PathVisibilityRule> = Vec::new();
+    for rule in rules {
+        let Some(path) = normalize_visibility_path(&rule.path) else {
+            continue;
+        };
+        let visibility = match rule.visibility.trim() {
+            "public" | "team" | "private" | "local" => rule.visibility.trim().to_string(),
+            _ => continue,
+        };
+        if let Some(existing) = normalized
+            .iter_mut()
+            .find(|item| item.path == path)
+        {
+            existing.visibility = visibility;
+            continue;
+        }
+        normalized.push(PathVisibilityRule { path, visibility });
+        if normalized.len() >= 100 {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_visibility_path(path: &str) -> Option<String> {
+    let path = normalize_visibility_path_text(path);
+    if path.is_empty()
+        || path == "."
+        || path.split('/').any(|segment| segment == "..")
+        || path.chars().any(char::is_control)
+    {
+        return None;
+    }
+    Some(path.chars().take(240).collect())
+}
+
+fn normalize_visibility_path_text(path: &str) -> String {
+    let mut path = path.trim().replace('\\', "/");
+    while path.starts_with('/') {
+        path.remove(0);
+    }
+    while path.ends_with('/') {
+        path.pop();
+    }
+    for suffix in ["/**", "/*"] {
+        if let Some(value) = path.strip_suffix(suffix) {
+            path = value.to_string();
+        }
+    }
+    path
+}
+
+fn path_rule_matches(rule_path: &str, path: &str) -> bool {
+    path == rule_path || path.strip_prefix(rule_path).is_some_and(|rest| rest.starts_with('/'))
 }
 
 fn normalize_ci_settings(settings: ProjectCiSettings) -> ProjectCiSettings {

@@ -87,7 +87,13 @@ export interface ProjectSettings {
 	panels: PanelItem[];
 	merge_rules: MergeRules;
 	protected_workspaces: string[];
+	path_visibility: PathVisibilityRule[];
 	ci: ProjectCiSettings;
+}
+
+export interface PathVisibilityRule {
+	path: string;
+	visibility: 'public' | 'team' | 'private' | 'local';
 }
 
 export interface MergeRules {

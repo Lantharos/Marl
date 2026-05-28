@@ -16,7 +16,7 @@
 		<div class="mt-4 overflow-hidden rounded border border-[#2a2a28]">
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[160px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Workspace</h3>
-				<p class="text-sm leading-6 text-[#8c887e]">A named line of work. <code>main</code> exists by default. Child workspaces can be local-only, synced, ready for review, or merged.</p>
+				<p class="text-sm leading-6 text-[#8c887e]">A named line of work. <code>main</code> exists by default. Child workspaces can be local-only, synced, ready for review, or merged. A workspace view can open the same workspace in another folder while sharing PIG metadata and objects.</p>
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[160px_1fr]">
 				<h3 class="text-sm font-medium text-[#f0eee4]">Save</h3>

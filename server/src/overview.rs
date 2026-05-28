@@ -33,6 +33,9 @@ pub(crate) async fn project_overview(req: Request, ctx: crate::request_context::
         settings.visibility == "public",
     )
     .await?;
+    if !access.can_maintain {
+        settings.path_visibility = vec![];
+    }
     let stats = visible_project_stats(&database, &tenant, &project, user.as_deref()).await?;
     let releases = latest_releases(&database, &tenant, &project, 5).await?;
     let featured_screenshot = screenshots::featured_screenshot(&database, &tenant, &project).await?;

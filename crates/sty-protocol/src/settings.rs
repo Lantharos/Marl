@@ -148,6 +148,8 @@ pub struct ProjectSettings {
     #[serde(default)]
     pub protected_workspaces: Vec<String>,
     #[serde(default)]
+    pub path_visibility: Vec<PathVisibilityRule>,
+    #[serde(default)]
     pub ci: ProjectCiSettings,
 }
 
@@ -162,7 +164,14 @@ pub struct UpdateSettingsRequest {
     pub panels: Option<Vec<PanelItem>>,
     pub merge_rules: Option<MergeRules>,
     pub protected_workspaces: Option<Vec<String>>,
+    pub path_visibility: Option<Vec<PathVisibilityRule>>,
     pub ci: Option<ProjectCiSettings>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PathVisibilityRule {
+    pub path: String,
+    pub visibility: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

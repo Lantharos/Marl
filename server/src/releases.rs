@@ -523,9 +523,16 @@ async fn attach_release_source_archive(
         return Ok(());
     }
     let store = bucket(&ctx.env)?;
-    let bytes =
-        crate::source_archive::source_zip_bytes_for_snapshot(&store, tenant, project, snapshot)
-            .await?;
+    let database = db(ctx)?;
+    let public_path_policy = d1::path_visibility_policy(database, tenant, project, None).await?;
+    let bytes = crate::source_archive::source_zip_bytes_for_snapshot_filtered(
+        &store,
+        tenant,
+        project,
+        snapshot,
+        Some(&public_path_policy),
+    )
+    .await?;
     let size = bytes.len();
     let digest_bytes = Sha256::digest(&bytes);
     let digest = hex::encode(digest_bytes);

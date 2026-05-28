@@ -14,6 +14,15 @@ pub(crate) async fn source_zip_bytes_for_snapshot(
     project: &str,
     snapshot_id: &str,
 ) -> Result<Vec<u8>> {
+    source_zip_bytes_for_snapshot_filtered(store, tenant, project, snapshot_id, None).await
+}
+pub(crate) async fn source_zip_bytes_for_snapshot_filtered(
+    store: &Bucket,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+    path_policy: Option<&crate::d1::PathVisibilityPolicy>,
+) -> Result<Vec<u8>> {
     validate_object_id(snapshot_id)?;
     let snapshot_bytes = r2_bytes(store, &object_key(tenant, project, snapshot_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
@@ -27,7 +36,13 @@ pub(crate) async fn source_zip_bytes_for_snapshot(
     crate::walk_tree(store, tenant, project, "", &root_tree, &mut entries).await?;
     let files = entries
         .into_iter()
-        .filter(|entry| entry.entry_type == "blob")
+        .filter(|entry| {
+            entry.entry_type == "blob"
+                && match path_policy {
+                    Some(policy) => crate::d1::path_can_read(policy, &entry.path),
+                    None => true,
+                }
+        })
         .collect::<Vec<_>>();
     source_zip_bytes(store, tenant, project, files).await
 }
@@ -74,6 +89,8 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         )
         .await?;
     }
+    let path_policy =
+        crate::d1::path_visibility_policy(database, &tenant, &project, user.as_deref()).await?;
     let head_id = if let Some(snapshot) = snapshot_param {
         snapshot
     } else {
@@ -84,9 +101,10 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         }
     };
     validate_object_id(&head_id)?;
-    let public_cache = release_public
+    let public_cache = (release_public
         || crate::d1::workspace_is_publicly_readable(database, &tenant, &project, &workspace)
-            .await?;
+            .await?)
+        && !crate::d1::path_policy_restricts_objects(&path_policy);
     let etag = format!("{head_id}-source-zip");
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =
@@ -95,8 +113,8 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         return Ok(response);
     }
     let store = bucket(&ctx.env)?;
-    let cache_key =
-        released_snapshot.then(|| release_source_cache_key(&tenant, &project, &head_id));
+    let cache_key = (released_snapshot && !crate::d1::path_policy_restricts_objects(&path_policy))
+        .then(|| release_source_cache_key(&tenant, &project, &head_id));
     if let Some(cache_key) = cache_key.as_deref() {
         if let Some(object) = store.get(cache_key).execute().await? {
             if let Some(body) = object.body() {
@@ -161,7 +179,9 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
     crate::walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
     let files = entries
         .into_iter()
-        .filter(|entry| entry.entry_type == "blob")
+        .filter(|entry| {
+            entry.entry_type == "blob" && crate::d1::path_can_read(&path_policy, &entry.path)
+        })
         .collect::<Vec<_>>();
     let stream = source_zip_stream(store, tenant.clone(), project.clone(), files);
     let mut response = Response::from_stream(stream)?;

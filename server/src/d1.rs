@@ -2,8 +2,9 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sty_protocol::{
     CiCommand, Comment, HistoryEntry, HistorySignature, Issue, Leaf, MergeRules, NavbarItem,
-    PanelItem, ProjectAppearance, ProjectCiSettings, ProjectSettings, ProjectStats, ProjectSummary,
-    TenantSummary, TokenPrincipal, UserProfile, WorkspaceState, validate_segment,
+    PanelItem, PathVisibilityRule, ProjectAppearance, ProjectCiSettings, ProjectSettings,
+    ProjectStats, ProjectSummary, TenantSummary, TokenPrincipal, UserProfile, WorkspaceState,
+    validate_segment,
 };
 use uuid::Uuid;
 use worker::*;

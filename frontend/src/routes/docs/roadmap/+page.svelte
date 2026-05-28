@@ -14,9 +14,9 @@
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Exists now</h2>
 		<ul class="mt-3 grid gap-2 text-sm leading-6 text-[#8c887e]">
-			<li>PIG saves, packs, workspaces, local merge, operation log, operation undo, semantic query, secret scanning, generated-file markers, and conflict resolution reuse.</li>
+			<li>PIG saves, watch mode, journal snapshots, env overlays, packs, workspaces, local merge, operation log, operation undo, semantic query, secret scanning, generated-file markers, and conflict resolution reuse.</li>
 			<li>Remote sync with object upload, compare-and-swap workspace heads, force sync for intentional rewrites, batch object download, and path-closure fetch.</li>
-			<li>sty projects, tenants, folders, collaborators, private/team/public workspace visibility, ready review, comments, approvals, status checks, self-hosted CI runners, merge rules, notifications, and audit log entries.</li>
+			<li>sty projects, tenants, folders, collaborators, private/team/public workspace visibility, per-path source visibility, ready review, comments, approvals, status checks, self-hosted CI runners, merge rules, notifications, and audit log entries.</li>
 			<li>Project API keys, OAuth developer apps, webhooks, protocol hooks, releases, release artifacts, public project discovery, forks, and sendwork.</li>
 			<li>Signing keys, SSH keys, signed snapshot verification, remote browser approvals, and granular protocol permissions.</li>
 		</ul>
@@ -40,7 +40,7 @@
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Future hardening</h2>
 		<ul class="mt-3 grid gap-2 text-sm leading-6 text-[#8c887e]">
 			<li>Deeper lazy history, larger-object transfer tuning, and more aggressive object batching for very large repositories.</li>
-			<li>Policy controls for generated files, secret-sensitive paths, protected workspaces, and required review owners.</li>
+			<li>Policy controls for generated files, required review owners, and remote-scoped environment overlays.</li>
 			<li>Hosted runner pools, richer CI retention controls, and larger-runner scheduling on top of the self-hosted runner protocol.</li>
 			<li>Release attestations, signed artifact verification, and more visible trust metadata on public release pages.</li>
 			<li>Richer Git interop for importing history, exporting snapshots, and bridging existing deployment systems during migration.</li>

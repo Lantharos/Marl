@@ -6,12 +6,12 @@
 
 <svelte:head>
 	<title>PIG Guide - sty docs</title>
-	<meta name="description" content="PIG command guide for local snapshots, workspaces, sync, issues, releases, stash, and signing." />
+	<meta name="description" content="PIG command guide for local snapshots, autosave, workspaces, packing, and sync." />
 </svelte:head>
 
 <DocsPage
 	title="PIG overview"
-	description="PIG is a local-first VCS for stacked, reviewable software changes. It is designed for humans and agents that save often, clean up later, and sync when work is ready."
+	description="PIG is a local-first VCS for mutable work. Save constantly, pack the useful story later, and sync only when work should become shared."
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Human mode and agent mode</h2>
@@ -33,6 +33,18 @@
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
 				<code class="text-sm text-[#d9a66c]">save</code>
 				<p class="text-sm leading-6 text-[#8c887e]">Checkpoint meaningful local work. Saves are cheap and reversible.</p>
+			</div>
+			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
+				<code class="text-sm text-[#d9a66c]">watch</code>
+				<p class="text-sm leading-6 text-[#8c887e]">Keep a lightweight local save trail without stopping to name every checkpoint.</p>
+			</div>
+			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
+				<code class="text-sm text-[#d9a66c]">journal</code>
+				<p class="text-sm leading-6 text-[#8c887e]">Inspect and pack autosaved work separately from hand-written saves.</p>
+			</div>
+			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
+				<code class="text-sm text-[#d9a66c]">env</code>
+				<p class="text-sm leading-6 text-[#8c887e]">Store runtime values outside source snapshots and resolve them per project, workspace, or machine.</p>
 			</div>
 			<div class="grid gap-2 border-b border-[#252522] px-4 py-3 md:grid-cols-[150px_1fr]">
 				<code class="text-sm text-[#d9a66c]">pack</code>

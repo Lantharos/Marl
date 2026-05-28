@@ -90,14 +90,22 @@ export const styCommandGroups: CommandGroup[] = [
 
 export const pigCommandGroups: CommandGroup[] = [
 	{
-		title: 'Local history',
-		intro: 'PIG saves snapshots locally first. Human output is readable by default; add --json for agents.',
+		title: 'Core loop',
+		intro: 'PIG keeps local work moving: inspect changes, let work autosave when useful, pack the noise down, then sync only when it should leave your machine.',
 		rows: [
 			{ command: 'pig status', description: 'Show the current workspace, changed files, and pending work.' },
 			{ command: 'pig status --short', description: 'Show changed files as Git-style A/M/D lines.' },
 			{ command: 'pig status --name-only', description: 'Print changed paths only.' },
+			{ command: 'pig watch', description: 'Watch the workspace and save changed work automatically every few seconds.' },
+			{ command: 'pig watch --once --json', description: 'Run one autosave tick and return a machine-readable clean or saved result.' },
+			{ command: 'pig journal', description: 'Show autosaved journal snapshots in the current session.' },
+			{ command: 'pig journal pack', description: 'Pack the journal snapshots at the workspace head into one shareable snapshot.' },
 			{ command: 'pig save "message"', description: 'Create a local snapshot with intent metadata.' },
 			{ command: 'pig save --allow-secret-risk "message"', description: 'Create a snapshot after acknowledging a secret-scan warning.' },
+			{ command: 'pig env import .env', description: 'Import local environment values into the overlay store instead of saving them in source history.' },
+			{ command: 'pig env list', description: 'List resolved environment keys for the current workspace with values redacted.' },
+			{ command: 'pig env export', description: 'Print resolved environment values as shell assignments for a process that needs them.' },
+			{ command: 'pig env run -- bun dev', description: 'Run a command with the resolved environment overlay applied.' },
 			{ command: 'pig pack', description: 'Pack the current session into one shareable snapshot with an automatic message.' },
 			{ command: 'pig pack 3', description: 'Pack the last three saves into one snapshot.' },
 			{ command: 'pig pack 3 "message"', description: 'Pack the last three saves with an explicit message.' },
@@ -127,6 +135,7 @@ export const pigCommandGroups: CommandGroup[] = [
 			{ command: 'pig work new <name> --from <workspace>', description: 'Create a workspace from another workspace.' },
 			{ command: 'pig work new <name> --from-snapshot <id>', description: 'Create a workspace from an older snapshot.' },
 			{ command: 'pig work new <name> --isolated', description: 'Create the workspace in a separate folder while respecting .gitignore and .oink ignores.' },
+			{ command: 'pig work open <name> [path]', description: 'Open an existing workspace in another folder while sharing the original PIG metadata and object store.' },
 			{ command: 'pig work switch <name>', description: 'Switch the current folder to another workspace.' },
 			{ command: 'pig work move [name] --onto <workspace|snapshot>', description: 'Move a child workspace onto a newer workspace or snapshot base.' },
 			{ command: 'pig work ready [name]', description: 'Mark work ready for review. PIG can prompt to pack first.' },
@@ -161,7 +170,7 @@ export const pigCommandGroups: CommandGroup[] = [
 	},
 	{
 		title: 'Issues and review',
-		intro: 'Remote protocol commands work only when the connected remote advertises the matching capability.',
+		intro: 'These are scriptable protocol commands for teams that want review automation in the CLI. Most day-to-day review work can stay in sty.',
 		rows: [
 			{ command: 'pig issue list --label bug --assignee kristof', description: 'List issues with filters and pagination.' },
 			{ command: 'pig issue new "title" -b "body" --label bug', description: 'Create an issue.' },
@@ -180,7 +189,7 @@ export const pigCommandGroups: CommandGroup[] = [
 	},
 	{
 		title: 'Releases, hooks, and automation',
-		intro: 'These commands are useful for release tooling, deployment systems, and notification flows.',
+		intro: 'Keep these for release tooling, deployment systems, and notification flows. They are not part of the normal edit/save/pack/sync loop.',
 		rows: [
 			{ command: 'pig release list', description: 'List release entries.' },
 			{ command: 'pig release new <tag> --name "v1" --notes "..."', description: 'Create a release from the latest source snapshot.' },
@@ -200,7 +209,7 @@ export const pigCommandGroups: CommandGroup[] = [
 	},
 	{
 		title: 'Stash and signing',
-		intro: 'Stash is local. Signing keys are user-scoped and can use local key material or a system SSH agent.',
+		intro: 'Advanced local state and trust commands. Use them when a workflow specifically needs a stash or signed snapshots.',
 		rows: [
 			{ command: 'pig stash "message"', description: 'Store current working-tree changes without saving a snapshot.' },
 			{ command: 'pig stash-list', description: 'List local stashes.' },

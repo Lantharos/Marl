@@ -64,7 +64,7 @@ export const apiScopes: ApiScope[] = [
 	{ scope: 'webhooks:read', allows: 'List webhooks, integrations, and webhook delivery state.' },
 	{ scope: 'webhooks:write', allows: 'Create, test, trigger, and revoke project webhooks.' },
 	{ scope: 'settings:read', allows: 'Read project settings visible to users with project access.' },
-	{ scope: 'settings:write', allows: 'Change project appearance, navigation, screenshots, archive state, visibility, merge rules, protection, and automation settings.' }
+	{ scope: 'settings:write', allows: 'Change project appearance, navigation, screenshots, archive state, visibility, source boundaries, merge rules, protection, and automation settings.' }
 ];
 
 export const endpointGroups: EndpointGroup[] = [
@@ -139,7 +139,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Code, objects, and sync',
-		note: 'Object ids are immutable. Uploaded trees must use safe path segments and workspace heads are accepted only when their tree objects are complete. Head updates use compare-and-swap unless a client explicitly force-syncs rewritten history. Tree listing supports path, depth, limit, and cursor query parameters for bounded browsing. Source archive downloads stream a zip of the selected workspace. Object upload and download batches are bounded by item count and decoded byte size.',
+		note: 'Object ids are immutable. Uploaded trees must use safe path segments and workspace heads are accepted only when their tree objects are complete. Head updates use compare-and-swap unless a client explicitly force-syncs rewritten history. Tree listing supports path, depth, limit, and cursor query parameters for bounded browsing. Source boundaries filter tree, file, and archive reads by caller. Raw object reads require full source access when a project has non-public path rules. Source archive downloads stream a zip of the selected workspace. Object upload and download batches are bounded by item count and decoded byte size.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/tree?workspace=main&path=src&depth=1&limit=500',
 			'GET /v1/tenants/:tenant/projects/:project/source.zip?workspace=main',

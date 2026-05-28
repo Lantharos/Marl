@@ -5,12 +5,8 @@
 		getProjectSettings,
 		isAbortError,
 		updateProjectSettings,
-		type AccessResponse,
-		type MergeRules,
-		type NavbarItem,
-		type PanelItem,
-		type ProjectAppearance,
-		type ProjectSettings
+		type AccessResponse, type MergeRules, type NavbarItem, type PanelItem, type PathVisibilityRule,
+		type ProjectAppearance, type ProjectSettings
 	} from '$lib/api';
 	import { DEFAULT_PROJECT_APPEARANCE } from '$lib/projectAppearance';
 	import { DEFAULT_PROJECT_TABS, mergeProjectTabs } from '$lib/projectChrome';
@@ -20,6 +16,7 @@
 	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
 	import ProjectMergeRulesSettings from '$lib/components/ProjectMergeRulesSettings.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
+	import SourceBoundariesSettings from '$lib/components/SourceBoundariesSettings.svelte';
 	import SwitchControl from '$lib/components/SwitchControl.svelte';
 	import X from 'lucide-svelte/icons/x';
 	import Plus from 'lucide-svelte/icons/plus';
@@ -51,6 +48,7 @@
 			block_unresolved_comments: true
 		},
 		protected_workspaces: [],
+		path_visibility: [],
 		ci: {
 			enabled: false,
 			commands: []
@@ -92,7 +90,7 @@
 		return { id: '', title: '', type: 'text', content: '', enabled: true, order: 0 };
 	}
 
-	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean; merge_rules?: MergeRules; protected_workspaces?: string[] }) {
+	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean; merge_rules?: MergeRules; protected_workspaces?: string[]; path_visibility?: PathVisibilityRule[] }) {
 		busy = true;
 		try {
 			const result = await updateProjectSettings(tenant, project, items);
@@ -320,6 +318,14 @@
 					</div>
 					<SwitchControl checked={settings.visibility === 'public' || settings.public_releases} disabled={busy || settings.visibility === 'public'} label="Toggle public release downloads" onToggle={togglePublicReleases} />
 				</div>
+			</SettingsSection>
+
+			<SettingsSection title="Source boundaries">
+				<SourceBoundariesSettings
+					rules={settings.path_visibility ?? []}
+					{busy}
+					onSave={(path_visibility) => persistSettings({ path_visibility })}
+				/>
 			</SettingsSection>
 
 			<SettingsSection title="Merge rules">

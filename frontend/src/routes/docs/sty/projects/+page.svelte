@@ -4,12 +4,12 @@
 
 <svelte:head>
 	<title>Projects and Access - sty docs</title>
-	<meta name="description" content="Tenants, project folders, collaborators, roles, visibility, archived projects, and workspace privacy in sty." />
+	<meta name="description" content="Tenants, project folders, collaborators, roles, visibility, source boundaries, archived projects, and workspace privacy in sty." />
 </svelte:head>
 
 <DocsPage
 	title="projects and access"
-	description="sty uses tenant/project names, inherited collaborator roles, project-specific roles, and workspace visibility to keep code sharing explicit."
+	description="sty uses tenant/project names, inherited collaborator roles, project-specific roles, workspace visibility, and path-level source boundaries to keep code sharing explicit."
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Tenants and folders</h2>
@@ -43,6 +43,7 @@
 		<ul class="mt-3 grid gap-2 text-sm leading-6 text-[#8c887e]">
 			<li>Projects are private by default. Public projects are visible in discovery and can be forked.</li>
 			<li>Workspace visibility is separate from project visibility. A team can keep a security patch workspace private or team-only until it is ready.</li>
+			<li>Source boundaries hide configured paths from tree browsing, file reads, and source archives unless the caller has the required project role.</li>
 			<li>Private projects can publish release artifacts without making code browsing, issues, history, or workspaces public.</li>
 			<li>Archived projects stay readable to users who already had access, but project mutations are blocked until a maintainer unarchives the project.</li>
 		</ul>

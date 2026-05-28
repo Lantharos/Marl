@@ -31,6 +31,11 @@ pub(crate) async fn project_tree(req: Request, ctx: crate::request_context::AppR
         &workspace,
     )
     .await?;
+    let path_policy =
+        d1::path_visibility_policy(&database, &tenant, &project, user.as_deref()).await?;
+    if !tree_prefix.is_empty() && !d1::path_can_read(&path_policy, &tree_prefix) {
+        return json_error(404, "path not found");
+    }
     let snapshot_param = url
         .query_pairs()
         .find_map(|(k, v)| (k == "snapshot").then(|| v.to_string()));
@@ -54,8 +59,9 @@ pub(crate) async fn project_tree(req: Request, ctx: crate::request_context::AppR
             }
         }
     };
-    let public_cache =
-        d1::workspace_is_publicly_readable(&database, &tenant, &project, &workspace).await?;
+    let public_cache = d1::workspace_is_publicly_readable(&database, &tenant, &project, &workspace)
+        .await?
+        && !d1::path_policy_restricts_objects(&path_policy);
     validate_object_id(&head_id)?;
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     let tree_etag = tree_cache_etag(
@@ -87,11 +93,16 @@ pub(crate) async fn project_tree(req: Request, ctx: crate::request_context::AppR
         },
     )
     .await?;
+    let entries = page
+        .entries
+        .into_iter()
+        .filter(|entry| d1::path_can_read(&path_policy, &entry.path))
+        .collect();
     let mut response = Response::from_json(&ProjectTreeResponse {
         workspace: workspace.clone(),
         head: Some(head_id.clone()),
         root_tree: Some(root_tree),
-        entries: page.entries,
+        entries,
         prefix: (!tree_prefix.is_empty()).then_some(tree_prefix),
         next_cursor: page.next_cursor,
         truncated: page.truncated,
@@ -131,6 +142,7 @@ pub(crate) async fn project_file(req: Request, ctx: crate::request_context::AppR
         })
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| Error::RustError("path is required".to_string()))?;
+    let path = normalize_tree_prefix(&path)?;
     let workspace = url.query_pairs().find_map(|(k, v)| {
         (k == "workspace").then(|| v.to_string())
     }).unwrap_or_else(|| "main".to_string());
@@ -141,6 +153,11 @@ pub(crate) async fn project_file(req: Request, ctx: crate::request_context::AppR
         &workspace,
     )
     .await?;
+    let path_policy =
+        d1::path_visibility_policy(&database, &tenant, &project, user.as_deref()).await?;
+    if !d1::path_can_read(&path_policy, &path) {
+        return json_error(404, "file not found");
+    }
     let snapshot_param = url
         .query_pairs()
         .find_map(|(k, v)| (k == "snapshot").then(|| v.to_string()));
@@ -165,8 +182,9 @@ pub(crate) async fn project_file(req: Request, ctx: crate::request_context::AppR
     if entry.entry_type != "blob" {
         return json_error(400, "path is not a file");
     }
-    let public_cache =
-        d1::workspace_is_publicly_readable(&database, &tenant, &project, &workspace).await?;
+    let public_cache = d1::workspace_is_publicly_readable(&database, &tenant, &project, &workspace)
+        .await?
+        && !d1::path_policy_restricts_objects(&path_policy);
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =
         not_modified_response(&req, &entry.id, public_cache, cache_seconds, pinned_snapshot)?

@@ -37,6 +37,12 @@ pub(crate) async fn download_objects(
         "objects:read",
     )
     .await?;
+    let path_policy = d1::path_visibility_policy(&database, &tenant, &project, user.as_deref()).await?;
+    if d1::path_policy_restricts_objects(&path_policy)
+        && !d1::path_policy_can_read_all(&path_policy)
+    {
+        return json_error(403, "object reads require full source access");
+    }
     let body: DownloadRequest = req.json().await?;
     let mut ids = Vec::new();
     for id in body.ids {
@@ -168,6 +174,12 @@ pub(crate) async fn object_path_closure(
         &workspace,
     )
     .await?;
+    let path_policy = d1::path_visibility_policy(&database, &tenant, &project, user.as_deref()).await?;
+    if d1::path_policy_restricts_objects(&path_policy)
+        && !d1::path_policy_can_read_all(&path_policy)
+    {
+        return json_error(403, "path closure requires full source access");
+    }
 
     let workspace_head = d1::head(&database, &tenant, &project, &workspace).await?;
     let Some(workspace_head) = workspace_head else {
@@ -254,10 +266,16 @@ pub(crate) async fn get_object(req: Request, ctx: crate::request_context::AppRou
     validate_object_id(&id)?;
     let database = db(&ctx)?;
     check_project_read_capability(&database, &tenant, &project, user.as_deref(), "objects:read").await?;
+    let path_policy = d1::path_visibility_policy(&database, &tenant, &project, user.as_deref()).await?;
+    if d1::path_policy_restricts_objects(&path_policy)
+        && !d1::path_policy_can_read_all(&path_policy)
+    {
+        return json_error(403, "object reads require full source access");
+    }
     let public_cache = matches!(
         d1::project_visibility(&database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
-    );
+    ) && !d1::path_policy_restricts_objects(&path_policy);
     if let Some(response) = not_modified_response(&req, &id, public_cache, 31_536_000, true)? {
         return Ok(response);
     }

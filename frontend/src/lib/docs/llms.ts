@@ -54,10 +54,12 @@ PIG model:
 - A save is a local snapshot. Saves are cheap and reversible.
 - A pack combines recent saves into one shareable snapshot before review or sync.
 - A workspace is a named line of work. Isolated workspaces create separate folders for parallel agents or features.
+- pig work open <name> [path] opens an existing workspace in another folder while sharing the same PIG metadata and object store.
 - pig op log records local VCS operations that changed metadata or history. pig op undo reverts those operations without creating content snapshots.
 - pig undo restores content from snapshots or paths.
 - pig resolve --reuse applies a previously recorded conflict resolution when the same conflict shape appears again.
 - pig fetch path <path> fetches one remote file or directory by object closure. Use --no-hydrate to cache without writing files.
+- PIG MCP exposes source_list, source_read, source_write, source_delete, and source_move for validated local source access. Runtime .env files should use env_list, env_set, env_get, or env_import instead of source tools.
 - pig sync --force intentionally replaces the remote workspace head after local history was packed or rewritten.
 - sty ci runner new creates self-hosted runner tokens. pig ci run claims leased jobs, restores configured file or directory caches, runs commands, uploads logs/artifacts, saves caches, and reports the result.
 - Use --json for commands an agent needs to parse.

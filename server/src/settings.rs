@@ -4,8 +4,12 @@ pub(crate) async fn get_settings(req: Request, ctx: crate::request_context::AppR
     let database = db(&ctx)?;
     check_project_access(&database, &tenant, &project, user.as_deref()).await?;
     let principal = user
-        .map(|user| sty_protocol::TokenPrincipal { user });
-    let settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
+        .as_ref()
+        .map(|user| sty_protocol::TokenPrincipal { user: user.clone() });
+    let mut settings = d1::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
+    if !settings_can_read_source_boundaries(&database, &tenant, &project, user.as_deref()).await? {
+        settings.path_visibility = vec![];
+    }
     Response::from_json(&settings)
 }
 
@@ -33,6 +37,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: crate::request_contex
         body.panels,
         body.merge_rules,
         body.protected_workspaces,
+        body.path_visibility,
         body.ci,
         body.archived,
         body.public_releases,
@@ -52,6 +57,7 @@ pub(crate) async fn update_settings(mut req: Request, ctx: crate::request_contex
             "public_releases": settings.public_releases,
             "merge_rules": settings.merge_rules.clone(),
             "protected_workspaces": settings.protected_workspaces.clone(),
+            "path_visibility": settings.path_visibility.clone(),
             "ci": settings.ci.clone(),
         }),
     )
@@ -114,4 +120,16 @@ async fn is_public_project(database: &crate::request_context::Database, tenant: 
         d1::project_visibility(database, tenant, project).await?,
         Some(visibility) if visibility == "public"
     ))
+}
+
+async fn settings_can_read_source_boundaries(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    user: Option<&str>,
+) -> Result<bool> {
+    let Some(user) = user else {
+        return Ok(false);
+    };
+    d1::project_role_allows(database, tenant, project, user, "maintainer").await
 }
