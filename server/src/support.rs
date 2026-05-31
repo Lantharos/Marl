@@ -2,7 +2,7 @@ use serde_json::json;
 use sty_protocol::validate_segment;
 use worker::*;
 
-use crate::request_context::{AppRouteContext, D1_BOOKMARK_HEADER, Database};
+use crate::request_context::{AppRouteContext, DB_BOOKMARK_HEADER, Database};
 
 pub const MAX_TREE_DEPTH: usize = 128;
 pub const MAX_TREE_ENTRIES: usize = 200_000;
@@ -292,11 +292,11 @@ fn set_cors_headers(headers: &mut Headers) -> Result<()> {
     )?;
     headers.set(
         "access-control-allow-headers",
-        &format!("authorization,content-type,{D1_BOOKMARK_HEADER},x-pig-object-kind,x-pig-object-size,x-pig-chunk-count,x-pig-total-size"),
+        &format!("authorization,content-type,{DB_BOOKMARK_HEADER},x-pig-object-kind,x-pig-object-size,x-pig-chunk-count,x-pig-total-size"),
     )?;
     headers.set(
         "access-control-expose-headers",
-        &format!("etag,{D1_BOOKMARK_HEADER},x-pig-object-kind,x-pig-object-size"),
+        &format!("etag,{DB_BOOKMARK_HEADER},x-pig-object-kind,x-pig-object-size"),
     )?;
     headers.set("access-control-max-age", "86400")?;
     Ok(())
@@ -334,8 +334,8 @@ fn allowed_origin(env: &Env, origin: Option<&str>) -> bool {
         .unwrap_or(false)
 }
 
-pub async fn r2_bytes(store: &Bucket, key: &str) -> Result<Vec<u8>> {
-    let Some(object) = store.get(key).execute().await? else {
+pub async fn r2_bytes(features: &Bucket, key: &str) -> Result<Vec<u8>> {
+    let Some(object) = features.get(key).execute().await? else {
         return Err(Error::RustError(format!("missing object {key}")));
     };
     let Some(body) = object.body() else {

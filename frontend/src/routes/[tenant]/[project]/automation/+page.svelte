@@ -1,29 +1,37 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import {
+		cancelCiJob,
 		createProjectApiKey,
 		createProjectWebhook,
 		createCiRunner,
+		deleteCiSecret,
 		deleteCiRunner,
 		deleteProjectApiKey,
 		deleteProjectIntegration,
 		deleteProjectWebhook,
 		downloadCiJobArtifact,
+		getCiJobLogs,
 		getProjectSettings,
 		isAbortError,
 		listCiJobArtifacts,
 		listCiJobs,
 		listCiRunners,
+		listCiSecrets,
 		listProjectApiKeys,
 		listProjectIntegrations,
 		listProjectWebhookDeliveries,
 		listProjectWebhooks,
+		rerunCiJob,
 		testProjectWebhook,
 		triggerProjectWebhook,
 		updateProjectSettings,
+		upsertCiSecret,
 		type CiArtifact,
 		type CiJob,
+		type CiLogLine,
 		type CiRunner,
+		type CiSecret,
 		type ProjectApiKey,
 		type ProjectIntegration,
 		type ProjectSettings,
@@ -47,6 +55,9 @@
 	let runners = $state<CiRunner[]>([]);
 	let ciJobs = $state<CiJob[]>([]);
 	let ciArtifactsByJob = $state<Record<string, CiArtifact[]>>({});
+	let ciLogsByJob = $state<Record<string, CiLogLine[]>>({});
+	let liveCiLogJobs = $state<string[]>([]);
+	let ciSecrets = $state<CiSecret[]>([]);
 	let webhookDeliveriesByHook = $state<Record<string, ProjectWebhookDelivery[]>>({});
 	let settings = $state<ProjectSettings | null>(null);
 	let keyName = $state('');
@@ -62,12 +73,21 @@
 	let webhookEvents = $state<string[]>(['manual', 'snapshot.shipped', 'release.created']);
 	let createdWebhook = $state<ProjectWebhook | null>(null);
 	let runnerName = $state('');
+	let runnerConcurrency = $state(1);
+	let runnerLabels = $state('');
 	let createdRunner = $state<CiRunner | null>(null);
 	let ciCommandName = $state('');
 	let ciCommandRun = $state('');
 	let ciCommandTimeout = $state(900);
 	let ciCommandArtifacts = $state('');
 	let ciCommandCaches = $state('');
+	let ciCommandWorkspaces = $state('');
+	let ciCommandPaths = $state('');
+	let ciCommandLabels = $state('');
+	let ciCommandEnv = $state('');
+	let ciCommandSecrets = $state('');
+	let ciSecretKey = $state('');
+	let ciSecretValue = $state('');
 	let testMessage = $state('');
 	let canMaintain = $state(false);
 
@@ -81,22 +101,13 @@
 		loading = true;
 		error = '';
 		try {
-			const [keys, hooks, apps] = await Promise.all([
-				listProjectApiKeys(tenant, project, { all: true, signal }),
-				listProjectWebhooks(tenant, project, { all: true, signal }),
-				listProjectIntegrations(tenant, project, { all: true, signal })
+			await Promise.all([
+				loadAutomation(signal),
+				loadProjectCiSettings(signal),
+				loadCiRunners(signal),
+				loadCiSecrets(signal),
+				refreshCiJobs(signal, true)
 			]);
-			const [loadedSettings, loadedRunners, loadedJobs] = await Promise.all([
-				getProjectSettings(tenant, project, { signal }),
-				listCiRunners(tenant, project, { all: true, signal }),
-				listCiJobs(tenant, project, { perPage: 20, signal })
-			]);
-			apiKeys = keys.items;
-			webhooks = hooks.items;
-			integrations = apps.items;
-			settings = loadedSettings;
-			runners = loadedRunners.items;
-			ciJobs = loadedJobs.items;
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -105,11 +116,69 @@
 		}
 	}
 
+	async function loadAutomation(signal?: AbortSignal) {
+		const [keys, hooks, apps] = await Promise.all([
+			listProjectApiKeys(tenant, project, { all: true, signal }),
+			listProjectWebhooks(tenant, project, { all: true, signal }),
+			listProjectIntegrations(tenant, project, { all: true, signal })
+		]);
+		apiKeys = keys.items;
+		webhooks = hooks.items;
+		integrations = apps.items;
+	}
+
+	async function loadProjectCiSettings(signal?: AbortSignal) {
+		const loadedSettings = await getProjectSettings(tenant, project, { signal });
+		settings = loadedSettings;
+	}
+
+	async function loadCiRunners(signal?: AbortSignal) {
+		const loadedRunners = await listCiRunners(tenant, project, { all: true, signal });
+		runners = loadedRunners.items;
+	}
+
+	async function loadCiSecrets(signal?: AbortSignal) {
+		const loadedSecrets = await listCiSecrets(tenant, project, { signal });
+		ciSecrets = loadedSecrets;
+	}
+
+	async function refreshCiJobs(signal?: AbortSignal, quiet = false) {
+		if (!quiet) error = '';
+		try {
+			const loadedJobs = await listCiJobs(tenant, project, { perPage: 20, signal });
+			if (!signal?.aborted) ciJobs = loadedJobs.items;
+		} catch (e) {
+			if (isAbortError(e)) return;
+			if (!quiet) error = e instanceof Error ? e.message : 'Failed';
+		}
+	}
+
 	$effect(() => {
 		if (!tenant || !project) return;
 		const controller = new AbortController();
 		load(controller.signal);
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		const active = liveCiLogJobs.filter((jobId) => ciJobs.some((job) => job.id === jobId && job.status !== 'completed'));
+		if (!active.length) return;
+		const timer = window.setInterval(() => {
+			for (const jobId of active) void loadCiLogs(jobId, true);
+		}, 2500);
+		return () => window.clearInterval(timer);
+	});
+
+	$effect(() => {
+		if (!ciJobs.some((job) => job.status !== 'completed')) return;
+		const controller = new AbortController();
+		const timer = window.setInterval(() => {
+			void refreshCiJobs(controller.signal, true);
+		}, 5000);
+		return () => {
+			controller.abort();
+			window.clearInterval(timer);
+		};
 	});
 
 	async function addApiKey() {
@@ -123,7 +192,7 @@
 				scopes: keyScopes
 			});
 			keyName = '';
-			await load();
+			await loadAutomation();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -136,7 +205,7 @@
 		error = '';
 		try {
 			await deleteProjectApiKey(tenant, project, id);
-			await load();
+			await loadAutomation();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -158,7 +227,7 @@
 			});
 			webhookName = '';
 			webhookUrl = '';
-			await load();
+			await loadAutomation();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -171,7 +240,7 @@
 		error = '';
 		try {
 			await deleteProjectWebhook(tenant, project, id);
-			await load();
+			await loadAutomation();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -186,7 +255,7 @@
 		try {
 			const result = await testProjectWebhook(tenant, project, id);
 			testMessage = result.queued ? 'Webhook test queued.' : result.ok ? `Webhook returned ${result.status}` : `Webhook failed with ${result.status || 'no response'}`;
-			await load();
+			await loadAutomation();
 			await loadWebhookDeliveries(id);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -202,7 +271,7 @@
 		try {
 			const result = await triggerProjectWebhook(tenant, project, id);
 			testMessage = result.queued ? 'Manual event queued.' : result.ok ? `Manual event returned ${result.status}` : `Manual event failed with ${result.status || 'no response'}`;
-			await load();
+			await loadAutomation();
 			await loadWebhookDeliveries(id);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
@@ -216,7 +285,7 @@
 		error = '';
 		try {
 			await deleteProjectIntegration(tenant, project, id);
-			await load();
+			await loadAutomation();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -230,7 +299,7 @@
 		error = '';
 		try {
 			settings = await updateProjectSettings(tenant, project, { ci });
-			await load();
+			await refreshCiJobs(undefined, true);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -247,14 +316,25 @@
 		if (!settings || !ciCommandName.trim() || !ciCommandRun.trim()) return;
 		const artifacts = splitList(ciCommandArtifacts);
 		const cache = parseCacheEntries(ciCommandCaches);
+		const workspaces = splitList(ciCommandWorkspaces);
+		const paths = splitList(ciCommandPaths);
+		const labels = splitList(ciCommandLabels);
+		const env = parseEnvEntries(ciCommandEnv);
+		const secrets = splitList(ciCommandSecrets);
+		const name = ciCommandName.trim();
 		await saveCiSettings({
 			...settings.ci,
 			commands: [
-				...settings.ci.commands,
+				...settings.ci.commands.filter((command) => command.name !== name),
 				{
-					name: ciCommandName.trim(),
+					name,
 					run: ciCommandRun.trim(),
 					timeout_seconds: Math.max(1, Math.min(14400, ciCommandTimeout || 900)),
+					...(workspaces.length ? { workspaces } : {}),
+					...(paths.length ? { paths } : {}),
+					...(labels.length ? { labels } : {}),
+					...(env.length ? { env } : {}),
+					...(secrets.length ? { secrets } : {}),
 					...(artifacts.length ? { artifacts } : {}),
 					...(cache.length ? { cache } : {})
 				}
@@ -265,6 +345,11 @@
 		ciCommandTimeout = 900;
 		ciCommandArtifacts = '';
 		ciCommandCaches = '';
+		ciCommandWorkspaces = '';
+		ciCommandPaths = '';
+		ciCommandLabels = '';
+		ciCommandEnv = '';
+		ciCommandSecrets = '';
 	}
 
 	async function removeCiCommand(name: string) {
@@ -281,9 +366,11 @@
 		error = '';
 		createdRunner = null;
 		try {
-			createdRunner = await createCiRunner(tenant, project, runnerName.trim());
+			createdRunner = await createCiRunner(tenant, project, runnerName.trim(), Math.max(1, Math.min(32, runnerConcurrency || 1)), splitList(runnerLabels));
 			runnerName = '';
-			await load();
+			runnerConcurrency = 1;
+			runnerLabels = '';
+			await loadCiRunners();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -296,7 +383,7 @@
 		error = '';
 		try {
 			await deleteCiRunner(tenant, project, id);
-			await load();
+			await loadCiRunners();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		} finally {
@@ -314,6 +401,19 @@
 		}
 	}
 
+	async function loadCiLogs(jobId: string, quiet = false) {
+		if (!quiet) error = '';
+		try {
+			const logs = await getCiJobLogs(tenant, project, jobId);
+			ciLogsByJob = { ...ciLogsByJob, [jobId]: logs };
+			if (!liveCiLogJobs.includes(jobId)) {
+				liveCiLogJobs = [...liveCiLogJobs, jobId];
+			}
+		} catch (e) {
+			if (!quiet) error = e instanceof Error ? e.message : 'Failed';
+		}
+	}
+
 	async function downloadCiArtifact(jobId: string, artifact: CiArtifact) {
 		error = '';
 		try {
@@ -328,6 +428,61 @@
 			window.setTimeout(() => URL.revokeObjectURL(url), 0);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
+		}
+	}
+
+	async function cancelJob(jobId: string) {
+		busy = true;
+		error = '';
+		try {
+			await cancelCiJob(tenant, project, jobId);
+			await refreshCiJobs();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function rerunJob(jobId: string) {
+		busy = true;
+		error = '';
+		try {
+			await rerunCiJob(tenant, project, jobId);
+			await refreshCiJobs();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function saveCiSecret() {
+		if (!ciSecretKey.trim() || !ciSecretValue) return;
+		busy = true;
+		error = '';
+		try {
+			await upsertCiSecret(tenant, project, ciSecretKey.trim(), ciSecretValue);
+			ciSecretKey = '';
+			ciSecretValue = '';
+			await loadCiSecrets();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function removeCiSecret(key: string) {
+		busy = true;
+		error = '';
+		try {
+			await deleteCiSecret(tenant, project, key);
+			await loadCiSecrets();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed';
+		} finally {
+			busy = false;
 		}
 	}
 
@@ -359,6 +514,18 @@
 			})
 			.filter((entry): entry is { key: string; path: string } => Boolean(entry));
 	}
+
+	function parseEnvEntries(value: string) {
+		return splitList(value)
+			.map((item) => {
+				const index = item.indexOf('=');
+				if (index <= 0) return null;
+				const key = item.slice(0, index).trim();
+				const envValue = item.slice(index + 1).trim();
+				return key && envValue ? { key, value: envValue } : null;
+			})
+			.filter((entry): entry is { key: string; value: string } => Boolean(entry));
+	}
 </script>
 
 <div class="mx-auto max-w-6xl">
@@ -385,6 +552,8 @@
 			{runners}
 			{ciJobs}
 			{ciArtifactsByJob}
+			{ciLogsByJob}
+			{ciSecrets}
 			{webhookDeliveriesByHook}
 			ci={settings?.ci ?? { enabled: false, commands: [] }}
 			{busy}
@@ -397,11 +566,20 @@
 			bind:webhookUrl
 			bind:webhookEvents
 			bind:runnerName
+			bind:runnerConcurrency
+			bind:runnerLabels
 			bind:ciCommandName
 			bind:ciCommandRun
 			bind:ciCommandTimeout
 			bind:ciCommandArtifacts
 			bind:ciCommandCaches
+			bind:ciCommandWorkspaces
+			bind:ciCommandPaths
+			bind:ciCommandLabels
+			bind:ciCommandEnv
+			bind:ciCommandSecrets
+			bind:ciSecretKey
+			bind:ciSecretValue
 			{testMessage}
 			{addApiKey}
 			{removeApiKey}
@@ -411,9 +589,15 @@
 			{triggerWebhook}
 			{removeIntegration}
 			{loadCiArtifacts}
+			{loadCiLogs}
 			{downloadCiArtifact}
+			{cancelJob}
+			{rerunJob}
+			{saveCiSecret}
+			{removeCiSecret}
 			{loadWebhookDeliveries}
 			{toggleCi}
+			{saveCiSettings}
 			{addCiCommand}
 			{removeCiCommand}
 			{addRunner}

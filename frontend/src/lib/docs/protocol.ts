@@ -160,7 +160,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, lock state, and private, team, or public visibility. Merge rules can require approvals, passing checks, current-head approvals, and resolved file conversations. Project CI settings enqueue jobs for ready workspace heads, runner wakeups use WebSockets when available, and runner job state mirrors into workspace checks.',
+		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, lock state, and private, team, or public visibility. Merge rules can require approvals, passing checks, current-head approvals, and resolved file conversations. Project CI settings enqueue filtered jobs for ready workspace heads, runner labels route jobs to compatible self-hosted runners, command env and secret selection are injected into claimed jobs, runner wakeups use WebSockets when available, runner job state mirrors into workspace checks, and maintainers can cancel or rerun jobs.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',
@@ -180,6 +180,8 @@ export const endpointGroups: EndpointGroup[] = [
 			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs',
 			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs/batch',
 			'PATCH /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id',
+			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/cancel',
+			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/rerun',
 			'POST /v1/tenants/:tenant/projects/:project/sendwork',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge',
 			'POST /v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject',
@@ -229,7 +231,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Automation and integrations',
-		note: 'Maintainers manage these. OAuth integrations mint project-scoped tokens with the same granular scopes as API keys. Webhook deliveries and CI job creation are queued before workers process them. CI runners use dedicated runner tokens, wait on project runner events when available, and claim queued jobs for a single project. CI artifacts can be downloaded from job history, and caches may be raw files or tar.gz directory archives.',
+		note: 'Maintainers manage these. OAuth integrations mint project-scoped tokens with the same granular scopes as API keys. Webhook deliveries and CI job creation are queued before workers process them. CI runners use dedicated runner tokens, wait on project runner events when available, and claim queued jobs for a single project when their labels match the command. CI artifacts can be downloaded from job history, caches may be raw files or tar.gz directory archives, and CI secrets are injected into runner jobs with log redaction.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/api-keys',
 			'POST /v1/tenants/:tenant/projects/:project/api-keys',
@@ -253,6 +255,8 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/tenants/:tenant/projects/:project/ci/jobs',
 			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/claim',
 			'PATCH /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id',
+			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/cancel',
+			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/rerun',
 			'GET /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs',
 			'POST /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs/batch',
 			'GET /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts',
@@ -260,6 +264,9 @@ export const endpointGroups: EndpointGroup[] = [
 			'GET /v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact/download',
 			'GET /v1/tenants/:tenant/projects/:project/ci/cache/:key',
 			'PUT /v1/tenants/:tenant/projects/:project/ci/cache/:key',
+			'GET /v1/tenants/:tenant/projects/:project/ci/secrets',
+			'PUT /v1/tenants/:tenant/projects/:project/ci/secrets',
+			'DELETE /v1/tenants/:tenant/projects/:project/ci/secrets/:key',
 			'GET /v1/developer/apps',
 			'POST /v1/developer/apps',
 			'DELETE /v1/developer/apps/:app_id',

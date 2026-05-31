@@ -30,6 +30,8 @@
 		minHeight = '220px',
 		fill = false,
 		initialExpansion = 'open',
+		autoExpandPaths = false,
+		expandedPaths = [],
 		onSelect
 	}: {
 		entries: FilePathTreeEntry[];
@@ -39,24 +41,38 @@
 		minHeight?: string;
 		fill?: boolean;
 		initialExpansion?: 'open' | 'collapsed';
+		autoExpandPaths?: boolean;
+		expandedPaths?: string[];
 		onSelect: (path: string) => void;
 	} = $props();
 
-	let collapsedDirs = $state<string[]>([]);
+	let collapsedDirs = $state<Set<string>>(new Set());
 	let loadedEntriesKey = $state('');
+	let loadedTreeConfig = $state('');
+	const expandedPathSet = $derived(new Set(expandedPaths));
+	const expandedPathSignature = $derived(expandedPaths.join('|'));
 
 	const rows = $derived(flattenTree(buildTree(entries), collapsedDirs));
 	const entriesKey = $derived(entries.map((entry) => `${entry.kind ?? 'file'}:${entry.path}`).join('|'));
 
 	$effect(() => {
-		if (loadedEntriesKey !== entriesKey) {
+		const validDirectories = new Set(directoryPaths(buildTree(entries)));
+		const treeConfig = `${entriesKey}|${expandedPathSignature}`;
+		if (loadedEntriesKey !== entriesKey || loadedTreeConfig !== treeConfig) {
 			loadedEntriesKey = entriesKey;
-			collapsedDirs = initialExpansion === 'collapsed' ? directoryPaths(buildTree(entries)) : [];
+			loadedTreeConfig = treeConfig;
+			if (initialExpansion === 'collapsed') {
+				const collapsed = autoExpandPaths
+					? directoryPaths(buildTree(entries)).filter((path) => !expandedPathSet.has(path))
+					: directoryPaths(buildTree(entries));
+				collapsedDirs = new Set(collapsed);
+				return;
+			}
+			collapsedDirs = new Set();
 			return;
 		}
-		const valid = new Set(rows.filter((row) => row.node.kind === 'dir').map((row) => row.node.path));
-		const next = collapsedDirs.filter((path) => valid.has(path));
-		if (next.length !== collapsedDirs.length) collapsedDirs = next;
+		const next = new Set([...collapsedDirs].filter((path) => validDirectories.has(path)));
+		if (next.size !== collapsedDirs.size) collapsedDirs = next;
 	});
 
 	function buildTree(items: FilePathTreeEntry[]) {
@@ -83,7 +99,7 @@
 		return root;
 	}
 
-	function flattenTree(root: TreeNode, collapsed: string[]) {
+	function flattenTree(root: TreeNode, collapsed: Set<string>) {
 		const output: TreeRow[] = [];
 		appendRows([...root.children.values()], 0, collapsed, output);
 		return output;
@@ -103,10 +119,10 @@
 		}
 	}
 
-	function appendRows(nodes: TreeNode[], depth: number, collapsed: string[], output: TreeRow[]) {
+	function appendRows(nodes: TreeNode[], depth: number, collapsed: Set<string>, output: TreeRow[]) {
 		for (const node of sortNodes(nodes)) {
 			output.push({ node, depth });
-			if (node.kind === 'dir' && !collapsed.includes(node.path)) appendRows([...node.children.values()], depth + 1, collapsed, output);
+			if (node.kind === 'dir' && !collapsed.has(node.path)) appendRows([...node.children.values()], depth + 1, collapsed, output);
 		}
 	}
 
@@ -118,7 +134,10 @@
 	}
 
 	function toggleDirectory(path: string) {
-		collapsedDirs = collapsedDirs.includes(path) ? collapsedDirs.filter((item) => item !== path) : [...collapsedDirs, path];
+		const next = new Set(collapsedDirs);
+		if (next.has(path)) next.delete(path);
+		else next.add(path);
+		collapsedDirs = next;
 	}
 
 	function statusLabel(status?: string) {
@@ -166,7 +185,7 @@
 		{#each rows as row (row.node.path)}
 			{@const node = row.node}
 			{@const isDirectory = node.kind === 'dir'}
-			{@const isCollapsed = collapsedDirs.includes(node.path)}
+			{@const isCollapsed = collapsedDirs.has(node.path)}
 			{@const comments = commentCountsByFile[node.path] ?? 0}
 			{@const status = statusLabel(node.entry?.status)}
 			<button

@@ -131,7 +131,16 @@
 						<span>{downloadBusy ? 'downloading' : 'download'}</span>
 					</button>
 				</div>
-				<FilePathTree entries={treeEntries} selectedPath={file?.path ?? ''} onSelect={openFile} maxHeight="calc(100% - 33px)" minHeight="0px" fill={true} initialExpansion="collapsed" />
+				<FilePathTree
+					entries={treeEntries}
+					selectedPath={file?.path ?? ''}
+					onSelect={openFile}
+					maxHeight="calc(100% - 33px)"
+					minHeight="0px"
+					fill={true}
+					initialExpansion="collapsed"
+					autoExpandPaths={false}
+				/>
 			</div>
 			<div class="min-h-0 min-w-0 overflow-hidden rounded border border-[#2a2a28] bg-[#0f0f0d]">
 				<CodePane {file} />

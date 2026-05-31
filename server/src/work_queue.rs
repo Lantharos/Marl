@@ -157,8 +157,8 @@ async fn process_message(
             workspace,
             head,
         } => {
-            let jobs = crate::ci::materialize_ci_for_ready_head(
-                database, tenant, project, workspace, head,
+            let jobs = crate::routes::ci::materialize_ci_for_ready_head(
+                env, database, tenant, project, workspace, head,
             )
             .await?;
             if !jobs.is_empty() {

@@ -109,6 +109,13 @@
 				return;
 			}
 			tenants = me.tenants;
+			if (isLandingPage) {
+				projects = [];
+				appData.set({ me, projects, ready: true });
+				status = 'signedIn';
+				void hydrateProjectList(me.user);
+				return;
+			}
 			projects = await listProjects();
 			appData.set({ me, projects, ready: true });
 			status = 'signedIn';
@@ -122,6 +129,19 @@
 		} finally {
 			bootstrapDone = true;
 			clearAuthSplash();
+		}
+	}
+
+	async function hydrateProjectList(meUser: string) {
+		try {
+			const nextProjects = await listProjects();
+			projects = nextProjects;
+			appData.update((state) => {
+				if (state.me?.user !== meUser) return state;
+				return { ...state, projects: nextProjects };
+			});
+		} catch {
+			return;
 		}
 	}
 

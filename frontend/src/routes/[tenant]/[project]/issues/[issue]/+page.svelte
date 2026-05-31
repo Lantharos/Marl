@@ -227,7 +227,7 @@
 
 </script>
 
-<div class="mx-auto max-w-6xl">
+<div class="mx-auto w-full max-w-[96rem]">
 	{#if loading}
 		<Spinner />
 	{:else if error && !issue}

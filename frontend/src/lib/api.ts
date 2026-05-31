@@ -118,8 +118,20 @@ export interface CiCommand {
 	name: string;
 	run: string;
 	timeout_seconds: number;
+	workspaces?: string[];
+	paths?: string[];
+	labels?: string[];
+	env?: { key: string; value: string }[];
+	secrets?: string[];
 	artifacts?: string[];
 	cache?: CiCacheEntry[];
+}
+
+export interface CiSecret {
+	key: string;
+	created_by: string;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface CiCacheEntry {
@@ -818,17 +830,40 @@ export async function listCiRunners(tenant: string, project: string, options: Pa
 	return (await response.json()) as Paginated<CiRunner>;
 }
 
-export async function createCiRunner(tenant: string, project: string, name: string, concurrency = 1): Promise<CiRunner> {
+export async function createCiRunner(tenant: string, project: string, name: string, concurrency = 1, labels: string[] = []): Promise<CiRunner> {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/runners`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ name, concurrency })
+		body: JSON.stringify({ name, concurrency, labels })
 	});
 	return (await response.json()) as CiRunner;
 }
 
 export async function deleteCiRunner(tenant: string, project: string, id: string): Promise<void> {
 	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/runners/${encodeURIComponent(id)}`, {
+		method: 'DELETE'
+	});
+}
+
+export async function listCiSecrets(tenant: string, project: string, options: ApiOptions = {}): Promise<CiSecret[]> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/secrets`, {
+		signal: options.signal
+	});
+	const data = (await response.json()) as { secrets: CiSecret[] };
+	return data.secrets;
+}
+
+export async function upsertCiSecret(tenant: string, project: string, key: string, value: string): Promise<CiSecret> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/secrets`, {
+		method: 'PUT',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ key, value })
+	});
+	return (await response.json()) as CiSecret;
+}
+
+export async function deleteCiSecret(tenant: string, project: string, key: string): Promise<void> {
+	await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/secrets/${encodeURIComponent(key)}`, {
 		method: 'DELETE'
 	});
 }
@@ -849,6 +884,20 @@ export async function getCiJobLogs(tenant: string, project: string, jobId: strin
 	});
 	const data = (await response.json()) as { logs: CiLogLine[] };
 	return data.logs;
+}
+
+export async function cancelCiJob(tenant: string, project: string, jobId: string): Promise<CiJob> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/jobs/${encodeURIComponent(jobId)}/cancel`, {
+		method: 'POST'
+	});
+	return (await response.json()) as CiJob;
+}
+
+export async function rerunCiJob(tenant: string, project: string, jobId: string): Promise<CiJob> {
+	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/ci/jobs/${encodeURIComponent(jobId)}/rerun`, {
+		method: 'POST'
+	});
+	return (await response.json()) as CiJob;
 }
 
 export async function listCiJobArtifacts(tenant: string, project: string, jobId: string, options: ApiOptions = {}): Promise<CiArtifact[]> {

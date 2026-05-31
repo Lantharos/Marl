@@ -21,6 +21,28 @@
 	} = $props();
 
 	const entries = $derived(changedFiles.map((file) => ({ path: file.path, kind: 'file' as const, status: file.change_type })));
+	const expandedPaths = $derived.by(() => {
+		const directories = new Set<string>();
+		const parts = selectedPath.split('/').filter(Boolean);
+		let cursor = '';
+		for (let index = 0; index < parts.length - 1; index += 1) {
+			cursor = cursor ? `${cursor}/${parts[index]}` : parts[index];
+			directories.add(cursor);
+		}
+		return [...directories];
+	});
+
 </script>
 
-<FilePathTree {entries} {selectedPath} {commentCountsByFile} {maxHeight} {minHeight} {fill} {onSelect} />
+	<FilePathTree
+	{entries}
+	{selectedPath}
+	{commentCountsByFile}
+	{maxHeight}
+	{minHeight}
+	{fill}
+	autoExpandPaths={true}
+	{onSelect}
+	initialExpansion="collapsed"
+	{expandedPaths}
+/>

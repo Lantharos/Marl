@@ -118,7 +118,8 @@
 		const next = viewedPaths.filter((path) => valid.has(path));
 		if (next.length !== viewedPaths.length) viewedPaths = next;
 		if (visibleStart >= changedFiles.length) visibleStart = Math.max(0, changedFiles.length - chunkSize);
-		if (visibleEnd <= visibleStart) visibleEnd = Math.min(changedFiles.length, visibleStart + chunkSize);
+		if (visibleEnd < visibleStart + 1) visibleEnd = Math.min(changedFiles.length, visibleStart + chunkSize);
+		if (visibleEnd > changedFiles.length) visibleEnd = changedFiles.length;
 	});
 
 	$effect(() => {
@@ -226,6 +227,7 @@
 	}
 
 	function loadMore() {
+		if (visibleEnd >= changedFiles.length) return;
 		visibleEnd = Math.min(visibleEnd + chunkSize, changedFiles.length);
 	}
 

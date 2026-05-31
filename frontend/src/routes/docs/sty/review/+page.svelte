@@ -28,7 +28,7 @@
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Status checks</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">sty stores status checks and can queue CI jobs for ready workspace heads. Self-hosted runners wait for runner wakeups, claim jobs with project runner tokens, execute commands in an isolated checkout, upload batched logs and artifacts, restore or save file and directory caches, and report the result back to the workspace. CI artifacts and caches are retained for the project CI retention window. External systems can still call the checks API directly.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">sty stores status checks and can queue CI jobs for ready workspace heads. Self-hosted runners wait for runner wakeups, claim jobs with project runner tokens, match command runner labels, execute commands in an isolated checkout, stop running commands when a job is canceled, upload batched logs and artifacts, restore or save file and directory caches, and report the result back to the workspace. CI commands can set env, request selected project secrets, and use path filters that are marked skipped when the ready head does not touch matching files. CI artifacts and caches are retained for the project CI retention window. External systems can still call the checks API directly.</p>
 	</section>
 
 	<section>

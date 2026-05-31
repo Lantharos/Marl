@@ -214,6 +214,7 @@ export interface CiRunner {
 	created_by: string;
 	created_at: string;
 	concurrency: number;
+	labels?: string[];
 	last_seen_at?: string | null;
 	disabled_at?: string | null;
 	token?: string;
@@ -237,6 +238,7 @@ export interface CiJob {
 	max_attempts?: number;
 	artifacts?: string[];
 	cache?: CiCacheEntry[];
+	env?: { key: string; value: string }[];
 	queued_at: string;
 	started_at?: string | null;
 	completed_at?: string | null;

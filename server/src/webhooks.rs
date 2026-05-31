@@ -5,7 +5,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use wasm_bindgen::{JsCast, closure::Closure};
 use worker::*;
 
-use crate::d1;
+use crate::features;
 use crate::request_context::{AppContext, AppRouteContext, Database};
 use crate::work_queue::{self, WEBHOOK_QUEUE_BINDING, WorkQueueMessage};
 
@@ -46,7 +46,7 @@ pub(crate) async fn enqueue_webhook_delivery(
     ctx: &AppRouteContext,
     tenant: &str,
     project: &str,
-    hook: &d1::ProjectWebhook,
+    hook: &features::ProjectWebhook,
     event: &str,
     data: serde_json::Value,
 ) -> Result<WebhookDispatchResult> {
@@ -84,7 +84,7 @@ pub(crate) async fn dispatch_project_event(
     event: &str,
     data: serde_json::Value,
 ) -> Result<()> {
-    let hooks = d1::active_project_webhooks(database, tenant, project, event).await?;
+    let hooks = features::active_project_webhooks(database, tenant, project, event).await?;
     if hooks.is_empty() {
         return Ok(());
     }
@@ -121,11 +121,12 @@ pub(crate) async fn deliver_webhook_delivery(
     event: &str,
     payload: &serde_json::Value,
 ) -> Result<()> {
-    let Some(hook) = d1::project_webhook_by_id(database, tenant, project, hook_id).await? else {
+    let Some(hook) = features::project_webhook_by_id(database, tenant, project, hook_id).await?
+    else {
         return Ok(());
     };
     let delivery_id = delivery_id(payload);
-    if d1::webhook_delivery_succeeded(database, &delivery_id).await? {
+    if features::webhook_delivery_succeeded(database, &delivery_id).await? {
         return Ok(());
     }
     let status = send_webhook(&hook, event, payload).await.unwrap_or(0);
@@ -147,7 +148,7 @@ async fn record_delivery_result(
     payload: &serde_json::Value,
     status: i64,
 ) -> Result<()> {
-    d1::record_webhook_delivery(
+    features::record_webhook_delivery(
         database,
         tenant,
         project,
@@ -229,7 +230,7 @@ fn delivery_error(status: i64) -> Option<String> {
 }
 
 async fn send_webhook(
-    hook: &d1::ProjectWebhook,
+    hook: &features::ProjectWebhook,
     event: &str,
     payload: &serde_json::Value,
 ) -> Result<i64> {
@@ -278,7 +279,7 @@ async fn send_webhook(
 }
 
 async fn send_webhook_with_retries(
-    hook: &d1::ProjectWebhook,
+    hook: &features::ProjectWebhook,
     event: &str,
     payload: &serde_json::Value,
 ) -> i64 {

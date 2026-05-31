@@ -63,6 +63,8 @@ pig unstash`;
 		<ul class="mt-3 grid gap-2 text-sm leading-6 text-[#8c887e]">
 			<li>Pack before marking a workspace ready when the local stack has several exploratory saves.</li>
 			<li>Use <code>pig pack 3</code> when only the last three saves belong together.</li>
+			<li>Use <code>pig pack 4..10</code> when older saves should become one readable snapshot while the latest saves stay separate.</li>
+			<li>Use <code>pig unpack</code> to undo the latest pack operation before sharing.</li>
 			<li>Use <code>pig pack --force</code> only when rewriting already-synced local history is intentional. Follow with <code>pig sync --force</code> when the remote should be replaced too.</li>
 		</ul>
 	</section>

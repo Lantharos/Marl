@@ -44,6 +44,13 @@
 	const showAveHandle = $derived(Boolean(aveHandle && aveHandle !== profile.tenant));
 	const avatar = $derived(profile.profile.avatar_url);
 	const pinnedKeys = $derived(profile.pinned_projects.map(projectKey));
+	const pinOptions = $derived.by(() => {
+		const options = new Map<string, ProjectDiscoveryItem>();
+		for (const project of [...profile.pin_candidates, ...profile.pinned_projects]) {
+			options.set(projectKey(project), project);
+		}
+		return [...options.values()];
+	});
 
 	$effect(() => {
 		if (savedProfile && savedProfile.tenant !== profileProp.tenant) savedProfile = null;
@@ -87,18 +94,30 @@
 			selectedPins = selectedPins.filter((item) => item !== key);
 			return;
 		}
-		if (selectedPins.length >= 6) return;
-		selectedPins = [...selectedPins, key];
+	if (selectedPins.length >= 6) return;
+	selectedPins = [...selectedPins, key];
+	}
+
+	function parsePinnedKey(key: string) {
+		const split = key.indexOf('/');
+		if (split <= 0 || split >= key.length - 1) return null;
+		return { tenant: key.slice(0, split), project: key.slice(split + 1) };
 	}
 
 	async function savePins() {
 		saveBusy = true;
 		saveError = '';
 		try {
-			const projects = selectedPins
-				.map((key) => profile.pin_candidates.find((project) => projectKey(project) === key))
-				.filter((project): project is ProjectDiscoveryItem => Boolean(project))
-				.map((project) => ({ tenant: project.tenant, project: project.project }));
+			const seen = new Set<string>();
+			const projects: { tenant: string; project: string }[] = [];
+			for (const pin of selectedPins) {
+				const parsed = parsePinnedKey(pin);
+				if (!parsed) continue;
+				const key = `${parsed.tenant}/${parsed.project}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				projects.push(parsed);
+			}
 			savedProfile = await updateUserProfilePins(profile.tenant, projects);
 			editingPins = false;
 		} catch (error) {
@@ -409,7 +428,7 @@
 				</button>
 			</div>
 			<div class="max-h-96 overflow-y-auto p-3">
-				{#each profile.pin_candidates as project (projectKey(project))}
+				{#each pinOptions as project (projectKey(project))}
 					<button class="flex w-full items-center gap-3 rounded px-2 py-2 text-left hover:bg-[#1e1e1c]" onclick={() => togglePin(project)}>
 						<span class="grid h-5 w-5 shrink-0 place-items-center rounded border border-[#3a3a36] text-[#eae9e4]">
 							{#if selectedPins.includes(projectKey(project))}

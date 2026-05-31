@@ -74,7 +74,7 @@ impl CiRunnerPool {
 
 pub(crate) async fn connect_runner(
     ctx: &crate::request_context::AppRouteContext,
-    runner: &crate::d1::CiRunner,
+    runner: &crate::features::CiRunner,
 ) -> Result<Response> {
     let namespace = ctx.data.durable_object(CI_RUNNER_POOL_BINDING)?;
     let stub = namespace.get_by_name(&runner_pool_name(&runner.tenant, &runner.project))?;

@@ -247,9 +247,25 @@ pub struct CiCommand {
     #[serde(default = "default_ci_timeout_seconds")]
     pub timeout_seconds: u32,
     #[serde(default)]
+    pub workspaces: Vec<String>,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub env: Vec<CiEnvEntry>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
+    #[serde(default)]
     pub artifacts: Vec<String>,
     #[serde(default)]
     pub cache: Vec<CiCacheEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CiEnvEntry {
+    pub key: String,
+    pub value: String,
 }
 
 fn default_ci_timeout_seconds() -> u32 {

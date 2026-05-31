@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { CiArtifact, CiJob, CiRunner, ProjectApiKey, ProjectCiSettings, ProjectIntegration, ProjectWebhook, ProjectWebhookDelivery } from '$lib/api';
+	import type { CiArtifact, CiJob, CiLogLine, CiRunner, CiSecret, ProjectApiKey, ProjectCiSettings, ProjectIntegration, ProjectWebhook, ProjectWebhookDelivery } from '$lib/api';
 	import SettingsCi from '$lib/components/SettingsCi.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
 	import AlertCircle from 'lucide-svelte/icons/alert-circle';
@@ -81,6 +81,8 @@
 		runners,
 		ciJobs,
 		ciArtifactsByJob,
+		ciLogsByJob,
+		ciSecrets,
 		webhookDeliveriesByHook,
 		ci,
 		busy,
@@ -93,11 +95,20 @@
 		webhookUrl = $bindable(),
 		webhookEvents = $bindable(),
 		runnerName = $bindable(),
+		runnerConcurrency = $bindable(),
+		runnerLabels = $bindable(),
 		ciCommandName = $bindable(),
 		ciCommandRun = $bindable(),
 		ciCommandTimeout = $bindable(),
 		ciCommandArtifacts = $bindable(),
 		ciCommandCaches = $bindable(),
+		ciCommandWorkspaces = $bindable(),
+		ciCommandPaths = $bindable(),
+		ciCommandLabels = $bindable(),
+		ciCommandEnv = $bindable(),
+		ciCommandSecrets = $bindable(),
+		ciSecretKey = $bindable(),
+		ciSecretValue = $bindable(),
 		testMessage,
 		addApiKey,
 		removeApiKey,
@@ -107,9 +118,15 @@
 		triggerWebhook,
 		removeIntegration,
 		loadCiArtifacts,
+		loadCiLogs,
 		downloadCiArtifact,
+		cancelJob,
+		rerunJob,
+		saveCiSecret,
+		removeCiSecret,
 		loadWebhookDeliveries,
 		toggleCi,
+		saveCiSettings,
 		addCiCommand,
 		removeCiCommand,
 		addRunner,
@@ -121,6 +138,8 @@
 		runners: CiRunner[];
 		ciJobs: CiJob[];
 		ciArtifactsByJob: Record<string, CiArtifact[]>;
+		ciLogsByJob: Record<string, CiLogLine[]>;
+		ciSecrets: CiSecret[];
 		webhookDeliveriesByHook: Record<string, ProjectWebhookDelivery[]>;
 		ci: ProjectCiSettings;
 		busy: boolean;
@@ -133,11 +152,20 @@
 		webhookUrl: string;
 		webhookEvents: string[];
 		runnerName: string;
+		runnerConcurrency: number;
+		runnerLabels: string;
 		ciCommandName: string;
 		ciCommandRun: string;
 		ciCommandTimeout: number;
 		ciCommandArtifacts: string;
 		ciCommandCaches: string;
+		ciCommandWorkspaces: string;
+		ciCommandPaths: string;
+		ciCommandLabels: string;
+		ciCommandEnv: string;
+		ciCommandSecrets: string;
+		ciSecretKey: string;
+		ciSecretValue: string;
 		testMessage: string;
 		addApiKey: () => void;
 		removeApiKey: (id: string) => void;
@@ -147,9 +175,15 @@
 		triggerWebhook: (id: string) => void;
 		removeIntegration: (id: string) => void;
 		loadCiArtifacts: (jobId: string) => void | Promise<void>;
+		loadCiLogs: (jobId: string) => void | Promise<void>;
 		downloadCiArtifact: (jobId: string, artifact: CiArtifact) => void | Promise<void>;
+		cancelJob: (jobId: string) => void | Promise<void>;
+		rerunJob: (jobId: string) => void | Promise<void>;
+		saveCiSecret: () => void | Promise<void>;
+		removeCiSecret: (key: string) => void | Promise<void>;
 		loadWebhookDeliveries: (id: string) => void | Promise<void>;
 		toggleCi: () => void;
+		saveCiSettings: (ci: ProjectCiSettings) => void | Promise<void>;
 		addCiCommand: () => void;
 		removeCiCommand: (name: string) => void;
 		addRunner: () => void;
@@ -266,16 +300,33 @@
 		{ci}
 		{busy}
 		{createdRunner}
+		{ciLogsByJob}
+		{ciSecrets}
 		bind:runnerName
+		bind:runnerConcurrency
+		bind:runnerLabels
 		bind:ciCommandName
 		bind:ciCommandRun
 		bind:ciCommandTimeout
 		bind:ciCommandArtifacts
 		bind:ciCommandCaches
+		bind:ciCommandWorkspaces
+		bind:ciCommandPaths
+		bind:ciCommandLabels
+		bind:ciCommandEnv
+		bind:ciCommandSecrets
+		bind:ciSecretKey
+		bind:ciSecretValue
 		{ciArtifactsByJob}
 		{loadCiArtifacts}
+		{loadCiLogs}
 		{downloadCiArtifact}
+		{cancelJob}
+		{rerunJob}
+		{saveCiSecret}
+		{removeCiSecret}
 		{toggleCi}
+		{saveCiSettings}
 		{addCiCommand}
 		{removeCiCommand}
 		{addRunner}

@@ -9,22 +9,22 @@ use crate::support::{
 };
 
 pub(crate) async fn source_zip_bytes_for_snapshot(
-    store: &Bucket,
+    features: &Bucket,
     tenant: &str,
     project: &str,
     snapshot_id: &str,
 ) -> Result<Vec<u8>> {
-    source_zip_bytes_for_snapshot_filtered(store, tenant, project, snapshot_id, None).await
+    source_zip_bytes_for_snapshot_filtered(features, tenant, project, snapshot_id, None).await
 }
 pub(crate) async fn source_zip_bytes_for_snapshot_filtered(
-    store: &Bucket,
+    features: &Bucket,
     tenant: &str,
     project: &str,
     snapshot_id: &str,
-    path_policy: Option<&crate::d1::PathVisibilityPolicy>,
+    path_policy: Option<&crate::features::PathVisibilityPolicy>,
 ) -> Result<Vec<u8>> {
     validate_object_id(snapshot_id)?;
-    let snapshot_bytes = r2_bytes(store, &object_key(tenant, project, snapshot_id)).await?;
+    let snapshot_bytes = r2_bytes(features, &object_key(tenant, project, snapshot_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
         .map_err(|error| Error::RustError(error.to_string()))?;
     let root_tree = snapshot["root_tree"]
@@ -33,18 +33,19 @@ pub(crate) async fn source_zip_bytes_for_snapshot_filtered(
         .to_string();
     validate_object_id(&root_tree)?;
     let mut entries = Vec::new();
-    crate::walk_tree(store, tenant, project, "", &root_tree, &mut entries).await?;
+    crate::routes::graph::walk_tree(features, tenant, project, "", &root_tree, &mut entries)
+        .await?;
     let files = entries
         .into_iter()
         .filter(|entry| {
             entry.entry_type == "blob"
                 && match path_policy {
-                    Some(policy) => crate::d1::path_can_read(policy, &entry.path),
+                    Some(policy) => crate::features::path_can_read(policy, &entry.path),
                     None => true,
                 }
         })
         .collect::<Vec<_>>();
-    source_zip_bytes(store, tenant, project, files).await
+    source_zip_bytes(features, tenant, project, files).await
 }
 
 pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -> Result<Response> {
@@ -70,17 +71,19 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         None => false,
     };
     let project_public = matches!(
-        crate::d1::project_visibility(database, &tenant, &project).await?,
+        crate::features::project_visibility(database, &tenant, &project).await?,
         Some(visibility) if visibility == "public"
     );
     let release_public = released_snapshot && project_public;
     let user = if release_public {
-        crate::optional_auth(&req, &ctx).await.unwrap_or(None)
+        crate::routes::objects::optional_auth(&req, &ctx)
+            .await
+            .unwrap_or(None)
     } else {
-        crate::optional_auth(&req, &ctx).await?
+        crate::routes::objects::optional_auth(&req, &ctx).await?
     };
     if !release_public {
-        crate::check_workspace_read_capability(
+        crate::routes::objects::check_workspace_read_capability(
             database,
             &tenant,
             &project,
@@ -90,11 +93,12 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         .await?;
     }
     let path_policy =
-        crate::d1::path_visibility_policy(database, &tenant, &project, user.as_deref()).await?;
+        crate::features::path_visibility_policy(database, &tenant, &project, user.as_deref())
+            .await?;
     let head_id = if let Some(snapshot) = snapshot_param {
         snapshot
     } else {
-        let head = crate::d1::head(database, &tenant, &project, &workspace).await?;
+        let head = crate::features::head(database, &tenant, &project, &workspace).await?;
         match head {
             Some(value) => value,
             None => return json_error(404, "workspace has no head"),
@@ -102,9 +106,11 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
     };
     validate_object_id(&head_id)?;
     let public_cache = (release_public
-        || crate::d1::workspace_is_publicly_readable(database, &tenant, &project, &workspace)
-            .await?)
-        && !crate::d1::path_policy_restricts_objects(&path_policy);
+        || crate::features::workspace_is_publicly_readable(
+            database, &tenant, &project, &workspace,
+        )
+        .await?)
+        && !crate::features::path_policy_restricts_objects(&path_policy);
     let etag = format!("{head_id}-source-zip");
     let cache_seconds = if pinned_snapshot { 31_536_000 } else { 60 };
     if let Some(response) =
@@ -112,11 +118,12 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
     {
         return Ok(response);
     }
-    let store = bucket(&ctx.env)?;
-    let cache_key = (released_snapshot && !crate::d1::path_policy_restricts_objects(&path_policy))
-        .then(|| release_source_cache_key(&tenant, &project, &head_id));
+    let features = bucket(&ctx.env)?;
+    let cache_key = (released_snapshot
+        && !crate::features::path_policy_restricts_objects(&path_policy))
+    .then(|| release_source_cache_key(&tenant, &project, &head_id));
     if let Some(cache_key) = cache_key.as_deref() {
-        if let Some(object) = store.get(cache_key).execute().await? {
+        if let Some(object) = features.get(cache_key).execute().await? {
             if let Some(body) = object.body() {
                 let mut response = Response::from_body(body.response_body()?)?;
                 let headers = response.headers_mut();
@@ -140,7 +147,7 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         }
     }
     if let Some(cache_key) = cache_key {
-        let bytes = source_zip_bytes_for_snapshot(&store, &tenant, &project, &head_id).await?;
+        let bytes = source_zip_bytes_for_snapshot(&features, &tenant, &project, &head_id).await?;
         let metadata = HttpMetadata {
             content_type: Some("application/zip".to_string()),
             content_disposition: Some(format!(
@@ -149,7 +156,7 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
             )),
             ..Default::default()
         };
-        store
+        features
             .put(cache_key, bytes.clone())
             .http_metadata(metadata)
             .execute()
@@ -167,7 +174,7 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         apply_cache_headers(headers, &etag, public_cache, cache_seconds, pinned_snapshot)?;
         return Ok(response);
     }
-    let snapshot_bytes = r2_bytes(&store, &object_key(&tenant, &project, &head_id)).await?;
+    let snapshot_bytes = r2_bytes(&features, &object_key(&tenant, &project, &head_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
         .map_err(|error| Error::RustError(error.to_string()))?;
     let root_tree = snapshot["root_tree"]
@@ -176,14 +183,15 @@ pub(crate) async fn project_source_archive(req: Request, ctx: AppRouteContext) -
         .to_string();
     validate_object_id(&root_tree)?;
     let mut entries = Vec::new();
-    crate::walk_tree(&store, &tenant, &project, "", &root_tree, &mut entries).await?;
+    crate::routes::graph::walk_tree(&features, &tenant, &project, "", &root_tree, &mut entries)
+        .await?;
     let files = entries
         .into_iter()
         .filter(|entry| {
-            entry.entry_type == "blob" && crate::d1::path_can_read(&path_policy, &entry.path)
+            entry.entry_type == "blob" && crate::features::path_can_read(&path_policy, &entry.path)
         })
         .collect::<Vec<_>>();
-    let stream = source_zip_stream(store, tenant.clone(), project.clone(), files);
+    let stream = source_zip_stream(features, tenant.clone(), project.clone(), files);
     let mut response = Response::from_stream(stream)?;
     let headers = response.headers_mut();
     headers.set("content-type", "application/zip")?;
@@ -203,7 +211,7 @@ fn release_source_cache_key(tenant: &str, project: &str, snapshot: &str) -> Stri
 }
 
 async fn source_zip_bytes(
-    store: &Bucket,
+    features: &Bucket,
     tenant: &str,
     project: &str,
     files: Vec<TreeEntryInfo>,
@@ -218,7 +226,7 @@ async fn source_zip_bytes(
         offset = checked_zip_offset(offset + header.len() as u64)?;
         output.extend_from_slice(&header);
 
-        let bytes = r2_bytes(store, &object_key(tenant, project, &entry.id)).await?;
+        let bytes = r2_bytes(features, &object_key(tenant, project, &entry.id)).await?;
         let size = checked_zip_size(bytes.len() as u64)?;
         let mut crc = Crc32::new();
         crc.update(&bytes);
@@ -242,14 +250,14 @@ async fn source_zip_bytes(
 }
 
 fn source_zip_stream(
-    store: Bucket,
+    features: Bucket,
     tenant: String,
     project: String,
     files: Vec<TreeEntryInfo>,
 ) -> impl futures_util::TryStream<Ok = Vec<u8>, Error = Error> {
     stream::try_unfold(
         SourceZipState {
-            store,
+            features,
             tenant,
             project,
             files,
@@ -263,7 +271,7 @@ fn source_zip_stream(
 }
 
 struct SourceZipState {
-    store: Bucket,
+    features: Bucket,
     tenant: String,
     project: String,
     files: Vec<TreeEntryInfo>,
@@ -306,7 +314,7 @@ impl SourceZipState {
                     };
                     let name = source_zip_name(&entry.path)?;
                     let key = object_key(&self.tenant, &self.project, &entry.id);
-                    let Some(object) = self.store.get(key).execute().await? else {
+                    let Some(object) = self.features.get(key).execute().await? else {
                         return Err(Error::RustError(format!("missing object {}", entry.id)));
                     };
                     let Some(body) = object.body() else {

@@ -392,7 +392,7 @@
 {:else if error && !detail}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
 {:else if detail}
-	<div class={activeTab === 'files' ? 'mx-auto max-w-none' : 'mx-auto max-w-6xl'}>
+	<div class="mx-auto w-full max-w-[96rem]">
 		<div class={activeTab === 'files' ? 'mx-[calc(50%-50vw)] border-b border-[#2a2a28] px-6 pt-5' : ''}>
 			<div class="mb-4">
 				<h2 class="text-xl font-semibold text-[#f0eee4]">{detail.name}</h2>

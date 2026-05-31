@@ -56,8 +56,11 @@
 	const pathParts = $derived(currentPath.split('/').filter(Boolean));
 	const homePage = $derived(pathParts.length === 0);
 	const accountSettings = $derived(pathParts[0] === 'settings');
+	const reservedTenantSections = new Set<string>(['leaves']);
 	const currentTenant = $derived(accountSettings ? '' : (pathParts[0] ?? ''));
-	const currentProject = $derived(accountSettings ? null : (pathParts[1] ?? null));
+	const currentProject = $derived(
+		accountSettings || reservedTenantSections.has(pathParts[1] ?? '') ? null : (pathParts[1] ?? null)
+	);
 	const userTenant = $derived(tenants.find((tenant) => tenant.kind === 'user')?.name ?? '');
 	const selectedTenant = $derived(homePage || accountSettings ? '' : currentTenant || tenants[0]?.name || userTenant || profile?.preferredUsername || '');
 	const tenantProjects = $derived(projects.filter((p) => p.tenant === selectedTenant));
