@@ -87,19 +87,46 @@ pub(crate) async fn project_tree(
         .as_str()
         .unwrap_or_default()
         .to_string();
-    let page = walk_tree_page(
-        &features,
-        &tenant,
-        &project,
-        &root_tree,
-        TreeWalkOptions {
-            prefix: tree_prefix.clone(),
-            max_depth: tree_depth,
-            limit: tree_limit,
-            cursor: tree_cursor,
-        },
-    )
-    .await?;
+    let walk_options = TreeWalkOptions {
+        prefix: tree_prefix.clone(),
+        max_depth: tree_depth,
+        limit: tree_limit,
+        cursor: tree_cursor.clone(),
+    };
+    let page = if tree_cursor.is_none() && tree_depth >= MAX_TREE_DEPTH {
+        match features::cached_snapshot_blob_map(
+            &ctx.env,
+            &database,
+            &tenant,
+            &project,
+            &head_id,
+        )
+        .await
+        {
+            Ok(blob_map) if !blob_map.is_empty() => {
+                crate::routes::graph::tree_entries_from_blob_map(&blob_map, &walk_options)
+            }
+            _ => {
+                walk_tree_page(
+                    &features,
+                    &tenant,
+                    &project,
+                    &root_tree,
+                    walk_options,
+                )
+                .await?
+            }
+        }
+    } else {
+        walk_tree_page(
+            &features,
+            &tenant,
+            &project,
+            &root_tree,
+            walk_options,
+        )
+        .await?
+    };
     let entries = page
         .entries
         .into_iter()

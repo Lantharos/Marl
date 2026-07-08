@@ -230,7 +230,16 @@ pub async fn workspace_merge_status(
         blocked_by.push(format!("{unresolved} unresolved file conversation(s)"));
     }
     blocked_by.extend(
-        component_owner_approval_blocks(env, tenant, project, head, settings, &approvals).await?,
+        component_owner_approval_blocks(
+            env,
+            database,
+            tenant,
+            project,
+            head,
+            settings,
+            &approvals,
+        )
+        .await?,
     );
     Ok(MergeRequirementStatus {
         can_merge: blocked_by.is_empty(),
@@ -245,6 +254,7 @@ pub async fn workspace_merge_status(
 
 async fn component_owner_approval_blocks(
     env: Option<&Env>,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     head: Option<&str>,
@@ -257,8 +267,14 @@ async fn component_owner_approval_blocks(
     let (Some(env), Some(head)) = (env, head) else {
         return Ok(Vec::new());
     };
-    let Some(changed_paths) =
-        crate::routes::sync::ci_changed_paths_for_head(env, tenant, project, head).await?
+    let Some(changed_paths) = crate::routes::sync::ci_changed_paths_for_head(
+        env,
+        database,
+        tenant,
+        project,
+        head,
+    )
+    .await?
     else {
         return Ok(Vec::new());
     };

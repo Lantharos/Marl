@@ -725,7 +725,15 @@ pub(crate) async fn materialize_ci_for_ready_head(
     head: &str,
 ) -> Result<Vec<String>> {
     let settings = features::project_settings(database, tenant, project, None).await?;
-    let changed_paths = ci_changed_paths(env, database, tenant, project, workspace, head).await?;
+    let changed_paths = crate::routes::sync::ci_changed_paths_for_workspace_head(
+        env,
+        database,
+        tenant,
+        project,
+        workspace,
+        head,
+    )
+    .await?;
     let affected_components = changed_paths
         .as_ref()
         .map(|paths| features::component_ids_for_paths(&settings, paths));
@@ -760,31 +768,6 @@ pub(crate) async fn materialize_ci_for_ready_head(
     }
     refresh_workspace_mergeability(env, database, tenant, project, workspace, Some(head)).await?;
     Ok(jobs.into_iter().map(|job| job.id).collect())
-}
-
-async fn ci_changed_paths(
-    env: &Env,
-    database: &crate::request_context::Database,
-    tenant: &str,
-    project: &str,
-    workspace: &str,
-    head: &str,
-) -> Result<Option<Vec<String>>> {
-    let Some(state) = features::workspace_state(database, tenant, project, workspace).await? else {
-        return Ok(None);
-    };
-    let parent_workspace = state.parent_workspace.as_deref().unwrap_or("main");
-    let Some(parent) =
-        features::workspace_state(database, tenant, project, parent_workspace).await?
-    else {
-        return Ok(None);
-    };
-    let Some(parent_head) = parent.head.as_deref() else {
-        return Ok(None);
-    };
-    crate::routes::graph::changed_paths_between_snapshots(env, tenant, project, head, parent_head)
-        .await
-        .map(Some)
 }
 
 pub(crate) async fn require_ci_runner(

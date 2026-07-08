@@ -13,29 +13,56 @@
 
 	let tree = $state<ProjectTree | null>(null);
 	let file = $state<ProjectFile | null>(null);
-	let loading = $state(true);
+	let loadingTree = $state(true);
+	let loadingFile = $state(false);
 	let error = $state('');
 	let downloadBusy = $state(false);
 	let fileController: AbortController | null = null;
 	let downloadController: AbortController | null = null;
 
-	async function load(signal: AbortSignal, snapshotId = snapshot) {
-		loading = true;
+	async function loadTree(signal: AbortSignal, snapshotId = snapshot) {
+		loadingTree = true;
 		error = '';
 		try {
-			const nextTree = await getProjectTree(tenant, project, 'main', snapshotId, { signal });
-			tree = nextTree;
-			const currentPath = file?.path;
-			const currentExists = currentPath
-				? nextTree.entries.some((entry) => entry.path === currentPath && entry.entry_type === 'blob')
-				: false;
-			const path = currentExists && currentPath ? currentPath : defaultFilePath(nextTree.entries);
-			file = path ? await getProjectFile(tenant, project, path, 'main', snapshotId, { signal }) : null;
+			tree = await getProjectTree(tenant, project, 'main', snapshotId, { signal, limit: 4000 });
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed to load';
+			tree = null;
 		} finally {
-			if (!signal.aborted) loading = false;
+			if (!signal.aborted) loadingTree = false;
+		}
+	}
+
+	async function loadDefaultFile(signal: AbortSignal, snapshotId = snapshot) {
+		if (!tree) return;
+		const path = defaultFilePath(tree.entries);
+		if (!path) {
+			file = null;
+			return;
+		}
+		loadingFile = true;
+		fileController?.abort();
+		const controller = new AbortController();
+		fileController = controller;
+		try {
+			file = await getProjectFile(tenant, project, path, 'main', snapshotId, { signal: controller.signal });
+		} catch (e) {
+			if (isAbortError(e)) return;
+			error = e instanceof Error ? e.message : 'Failed to load file';
+			file = null;
+		} finally {
+			if (!signal.aborted && fileController === controller) {
+				loadingFile = false;
+				fileController = null;
+			}
+		}
+	}
+
+	async function load(signal: AbortSignal, snapshotId = snapshot) {
+		await loadTree(signal, snapshotId);
+		if (!signal.aborted && tree) {
+			await loadDefaultFile(signal, snapshotId);
 		}
 	}
 
@@ -68,12 +95,16 @@
 		fileController?.abort();
 		const controller = new AbortController();
 		fileController = controller;
+		loadingFile = true;
 		try {
 			file = await getProjectFile(tenant, project, path, 'main', snapshot, { signal: controller.signal });
 		} catch (e) {
 			if (!isAbortError(e)) error = e instanceof Error ? e.message : 'Failed to load file';
 		} finally {
-			if (fileController === controller) fileController = null;
+			if (fileController === controller) {
+				loadingFile = false;
+				fileController = null;
+			}
 		}
 	}
 
@@ -108,7 +139,7 @@
 	}
 </script>
 
-{#if loading}
+{#if loadingTree}
 	<Spinner />
 {:else if error}
 	<div class="text-sm text-[#d96c5a]">{error}</div>
@@ -143,7 +174,13 @@
 				/>
 			</div>
 			<div class="min-h-0 min-w-0 overflow-hidden rounded border border-[#2a2a28] bg-[#0f0f0d]">
-				<CodePane {file} />
+				{#if loadingFile && !file}
+					<div class="flex h-full items-center justify-center">
+						<Spinner />
+					</div>
+				{:else}
+					<CodePane {file} />
+				{/if}
 			</div>
 		</div>
 	</div>

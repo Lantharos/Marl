@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { approveRemoteApproval, getRemoteApproval, type RemoteApproval } from '$lib/api';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 
 	let { params } = $props();
 	let approval = $state<RemoteApproval | null>(null);
@@ -44,7 +45,9 @@
 
 <main class="min-h-screen bg-[#0f0f0d] px-6 py-10 text-[#eae9e4]">
 	<div class="mx-auto max-w-2xl border-b border-[#252522] pb-5">
-		<a href="/" class="text-lg font-semibold text-[#f0eee4]">sty</a>
+		<a href="/" class="sty-logo-link inline-block">
+			<StyLogo />
+		</a>
 	</div>
 
 	<div class="mx-auto mt-12 max-w-2xl">

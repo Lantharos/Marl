@@ -21,6 +21,7 @@
 	import ExternalLink from 'lucide-svelte/icons/external-link';
 	import Plus from 'lucide-svelte/icons/plus';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 	import type { AveProfile } from '$lib/session';
 
 	let {
@@ -196,7 +197,9 @@
 
 <header class="border-b border-[#2a2a28] bg-[#0f0f0d] {currentProject ? 'sty-project-theme sty-project-nav' : ''}" style={themeStyle}>
 	<div class="flex items-center gap-4 px-32 py-2.5 md:px-48 lg:px-64 xl:px-80">
-		<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
+		<a href="/" class="sty-logo-link block shrink-0">
+			<StyLogo />
+		</a>
 
 		<div class="flex items-center gap-0.5">
 			<div class="relative">

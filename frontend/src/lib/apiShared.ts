@@ -30,6 +30,19 @@ export function isAbortError(error: unknown) {
 	return error instanceof Error && error.name === 'AbortError';
 }
 
+function parseApiError(body: string) {
+	const trimmed = body.trim();
+	if (!trimmed.startsWith('{')) {
+		return trimmed;
+	}
+	try {
+		const parsed = JSON.parse(trimmed) as { error?: string; message?: string };
+		return parsed.error ?? parsed.message ?? trimmed;
+	} catch {
+		return trimmed;
+	}
+}
+
 export async function authedFetch(path: string, init: RequestInit = {}) {
 	const token = await getStyToken();
 	if (!token) {
@@ -39,7 +52,7 @@ export async function authedFetch(path: string, init: RequestInit = {}) {
 	headers.set('authorization', `Bearer ${token}`);
 	const response = await d1Fetch(`${apiBase()}${path}`, { ...init, headers });
 	if (!response.ok) {
-		throw new Error(await response.text());
+		throw new Error(parseApiError(await response.text()));
 	}
 	return response;
 }
@@ -52,7 +65,7 @@ export async function publicFetch(path: string, init: RequestInit = {}) {
 	}
 	const response = await d1Fetch(`${apiBase()}${path}`, { ...init, headers });
 	if (!response.ok) {
-		throw new Error(await response.text());
+		throw new Error(parseApiError(await response.text()));
 	}
 	return response;
 }

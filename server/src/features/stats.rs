@@ -44,6 +44,21 @@ pub async fn recompute_project_stats(db: &Database, tenant: &str, project: &str)
     Ok(())
 }
 
+pub async fn increment_history_count(db: &Database, tenant: &str, project: &str) -> Result<()> {
+    let updated_at = now_rfc3339();
+    db.prepare(
+        "INSERT INTO project_stats (tenant, project, workspace_count, open_issue_count, ready_count, release_count, history_count, leaf_count, updated_at)
+         VALUES (?1, ?2, 0, 0, 0, 0, 1, 0, ?3)
+         ON CONFLICT(tenant, project) DO UPDATE SET
+            history_count = project_stats.history_count + 1,
+            updated_at = excluded.updated_at",
+    )
+    .bind(&[js_str(tenant), js_str(project), js_str(&updated_at)])?
+    .run()
+    .await?;
+    Ok(())
+}
+
 async fn select_project_stats(
     db: &Database,
     tenant: &str,

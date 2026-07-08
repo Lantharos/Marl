@@ -1,4 +1,5 @@
 use super::prelude::*;
+use futures_util::future::try_join_all;
 pub(crate) async fn missing(
     mut req: Request,
     ctx: crate::request_context::AppRouteContext,
@@ -24,14 +25,18 @@ pub(crate) async fn missing(
             ids.push(id);
         }
     }
-    if ids.len() > 512 {
+    if ids.len() > 2048 {
         return json_error(413, "object missing batch is too large");
     }
-    let known = features::object_kinds(&database, &tenant, &project, &ids).await?;
-    let missing = ids
-        .into_iter()
-        .filter(|id| !known.contains_key(id))
-        .collect();
+    let storage = bucket(&ctx.env)?;
+    let mut missing = Vec::new();
+    for id in ids {
+        let key = object_key(&tenant, &project, &id);
+        if storage.head(&key).await?.is_some() {
+            continue;
+        }
+        missing.push(id);
+    }
     Response::from_json(&MissingResponse { missing })
 }
 
@@ -66,7 +71,7 @@ pub(crate) async fn download_objects(
             ids.push(id);
         }
     }
-    if ids.len() > 128 {
+    if ids.len() > 512 {
         return json_error(413, "object download batch is too large");
     }
     let kinds = features::object_kinds(&database, &tenant, &project, &ids).await?;
@@ -85,7 +90,7 @@ pub(crate) async fn download_objects(
             return json_error(404, "object not found");
         };
         let object_size = usize::try_from(object.size()).unwrap_or(usize::MAX);
-        if total_size.saturating_add(object_size) > 8 * 1024 * 1024 {
+        if total_size.saturating_add(object_size) > 32 * 1024 * 1024 {
             return json_error(413, "object download batch payload is too large");
         }
         let Some(body) = object.body() else {
@@ -93,7 +98,7 @@ pub(crate) async fn download_objects(
         };
         let bytes = body.bytes().await?;
         total_size += bytes.len();
-        if total_size > 8 * 1024 * 1024 {
+        if total_size > 32 * 1024 * 1024 {
             return json_error(413, "object download batch payload is too large");
         }
         objects.push(RemoteObject {
@@ -105,8 +110,10 @@ pub(crate) async fn download_objects(
     Response::from_json(&DownloadResponse { objects })
 }
 
-const OBJECT_UPLOAD_BATCH_LIMIT: usize = 64;
-const OBJECT_UPLOAD_BATCH_BYTES: usize = 8 * 1024 * 1024;
+const OBJECT_UPLOAD_BATCH_LIMIT: usize = 256;
+const OBJECT_UPLOAD_BATCH_BYTES: usize = 32 * 1024 * 1024;
+const OBJECT_PACK_LIMIT: usize = 512;
+const OBJECT_PACK_BYTES: usize = 64 * 1024 * 1024;
 
 pub(crate) async fn upload_objects(
     mut req: Request,
@@ -183,6 +190,209 @@ pub(crate) async fn upload_objects(
         stored += 1;
     }
     Response::from_json(&json!({ "ok": true, "stored": stored, "skipped": skipped }))
+}
+
+const PACK_DOWNLOAD_CONCURRENCY: usize = 8;
+const PACK_UPLOAD_CONCURRENCY: usize = 8;
+
+async fn store_pack_object(
+    features: &worker::Bucket,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    object: crate::support::PackObject,
+    max_object_size: usize,
+    existing_kind: Option<&str>,
+) -> Result<Option<usize>> {
+    validate_object_metadata(&object.id, &object.kind)?;
+    if object.bytes.len() > max_object_size {
+        return Err(Error::RustError(
+            "object is larger than the configured upload limit".to_string(),
+        ));
+    }
+    if let Some(existing_kind) = existing_kind {
+        if existing_kind != object.kind {
+            return Err(Error::RustError(
+                "object kind does not match existing object".to_string(),
+            ));
+        }
+        let key = object_key(tenant, project, &object.id);
+        if features.head(&key).await?.is_some() {
+            return Ok(None);
+        }
+    }
+    let digest = object_digest_for_kind(&object.bytes, &object.kind)?;
+    if digest != object.id {
+        return Err(Error::RustError(
+            "object id does not match SHA-256 digest".to_string(),
+        ));
+    }
+    validate_object_payload(&object.kind, &object.bytes)?;
+    if object.kind == "snapshot" {
+        if let Err(reason) = validate_snapshot_signature(database, &object.bytes).await {
+            return Err(Error::RustError(format!("invalid snapshot signature: {reason}")));
+        }
+    }
+    let size = object.bytes.len();
+    put_bytes(
+        features,
+        &object_key(tenant, project, &object.id),
+        object.bytes,
+    )
+    .await?;
+    features::record_object(database, tenant, project, &object.id, &object.kind, size).await?;
+    Ok(Some(size))
+}
+
+pub(crate) async fn upload_pack(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = require_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    check_project_write_capability(
+        &database,
+        &tenant,
+        &project,
+        &user,
+        "contributor",
+        "objects:write",
+    )
+    .await?;
+    let bytes = req.bytes().await?;
+    if bytes.len() > OBJECT_PACK_BYTES {
+        return json_error(413, "object pack payload is too large");
+    }
+    let packed = crate::support::decode_pack(&bytes)?;
+    if packed.is_empty() {
+        return json_error(400, "object pack is empty");
+    }
+    if packed.len() > OBJECT_PACK_LIMIT {
+        return json_error(413, "object pack contains too many objects");
+    }
+    let max_object_size = object_size_limit(&ctx.env);
+    let ids = packed
+        .iter()
+        .map(|object| object.id.clone())
+        .collect::<Vec<_>>();
+    let known = features::object_kinds(&database, &tenant, &project, &ids).await?;
+    let features = bucket(&ctx.env)?;
+    let mut stored = 0usize;
+    let mut skipped = 0usize;
+    for chunk in packed.chunks(PACK_UPLOAD_CONCURRENCY) {
+        let results = try_join_all(chunk.iter().map(|object| {
+            let features = features.clone();
+            let tenant = tenant.clone();
+            let project = project.clone();
+            let object = object.clone();
+            let existing_kind = known.get(&object.id).cloned();
+            async move {
+                store_pack_object(
+                    &features,
+                    database,
+                    &tenant,
+                    &project,
+                    object,
+                    max_object_size,
+                    existing_kind.as_deref(),
+                )
+                .await
+            }
+        }))
+        .await?;
+        for result in results {
+            match result {
+                Some(_) => stored += 1,
+                None => skipped += 1,
+            }
+        }
+    }
+    Response::from_json(&json!({ "ok": true, "stored": stored, "skipped": skipped }))
+}
+
+async fn fetch_pack_object(
+    features: &worker::Bucket,
+    tenant: &str,
+    project: &str,
+    id: String,
+    kind: String,
+) -> Result<crate::support::PackObject> {
+    let Some(object) = features
+        .get(object_key(tenant, project, &id))
+        .execute()
+        .await?
+    else {
+        return Err(Error::RustError(format!("object not found: {id}")));
+    };
+    let Some(body) = object.body() else {
+        return Err(Error::RustError(format!("object not found: {id}")));
+    };
+    let bytes = body.bytes().await?;
+    Ok(crate::support::PackObject { id, kind, bytes })
+}
+
+pub(crate) async fn download_pack(
+    mut req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    check_project_read_capability(
+        &database,
+        &tenant,
+        &project,
+        user.as_deref(),
+        "objects:read",
+    )
+    .await?;
+    let path_policy =
+        features::path_visibility_policy(&database, &tenant, &project, user.as_deref()).await?;
+    if features::path_policy_restricts_objects(&path_policy)
+        && !features::path_policy_can_read_all(&path_policy)
+    {
+        return json_error(403, "object reads require full source access");
+    }
+    let body: DownloadRequest = req.json().await?;
+    let mut ids = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for id in body.ids {
+        validate_object_id(&id)?;
+        if seen.insert(id.clone()) {
+            ids.push(id);
+        }
+    }
+    if ids.len() > OBJECT_PACK_LIMIT {
+        return json_error(413, "object pack download batch is too large");
+    }
+    let kinds = features::object_kinds(&database, &tenant, &project, &ids).await?;
+    for id in &ids {
+        if !kinds.contains_key(id) {
+            return json_error(404, "object not found");
+        }
+    }
+    let features = bucket(&ctx.env)?;
+    let mut packed = Vec::with_capacity(ids.len());
+    let mut total_size = 0usize;
+    for chunk in ids.chunks(PACK_DOWNLOAD_CONCURRENCY) {
+        let futures = chunk.iter().map(|id| {
+            let kind = kinds.get(id).cloned().expect("validated above");
+            fetch_pack_object(&features, &tenant, &project, id.clone(), kind)
+        });
+        let chunk_objects = try_join_all(futures).await?;
+        for object in chunk_objects {
+            total_size = total_size.saturating_add(object.bytes.len());
+            if total_size > OBJECT_PACK_BYTES {
+                return json_error(413, "object pack download payload is too large");
+            }
+            packed.push(object);
+        }
+    }
+    let body = crate::support::encode_pack(&packed, true)?;
+    let headers = Headers::new();
+    headers.set("content-type", "application/vnd.pig-object-pack")?;
+    Ok(Response::from_bytes(body)?.with_headers(headers))
 }
 
 const PATH_CLOSURE_OBJECT_LIMIT: usize = 10_000;

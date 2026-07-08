@@ -105,6 +105,8 @@ pub struct HeadUpdateRequest {
     pub new_head: String,
     #[serde(default)]
     pub force: bool,
+    #[serde(default)]
+    pub objects_verified: bool,
 }
 
 #[derive(Debug, Serialize)]

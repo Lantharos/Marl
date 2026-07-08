@@ -2,6 +2,9 @@ use serde_json::json;
 use sty_protocol::validate_segment;
 use worker::*;
 
+mod object_pack;
+pub(crate) use object_pack::{PackObject, decode_pack, encode_pack};
+
 use crate::request_context::{AppRouteContext, DB_BOOKMARK_HEADER, Database};
 
 pub const MAX_TREE_DEPTH: usize = 128;
@@ -70,6 +73,22 @@ pub fn validate_object_payload(kind: &str, bytes: &[u8]) -> Result<()> {
         "snapshot" => validate_snapshot_payload(bytes),
         _ => Err(Error::RustError("unknown object kind".to_string())),
     }
+}
+
+pub fn infer_object_kind_from_bytes(bytes: &[u8]) -> Result<String> {
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) {
+        if value
+            .get("root_tree")
+            .and_then(|value| value.as_str())
+            .is_some()
+        {
+            return Ok("snapshot".to_string());
+        }
+        if value.get("entries").and_then(|value| value.as_array()).is_some() {
+            return Ok("tree".to_string());
+        }
+    }
+    Ok("blob".to_string())
 }
 
 pub fn required_header(req: &Request, name: &str) -> Result<String> {
@@ -195,6 +214,9 @@ fn status_for_error(message: &str) -> u16 {
         || lower.contains("malformed")
         || lower.contains("unsafe tree")
         || lower.contains("unknown object kind")
+        || lower.contains(" is missing")
+        || lower.contains("not a tree")
+        || lower.contains("not a snapshot")
     {
         return 400;
     }

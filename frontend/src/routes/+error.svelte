@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 
 	function goBack() {
 		globalThis.history.back();
@@ -13,7 +14,9 @@
 
 <main class="grid min-h-screen place-items-center bg-[#0f0f0d] px-6">
 	<div class="w-full max-w-xl">
-		<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
+		<a href="/" class="sty-logo-link inline-block">
+			<StyLogo />
+		</a>
 		<div class="mt-12 border-l border-[#2a2a28] pl-6">
 			<div class="font-mono text-sm text-[#6f6b5f]">HTTP {$page.status}</div>
 			<h1 class="mt-3 text-4xl font-semibold tracking-tight text-[#f0eee4]">

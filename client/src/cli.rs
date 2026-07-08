@@ -32,7 +32,7 @@ enum Commands {
         callback_port: u16,
         #[command(flatten)]
         remote: RemoteOpts,
-        #[arg(long, default_value = "pig")]
+        #[arg(long, default_value = "pig", hide = true)]
         pig: String,
     },
     Init {

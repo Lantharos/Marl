@@ -51,6 +51,8 @@ pub struct CiJob {
     pub completed_at: Option<String>,
     pub updated_at: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checkout_paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub env: Vec<CiEnvVar>,
 }
 
@@ -158,6 +160,12 @@ pub async fn ensure_ci_schema(db: &Database) -> Result<()> {
     )
     .run()
     .await?;
+    db.prepare(
+        "ALTER TABLE ci_jobs ADD COLUMN checkout_paths_json TEXT NOT NULL DEFAULT '[]'",
+    )
+    .run()
+    .await
+    .ok();
     db.prepare(
         "CREATE INDEX IF NOT EXISTS idx_ci_jobs_project
          ON ci_jobs(tenant, project, workspace, head, queued_at DESC)",

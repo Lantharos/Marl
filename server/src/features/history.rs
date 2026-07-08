@@ -175,7 +175,7 @@ pub async fn log_history(
     ])?
     .run()
     .await?;
-    recompute_project_stats(db, tenant, project).await?;
+    super::stats::increment_history_count(db, tenant, project).await?;
     Ok(())
 }
 

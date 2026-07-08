@@ -245,7 +245,15 @@ pub(crate) async fn component_overview(
     };
     let mut history =
         features::project_history_with_limit(&database, &tenant, &project, Some(80)).await?;
-    enrich_component_history(&ctx.env, &tenant, &project, &settings, &mut history).await?;
+    enrich_component_history(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        &settings,
+        &mut history,
+    )
+    .await?;
 
     let rows = components
         .into_iter()
@@ -298,6 +306,7 @@ pub(crate) async fn component_overview(
 
 async fn enrich_component_history(
     env: &Env,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     settings: &sty_protocol::ProjectSettings,
@@ -310,9 +319,14 @@ async fn enrich_component_history(
         let Some(snapshot_id) = entry.snapshot_id.as_deref() else {
             continue;
         };
-        let Some(changed_paths) =
-            crate::routes::sync::ci_changed_paths_for_head(env, tenant, project, snapshot_id)
-                .await?
+        let Some(changed_paths) = crate::routes::sync::ci_changed_paths_for_head(
+            env,
+            database,
+            tenant,
+            project,
+            snapshot_id,
+        )
+        .await?
         else {
             continue;
         };

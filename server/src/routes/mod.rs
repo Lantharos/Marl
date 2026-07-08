@@ -650,6 +650,14 @@ pub(crate) fn api_router(app_context: AppContext) -> Router<'static, AppContext>
             upload_objects,
         )
         .post_async(
+            "/api/v1/tenants/:tenant/projects/:project/objects/pack",
+            upload_pack,
+        )
+        .post_async(
+            "/api/v1/tenants/:tenant/projects/:project/objects/pack-download",
+            download_pack,
+        )
+        .post_async(
             "/api/v1/tenants/:tenant/projects/:project/objects/path-closure",
             object_path_closure,
         )

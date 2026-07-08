@@ -63,6 +63,14 @@ select:focus-visible:not(.focus-visible\:outline-none) {
 	outline-offset: 1px;
 }
 
+.sty-logo-link {
+	color: #f0eee4;
+}
+
+.sty-project-theme .sty-logo-link {
+	color: var(--sty-project-accent);
+}
+
 .sty-project-theme {
 	--sty-project-accent: #d9a66c;
 	--sty-project-bg: #0f0f0d;

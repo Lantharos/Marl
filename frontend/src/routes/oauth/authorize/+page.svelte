@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { authorizeOAuthApp, getInitializedMe, getOAuthApp, isAbortError, type DeveloperApp } from '$lib/api';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 	import { startLogin } from '$lib/session';
 
 	const clientId = $derived($page.url.searchParams.get('client_id') ?? '');
@@ -108,7 +109,9 @@
 	{:else}
 		<section class="w-full max-w-lg rounded border border-[#2a2a28] bg-[#141412] p-5">
 			<div class="mb-4">
-				<a href="/" class="text-lg font-bold text-[#f0eee4]">sty</a>
+				<a href="/" class="sty-logo-link inline-block">
+					<StyLogo />
+				</a>
 				<h1 class="mt-6 text-xl font-semibold text-[#f0eee4]">Authorize app</h1>
 				<p class="mt-1 text-sm text-[#8c887e]">{app?.name ?? 'This app'} wants access to {tenant}/{project}.</p>
 			</div>

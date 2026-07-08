@@ -25,6 +25,7 @@
 		"wrangler": "^4.85.0"
 	},
 	"dependencies": {
+		"@ave-id/sdk": "0.10.1",
 		"@iconify/svelte": "^5.2.1",
 		"@pierre/trees": "^1.0.0-beta.3",
 		"@speed-highlight/core": "^1.2.15",

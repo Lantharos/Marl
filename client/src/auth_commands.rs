@@ -2,9 +2,8 @@ use std::env;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::blocking::Client;
@@ -24,7 +23,7 @@ pub(crate) fn login(
     token: Option<String>,
     callback_port: u16,
     remote: RemoteOpts,
-    pig: String,
+    _pig: String,
 ) -> Result<()> {
     let remote_url = remote.resolve();
     let (token, user) = match token {
@@ -38,7 +37,7 @@ pub(crate) fn login(
             browser_login(&remote_url, &client_id, callback_port)?
         }
     };
-    import_pig_auth(&pig, &remote_url, &token)?;
+    import_pig_auth(&remote_url, &token)?;
     save_config(&StyConfig {
         remote_url: remote_url.clone(),
         token,
@@ -105,7 +104,9 @@ fn browser_login(
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256");
     webbrowser::open(auth_url.as_str()).context("could not open browser")?;
-    println!("Waiting for Ave login at {redirect_uri}");
+    println!("Complete Ave sign-in in your browser.");
+    println!("OAuth callback: {redirect_uri}");
+    println!("sty API: {remote_url}");
     let callback = wait_for_callback(listener)?;
     if callback.state.as_deref() != Some(state.as_str()) {
         bail!("login callback state did not match");
@@ -227,24 +228,38 @@ fn pkce_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
-fn import_pig_auth(pig: &str, remote_url: &str, token: &str) -> Result<()> {
-    let temp = tempfile::tempdir()?;
-    let mut child = Command::new(pig)
-        .args(["auth", "import", remote_url, "--token-stdin"])
-        .current_dir(temp.path())
-        .stdin(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("failed to run `{pig} auth import`"))?;
-    let stdin = child
-        .stdin
-        .as_mut()
-        .ok_or_else(|| anyhow!("failed to open pig stdin"))?;
-    writeln!(stdin, "{token}")?;
-    let status = child.wait()?;
-    if !status.success() {
-        bail!("`{pig} auth import` failed");
+fn import_pig_auth(remote_url: &str, token: &str) -> Result<()> {
+    let path = pig_config_path()?;
+    let mut config = if path.exists() {
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path)?)?
+    } else {
+        serde_json::json!({})
+    };
+    let Some(config) = config.as_object_mut() else {
+        bail!("invalid PIG config at {}", path.display());
+    };
+    config.insert(
+        "auth".to_string(),
+        serde_json::json!({
+            "remote_url": remote_url,
+            "token": token,
+        }),
+    );
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
     }
+    std::fs::write(
+        &path,
+        serde_json::to_vec_pretty(&serde_json::Value::Object(config.clone()))?,
+    )?;
     Ok(())
+}
+
+fn pig_config_path() -> Result<PathBuf> {
+    let home = env::var("USERPROFILE")
+        .or_else(|_| env::var("HOME"))
+        .context("could not find USERPROFILE or HOME")?;
+    Ok(PathBuf::from(home).join(".pig").join("config.json"))
 }
 
 fn save_config(config: &StyConfig) -> Result<()> {

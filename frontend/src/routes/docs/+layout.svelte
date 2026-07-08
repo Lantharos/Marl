@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { docsNav } from '$lib/docs/navigation';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 
 	let { children } = $props();
 	const path = $derived($page.url.pathname.replace(/\/$/, '') || '/docs');
@@ -15,7 +16,9 @@
 	<header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
 		<div class="mx-auto flex max-w-6xl items-center gap-4 px-6 py-4">
 			<nav class="flex items-center gap-3 text-sm">
-				<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
+				<a href="/" class="sty-logo-link block shrink-0">
+					<StyLogo />
+				</a>
 				<span class="text-[#6f6b5f]">/</span>
 				<a href="/docs" class="font-medium text-[#eae9e4]">docs</a>
 			</nav>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import StyLogo from '$lib/components/StyLogo.svelte';
+
 	let {
 		title,
 		description,
@@ -15,7 +17,9 @@
 <main class="min-h-screen bg-[#0f0f0d] text-[#eae9e4]">
 	<header class="border-b border-[#2a2a28]">
 		<div class="mx-auto flex max-w-4xl items-center justify-center px-6 py-4">
-			<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
+			<a href="/" class="sty-logo-link block shrink-0">
+				<StyLogo />
+			</a>
 		</div>
 	</header>
 

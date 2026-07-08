@@ -40,7 +40,15 @@ pub(crate) async fn update_head(
         validate_object_id(expected)?;
     }
     validate_object_id(&body.new_head)?;
-    match features::object_kind(&database, &tenant, &project, &body.new_head).await? {
+    match features::object_kind_resolved(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        &body.new_head,
+    )
+    .await?
+    {
         Some(kind) if kind == "snapshot" => {}
         Some(_) => return json_error(400, "workspace head must point to a snapshot object"),
         None => return json_error(400, "workspace head object is missing"),
@@ -50,7 +58,17 @@ pub(crate) async fn update_head(
     {
         return json_error(409, "workspace was deleted remotely");
     }
-    ensure_snapshot_refs_uploaded(&ctx.env, &database, &tenant, &project, &body.new_head).await?;
+    ensure_snapshot_refs_uploaded(
+        &ctx.env,
+        &database,
+        &tenant,
+        &project,
+        &workspace,
+        &body.new_head,
+        body.expected_head.as_deref(),
+        body.objects_verified,
+    )
+    .await?;
     let ok = if body.force {
         features::force_update_head(
             &database,
@@ -87,60 +105,30 @@ pub(crate) async fn update_head(
             )
             .await?;
         }
-        let _ = crate::webhooks::emit_project_event(
-            &ctx,
-            &tenant,
-            &project,
-            "sync",
-            serde_json::json!({ "workspace": workspace, "head": body.new_head.clone(), "actor": user }),
-        );
-        enqueue_ci_for_pushed_head(
-            &ctx,
-            &database,
-            &tenant,
-            &project,
-            &workspace,
-            &body.new_head,
-        )
-        .await?;
-        if let Some(state) =
-            features::workspace_state(&database, &tenant, &project, &workspace).await?
-            && state.status == "ready"
-        {
-            crate::routes::ci::enqueue_ci_for_ready_head(
-                &ctx,
-                &tenant,
-                &project,
-                &workspace,
-                Some(&body.new_head),
+        let app = ctx.data.clone();
+        let env = ctx.env.clone();
+        let tenant_owned = tenant.clone();
+        let project_owned = project.clone();
+        let workspace_owned = workspace.clone();
+        let new_head = body.new_head.clone();
+        let user_owned = user.clone();
+        ctx.data.wait_until(async move {
+            let database = app.database();
+            if let Err(error) = finish_head_update_side_effects(
+                &env,
+                database,
+                &app,
+                &tenant_owned,
+                &project_owned,
+                &workspace_owned,
+                &new_head,
+                &user_owned,
             )
-            .await?;
-            let settings = features::project_settings(
-                &database,
-                &tenant,
-                &project,
-                Some(&sty_protocol::TokenPrincipal { user: user.clone() }),
-            )
-            .await?;
-            let merge_status = crate::routes::governance::workspace_merge_status(
-                Some(&ctx.env),
-                &database,
-                &tenant,
-                &project,
-                &workspace,
-                Some(&body.new_head),
-                &settings,
-            )
-            .await?;
-            features::set_workspace_mergeable(
-                &database,
-                &tenant,
-                &project,
-                &workspace,
-                merge_status.can_merge,
-            )
-            .await?;
-        }
+            .await
+            {
+                console_error!("head update side effects failed: {error}");
+            }
+        });
         Response::from_json(&OkResponse { ok: true })
     } else {
         json_error(409, "workspace head changed")
@@ -221,16 +209,101 @@ pub(crate) async fn history_entry(
     }
 }
 
-async fn enqueue_ci_for_pushed_head(
-    ctx: &crate::request_context::AppRouteContext,
+async fn finish_head_update_side_effects(
+    env: &Env,
     database: &crate::request_context::Database,
+    app: &crate::request_context::AppContext,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    head: &str,
+    user: &str,
+) -> Result<()> {
+    let _ = features::warm_snapshot_caches_for_history(env, database, tenant, project, head).await;
+    let queue = app.queue(crate::work_queue::WEBHOOK_QUEUE_BINDING).ok();
+    crate::webhooks::dispatch_project_event(
+        database,
+        queue.as_ref(),
+        tenant,
+        project,
+        "sync",
+        serde_json::json!({ "workspace": workspace, "head": head, "actor": user }),
+    )
+    .await?;
+    enqueue_ci_for_pushed_head(env, database, app, tenant, project, workspace, head).await?;
+    if let Some(state) = features::workspace_state(database, tenant, project, workspace).await?
+        && state.status == "ready"
+    {
+        let jobs = crate::routes::ci::materialize_ci_for_ready_head(
+            env, database, tenant, project, workspace, head,
+        )
+        .await?;
+        if !jobs.is_empty() {
+            let queue = app.queue(crate::work_queue::WEBHOOK_QUEUE_BINDING).ok();
+            crate::webhooks::dispatch_project_event(
+                database,
+                queue.as_ref(),
+                tenant,
+                project,
+                "ci.jobs_queued",
+                serde_json::json!({ "workspace": workspace, "head": head, "jobs": jobs }),
+            )
+            .await?;
+            app.wait_until({
+                let env = env.clone();
+                let tenant = tenant.to_string();
+                let project = project.to_string();
+                let count = jobs.len();
+                async move {
+                    let _ =
+                        crate::ci_runner_pool::notify_runners(&env, &tenant, &project, count)
+                            .await;
+                }
+            });
+        }
+        let settings = features::project_settings(
+            database,
+            tenant,
+            project,
+            Some(&sty_protocol::TokenPrincipal {
+                user: user.to_string(),
+            }),
+        )
+        .await?;
+        let merge_status = crate::routes::governance::workspace_merge_status(
+            Some(env),
+            database,
+            tenant,
+            project,
+            workspace,
+            Some(head),
+            &settings,
+        )
+        .await?;
+        features::set_workspace_mergeable(
+            database,
+            tenant,
+            project,
+            workspace,
+            merge_status.can_merge,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+async fn enqueue_ci_for_pushed_head(
+    env: &Env,
+    database: &crate::request_context::Database,
+    app: &crate::request_context::AppContext,
     tenant: &str,
     project: &str,
     workspace: &str,
     head: &str,
 ) -> Result<()> {
     let settings = features::project_settings(database, tenant, project, None).await?;
-    let changed_paths = ci_changed_paths_for_head(&ctx.env, tenant, project, head).await?;
+    let changed_paths =
+        ci_changed_paths_for_head(env, database, tenant, project, head).await?;
     let affected_components = changed_paths
         .as_ref()
         .map(|paths| features::component_ids_for_paths(&settings, paths));
@@ -265,8 +338,8 @@ async fn enqueue_ci_for_pushed_head(
         }),
     )
     .await?;
-    ctx.data.wait_until({
-        let env = ctx.env.clone();
+    app.wait_until({
+        let env = env.clone();
         let tenant = tenant.to_string();
         let project = project.to_string();
         let count = jobs.len();
@@ -289,7 +362,8 @@ async fn enrich_history_components(
         return Ok(entries);
     }
     for entry in &mut entries {
-        enrich_history_components_with_settings(env, tenant, project, &settings, entry).await?;
+        enrich_history_components_with_settings(env, database, tenant, project, &settings, entry)
+            .await?;
     }
     Ok(entries)
 }
@@ -302,11 +376,12 @@ async fn enrich_history_components_for_entry(
     entry: &mut HistoryEntry,
 ) -> Result<()> {
     let settings = features::project_settings(database, tenant, project, None).await?;
-    enrich_history_components_with_settings(env, tenant, project, &settings, entry).await
+    enrich_history_components_with_settings(env, database, tenant, project, &settings, entry).await
 }
 
 async fn enrich_history_components_with_settings(
     env: &Env,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     settings: &sty_protocol::ProjectSettings,
@@ -315,7 +390,8 @@ async fn enrich_history_components_with_settings(
     let Some(snapshot_id) = entry.snapshot_id.as_deref() else {
         return Ok(());
     };
-    let Some(changed_paths) = ci_changed_paths_for_head(env, tenant, project, snapshot_id).await?
+    let Some(changed_paths) =
+        ci_changed_paths_for_head(env, database, tenant, project, snapshot_id).await?
     else {
         return Ok(());
     };
@@ -325,6 +401,7 @@ async fn enrich_history_components_with_settings(
 
 pub(crate) async fn ci_changed_paths_for_head(
     env: &Env,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     head: &str,
@@ -332,12 +409,44 @@ pub(crate) async fn ci_changed_paths_for_head(
     let Some(parent) = snapshot_parent(env, tenant, project, head).await? else {
         return Ok(None);
     };
-    crate::routes::graph::changed_paths_between_snapshots(env, tenant, project, head, &parent)
+    crate::routes::graph::changed_paths_with_cache(env, database, tenant, project, head, &parent)
         .await
         .map(Some)
 }
 
-async fn snapshot_parent(
+pub(crate) async fn ci_changed_paths_for_workspace_head(
+    env: &Env,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    head: &str,
+) -> Result<Option<Vec<String>>> {
+    let Some(state) = features::workspace_state(database, tenant, project, workspace).await? else {
+        return Ok(None);
+    };
+    let parent_workspace = state.parent_workspace.as_deref().unwrap_or("main");
+    let Some(parent) =
+        features::workspace_state(database, tenant, project, parent_workspace).await?
+    else {
+        return Ok(None);
+    };
+    let Some(parent_head) = parent.head.as_deref() else {
+        return Ok(None);
+    };
+    crate::routes::graph::changed_paths_with_cache(
+        env,
+        database,
+        tenant,
+        project,
+        head,
+        parent_head,
+    )
+    .await
+    .map(Some)
+}
+
+pub(crate) async fn snapshot_parent(
     env: &Env,
     tenant: &str,
     project: &str,
@@ -457,6 +566,24 @@ pub(crate) async fn log_history(
         metadata.as_ref(),
     )
     .await?;
+    if let Some(snapshot_id) = body.snapshot_id.as_deref() {
+        let app = ctx.data.clone();
+        let env = ctx.env.clone();
+        let tenant = tenant.to_string();
+        let project = project.to_string();
+        let snapshot_id = snapshot_id.to_string();
+        ctx.data.wait_until(async move {
+            let database = app.database();
+            let _ = features::warm_snapshot_caches_for_history(
+                &env,
+                &database,
+                &tenant,
+                &project,
+                &snapshot_id,
+            )
+            .await;
+        });
+    }
     emit_history_event(
         &ctx,
         &tenant,
@@ -1033,82 +1160,79 @@ pub(crate) async fn merge_preview(
     let parent = ws.parent_workspace.as_deref().unwrap_or("main");
     let head = features::head(&database, &tenant, &project, &workspace).await?;
     let parent_head = features::head(&database, &tenant, &project, parent).await?;
-    let features = bucket(&ctx.env)?;
-    let mut current_entries = Vec::new();
-    if let Some(h) = head {
-        let snapshot_bytes = r2_bytes(&features, &object_key(&tenant, &project, &h)).await?;
-        let snapshot: serde_json::Value =
-            serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
-        let root_tree = snapshot["root_tree"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string();
-        walk_tree(
-            &features,
-            &tenant,
-            &project,
-            "",
-            &root_tree,
-            &mut current_entries,
-        )
-        .await?;
-    }
-    let mut parent_entries = Vec::new();
-    if let Some(h) = parent_head {
-        let snapshot_bytes = r2_bytes(&features, &object_key(&tenant, &project, &h)).await?;
-        let snapshot: serde_json::Value =
-            serde_json::from_slice(&snapshot_bytes).map_err(|e| Error::RustError(e.to_string()))?;
-        let root_tree = snapshot["root_tree"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string();
-        walk_tree(
-            &features,
-            &tenant,
-            &project,
-            "",
-            &root_tree,
-            &mut parent_entries,
-        )
-        .await?;
-    }
-    let current_map: std::collections::HashMap<String, String> = current_entries
-        .into_iter()
-        .filter(|e| e.entry_type == "blob")
-        .map(|e| (e.path, e.id))
-        .collect();
-    let parent_map: std::collections::HashMap<String, String> = parent_entries
-        .into_iter()
-        .filter(|e| e.entry_type == "blob")
-        .map(|e| (e.path, e.id))
-        .collect();
     let mut files = Vec::new();
-    for (path, id) in &current_map {
-        if !parent_map.contains_key(path) {
-            files.push(sty_protocol::ChangedFile {
-                path: path.clone(),
-                change_type: "added".to_string(),
-                old_id: None,
-                new_id: Some(id.clone()),
-            });
-        } else if parent_map.get(path) != Some(id) {
-            files.push(sty_protocol::ChangedFile {
-                path: path.clone(),
-                change_type: "modified".to_string(),
-                old_id: parent_map.get(path).cloned(),
-                new_id: Some(id.clone()),
-            });
+    match (head.as_deref(), parent_head.as_deref()) {
+        (Some(current), Some(base)) => {
+            let changed_paths = crate::routes::graph::changed_paths_with_cache(
+                &ctx.env,
+                &database,
+                &tenant,
+                &project,
+                current,
+                base,
+            )
+            .await?;
+            let current_map = features::cached_snapshot_blob_map(
+                &ctx.env,
+                &database,
+                &tenant,
+                &project,
+                current,
+            )
+            .await?;
+            let parent_map = features::cached_snapshot_blob_map(
+                &ctx.env,
+                &database,
+                &tenant,
+                &project,
+                base,
+            )
+            .await?;
+            for path in changed_paths {
+                match (current_map.get(&path), parent_map.get(&path)) {
+                    (Some(new_id), None) => files.push(sty_protocol::ChangedFile {
+                        path: path.clone(),
+                        change_type: "added".to_string(),
+                        old_id: None,
+                        new_id: Some(new_id.clone()),
+                    }),
+                    (Some(new_id), Some(old_id)) if new_id != old_id => {
+                        files.push(sty_protocol::ChangedFile {
+                            path: path.clone(),
+                            change_type: "modified".to_string(),
+                            old_id: Some(old_id.clone()),
+                            new_id: Some(new_id.clone()),
+                        });
+                    }
+                    (None, Some(old_id)) => files.push(sty_protocol::ChangedFile {
+                        path: path.clone(),
+                        change_type: "deleted".to_string(),
+                        old_id: Some(old_id.clone()),
+                        new_id: None,
+                    }),
+                    _ => {}
+                }
+            }
         }
-    }
-    for (path, id) in &parent_map {
-        if !current_map.contains_key(path) {
-            files.push(sty_protocol::ChangedFile {
-                path: path.clone(),
-                change_type: "deleted".to_string(),
-                old_id: Some(id.clone()),
-                new_id: None,
-            });
+        (Some(current), None) => {
+            let current_map = features::cached_snapshot_blob_map(
+                &ctx.env,
+                &database,
+                &tenant,
+                &project,
+                current,
+            )
+            .await?;
+            for (path, id) in current_map {
+                files.push(sty_protocol::ChangedFile {
+                    path,
+                    change_type: "added".to_string(),
+                    old_id: None,
+                    new_id: Some(id),
+                });
+            }
         }
+        _ => {}
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Response::from_json(&sty_protocol::MergePreviewResponse { files })
@@ -1197,8 +1321,12 @@ async fn ensure_snapshot_refs_uploaded(
     db: &crate::request_context::Database,
     tenant: &str,
     project: &str,
+    workspace: &str,
     snapshot_id: &str,
+    expected_head: Option<&str>,
+    objects_verified: bool,
 ) -> Result<()> {
+    let current_head = features::head(db, tenant, project, workspace).await?;
     let features = bucket(env)?;
     let snapshot_bytes = r2_bytes(&features, &object_key(tenant, project, snapshot_id)).await?;
     validate_snapshot_signature(db, &snapshot_bytes)
@@ -1210,37 +1338,89 @@ async fn ensure_snapshot_refs_uploaded(
         .as_str()
         .ok_or_else(|| Error::RustError("snapshot root_tree is missing".to_string()))?;
     validate_object_id(root_tree)?;
-    match features::object_kind(db, tenant, project, root_tree).await? {
-        Some(kind) if kind == "tree" => {}
-        Some(_) => {
-            return Err(Error::RustError(
-                "snapshot root_tree is not a tree".to_string(),
-            ));
-        }
-        None => {
-            return Err(Error::RustError(
-                "snapshot root_tree is missing".to_string(),
-            ));
-        }
+    expect_uploaded_object_kind(
+        env,
+        db,
+        tenant,
+        project,
+        root_tree,
+        "tree",
+        objects_verified,
+        "snapshot root_tree is missing",
+        "snapshot root_tree is not a tree",
+    )
+    .await?;
+    if !objects_verified {
+        validate_tree_closure(&features, db, tenant, project, root_tree).await?;
     }
-    validate_tree_closure(&features, db, tenant, project, root_tree).await?;
-    let Some(parents) = snapshot["parents"].as_array() else {
-        return Err(Error::RustError("snapshot parents are missing".to_string()));
-    };
-    for parent in parents {
-        let parent_id = parent
-            .as_str()
-            .ok_or_else(|| Error::RustError("snapshot parent is invalid".to_string()))?;
-        validate_object_id(parent_id)?;
-        match features::object_kind(db, tenant, project, parent_id).await? {
-            Some(kind) if kind == "snapshot" => {}
-            Some(_) => {
-                return Err(Error::RustError(
-                    "snapshot parent is not a snapshot".to_string(),
-                ));
+    let parents = snapshot["parents"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    if objects_verified {
+        for parent in parents {
+            let parent_id = parent
+                .as_str()
+                .ok_or_else(|| Error::RustError("snapshot parent is invalid".to_string()))?;
+            validate_object_id(parent_id)?;
+            if expected_head == Some(parent_id) || current_head.as_deref() == Some(parent_id) {
+                continue;
             }
-            None => return Err(Error::RustError("snapshot parent is missing".to_string())),
+            expect_uploaded_object_kind(
+                env,
+                db,
+                tenant,
+                project,
+                parent_id,
+                "snapshot",
+                true,
+                "snapshot parent is missing",
+                "snapshot parent is not a snapshot",
+            )
+            .await?;
+        }
+    } else {
+        for parent in parents {
+            let parent_id = parent
+                .as_str()
+                .ok_or_else(|| Error::RustError("snapshot parent is invalid".to_string()))?;
+            validate_object_id(parent_id)?;
+            expect_uploaded_object_kind(
+                env,
+                db,
+                tenant,
+                project,
+                parent_id,
+                "snapshot",
+                false,
+                "snapshot parent is missing",
+                "snapshot parent is not a snapshot",
+            )
+            .await?;
         }
     }
     Ok(())
+}
+
+async fn expect_uploaded_object_kind(
+    env: &Env,
+    db: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    id: &str,
+    expected: &str,
+    objects_verified: bool,
+    missing_message: &str,
+    mismatch_message: &str,
+) -> Result<()> {
+    let kind = if objects_verified {
+        features::object_kind_resolved(env, db, tenant, project, id).await?
+    } else {
+        features::object_kind(db, tenant, project, id).await?
+    };
+    match kind.as_deref() {
+        Some(kind) if kind == expected => Ok(()),
+        Some(_) => Err(Error::RustError(mismatch_message.to_string())),
+        None => Err(Error::RustError(missing_message.to_string())),
+    }
 }

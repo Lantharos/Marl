@@ -5,6 +5,7 @@
     "": {
       "name": "frontend",
       "dependencies": {
+        "@ave-id/sdk": "0.10.1",
         "@iconify/svelte": "^5.2.1",
         "@pierre/trees": "^1.0.0-beta.3",
         "@speed-highlight/core": "^1.2.15",
@@ -28,6 +29,8 @@
     },
   },
   "packages": {
+    "@ave-id/sdk": ["@ave-id/sdk@0.10.1", "", { "peerDependencies": { "react": ">=18.0.0" }, "optionalPeers": ["react"] }, "sha512-IBKsXSpa7NSVRHwwk4v9O7j2HS7DJfTjHgwy9GlosOPLe6k4agrLXJ1jSqn6eAVjUG+r2NxUZaj8ikpudZNVQg=="],
+
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.4.2", "", {}, "sha512-SIOD2DxrRRwQ+jgzlXCqoEFiKOFqaPjhnNTGKXSRLvp1HiOvapLaFG2kEr9dYQTYe8rKrd9uvDUzmAITeNyaHQ=="],
 
     "@cloudflare/unenv-preset": ["@cloudflare/unenv-preset@2.16.1", "", { "peerDependencies": { "unenv": "2.0.0-rc.24", "workerd": ">1.20260305.0 <2.0.0-0" }, "optionalPeers": ["workerd"] }, "sha512-ECxObrMfyTl5bhQf/lZCXwo5G6xX9IAUo+nDMKK4SZ8m4Jvvxp52vilxyySSWh2YTZz8+HQ07qGH/2rEom1vDw=="],

@@ -1,6 +1,8 @@
 use super::*;
 use std::collections::BTreeMap;
 
+use crate::support::{bucket, infer_object_kind_from_bytes, object_key, r2_bytes};
+
 const OBJECT_KIND_LOOKUP_BATCH: usize = 98;
 pub async fn object_kind(
     db: &Database,
@@ -18,6 +20,26 @@ pub async fn object_kind(
         .first(None)
         .await?;
     Ok(row.map(|r| r.kind))
+}
+
+pub async fn object_kind_resolved(
+    env: &Env,
+    db: &Database,
+    tenant: &str,
+    project: &str,
+    id: &str,
+) -> Result<Option<String>> {
+    if let Some(kind) = object_kind(db, tenant, project, id).await? {
+        return Ok(Some(kind));
+    }
+    let storage = bucket(env)?;
+    let bytes = match r2_bytes(&storage, &object_key(tenant, project, id)).await {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(None),
+    };
+    let kind = infer_object_kind_from_bytes(&bytes)?;
+    let _ = record_object(db, tenant, project, id, &kind, bytes.len()).await;
+    Ok(Some(kind))
 }
 
 pub async fn object_ids_by_kind(

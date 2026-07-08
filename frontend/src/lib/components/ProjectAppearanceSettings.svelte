@@ -8,6 +8,7 @@
 		projectAppearanceStyle
 	} from '$lib/projectAppearance';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 	import Check from 'lucide-svelte/icons/check';
 	import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
 
@@ -177,7 +178,9 @@
 		<div class="min-h-72 border border-[#2a2a28] bg-[var(--sty-project-bg)]" style={projectAppearanceStyle(draft)}>
 			<div class="border-b border-[var(--sty-project-border)] bg-[var(--sty-project-nav-bg)] px-3 py-2 text-[var(--sty-project-nav-fg)]">
 				<div class="flex items-center gap-2 text-sm font-medium">
-					<span>sty</span>
+					<span class="text-[var(--sty-project-accent)]">
+						<StyLogo class="h-5 w-auto" />
+					</span>
 					<span class="text-[var(--sty-project-nav-muted)]">/</span>
 					<span>{fields.length} colors</span>
 				</div>

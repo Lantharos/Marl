@@ -17,6 +17,7 @@
     import { projectTabCount, projectTabs } from "$lib/projectChrome";
     import { startLogin } from "$lib/session";
     import ExternalLink from "lucide-svelte/icons/external-link";
+    import StyLogo from "$lib/components/StyLogo.svelte";
 
     let { children } = $props();
 
@@ -140,11 +141,9 @@
     <div class="sty-project-nav border-b border-[#2a2a28] bg-[#0f0f0d]">
         <div class="px-32 md:px-48 lg:px-64 xl:px-80">
             <div class="flex items-center gap-4 py-2.5">
-                <a
-                    href="/"
-                    class="text-lg font-bold tracking-tight text-[#f0eee4]"
-                    >sty</a
-                >
+                <a href="/" class="sty-logo-link block shrink-0">
+                    <StyLogo />
+                </a>
                 <div class="flex min-w-0 flex-1 items-center gap-0.5">
                     <a
                         class="flex min-w-0 items-center gap-1 rounded px-2 py-1 text-[18px] font-medium leading-5 text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#d9a66c]"

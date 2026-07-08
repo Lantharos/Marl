@@ -1,5 +1,5 @@
 use super::prelude::*;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use serde::Deserialize;
 
@@ -64,17 +64,16 @@ pub(crate) async fn is_ancestor(
     ancestor: &str,
     head: &str,
 ) -> Result<bool> {
-    let mut seen = Vec::new();
+    let mut seen = HashSet::new();
     let mut stack = vec![head.to_string()];
     let features = bucket(env)?;
     while let Some(id) = stack.pop() {
         if id == ancestor {
             return Ok(true);
         }
-        if seen.contains(&id) {
+        if !seen.insert(id.clone()) {
             continue;
         }
-        seen.push(id.clone());
         let key = object_key(tenant, project, &id);
         let Ok(bytes) = r2_bytes(&features, &key).await else {
             continue;
@@ -120,16 +119,25 @@ pub(crate) async fn walk_tree(
 
 pub(crate) async fn changed_paths_between_snapshots(
     env: &Env,
+    database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
     current_head: &str,
     base_head: &str,
 ) -> Result<Vec<String>> {
-    let features = bucket(env)?;
-    let current = graph_snapshot_blob_map(&features, tenant, project, current_head).await?;
-    let base = graph_snapshot_blob_map(&features, tenant, project, base_head).await?;
+    let current =
+        features::cached_snapshot_blob_map(env, database, tenant, project, current_head).await?;
+    let base =
+        features::cached_snapshot_blob_map(env, database, tenant, project, base_head).await?;
+    changed_paths_from_blob_maps(&current, &base)
+}
+
+pub(crate) fn changed_paths_from_blob_maps(
+    current: &HashMap<String, String>,
+    base: &HashMap<String, String>,
+) -> Result<Vec<String>> {
     let mut paths = BTreeSet::new();
-    for (path, new_id) in &current {
+    for (path, new_id) in current {
         if base.get(path) != Some(new_id) {
             paths.insert(path.clone());
         }
@@ -142,14 +150,50 @@ pub(crate) async fn changed_paths_between_snapshots(
     Ok(paths.into_iter().collect())
 }
 
-async fn graph_snapshot_blob_map(
-    features: &Bucket,
+pub(crate) async fn changed_paths_with_cache(
+    env: &Env,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+    base_snapshot_id: &str,
+) -> Result<Vec<String>> {
+    if let Some(cached) =
+        features::cached_changed_paths(database, tenant, project, snapshot_id, base_snapshot_id)
+            .await?
+    {
+        return Ok(cached);
+    }
+    let paths = changed_paths_between_snapshots(
+        env,
+        database,
+        tenant,
+        project,
+        snapshot_id,
+        base_snapshot_id,
+    )
+    .await?;
+    features::store_changed_paths(
+        database,
+        tenant,
+        project,
+        snapshot_id,
+        base_snapshot_id,
+        &paths,
+    )
+    .await?;
+    Ok(paths)
+}
+
+pub(crate) async fn build_snapshot_blob_map(
+    env: &Env,
     tenant: &str,
     project: &str,
     snapshot_id: &str,
 ) -> Result<HashMap<String, String>> {
     validate_object_id(snapshot_id)?;
-    let snapshot_bytes = r2_bytes(features, &object_key(tenant, project, snapshot_id)).await?;
+    let features = bucket(env)?;
+    let snapshot_bytes = r2_bytes(&features, &object_key(tenant, project, snapshot_id)).await?;
     let snapshot: serde_json::Value = serde_json::from_slice(&snapshot_bytes)
         .map_err(|error| Error::RustError(error.to_string()))?;
     let root_tree = snapshot["root_tree"]
@@ -157,7 +201,7 @@ async fn graph_snapshot_blob_map(
         .ok_or_else(|| Error::RustError("malformed snapshot object".to_string()))?;
     validate_object_id(root_tree)?;
     let mut entries = Vec::new();
-    walk_tree(features, tenant, project, "", root_tree, &mut entries).await?;
+    walk_tree(&features, tenant, project, "", root_tree, &mut entries).await?;
     Ok(entries
         .into_iter()
         .filter(|entry| entry.entry_type == "blob")
@@ -236,6 +280,150 @@ pub(crate) async fn walk_tree_page(
         next_cursor: next_cursor.take(),
         truncated: false,
     })
+}
+
+pub(crate) fn tree_entries_from_blob_map(
+    blob_map: &HashMap<String, String>,
+    options: &TreeWalkOptions,
+) -> TreePage {
+    let prefix = options.prefix.trim_matches('/');
+    let mut entries = Vec::new();
+    let mut directories = BTreeSet::new();
+
+    for (path, blob_id) in blob_map {
+        if !path_matches_tree_prefix(path, prefix) {
+            continue;
+        }
+        let depth = path_depth_from_prefix(path, prefix);
+        if depth > options.max_depth.saturating_add(1) {
+            continue;
+        }
+        entries.push(TreeEntryInfo {
+            path: path.clone(),
+            name: path_file_name(path),
+            id: blob_id.clone(),
+            entry_type: "blob".to_string(),
+        });
+        let mut parts = path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>();
+        while parts.len() > 1 {
+            parts.pop();
+            let dir_path = parts.join("/");
+            if !path_matches_tree_prefix(&dir_path, prefix) {
+                continue;
+            }
+            if path_depth_from_prefix(&dir_path, prefix) <= options.max_depth {
+                directories.insert(dir_path);
+            }
+        }
+    }
+
+    for dir_path in directories {
+        if entries.iter().any(|entry| entry.path == dir_path) {
+            continue;
+        }
+        entries.push(TreeEntryInfo {
+            path: dir_path.clone(),
+            name: path_file_name(&dir_path),
+            id: dir_path.clone(),
+            entry_type: "tree".to_string(),
+        });
+    }
+
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+
+    let mut after_cursor = options.cursor.is_none();
+    let mut output: Vec<TreeEntryInfo> = Vec::new();
+    let mut next_cursor = None;
+    for entry in entries {
+        if after_cursor {
+            if output.len() >= options.limit {
+                next_cursor = output.last().map(|entry| entry.path.clone());
+                return TreePage {
+                    entries: output,
+                    next_cursor,
+                    truncated: true,
+                };
+            }
+            output.push(entry);
+        } else if options.cursor.as_deref() == Some(entry.path.as_str()) {
+            after_cursor = true;
+        }
+    }
+    TreePage {
+        entries: output,
+        next_cursor,
+        truncated: false,
+    }
+}
+
+fn path_matches_tree_prefix(path: &str, prefix: &str) -> bool {
+    if prefix.is_empty() {
+        return true;
+    }
+    path == prefix || path.starts_with(&format!("{prefix}/"))
+}
+
+fn path_depth_from_prefix(path: &str, prefix: &str) -> usize {
+    let relative = if prefix.is_empty() {
+        path.to_string()
+    } else if let Some(rest) = path.strip_prefix(&format!("{prefix}/")) {
+        rest.to_string()
+    } else if path == prefix {
+        return 0;
+    } else {
+        return usize::MAX;
+    };
+    if relative.is_empty() {
+        return 0;
+    }
+    relative.split('/').filter(|segment| !segment.is_empty()).count()
+}
+
+fn path_file_name(path: &str) -> String {
+    path.rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
+#[cfg(test)]
+mod tree_blob_map_tests {
+    use super::*;
+
+    #[test]
+    fn blob_map_lists_nested_paths_for_file_tree() {
+        let mut blob_map = HashMap::new();
+        blob_map.insert(
+            "client/src/main.rs".to_string(),
+            "aa".repeat(64),
+        );
+        blob_map.insert("README.md".to_string(), "bb".repeat(64));
+        let page = tree_entries_from_blob_map(
+            &blob_map,
+            &TreeWalkOptions {
+                prefix: String::new(),
+                max_depth: 128,
+                limit: 10_000,
+                cursor: None,
+            },
+        );
+        let paths = page
+            .entries
+            .into_iter()
+            .map(|entry| (entry.path, entry.entry_type))
+            .collect::<Vec<_>>();
+        assert!(paths.contains(&("client".to_string(), "tree".to_string())));
+        assert!(paths.contains(&("client/src".to_string(), "tree".to_string())));
+        assert!(paths.contains(&(
+            "client/src/main.rs".to_string(),
+            "blob".to_string()
+        )));
+        assert!(paths.contains(&("README.md".to_string(), "blob".to_string())));
+    }
 }
 
 pub(crate) async fn validate_tree_closure(

@@ -10,6 +10,8 @@ mod logs;
 use limits::*;
 pub use logs::*;
 
+const CI_JOB_COLUMNS: &str = "id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, checkout_paths_json, queued_at, started_at, completed_at, updated_at";
+
 #[derive(Deserialize)]
 struct CiJobRow {
     id: String,
@@ -29,6 +31,7 @@ struct CiJobRow {
     max_attempts: f64,
     artifacts_json: String,
     cache_json: String,
+    checkout_paths_json: String,
     queued_at: String,
     started_at: Option<String>,
     completed_at: Option<String>,
@@ -299,6 +302,26 @@ fn pattern_matches(pattern: &str, value: &str) -> bool {
     false
 }
 
+fn checkout_paths_for_command(command: &CiCommand) -> Vec<String> {
+    if command.paths.is_empty() || command.paths.iter().any(|pattern| pattern == "*") {
+        return Vec::new();
+    }
+    command
+        .paths
+        .iter()
+        .map(|pattern| normalize_checkout_path(pattern))
+        .filter(|path| !path.is_empty())
+        .collect()
+}
+
+fn normalize_checkout_path(pattern: &str) -> String {
+    pattern
+        .strip_suffix("/**")
+        .unwrap_or(pattern)
+        .trim_end_matches('/')
+        .to_string()
+}
+
 pub async fn enqueue_ci_job(
     db: &Database,
     tenant: &str,
@@ -314,10 +337,13 @@ pub async fn enqueue_ci_job(
     let artifacts_json =
         serde_json::to_string(&command.artifacts).map_err(|e| err(e.to_string()))?;
     let cache_json = serde_json::to_string(&command.cache).map_err(|e| err(e.to_string()))?;
+    let checkout_paths = checkout_paths_for_command(command);
+    let checkout_paths_json =
+        serde_json::to_string(&checkout_paths).map_err(|e| err(e.to_string()))?;
     db.prepare(
         "INSERT INTO ci_jobs
-         (id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, queued_at, started_at, completed_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued', NULL, NULL, NULL, NULL, 0, ?9, ?10, ?11, ?12, NULL, NULL, ?12)",
+         (id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, checkout_paths_json, queued_at, started_at, completed_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'queued', NULL, NULL, NULL, NULL, 0, ?9, ?10, ?11, ?12, ?13, NULL, NULL, ?13)",
     )
     .bind(&[
         js_str(&id),
@@ -331,6 +357,7 @@ pub async fn enqueue_ci_job(
         wasm_bindgen::JsValue::from_f64(max_attempts.clamp(1, 10) as f64),
         js_str(&artifacts_json),
         js_str(&cache_json),
+        js_str(&checkout_paths_json),
         js_str(&now),
     ])?
     .run()
@@ -399,13 +426,13 @@ impl CiQueueScheduler<'_> {
     async fn queued_candidates(&self) -> Result<Vec<CiJobRow>> {
         let result = self
             .db
-            .prepare(
-                "SELECT id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, queued_at, started_at, completed_at, updated_at
+            .prepare(&format!(
+                "SELECT {CI_JOB_COLUMNS}
                  FROM ci_jobs
                  WHERE tenant = ?1 AND project = ?2 AND status = 'queued' AND attempt < max_attempts
                  ORDER BY queued_at ASC
                  LIMIT 25",
-            )
+            ))
             .bind(&[js_str(&self.runner.tenant), js_str(&self.runner.project)])?
             .all()
             .await?;
@@ -657,13 +684,13 @@ pub async fn list_ci_jobs(
 ) -> Result<Vec<CiJob>> {
     ensure_ci_schema(db).await?;
     let result = if let Some(workspace) = workspace {
-        db.prepare(
-            "SELECT id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, queued_at, started_at, completed_at, updated_at
+        db.prepare(&format!(
+            "SELECT {CI_JOB_COLUMNS}
              FROM ci_jobs
              WHERE tenant = ?1 AND project = ?2 AND workspace = ?3
              ORDER BY queued_at DESC
              LIMIT ?4",
-        )
+        ))
         .bind(&[
             js_str(tenant),
             js_str(project),
@@ -673,13 +700,13 @@ pub async fn list_ci_jobs(
         .all()
         .await?
     } else {
-        db.prepare(
-            "SELECT id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, queued_at, started_at, completed_at, updated_at
+        db.prepare(&format!(
+            "SELECT {CI_JOB_COLUMNS}
              FROM ci_jobs
              WHERE tenant = ?1 AND project = ?2
              ORDER BY queued_at DESC
              LIMIT ?3",
-        )
+        ))
         .bind(&[
             js_str(tenant),
             js_str(project),
@@ -700,11 +727,11 @@ pub async fn ci_job(
 ) -> Result<Option<CiJob>> {
     ensure_ci_schema(db).await?;
     let row: Option<CiJobRow> = db
-        .prepare(
-            "SELECT id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, queued_at, started_at, completed_at, updated_at
+        .prepare(&format!(
+            "SELECT {CI_JOB_COLUMNS}
              FROM ci_jobs
              WHERE tenant = ?1 AND project = ?2 AND id = ?3",
-        )
+        ))
         .bind(&[js_str(tenant), js_str(project), js_str(job_id)])?
         .first(None)
         .await?;
@@ -740,13 +767,13 @@ pub async fn ci_job_active_for_runner(
 async fn reclaim_expired_ci_jobs(db: &Database, tenant: &str, project: &str) -> Result<()> {
     let now = now_rfc3339();
     let result = db
-        .prepare(
-            "SELECT id, tenant, project, workspace, head, name, command, timeout_seconds, status, conclusion, summary, runner_id, lease_expires_at, attempt, max_attempts, artifacts_json, cache_json, queued_at, started_at, completed_at, updated_at
+        .prepare(&format!(
+            "SELECT {CI_JOB_COLUMNS}
              FROM ci_jobs
              WHERE tenant = ?1 AND project = ?2 AND status = 'in_progress' AND lease_expires_at IS NOT NULL AND lease_expires_at < ?3
              ORDER BY lease_expires_at ASC
              LIMIT 25",
-        )
+        ))
         .bind(&[js_str(tenant), js_str(project), js_str(&now)])?
         .all()
         .await?;
@@ -880,6 +907,7 @@ fn ci_job_from_row(row: CiJobRow) -> CiJob {
         max_attempts: row.max_attempts as u32,
         artifacts: serde_json::from_str(&row.artifacts_json).unwrap_or_default(),
         cache: serde_json::from_str(&row.cache_json).unwrap_or_default(),
+        checkout_paths: serde_json::from_str(&row.checkout_paths_json).unwrap_or_default(),
         queued_at: row.queued_at,
         started_at: row.started_at,
         completed_at: row.completed_at,

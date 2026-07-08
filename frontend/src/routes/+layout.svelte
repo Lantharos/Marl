@@ -23,6 +23,7 @@
 	} from '$lib/session';
 	import TopNav from '$lib/components/TopNav.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import StyLogo from '$lib/components/StyLogo.svelte';
 
 	let { children } = $props();
 
@@ -212,7 +213,9 @@
 	<div class="min-h-screen bg-[#0f0f0d]">
 		<header class="border-b border-[#2a2a28] bg-[#0f0f0d]">
 			<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-2.5">
-				<a href="/" class="text-lg font-bold tracking-tight text-[#f0eee4]">sty</a>
+				<a href="/" class="sty-logo-link block shrink-0">
+					<StyLogo />
+				</a>
 				<button class="rounded border border-[#2a2a28] px-3 py-1.5 text-sm font-medium text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]" onclick={startLogin}>
 					Sign in
 				</button>
@@ -225,7 +228,9 @@
 		<!-- Hero -->
 		<section class="px-6 pt-20 pb-16 md:px-12 lg:px-20">
 			<div class="mx-auto max-w-4xl text-center">
-				<h1 class="text-6xl font-bold tracking-tight text-[#f0eee4] md:text-7xl">sty</h1>
+				<div class="mx-auto flex justify-center">
+					<StyLogo class="h-20 w-auto text-[#d9a66c] md:h-24" />
+				</div>
 				<p class="mt-4 text-xl text-[#d9a66c] md:text-2xl">where pigs ship code</p>
 				<p class="mt-4 text-sm leading-6 text-[#8c887e] md:text-base">
 					Version control for humans who think in workspaces, not branches.<br class="hidden md:block" />
