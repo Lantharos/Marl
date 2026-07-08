@@ -20,13 +20,13 @@ sty init
 pig save "initial import"
 pig sync`;
 
-	const forkProject = `sty fork lantharos/example
+	const forkProject = `sty fork acme/example
 pig save "my change"
 pig sync
 sty sendwork`;
 
-	const readOnlyClone = `sty clone lantharos/example ./example
-sty clone lantharos/example ./parser-only --include src/parser`;
+	const readOnlyClone = `sty clone acme/example ./example
+sty clone acme/example ./parser-only --include src/parser`;
 
 	const daily = `pig status
 pig work new feature-name

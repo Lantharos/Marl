@@ -369,7 +369,7 @@ export const oauthTokenJson = `{
 export const webhookPayloadJson = `{
   "event": "release.created",
   "delivery": "del_...",
-  "tenant": "lantharos",
+  "tenant": "acme",
   "project": "sty",
   "sent_at": "2026-04-30T12:00:00Z",
   "data": {

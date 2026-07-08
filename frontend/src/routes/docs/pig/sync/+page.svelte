@@ -3,7 +3,7 @@
 	import DocsPage from '$lib/components/docs/DocsPage.svelte';
 
 	const setup = `sty login
-sty init lantharos/editor
+sty init acme/editor
 pig remote show
 pig sync`;
 
@@ -11,7 +11,7 @@ pig sync`;
 pig fetch path src/parser --no-hydrate
 pig fetch path src/parser --snapshot <snapshot-id>
 
-sty clone lantharos/editor ./parser-only --include src/parser`;
+sty clone acme/editor ./parser-only --include src/parser`;
 
 	const historyRewrite = `pig pack 3 "clean parser work"
 pig sync --force`;

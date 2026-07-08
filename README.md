@@ -14,11 +14,11 @@ Windows:
 irm https://sty.sh/install.ps1 | iex
 ```
 
-Binaries are served from the `lantharos/pig` project releases on sty:
+Binaries are served from sty project releases:
 
-- `https://sty.sh/lantharos/pig/releases/latest/sty-darwin-arm64.tar.gz`
-- `https://sty.sh/lantharos/pig/releases/latest/sty-linux-x64.tar.gz`
-- `https://sty.sh/lantharos/pig/releases/latest/sty-windows-x64.zip`
+- `https://sty.sh/:tenant/:project/releases/latest/sty-darwin-arm64.tar.gz`
+- `https://sty.sh/:tenant/:project/releases/latest/sty-linux-x64.tar.gz`
+- `https://sty.sh/:tenant/:project/releases/latest/sty-windows-x64.zip`
 
 ## Quick start
 
@@ -67,7 +67,7 @@ bun run dev
 
 ```sh
 cd server
-bunx wrangler d1 migrations apply sty --local
+bunx wrangler d1 migrations apply <database-name> --local
 bunx wrangler dev
 ```
 
@@ -84,27 +84,23 @@ Local defaults:
 
 ## Deploy
 
-Production uses two Cloudflare Workers on `sty.sh`:
+Production uses two Cloudflare Workers:
 
-- `sty-server` at `sty.sh/api/*`
-- `sty-frontend` at `sty.sh/*`
+- API worker at `/api/*`
+- Frontend worker at `/*`
 
-Prerequisites in your Cloudflare account:
-
-- D1 database `sty` (`1ebc4e0e-5d2a-41f5-81d9-121dc68311d0`)
-- R2 bucket `sty-objects`
-- Queues `sty-webhooks`, `sty-webhooks-dlq`, `sty-ci`, `sty-ci-dlq`
+Provision the D1 database, R2 bucket, queues, and routes described in `server/wrangler.jsonc`, then:
 
 ```sh
 cd server
-bunx wrangler d1 migrations apply sty --remote
+bunx wrangler d1 migrations apply <database-name> --remote
 bunx wrangler deploy
 
 cd ../frontend
 bun run deploy
 ```
 
-Set `CLOUDFLARE_API_TOKEN` locally or use GitHub Actions (`.github/workflows/deploy.yml`).
+For GitHub Actions deploys, set `CLOUDFLARE_API_TOKEN` in repository secrets.
 
 OAuth uses Ave (`AVE_ISSUER`, `AVE_CLIENT_ID` in `server/wrangler.jsonc`). No server-side OAuth secret is required for the browser PKCE flow.
 

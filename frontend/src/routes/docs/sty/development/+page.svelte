@@ -3,15 +3,12 @@
 	import DocsPage from '$lib/components/docs/DocsPage.svelte';
 
 	const workerLocal = `cd sty/server
-bunx wrangler d1 migrations apply sty --local
+bunx wrangler d1 migrations apply <database-name> --local
 bunx wrangler dev`;
 
 	const workerRemote = `cd sty/server
-bunx wrangler queues create sty-webhooks
-bunx wrangler queues create sty-webhooks-dlq
-bunx wrangler queues create sty-ci
-bunx wrangler queues create sty-ci-dlq
-bunx wrangler d1 migrations apply sty --remote
+# Create D1, R2, queues, and routes from wrangler.jsonc first
+bunx wrangler d1 migrations apply <database-name> --remote
 bunx wrangler deploy --dry-run
 bunx wrangler deploy`;
 
