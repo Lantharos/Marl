@@ -28,11 +28,10 @@ pub(crate) async fn missing(
     if ids.len() > 2048 {
         return json_error(413, "object missing batch is too large");
     }
-    let storage = bucket(&ctx.env)?;
+    let known = features::object_kinds(&database, &tenant, &project, &ids).await?;
     let mut missing = Vec::new();
     for id in ids {
-        let key = object_key(&tenant, &project, &id);
-        if storage.head(&key).await?.is_some() {
+        if known.contains_key(&id) {
             continue;
         }
         missing.push(id);
@@ -216,10 +215,7 @@ async fn store_pack_object(
                 "object kind does not match existing object".to_string(),
             ));
         }
-        let key = object_key(tenant, project, &object.id);
-        if features.head(&key).await?.is_some() {
-            return Ok(None);
-        }
+        return Ok(None);
     }
     let digest = object_digest_for_kind(&object.bytes, &object.kind)?;
     if digest != object.id {
