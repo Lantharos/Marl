@@ -42,7 +42,9 @@ pub async fn enqueue_ci_jobs_for_head(
     workspace: &str,
     head: &str,
     ci: &ProjectCiSettings,
+    event: &str,
     changed_paths: Option<&[String]>,
+    affected_components: Option<&[String]>,
 ) -> Result<Vec<CiJob>> {
     ensure_ci_schema(db).await?;
     if !ci.enabled || ci.commands.is_empty() {
@@ -54,6 +56,12 @@ pub async fn enqueue_ci_jobs_for_head(
         .iter()
         .take(ci.max_jobs_per_head.clamp(1, 100) as usize)
     {
+        if jobs.len() >= ci.max_jobs_per_head.clamp(1, 100) as usize {
+            break;
+        }
+        if !ci_command_matches_event(command, event) {
+            continue;
+        }
         if !ci_command_matches_workspace(command, workspace) {
             continue;
         }
@@ -61,23 +69,138 @@ pub async fn enqueue_ci_jobs_for_head(
             mark_ci_job_skipped_for_head(db, tenant, project, workspace, head, command).await?;
             continue;
         }
-        if ci_job_exists_for_head(db, tenant, project, workspace, head, &command.name).await? {
+        if !ci_command_matches_components(command, affected_components) {
+            mark_ci_job_skipped_for_head(db, tenant, project, workspace, head, command).await?;
             continue;
         }
-        jobs.push(
-            enqueue_ci_job(
-                db,
-                tenant,
-                project,
-                workspace,
-                head,
-                command,
-                ci.max_attempts,
-            )
-            .await?,
-        );
+        let command = materialize_ci_command(command, &ci.blocks);
+        let remaining = ci.max_jobs_per_head.clamp(1, 100) as usize - jobs.len();
+        for matrix_command in expand_ci_matrix(&command).into_iter().take(remaining) {
+            if ci_job_exists_for_head(db, tenant, project, workspace, head, &matrix_command.name)
+                .await?
+            {
+                continue;
+            }
+            jobs.push(
+                enqueue_ci_job(
+                    db,
+                    tenant,
+                    project,
+                    workspace,
+                    head,
+                    &matrix_command,
+                    ci.max_attempts,
+                )
+                .await?,
+            );
+            if jobs.len() >= ci.max_jobs_per_head.clamp(1, 100) as usize {
+                break;
+            }
+        }
     }
     Ok(jobs)
+}
+
+fn materialize_ci_command(command: &CiCommand, blocks: &[sty_protocol::CiCommandBlock]) -> CiCommand {
+    if command.uses_blocks.is_empty() {
+        return command.clone();
+    }
+    let mut output = command.clone();
+    let mut run_parts = Vec::new();
+    for block_name in &command.uses_blocks {
+        let Some(block) = blocks.iter().find(|block| &block.name == block_name) else {
+            continue;
+        };
+        run_parts.push(block.run.clone());
+        append_ci_env(&mut output.env, &block.env);
+        append_unique_strings(&mut output.secrets, &block.secrets);
+        append_ci_cache(&mut output.cache, &block.cache);
+    }
+    run_parts.push(command.run.clone());
+    output.run = run_parts.join("\n");
+    output
+}
+
+fn append_ci_env(target: &mut Vec<sty_protocol::CiEnvEntry>, entries: &[sty_protocol::CiEnvEntry]) {
+    for entry in entries {
+        if target.iter().any(|item| item.key == entry.key) {
+            continue;
+        }
+        target.push(entry.clone());
+    }
+}
+
+fn append_ci_cache(target: &mut Vec<sty_protocol::CiCacheEntry>, entries: &[sty_protocol::CiCacheEntry]) {
+    for entry in entries {
+        if target.iter().any(|item| item.key == entry.key) {
+            continue;
+        }
+        target.push(entry.clone());
+    }
+}
+
+fn append_unique_strings(target: &mut Vec<String>, entries: &[String]) {
+    for entry in entries {
+        if target.iter().any(|item| item == entry) {
+            continue;
+        }
+        target.push(entry.clone());
+    }
+}
+
+fn expand_ci_matrix(command: &CiCommand) -> Vec<CiCommand> {
+    if command.matrix.is_empty() {
+        return vec![command.clone()];
+    }
+    let mut variants = vec![(Vec::<(String, String)>::new(), command.clone())];
+    for axis in &command.matrix {
+        let mut next = Vec::new();
+        for value in &axis.values {
+            for (pairs, variant) in &variants {
+                let mut pairs = pairs.clone();
+                pairs.push((axis.key.clone(), value.clone()));
+                let mut variant = variant.clone();
+                variant.env.push(sty_protocol::CiEnvEntry {
+                    key: matrix_env_key(&axis.key),
+                    value: value.clone(),
+                });
+                next.push((pairs, variant));
+            }
+        }
+        variants = next;
+        if variants.len() >= 100 {
+            variants.truncate(100);
+            break;
+        }
+    }
+    variants
+        .into_iter()
+        .map(|(pairs, mut variant)| {
+            let suffix = pairs
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            variant.name = format!("{} ({suffix})", command.name);
+            variant.matrix = Vec::new();
+            variant
+        })
+        .collect()
+}
+
+fn matrix_env_key(key: &str) -> String {
+    format!(
+        "MATRIX_{}",
+        key.chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() {
+                    ch.to_ascii_uppercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>()
+    )
 }
 
 async fn mark_ci_job_skipped_for_head(
@@ -112,6 +235,14 @@ fn ci_command_matches_workspace(command: &CiCommand, workspace: &str) -> bool {
             .any(|pattern| pattern_matches(pattern, workspace))
 }
 
+fn ci_command_matches_event(command: &CiCommand, event: &str) -> bool {
+    command.events.is_empty()
+        || command
+            .events
+            .iter()
+            .any(|item| item == event || item == "*")
+}
+
 fn ci_command_matches_paths(command: &CiCommand, changed_paths: Option<&[String]>) -> bool {
     if command.paths.is_empty() {
         return true;
@@ -125,6 +256,21 @@ fn ci_command_matches_paths(command: &CiCommand, changed_paths: Option<&[String]
             .iter()
             .any(|pattern| path_pattern_matches(pattern, path))
     })
+}
+
+fn ci_command_matches_components(
+    command: &CiCommand,
+    affected_components: Option<&[String]>,
+) -> bool {
+    if command.components.is_empty() {
+        return true;
+    }
+    let Some(affected_components) = affected_components else {
+        return true;
+    };
+    affected_components
+        .iter()
+        .any(|component| command.components.iter().any(|item| item == component))
 }
 
 fn path_pattern_matches(pattern: &str, path: &str) -> bool {
@@ -357,7 +503,10 @@ fn missing_runner_labels<'a>(required: &'a [String], labels: &[String]) -> Vec<&
 fn ci_command_for_job(row: &CiJobRow, ci: &ProjectCiSettings) -> Option<CiCommand> {
     ci.commands
         .iter()
-        .find(|command| command.name == row.name && command.run == row.command)
+        .find(|command| {
+            command.run == row.command
+                && (command.name == row.name || row.name.starts_with(&format!("{} (", command.name)))
+        })
         .cloned()
 }
 
@@ -473,9 +622,13 @@ pub async fn rerun_ci_job(
     let command = CiCommand {
         name: existing.name,
         run: existing.command,
+        uses_blocks: Vec::new(),
         timeout_seconds: existing.timeout_seconds,
+        events: Vec::new(),
         workspaces: Vec::new(),
         paths: Vec::new(),
+        components: Vec::new(),
+        matrix: Vec::new(),
         labels: Vec::new(),
         env: Vec::new(),
         secrets: Vec::new(),

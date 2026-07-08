@@ -43,6 +43,12 @@ export const docsNav: DocsNavItem[] = [
 		group: 'sty'
 	},
 	{
+		href: '/docs/sty/monorepos',
+		title: 'Monorepos',
+		description: 'Components, independent releases, and component-aware CI for one shared project.',
+		group: 'sty'
+	},
+	{
 		href: '/docs/sty/development',
 		title: 'Development',
 		description: 'Run the Worker, frontend, migrations, and local tooling from source.',

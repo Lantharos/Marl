@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
-	import { getProjectHistory, isAbortError, type HistoryEntry } from '$lib/api';
+	import { getProjectHistory, getProjectSettings, isAbortError, type HistoryEntry, type ProjectComponent } from '$lib/api';
 	import { appData } from '$lib/appState';
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import { dateInRange } from '$lib/dateRange';
@@ -18,12 +18,14 @@
 	const chunkSize = 20;
 
 	let entries = $state<HistoryEntry[]>([]);
+	let components = $state<ProjectComponent[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let visibleCount = $state(chunkSize);
 	let vigilantMode = $state(false);
 	let query = $state('');
 	let kindFilter = $state<'all' | 'save' | 'pack' | 'merge' | 'ship' | 'ready'>('all');
+	let componentFilter = $state('all');
 
 	const unsubscribeAppData = appData.subscribe((value) => {
 		vigilantMode = Boolean(value.me?.settings?.vigilant_mode);
@@ -35,7 +37,12 @@
 		loading = true;
 		error = '';
 		try {
-			entries = await getProjectHistory(tenant, project, { signal, limit: 500 });
+			const [historyEntries, settings] = await Promise.all([
+				getProjectHistory(tenant, project, { signal, limit: 500 }),
+				getProjectSettings(tenant, project, { signal }).catch(() => null)
+			]);
+			entries = historyEntries;
+			components = settings?.components ?? [];
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -94,12 +101,27 @@
 		{ id: 'ship', label: 'Ships', count: kindCounts.ship },
 		{ id: 'ready', label: 'Ready', count: kindCounts.ready }
 	]);
+	const componentItems = $derived.by(() => {
+		const counts: Record<string, number> = {};
+		for (const entry of entries) {
+			for (const component of entry.components ?? []) {
+				counts[component] = (counts[component] ?? 0) + 1;
+			}
+		}
+		return [
+			{ id: 'all', label: 'All', count: entries.length },
+			...components
+				.filter((component) => counts[component.id])
+				.map((component) => ({ id: component.id, label: component.name, count: counts[component.id] ?? 0 }))
+		];
+	});
 
 	$effect(() => {
 		dateFrom;
 		dateTo;
 		query;
 		kindFilter;
+		componentFilter;
 		visibleCount = chunkSize;
 	});
 
@@ -115,6 +137,7 @@
 		if (!inDateRange(entry.timestamp)) return false;
 		if (kindFilter === 'pack' && entry.kind !== 'pack' && entry.kind !== 'cram') return false;
 		if (kindFilter !== 'all' && kindFilter !== 'pack' && entry.kind !== kindFilter) return false;
+		if (componentFilter !== 'all' && !(entry.components ?? []).includes(componentFilter)) return false;
 		const needle = query.trim().toLowerCase();
 		if (!needle) return true;
 		const haystack = [
@@ -123,6 +146,7 @@
 			entry.author,
 			userDisplayName(entry.author, entry.author_profile),
 			entry.workspace,
+			...(entry.components ?? []).map((component) => componentName(component)),
 			entry.snapshot_id ?? '',
 			entry.agent ?? '',
 			entry.model ?? ''
@@ -166,6 +190,10 @@
 	function loadMore() {
 		visibleCount = Math.min(visibleCount + chunkSize, filtered.length);
 	}
+
+	function componentName(id: string) {
+		return components.find((component) => component.id === id)?.name ?? id;
+	}
 </script>
 
 <div class="mx-auto max-w-6xl">
@@ -186,7 +214,7 @@
 	{:else}
 		<div class="border border-[#2a2a28] bg-[#0f0f0d]">
 			<div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a2a28] bg-[#141412] px-4 py-3">
-				<div class="flex flex-wrap items-center gap-4 text-sm">
+				<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
 					{#each filterItems as item (item.id)}
 						<button
 							class="{kindFilter === item.id ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}"
@@ -198,6 +226,18 @@
 				</div>
 				<div class="text-sm text-[#8c887e]">{filtered.length} {filtered.length === 1 ? 'entry' : 'entries'}</div>
 			</div>
+			{#if componentItems.length > 1}
+				<div class="flex flex-wrap items-center gap-2 border-b border-[#252522] px-4 py-2 text-xs">
+					{#each componentItems as item (item.id)}
+						<button
+							class="border px-2 py-1 {componentFilter === item.id ? 'border-[#d9a66c] text-[#d9a66c]' : 'border-[#2a2a28] text-[#8c887e] hover:text-[#eae9e4]'}"
+							onclick={() => (componentFilter = item.id)}
+						>
+							{item.label} <span class="ml-1 text-[#6f6b5f]">{item.count}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 
 			{#if filtered.length}
 				<div class="divide-y divide-[#252522]">
@@ -232,6 +272,9 @@
 											{:else if vigilantMode && entry.snapshot_id}
 												<span class="rounded border border-[#2a2a28] bg-[#10100e] px-1.5 py-0.5 text-[10px] text-[#6f6b5f]">unsigned</span>
 											{/if}
+											{#each entry.components ?? [] as component (component)}
+												<span class="bg-[#1e1e1c] px-1.5 py-0.5 text-[10px] text-[#a09d94]">{componentName(component)}</span>
+											{/each}
 										</div>
 										<div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#6f6b5f]">
 											<span>{userDisplayName(entry.author, entry.author_profile)}</span>

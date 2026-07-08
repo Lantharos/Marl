@@ -8,12 +8,13 @@ export const DEFAULT_PROJECT_TABS: NavbarItem[] = [
 	{ id: 'leaves', label: 'Leaves', type: 'tab', enabled: true, order: 4 },
 	{ id: 'screenshots', label: 'Gallery', type: 'tab', enabled: true, order: 5 },
 	{ id: 'releases', label: 'Releases', type: 'tab', enabled: true, order: 6 },
-	{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 7 },
-	{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 8 },
-	{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 9 }
+	{ id: 'components', label: 'Components', type: 'tab', enabled: true, order: 7 },
+	{ id: 'automation', label: 'Automation', type: 'tab', enabled: true, order: 8 },
+	{ id: 'history', label: 'History', type: 'tab', enabled: true, order: 9 },
+	{ id: 'settings', label: 'Settings', type: 'tab', enabled: true, order: 10 }
 ];
 
-const PUBLIC_PROJECT_TAB_IDS = new Set(['', 'code', 'workspaces', 'issues', 'leaves', 'screenshots', 'releases', 'history']);
+const PUBLIC_PROJECT_TAB_IDS = new Set(['', 'code', 'workspaces', 'issues', 'leaves', 'screenshots', 'releases', 'components', 'history']);
 
 export function mergeProjectTabs(items: NavbarItem[]) {
 	const merged = items.filter((item) => item.id !== 'ready');

@@ -23,6 +23,7 @@ export interface Issue {
 	updated_at?: string;
 	closed_at?: string | null;
 	labels: string[];
+	components: string[];
 	milestone?: string | null;
 	workspace?: string | null;
 	issue_type?: IssueType | null;
@@ -85,7 +86,7 @@ export async function createIssueComment(tenant: string, project: string, issueI
 export async function createIssue(
 	tenant: string,
 	project: string,
-	issue: { title: string; body: string; labels?: string[]; assignee?: string; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null }
+	issue: { title: string; body: string; labels?: string[]; components?: string[]; assignee?: string; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null }
 ) {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues`, {
 		method: 'POST',
@@ -101,7 +102,7 @@ export async function updateIssue(
 	tenant: string,
 	project: string,
 	issueId: string,
-	issue: { title?: string; body?: string; state?: 'open' | 'closed'; status?: 'open' | 'closed'; labels?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; locked?: boolean; pinned?: boolean }
+	issue: { title?: string; body?: string; state?: 'open' | 'closed'; status?: 'open' | 'closed'; labels?: string[]; components?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; locked?: boolean; pinned?: boolean }
 ): Promise<Issue> {
 	const response = await authedFetch(`/v1/tenants/${tenant}/projects/${project}/issues/${encodeURIComponent(issueId)}`, {
 		method: 'PATCH',

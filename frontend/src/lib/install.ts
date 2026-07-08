@@ -35,7 +35,7 @@ need tar
 install_dir="\${STY_INSTALL_DIR:-$HOME/.sty/bin}"
 origin="\${STY_INSTALL_ORIGIN:-https://sty.sh}"
 archive="sty-$os-$arch.tar.gz"
-url="\${STY_DOWNLOAD_URL:-$origin/releases/latest/download/$archive}"
+url="\${STY_DOWNLOAD_URL:-$origin/lantharos/pig/releases/latest/$archive}"
 tmp="\${TMPDIR:-/tmp}/sty-install-$$"
 components="\${STY_INSTALL_COMPONENTS:-}"
 
@@ -140,7 +140,7 @@ switch ($ArchName) {
 }
 
 $Archive = "sty-windows-$Arch.zip"
-$Url = if ($env:STY_DOWNLOAD_URL) { $env:STY_DOWNLOAD_URL } else { "$Origin/releases/latest/download/$Archive" }
+$Url = if ($env:STY_DOWNLOAD_URL) { $env:STY_DOWNLOAD_URL } else { "$Origin/lantharos/pig/releases/latest/$Archive" }
 $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("sty-install-" + [System.Guid]::NewGuid().ToString("n"))
 $ZipPath = Join-Path $TempRoot $Archive
 $ExtractDir = Join-Path $TempRoot "extract"

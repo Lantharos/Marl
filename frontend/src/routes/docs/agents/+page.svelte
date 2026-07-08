@@ -32,7 +32,7 @@ Content-Type: application/json
 			<li>Prefer project API keys or OAuth-issued project tokens for automation.</li>
 			<li>Use <code>--json</code> for CLI output that a program needs to parse.</li>
 			<li>Save at meaningful boundaries, pack before review, and sync only when the workspace is ready to share.</li>
-			<li>Use runner tokens for self-hosted CI. Runners advertise labels, wait for wakeups when available, claim compatible queued jobs, execute commands outside sty, upload batched logs, and report results into workspace checks.</li>
+			<li>Use runner tokens for self-hosted CI. Runners advertise labels, wait for wakeups when available, claim compatible queued jobs, execute commands outside sty, upload batched logs and artifacts, and report results into workspace checks.</li>
 		</ul>
 	</section>
 
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">CI and checks</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Project CI commands enqueue jobs for ready workspace heads. <code>pig ci detect</code> can read existing workflow files, including workflow path filters, runner labels, and simple matrix variants, and <code>pig ci detect --push</code> merges those jobs into the configured project. Commands filtered out by changed paths are reported as skipped checks, and commands with runner labels wait for a matching self-hosted runner. Self-hosted runners use <code>pig ci run</code> with a runner token; <code>pig ci runner setup</code> validates the connection and prints runner setup commands. Runners wait on WebSocket wakeups when available, fall back to adaptive polling, receive configured env and selected project CI secrets, and upload redacted logs. External systems can also report checks directly through the checks API.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Project CI commands enqueue jobs for configured events such as workspace pushes, ready workspace heads, or component releases. <code>pig ci detect</code> can read existing workflow files, including workflow path filters, runner labels, and simple matrix variants, and <code>pig ci detect --push</code> merges those jobs into the configured project. The CI import panel also accepts GitHub workflow YAML and converts common workflow events, path filters, matrices, artifact/cache steps, and Cloudflare deploy steps into sty commands and reusable setup blocks. The hosted UI can detect components from package and Cargo manifests, then suggest build, test, and deploy commands from those components. Commands filtered out by changed paths or affected components are reported as skipped checks, and commands with runner labels wait for a matching self-hosted runner. Self-hosted runners use <code>pig ci run</code> with a runner token; <code>pig ci runner setup</code> validates the connection and prints runner setup commands. Runners wait on WebSocket wakeups when available, fall back to adaptive polling, receive configured env and selected project CI secrets, upload redacted logs and artifacts, and can restore or save configured caches. External systems can also report checks directly through the checks API.</p>
 		<div class="mt-4">
 			<CodeBlock code={ciCheck} />
 		</div>

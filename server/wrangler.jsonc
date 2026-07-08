@@ -14,7 +14,8 @@
   "vars": {
     "AVE_ISSUER": "https://aveid.net",
     "AVE_CLIENT_ID": "app_813ac5533bb87d939f328d76b5a1dca8",
-    "STY_FRONTEND_ORIGIN": "http://localhost:5173",
+    "STY_FRONTEND_ORIGIN": "https://sty.sh",
+    "STY_ALLOWED_ORIGINS": "https://sty.sh,http://localhost:5173,http://127.0.0.1:5173",
   },
   "r2_buckets": [
     {
@@ -25,8 +26,14 @@
   "d1_databases": [
     {
       "binding": "STY_DB",
-      "database_name": "sty-db",
-      "database_id": "local-sty-db",
+      "database_name": "sty",
+      "database_id": "1ebc4e0e-5d2a-41f5-81d9-121dc68311d0",
+    },
+  ],
+  "routes": [
+    {
+      "pattern": "sty.sh/api/*",
+      "zone_name": "sty.sh",
     },
   ],
   "durable_objects": {

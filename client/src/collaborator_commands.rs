@@ -4,35 +4,36 @@ use sty_protocol::{validate_segment, validate_target};
 
 use crate::auth_commands::load_config;
 use crate::collaborators;
+use crate::remote::RemoteOpts;
 
 #[derive(Subcommand)]
 pub(crate) enum TenantCollaboratorCommands {
     List {
         tenant: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Add {
         tenant: String,
         user: String,
         #[arg(long)]
         role: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Update {
         tenant: String,
         user: String,
         #[arg(long)]
         role: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Remove {
         tenant: String,
         user: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
 }
 
@@ -40,67 +41,67 @@ pub(crate) enum TenantCollaboratorCommands {
 pub(crate) enum ProjectCollaboratorCommands {
     List {
         target: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Add {
         target: String,
         user: String,
         #[arg(long)]
         role: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Update {
         target: String,
         user: String,
         #[arg(long)]
         role: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Remove {
         target: String,
         user: String,
-        #[arg(long, default_value = super::cli::DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
 }
 
 pub(crate) fn tenant_collaborators(command: TenantCollaboratorCommands) -> Result<()> {
     let config = load_config()?;
     match command {
-        TenantCollaboratorCommands::List { tenant, remote_url } => {
+        TenantCollaboratorCommands::List { tenant, remote } => {
             validate_segment(&tenant)?;
-            collaborators::list_tenant(&remote_url, &config.token, &tenant)
+            collaborators::list_tenant(&remote.resolve(), &config.token, &tenant)
         }
         TenantCollaboratorCommands::Add {
             tenant,
             user,
             role,
-            remote_url,
+            remote,
         } => {
             validate_segment(&tenant)?;
             let role = collaborator_role(&role)?;
-            collaborators::add_tenant(&remote_url, &config.token, &tenant, &user, &role)
+            collaborators::add_tenant(&remote.resolve(), &config.token, &tenant, &user, &role)
         }
         TenantCollaboratorCommands::Update {
             tenant,
             user,
             role,
-            remote_url,
+            remote,
         } => {
             validate_segment(&tenant)?;
             let role = collaborator_role(&role)?;
-            collaborators::update_tenant(&remote_url, &config.token, &tenant, &user, &role)
+            collaborators::update_tenant(&remote.resolve(), &config.token, &tenant, &user, &role)
         }
         TenantCollaboratorCommands::Remove {
             tenant,
             user,
-            remote_url,
+            remote,
         } => {
             validate_segment(&tenant)?;
-            collaborators::remove_tenant(&remote_url, &config.token, &tenant, &user)
+            collaborators::remove_tenant(&remote.resolve(), &config.token, &tenant, &user)
         }
     }
 }
@@ -108,37 +109,57 @@ pub(crate) fn tenant_collaborators(command: TenantCollaboratorCommands) -> Resul
 pub(crate) fn project_collaborators(command: ProjectCollaboratorCommands) -> Result<()> {
     let config = load_config()?;
     match command {
-        ProjectCollaboratorCommands::List { target, remote_url } => {
+        ProjectCollaboratorCommands::List { target, remote } => {
             let (tenant, project) = validate_target(&target)?;
-            collaborators::list_project(&remote_url, &config.token, tenant, project)
+            collaborators::list_project(&remote.resolve(), &config.token, tenant, project)
         }
         ProjectCollaboratorCommands::Add {
             target,
             user,
             role,
-            remote_url,
+            remote,
         } => {
             let (tenant, project) = validate_target(&target)?;
             let role = collaborator_role(&role)?;
-            collaborators::add_project(&remote_url, &config.token, tenant, project, &user, &role)
+            collaborators::add_project(
+                &remote.resolve(),
+                &config.token,
+                tenant,
+                project,
+                &user,
+                &role,
+            )
         }
         ProjectCollaboratorCommands::Update {
             target,
             user,
             role,
-            remote_url,
+            remote,
         } => {
             let (tenant, project) = validate_target(&target)?;
             let role = collaborator_role(&role)?;
-            collaborators::update_project(&remote_url, &config.token, tenant, project, &user, &role)
+            collaborators::update_project(
+                &remote.resolve(),
+                &config.token,
+                tenant,
+                project,
+                &user,
+                &role,
+            )
         }
         ProjectCollaboratorCommands::Remove {
             target,
             user,
-            remote_url,
+            remote,
         } => {
             let (tenant, project) = validate_target(&target)?;
-            collaborators::remove_project(&remote_url, &config.token, tenant, project, &user)
+            collaborators::remove_project(
+                &remote.resolve(),
+                &config.token,
+                tenant,
+                project,
+                &user,
+            )
         }
     }
 }

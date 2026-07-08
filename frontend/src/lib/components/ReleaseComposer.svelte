@@ -1,5 +1,5 @@
 <script module lang="ts">
-	import type { Release, TagInfo } from '$lib/api';
+	import type { ProjectComponent, Release, TagInfo } from '$lib/api';
 
 	export type ReleaseCreateInput = {
 		tag: string;
@@ -7,6 +7,7 @@
 		notes: string;
 		prerelease: boolean;
 		draft: boolean;
+		components: string[];
 		files: File[];
 	};
 </script>
@@ -28,6 +29,7 @@
 		busy = false,
 		mode = 'create',
 		initialRelease = null,
+		projectComponents = [],
 		onCreate,
 		onCancel,
 		onGenerateNotes
@@ -37,6 +39,7 @@
 		busy?: boolean;
 		mode?: 'create' | 'edit';
 		initialRelease?: Release | null;
+		projectComponents?: ProjectComponent[];
 		onCreate: (input: ReleaseCreateInput) => Promise<void> | void;
 		onCancel: () => void;
 		onGenerateNotes: () => Promise<string> | string;
@@ -47,6 +50,7 @@
 	let name = $state('');
 	let notes = $state('');
 	let prerelease = $state(false);
+	let selectedComponents = $state<string[]>([]);
 	let pendingFiles = $state<File[]>([]);
 	let dragging = $state(false);
 	let tagOpen = $state(false);
@@ -55,7 +59,7 @@
 	let tagPicker = $state<HTMLElement | null>(null);
 	let hydratedReleaseKey = $state('');
 
-	const releaseTags = $derived(releases.map((release) => release.tag?.toLowerCase()).filter(Boolean));
+	const visibleComponents = $derived(projectComponents.filter((component) => component.visible !== false));
 	const initialTag = $derived(initialRelease?.tag?.trim().toLowerCase() ?? '');
 	const matchingTags = $derived.by(() => {
 		const needle = tagQuery.trim().toLowerCase();
@@ -68,7 +72,7 @@
 	});
 	const selectedTag = $derived(tags.find((item) => tagValue(item).toLowerCase() === tag.trim().toLowerCase()));
 	const tagExists = $derived(Boolean(selectedTag));
-	const tagAlreadyReleased = $derived(Boolean(tag.trim() && releaseTags.includes(tag.trim().toLowerCase()) && tag.trim().toLowerCase() !== initialTag));
+	const tagAlreadyReleased = $derived(Boolean(tag.trim() && releases.some((release) => releaseConflicts(release)) && tag.trim().toLowerCase() !== initialTag));
 	const canSubmit = $derived(Boolean(tag.trim()) && !tagAlreadyReleased && !busy);
 	const tagLocked = $derived(mode === 'edit');
 	const showDraftButton = $derived(mode === 'create' || Boolean(initialRelease?.draft));
@@ -83,12 +87,23 @@
 		name = initialRelease.name ?? '';
 		notes = initialRelease.notes ?? '';
 		prerelease = Boolean(initialRelease.prerelease);
+		selectedComponents = [...(initialRelease.components ?? [])];
 		pendingFiles = [];
 		hydratedReleaseKey = key;
 	});
 
 	function tagValue(item: TagInfo) {
 		return item.tag ?? item.name ?? item.id ?? '';
+	}
+
+	function releaseConflicts(release: Release) {
+		if (release.tag?.trim().toLowerCase() !== tag.trim().toLowerCase()) return false;
+		if ((release.id ?? '') === (initialRelease?.id ?? '')) return false;
+		return releaseScopeKey(release.components ?? []) === releaseScopeKey(selectedComponents);
+	}
+
+	function releaseScopeKey(components: string[]) {
+		return components.length ? [...components].sort().join('+') : 'project';
 	}
 
 	function formatSize(value: number | string | null | undefined) {
@@ -135,6 +150,7 @@
 			notes: notes.trim(),
 			prerelease,
 			draft,
+			components: selectedComponents,
 			files: pendingFiles
 		});
 		tag = '';
@@ -142,7 +158,12 @@
 		name = '';
 		notes = '';
 		prerelease = false;
+		selectedComponents = [];
 		pendingFiles = [];
+	}
+
+	function toggleComponent(id: string) {
+		selectedComponents = selectedComponents.includes(id) ? selectedComponents.filter((item) => item !== id) : [...selectedComponents, id];
 	}
 
 	async function generateNotes() {
@@ -236,6 +257,20 @@
 		</div>
 
 		<div class="flex flex-wrap items-center gap-2">
+			{#if visibleComponents.length > 0}
+				<div class="flex flex-wrap gap-1">
+					{#each visibleComponents as component (component.id)}
+						<button
+							class="h-8 border px-3 text-xs {selectedComponents.includes(component.id) ? 'border-[#d9a66c] text-[#d9a66c]' : 'border-[#2a2a28] text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4]'}"
+							type="button"
+							aria-pressed={selectedComponents.includes(component.id)}
+							onclick={() => toggleComponent(component.id)}
+						>
+							{component.name}
+						</button>
+					{/each}
+				</div>
+			{/if}
 			<button
 				class="inline-flex h-8 items-center gap-2 border border-[#2a2a28] px-3 text-xs text-[#a09d94] hover:bg-[#1e1e1c] hover:text-[#eae9e4] disabled:opacity-50"
 				type="button"

@@ -88,6 +88,8 @@ export interface Release {
 	latest?: boolean;
 	prerelease?: boolean;
 	draft?: boolean;
+	scope?: 'project' | 'component' | string;
+	components?: string[];
 	source?: {
 		snapshot?: string | null;
 		workspace?: string | null;
@@ -101,6 +103,7 @@ export interface ReleaseArtifact {
 	name: string;
 	url?: string | null;
 	download_url?: string | null;
+	public_url?: string | null;
 	size?: number | string | null;
 	digest?: string | null;
 	content_type?: string | null;

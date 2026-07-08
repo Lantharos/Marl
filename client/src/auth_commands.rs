@@ -17,16 +17,16 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::http::{RequestBuilderExt, response_error};
+use crate::remote::{RemoteOpts, normalize_remote_url};
 use crate::spinner;
-
-pub(crate) const DEFAULT_REMOTE_URL: &str = "http://127.0.0.1:8787";
 
 pub(crate) fn login(
     token: Option<String>,
     callback_port: u16,
-    remote_url: String,
+    remote: RemoteOpts,
     pig: String,
 ) -> Result<()> {
+    let remote_url = remote.resolve();
     let (token, user) = match token {
         Some(token) => {
             let user = auth_user(&remote_url, &token)?;
@@ -50,7 +50,7 @@ pub(crate) fn login(
 
 pub(crate) fn whoami() -> Result<()> {
     let config = load_config()?;
-    let url = format!("{}/v1/auth/check", config.remote_url.trim_end_matches('/'));
+    let url = format!("{}/v1/auth/check", normalize_remote_url(&config.remote_url));
     let response = Client::new()
         .post(url)
         .bearer_auth(&config.token)
@@ -181,7 +181,7 @@ fn exchange_oauth_code(
 }
 
 fn exchange_sty_token(remote_url: &str, id_token: &str) -> Result<String> {
-    let url = format!("{}/v1/session/exchange", remote_url.trim_end_matches('/'));
+    let url = format!("{}/v1/session/exchange", normalize_remote_url(remote_url));
     let response = spinner::run("Creating sty session", || {
         Client::new()
             .post(url)
@@ -198,7 +198,7 @@ fn exchange_sty_token(remote_url: &str, id_token: &str) -> Result<String> {
 }
 
 fn auth_user(remote_url: &str, token: &str) -> Result<String> {
-    let url = format!("{}/v1/auth/check", remote_url.trim_end_matches('/'));
+    let url = format!("{}/v1/auth/check", normalize_remote_url(remote_url));
     let response = spinner::run("Checking sty session", || {
         Client::new().post(url).bearer_auth(token).send()
     })?;

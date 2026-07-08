@@ -7,8 +7,9 @@ use reqwest::blocking::Response;
 use serde::Deserialize;
 use sty_protocol::{Paginated, validate_target};
 
-use crate::auth_commands::{DEFAULT_REMOTE_URL, load_config};
+use crate::auth_commands::load_config;
 use crate::http::{RequestBuilderExt, response_error};
+use crate::remote::RemoteOpts;
 
 #[derive(clap::Subcommand)]
 pub(crate) enum CiCommands {
@@ -22,14 +23,14 @@ pub(crate) enum CiCommands {
         workspace: Option<String>,
         #[arg(long, default_value_t = 50)]
         limit: u32,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Logs {
         target: String,
         job: String,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Artifacts {
         target: String,
@@ -38,8 +39,8 @@ pub(crate) enum CiCommands {
         download: Option<String>,
         #[arg(short, long)]
         output: Option<PathBuf>,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
 }
 
@@ -50,19 +51,19 @@ pub(crate) enum CiRunnerCommands {
         name: String,
         #[arg(long, default_value_t = 1)]
         concurrency: u32,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     List {
         target: String,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Delete {
         target: String,
         id: String,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
 }
 
@@ -122,37 +123,43 @@ pub(crate) fn run(command: CiCommands) -> Result<()> {
                 target,
                 name,
                 concurrency,
-                remote_url,
-            } => create_runner(&remote_url, &target, &name, concurrency),
-            CiRunnerCommands::List { target, remote_url } => list_runners(&remote_url, &target),
+                remote,
+            } => create_runner(&remote.resolve(), &target, &name, concurrency),
+            CiRunnerCommands::List { target, remote } => {
+                list_runners(&remote.resolve(), &target)
+            }
             CiRunnerCommands::Delete {
                 target,
                 id,
-                remote_url,
-            } => delete_runner(&remote_url, &target, &id),
+                remote,
+            } => delete_runner(&remote.resolve(), &target, &id),
         },
         CiCommands::Jobs {
             target,
             workspace,
             limit,
-            remote_url,
-        } => list_jobs(&remote_url, &target, workspace.as_deref(), limit),
+            remote,
+        } => list_jobs(&remote.resolve(), &target, workspace.as_deref(), limit),
         CiCommands::Logs {
             target,
             job,
-            remote_url,
-        } => show_logs(&remote_url, &target, &job),
+            remote,
+        } => show_logs(&remote.resolve(), &target, &job),
         CiCommands::Artifacts {
             target,
             job,
             download,
             output,
-            remote_url,
+            remote,
         } => match download {
-            Some(artifact) => {
-                download_artifact(&remote_url, &target, &job, &artifact, output.as_deref())
-            }
-            None => list_artifacts(&remote_url, &target, &job),
+            Some(artifact) => download_artifact(
+                &remote.resolve(),
+                &target,
+                &job,
+                &artifact,
+                output.as_deref(),
+            ),
+            None => list_artifacts(&remote.resolve(), &target, &job),
         },
     }
 }

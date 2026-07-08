@@ -151,6 +151,7 @@ pub async fn submit_workspace_review(
     )
     .await?;
     let merge_status = crate::routes::governance::workspace_merge_status(
+        Some(&ctx.env),
         &database,
         &tenant,
         &project,
@@ -277,6 +278,7 @@ async fn ready_workspace_json(
     )
     .await?;
     let merge_requirements = crate::routes::governance::workspace_merge_status(
+        Some(&ctx.env),
         database,
         tenant,
         project,

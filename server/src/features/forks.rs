@@ -281,6 +281,7 @@ async fn insert_fork_shell(
         merge_rules: MergeRules::default(),
         protected_workspaces: vec![],
         path_visibility: vec![],
+        components: vec![],
         ci: ProjectCiSettings::default(),
     })
     .map_err(|error| err(error.to_string()))?;

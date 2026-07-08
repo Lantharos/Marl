@@ -5,7 +5,7 @@
 		getProjectSettings,
 		isAbortError,
 		updateProjectSettings,
-		type AccessResponse, type MergeRules, type NavbarItem, type PanelItem, type PathVisibilityRule,
+		type AccessResponse, type MergeRules, type NavbarItem, type PanelItem, type PathVisibilityRule, type ProjectComponent,
 		type ProjectAppearance, type ProjectSettings
 	} from '$lib/api';
 	import { DEFAULT_PROJECT_APPEARANCE } from '$lib/projectAppearance';
@@ -14,6 +14,7 @@
 	import ProjectAppearanceSettings from '$lib/components/ProjectAppearanceSettings.svelte';
 	import ProjectDangerZone from '$lib/components/ProjectDangerZone.svelte';
 	import ProjectCollaboratorsSettings from '$lib/components/ProjectCollaboratorsSettings.svelte';
+	import ProjectComponentsSettings from '$lib/components/ProjectComponentsSettings.svelte';
 	import ProjectMergeRulesSettings from '$lib/components/ProjectMergeRulesSettings.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
 	import SourceBoundariesSettings from '$lib/components/SourceBoundariesSettings.svelte';
@@ -49,6 +50,7 @@
 		},
 		protected_workspaces: [],
 		path_visibility: [],
+		components: [],
 		ci: {
 			enabled: false,
 			commands: []
@@ -58,6 +60,7 @@
 	let error = $state('');
 	let busy = $state(false);
 	let access = $state<AccessResponse | null>(null);
+	let settingsTab = $state<'project' | 'code' | 'access'>('project');
 
 	const DEFAULT_PANELS: PanelItem[] = [
 		{ id: 'workspaces', title: 'Workspaces', type: 'workspaces', enabled: true, order: 0 },
@@ -90,7 +93,7 @@
 		return { id: '', title: '', type: 'text', content: '', enabled: true, order: 0 };
 	}
 
-	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean; merge_rules?: MergeRules; protected_workspaces?: string[]; path_visibility?: PathVisibilityRule[] }) {
+	async function persistSettings(items: { appearance?: ProjectAppearance; navbar_items?: NavbarItem[]; panels?: PanelItem[]; public_releases?: boolean; merge_rules?: MergeRules; protected_workspaces?: string[]; path_visibility?: PathVisibilityRule[]; components?: ProjectComponent[] }) {
 		busy = true;
 		try {
 			const result = await updateProjectSettings(tenant, project, items);
@@ -235,6 +238,11 @@
 	}
 
 	const canManageProject = $derived(Boolean(access?.can_maintain));
+	const settingsTabs = [
+		{ id: 'project', label: 'Project' },
+		{ id: 'code', label: 'Code' },
+		{ id: 'access', label: 'Access' }
+	] as const;
 </script>
 
 <div class="mx-auto max-w-6xl">
@@ -253,15 +261,24 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			<SettingsSection title="Appearance">
-				<ProjectAppearanceSettings
-					appearance={settings.appearance}
-					{busy}
-					onSave={(appearance) => persistSettings({ appearance })}
-				/>
-			</SettingsSection>
+			<div class="flex flex-wrap gap-1 border-b border-[#2a2a28]">
+				{#each settingsTabs as tab (tab.id)}
+					<button class="px-3 py-2 text-sm {settingsTab === tab.id ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" onclick={() => (settingsTab = tab.id)}>
+						{tab.label}
+					</button>
+				{/each}
+			</div>
 
-			<SettingsSection title="Navigation">
+			{#if settingsTab === 'project'}
+				<SettingsSection title="Appearance">
+					<ProjectAppearanceSettings
+						appearance={settings.appearance}
+						{busy}
+						onSave={(appearance) => persistSettings({ appearance })}
+					/>
+				</SettingsSection>
+
+				<SettingsSection title="Navigation">
 				{#snippet actions()}
 					<button class="flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] pl-1.5 pr-2.5 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#2a2a28]" onclick={() => (showAddNavbar = true)}>
 						<Plus class="h-3.5 w-3.5" /> Add
@@ -293,7 +310,7 @@
 									{/if}
 								</div>
 							</div>
-							{#if !['', 'code', 'workspaces', 'issues', 'leaves', 'screenshots', 'releases', 'automation', 'history', 'settings'].includes(item.id)}
+							{#if !['', 'code', 'workspaces', 'issues', 'leaves', 'screenshots', 'releases', 'components', 'automation', 'history', 'settings'].includes(item.id)}
 								<button class="flex h-7 w-7 shrink-0 items-center justify-center text-[#8c887e] hover:bg-[#252522] hover:text-[#d96c5a] disabled:opacity-30" disabled={busy} onclick={() => removeNavbar(i)} aria-label={`Delete ${item.label}`}>
 									<Trash2 class="h-3.5 w-3.5" />
 								</button>
@@ -302,9 +319,9 @@
 						</div>
 					{/each}
 				</div>
-			</SettingsSection>
+				</SettingsSection>
 
-			<SettingsSection title="Releases">
+				<SettingsSection title="Releases">
 				<div class="flex items-center justify-between gap-4 border border-[#252522] bg-[#0f0f0d] px-3 py-3">
 					<div class="min-w-0">
 						<div class="text-sm font-medium text-[#eae9e4]">Public downloads</div>
@@ -318,21 +335,49 @@
 					</div>
 					<SwitchControl checked={settings.visibility === 'public' || settings.public_releases} disabled={busy || settings.visibility === 'public'} label="Toggle public release downloads" onToggle={togglePublicReleases} />
 				</div>
-			</SettingsSection>
+				</SettingsSection>
 
-			<SettingsSection title="Source boundaries">
+			{:else if settingsTab === 'code'}
+				<SettingsSection title="Source boundaries">
 				<SourceBoundariesSettings
 					rules={settings.path_visibility ?? []}
 					{busy}
 					onSave={(path_visibility) => persistSettings({ path_visibility })}
 				/>
-			</SettingsSection>
+				</SettingsSection>
 
-			<SettingsSection title="Merge rules">
-				<ProjectMergeRulesSettings {settings} {busy} onSave={persistSettings} />
-			</SettingsSection>
+				<SettingsSection title="Components">
+				<ProjectComponentsSettings
+					{tenant}
+					{project}
+					components={settings.components ?? []}
+					{busy}
+					onSave={(components) => persistSettings({ components })}
+				/>
+				</SettingsSection>
 
-			<SettingsSection title="Overview panels">
+				<SettingsSection title="Merge rules">
+					<ProjectMergeRulesSettings {settings} {busy} onSave={persistSettings} />
+				</SettingsSection>
+			{:else}
+				<SettingsSection title="Collaborators">
+					<div class="grid gap-3">
+						<ProjectCollaboratorsSettings {tenant} {project} {access} />
+					</div>
+				</SettingsSection>
+
+				<ProjectDangerZone
+					{tenant}
+					{project}
+					{settings}
+					{access}
+					onSettings={(updatedSettings) => (settings = updatedSettings)}
+					onError={(message) => (error = message)}
+				/>
+			{/if}
+
+			{#if settingsTab === 'project'}
+				<SettingsSection title="Overview panels">
 				{#snippet actions()}
 					<button class="flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] pl-1.5 pr-2.5 text-xs font-medium whitespace-nowrap text-[#eae9e4] hover:bg-[#2a2a28]" onclick={openNewPanelModal}>
 						<Plus class="h-3.5 w-3.5" /> Add
@@ -373,22 +418,9 @@
 						</div>
 					{/each}
 				</div>
-			</SettingsSection>
+				</SettingsSection>
+			{/if}
 
-			<SettingsSection title="Collaborators">
-				<div class="grid gap-3">
-					<ProjectCollaboratorsSettings {tenant} {project} {access} />
-				</div>
-			</SettingsSection>
-
-			<ProjectDangerZone
-				{tenant}
-				{project}
-				{settings}
-				{access}
-				onSettings={(updatedSettings) => (settings = updatedSettings)}
-				onError={(message) => (error = message)}
-			/>
 		</div>
 
 		{#if showAddNavbar}

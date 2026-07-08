@@ -5,9 +5,10 @@ use clap::Subcommand;
 use reqwest::blocking::Client;
 use sty_protocol::{Leaf, LeafRequest, Paginated, validate_segment, validate_target};
 
-use crate::auth_commands::{DEFAULT_REMOTE_URL, load_config};
+use crate::auth_commands::load_config;
 use crate::http::{RequestBuilderExt, response_error};
 use crate::interactive;
+use crate::remote::RemoteOpts;
 
 mod input;
 
@@ -24,16 +25,16 @@ pub(crate) enum LeafCommands {
         tenant: bool,
         #[arg(long)]
         q: Option<String>,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Get {
         target: String,
         slug: String,
         #[arg(long)]
         tenant: bool,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     #[command(alias = "create")]
     New {
@@ -56,8 +57,8 @@ pub(crate) enum LeafCommands {
         tags: Vec<String>,
         #[arg(long)]
         pinned: bool,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Edit {
         target: String,
@@ -80,8 +81,8 @@ pub(crate) enum LeafCommands {
         tags: Vec<String>,
         #[arg(long)]
         pinned: Option<bool>,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Delete {
         target: String,
@@ -90,8 +91,8 @@ pub(crate) enum LeafCommands {
         tenant: bool,
         #[arg(long)]
         yes: bool,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
 }
 
@@ -144,14 +145,14 @@ pub(crate) fn run(command: LeafCommands) -> Result<()> {
             target,
             tenant,
             q,
-            remote_url,
-        } => list(target, tenant, q, remote_url),
+            remote,
+        } => list(target, tenant, q, remote.resolve()),
         LeafCommands::Get {
             target,
             slug,
             tenant,
-            remote_url,
-        } => get(target, slug, tenant, remote_url),
+            remote,
+        } => get(target, slug, tenant, remote.resolve()),
         LeafCommands::New {
             target,
             tenant,
@@ -163,10 +164,10 @@ pub(crate) fn run(command: LeafCommands) -> Result<()> {
             attach,
             tags,
             pinned,
-            remote_url,
+            remote,
         } => create(
             target, tenant, title, slug, body, body_file, visibility, attach, tags, pinned,
-            remote_url,
+            remote.resolve(),
         ),
         LeafCommands::Edit {
             target,
@@ -180,18 +181,18 @@ pub(crate) fn run(command: LeafCommands) -> Result<()> {
             attach,
             tags,
             pinned,
-            remote_url,
+            remote,
         } => edit(
             target, slug, tenant, title, new_slug, body, body_file, visibility, attach, tags,
-            pinned, remote_url,
+            pinned, remote.resolve(),
         ),
         LeafCommands::Delete {
             target,
             slug,
             tenant,
             yes,
-            remote_url,
-        } => delete(target, slug, tenant, yes, remote_url),
+            remote,
+        } => delete(target, slug, tenant, yes, remote.resolve()),
     }
 }
 

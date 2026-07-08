@@ -53,610 +53,618 @@ use self::sync::*;
 
 pub(crate) fn api_router(app_context: AppContext) -> Router<'static, AppContext> {
     Router::with_data(app_context)
-        .post_async("/v1/auth/check", auth_check)
-        .get_async("/v1/capabilities", capabilities)
-        .post_async("/v1/session/exchange", exchange_session)
-        .delete_async("/v1/session", revoke_session)
-        .get_async("/v1/me", me)
-        .get_async("/v1/account/settings", get_account_settings)
-        .patch_async("/v1/account/settings", update_account_settings)
-        .post_async("/v1/account/tenant", create_account_tenant)
-        .get_async("/v1/users/search", search_users)
-        .get_async("/v1/users/:handle/profile", user_profile_by_handle)
-        .post_async("/v1/remote-approvals", create_remote_approval)
-        .get_async("/v1/remote-approvals/:approval_id", get_remote_approval)
+        .post_async("/api/v1/auth/check", auth_check)
+        .get_async("/api/v1/capabilities", capabilities)
+        .post_async("/api/v1/session/exchange", exchange_session)
+        .delete_async("/api/v1/session", revoke_session)
+        .get_async("/api/v1/me", me)
+        .get_async("/api/v1/account/settings", get_account_settings)
+        .patch_async("/api/v1/account/settings", update_account_settings)
+        .post_async("/api/v1/account/tenant", create_account_tenant)
+        .get_async("/api/v1/users/search", search_users)
+        .get_async("/api/v1/users/:handle/profile", user_profile_by_handle)
+        .post_async("/api/v1/remote-approvals", create_remote_approval)
+        .get_async("/api/v1/remote-approvals/:approval_id", get_remote_approval)
         .post_async(
-            "/v1/remote-approvals/:approval_id/approve",
+            "/api/v1/remote-approvals/:approval_id/approve",
             approve_remote_approval,
         )
-        .get_async("/v1/account/keys", list_account_keys)
-        .post_async("/v1/account/keys", create_account_key)
-        .delete_async("/v1/account/keys/:key_id", delete_account_key)
-        .get_async("/v1/account/ssh-keys", list_account_ssh_keys)
-        .post_async("/v1/account/ssh-keys", create_account_ssh_key)
-        .delete_async("/v1/account/ssh-keys/:key_id", delete_account_ssh_key)
-        .get_async("/v1/developer/apps", list_developer_apps)
-        .post_async("/v1/developer/apps", create_developer_app)
-        .delete_async("/v1/developer/apps/:app_id", delete_developer_app)
-        .get_async("/v1/oauth/apps/:client_id", oauth_app)
-        .post_async("/v1/oauth/authorize", oauth_authorize)
-        .post_async("/v1/oauth/token", oauth_token)
-        .post_async("/v1/orgs", create_org)
-        .get_async("/v1/tenants/:tenant/collaborators", list_tenant_collaborators)
-        .post_async("/v1/tenants/:tenant/collaborators", add_tenant_collaborator)
+        .get_async("/api/v1/account/keys", list_account_keys)
+        .post_async("/api/v1/account/keys", create_account_key)
+        .delete_async("/api/v1/account/keys/:key_id", delete_account_key)
+        .get_async("/api/v1/account/ssh-keys", list_account_ssh_keys)
+        .post_async("/api/v1/account/ssh-keys", create_account_ssh_key)
+        .delete_async("/api/v1/account/ssh-keys/:key_id", delete_account_ssh_key)
+        .get_async("/api/v1/developer/apps", list_developer_apps)
+        .post_async("/api/v1/developer/apps", create_developer_app)
+        .delete_async("/api/v1/developer/apps/:app_id", delete_developer_app)
+        .get_async("/api/v1/oauth/apps/:client_id", oauth_app)
+        .post_async("/api/v1/oauth/authorize", oauth_authorize)
+        .post_async("/api/v1/oauth/token", oauth_token)
+        .post_async("/api/v1/orgs", create_org)
+        .get_async("/api/v1/tenants/:tenant/collaborators", list_tenant_collaborators)
+        .post_async("/api/v1/tenants/:tenant/collaborators", add_tenant_collaborator)
         .patch_async(
-            "/v1/tenants/:tenant/collaborators/:user",
+            "/api/v1/tenants/:tenant/collaborators/:user",
             update_tenant_collaborator,
         )
         .delete_async(
-            "/v1/tenants/:tenant/collaborators/:user",
+            "/api/v1/tenants/:tenant/collaborators/:user",
             delete_tenant_collaborator,
         )
-        .get_async("/v1/home", home)
-        .get_async("/v1/notifications", list_notifications)
+        .get_async("/api/v1/home", home)
+        .get_async("/api/v1/notifications", list_notifications)
         .post_async(
-            "/v1/notifications/:notification/read",
+            "/api/v1/notifications/:notification/read",
             mark_notification_read,
         )
-        .get_async("/v1/follows", follows)
-        .get_async("/v1/discover/projects", discover_projects)
-        .post_async("/v1/forks", fork_project)
-        .get_async("/v1/projects", list_projects)
-        .get_async("/v1/profiles/:tenant", user_profile)
-        .put_async("/v1/profiles/:tenant/pins", update_user_profile_pins)
-        .get_async("/v1/tenants/:tenant/folders", list_tenant_folders)
-        .post_async("/v1/tenants/:tenant/folders", create_tenant_folder)
-        .get_async("/v1/tenants/:tenant/leaves", list_tenant_leaves)
-        .post_async("/v1/tenants/:tenant/leaves", create_tenant_leaf)
-        .get_async("/v1/tenants/:tenant/leaves/:leaf", get_tenant_leaf)
-        .patch_async("/v1/tenants/:tenant/leaves/:leaf", update_tenant_leaf)
-        .delete_async("/v1/tenants/:tenant/leaves/:leaf", delete_tenant_leaf)
-        .get_async("/v1/tenants/:tenant/projects", tenant_projects)
-        .post_async("/v1/tenants/:tenant/projects/:project", create_project)
-        .get_async("/v1/tenants/:tenant/projects/:project", project_detail)
-        .delete_async("/v1/tenants/:tenant/projects/:project", delete_project)
+        .get_async("/api/v1/follows", follows)
+        .get_async("/api/v1/discover/projects", discover_projects)
+        .post_async("/api/v1/forks", fork_project)
+        .get_async("/api/v1/projects", list_projects)
+        .get_async("/api/v1/profiles/:tenant", user_profile)
+        .put_async("/api/v1/profiles/:tenant/pins", update_user_profile_pins)
+        .get_async("/api/v1/tenants/:tenant/folders", list_tenant_folders)
+        .post_async("/api/v1/tenants/:tenant/folders", create_tenant_folder)
+        .get_async("/api/v1/tenants/:tenant/leaves", list_tenant_leaves)
+        .post_async("/api/v1/tenants/:tenant/leaves", create_tenant_leaf)
+        .get_async("/api/v1/tenants/:tenant/leaves/:leaf", get_tenant_leaf)
+        .patch_async("/api/v1/tenants/:tenant/leaves/:leaf", update_tenant_leaf)
+        .delete_async("/api/v1/tenants/:tenant/leaves/:leaf", delete_tenant_leaf)
+        .get_async("/api/v1/tenants/:tenant/projects", tenant_projects)
+        .post_async("/api/v1/tenants/:tenant/projects/:project", create_project)
+        .get_async("/api/v1/tenants/:tenant/projects/:project", project_detail)
+        .delete_async("/api/v1/tenants/:tenant/projects/:project", delete_project)
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/folder",
+            "/api/v1/tenants/:tenant/projects/:project/folder",
             move_project_folder,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/access",
+            "/api/v1/tenants/:tenant/projects/:project/access",
             project_access,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/collaborators",
+            "/api/v1/tenants/:tenant/projects/:project/collaborators",
             list_project_collaborators,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/collaborators",
+            "/api/v1/tenants/:tenant/projects/:project/collaborators",
             add_project_collaborator,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/collaborators/:user",
+            "/api/v1/tenants/:tenant/projects/:project/collaborators/:user",
             update_project_collaborator,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/collaborators/:user",
+            "/api/v1/tenants/:tenant/projects/:project/collaborators/:user",
             delete_project_collaborator,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/overview",
+            "/api/v1/tenants/:tenant/projects/:project/overview",
             project_overview,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/leaves",
+            "/api/v1/tenants/:tenant/projects/:project/components/overview",
+            component_overview,
+        )
+        .get_async(
+            "/api/v1/tenants/:tenant/projects/:project/leaves",
             list_project_leaves,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/leaves",
+            "/api/v1/tenants/:tenant/projects/:project/leaves",
             create_project_leaf,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/leaves/:leaf",
+            "/api/v1/tenants/:tenant/projects/:project/leaves/:leaf",
             get_project_leaf,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/leaves/:leaf",
+            "/api/v1/tenants/:tenant/projects/:project/leaves/:leaf",
             update_project_leaf,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/leaves/:leaf",
+            "/api/v1/tenants/:tenant/projects/:project/leaves/:leaf",
             delete_project_leaf,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/screenshots",
+            "/api/v1/tenants/:tenant/projects/:project/screenshots",
             list_screenshots,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/screenshots",
+            "/api/v1/tenants/:tenant/projects/:project/screenshots",
             upload_screenshot,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/screenshots/:item_id/feature",
+            "/api/v1/tenants/:tenant/projects/:project/screenshots/:item_id/feature",
             feature_screenshot,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/screenshots/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/screenshots/:item_id",
             delete_screenshot,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/screenshots/:item_id/download",
+            "/api/v1/tenants/:tenant/projects/:project/screenshots/:item_id/download",
             download_screenshot,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/stats",
+            "/api/v1/tenants/:tenant/projects/:project/stats",
             project_stats,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces",
             list_workspaces,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/tree", project_tree)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/tree", project_tree)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/source.zip",
+            "/api/v1/tenants/:tenant/projects/:project/source.zip",
             project_source_archive,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/files/:path",
+            "/api/v1/tenants/:tenant/projects/:project/files/:path",
             project_file,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/files", project_file)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/files", project_file)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/issues",
+            "/api/v1/tenants/:tenant/projects/:project/issues",
             project_issues,
         )
-        .post_async("/v1/tenants/:tenant/projects/:project/issues", create_issue)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/issues", create_issue)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id",
             get_issue,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id",
             update_issue,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id",
             delete_issue,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/close",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/close",
             close_issue,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/reopen",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/reopen",
             reopen_issue,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/assignees",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/assignees",
             assign_issue,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/labels",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/labels",
             label_issue,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/transfer",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/transfer",
             transfer_issue,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/labels", list_labels)
-        .post_async("/v1/tenants/:tenant/projects/:project/labels", create_label)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/labels", list_labels)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/labels", create_label)
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/labels/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/labels/:item_id",
             delete_protocol_item,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/milestones",
+            "/api/v1/tenants/:tenant/projects/:project/milestones",
             list_milestones,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/milestones",
+            "/api/v1/tenants/:tenant/projects/:project/milestones",
             create_milestone,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/milestones/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/milestones/:item_id",
             get_protocol_item,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/milestones/:item_id/close",
+            "/api/v1/tenants/:tenant/projects/:project/milestones/:item_id/close",
             close_protocol_item,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/ready", list_ready)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/ready", list_ready)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ready/:workspace",
+            "/api/v1/tenants/:tenant/projects/:project/ready/:workspace",
             get_ready,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready",
             unmark_ready,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reject",
             reject_ready,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/comments",
+            "/api/v1/tenants/:tenant/projects/:project/comments",
             list_protocol_comments,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/comments",
+            "/api/v1/tenants/:tenant/projects/:project/comments",
             create_protocol_comment,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/comments/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/comments/:item_id",
             update_protocol_comment,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/comments/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/comments/:item_id",
             delete_protocol_item,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions",
+            "/api/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions",
             list_reactions,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions",
+            "/api/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions",
             add_reaction,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions/:reaction",
+            "/api/v1/tenants/:tenant/projects/:project/comments/:item_id/reactions/:reaction",
             delete_reaction,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions",
             list_reactions,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions",
             add_reaction,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions/:reaction",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/reactions/:reaction",
             delete_reaction,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/hooks", list_hooks)
-        .post_async("/v1/tenants/:tenant/projects/:project/hooks", create_hook)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/hooks", list_hooks)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/hooks", create_hook)
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/hooks/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/hooks/:item_id",
             delete_protocol_item,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/hooks/:item_id/test",
+            "/api/v1/tenants/:tenant/projects/:project/hooks/:item_id/test",
             test_protocol_item,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/api-keys",
+            "/api/v1/tenants/:tenant/projects/:project/api-keys",
             list_project_api_keys,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/api-keys",
+            "/api/v1/tenants/:tenant/projects/:project/api-keys",
             create_project_api_key,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/api-keys/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/api-keys/:item_id",
             delete_project_api_key,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/webhooks",
+            "/api/v1/tenants/:tenant/projects/:project/webhooks",
             list_project_webhooks,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/webhooks",
+            "/api/v1/tenants/:tenant/projects/:project/webhooks",
             create_project_webhook,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/webhooks/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/webhooks/:item_id",
             delete_project_webhook,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/deliveries",
+            "/api/v1/tenants/:tenant/projects/:project/webhooks/:item_id/deliveries",
             list_project_webhook_deliveries,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/test",
+            "/api/v1/tenants/:tenant/projects/:project/webhooks/:item_id/test",
             test_project_webhook,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/webhooks/:item_id/trigger",
+            "/api/v1/tenants/:tenant/projects/:project/webhooks/:item_id/trigger",
             trigger_project_webhook,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/integrations",
+            "/api/v1/tenants/:tenant/projects/:project/integrations",
             list_project_integrations,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/integrations/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/integrations/:item_id",
             delete_project_integration,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/runners",
+            "/api/v1/tenants/:tenant/projects/:project/ci/runners",
             list_ci_runners,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ci/runners",
+            "/api/v1/tenants/:tenant/projects/:project/ci/runners",
             create_ci_runner,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/ci/runners/:runner_id",
+            "/api/v1/tenants/:tenant/projects/:project/ci/runners/:runner_id",
             delete_ci_runner,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/secrets",
+            "/api/v1/tenants/:tenant/projects/:project/ci/secrets",
             list_ci_secrets,
         )
         .put_async(
-            "/v1/tenants/:tenant/projects/:project/ci/secrets",
+            "/api/v1/tenants/:tenant/projects/:project/ci/secrets",
             upsert_ci_secret,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/ci/secrets/:key",
+            "/api/v1/tenants/:tenant/projects/:project/ci/secrets/:key",
             delete_ci_secret,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/runners/events",
+            "/api/v1/tenants/:tenant/projects/:project/ci/runners/events",
             ci_runner_events,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/claim",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/claim",
             claim_ci_job,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs",
             list_ci_jobs,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id",
             get_ci_job,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts",
             list_ci_job_artifacts,
         )
         .put_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact_name",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact_name",
             upload_ci_job_artifact,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact_id/download",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/artifacts/:artifact_id/download",
             download_ci_job_artifact,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/cache/:cache_key",
+            "/api/v1/tenants/:tenant/projects/:project/ci/cache/:cache_key",
             restore_ci_cache,
         )
         .put_async(
-            "/v1/tenants/:tenant/projects/:project/ci/cache/:cache_key",
+            "/api/v1/tenants/:tenant/projects/:project/ci/cache/:cache_key",
             save_ci_cache,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs",
             append_ci_job_log,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs/batch",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs/batch",
             append_ci_job_logs,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/logs",
             ci_job_logs,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/cancel",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/cancel",
             cancel_ci_job,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/rerun",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id/rerun",
             rerun_ci_job,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id",
+            "/api/v1/tenants/:tenant/projects/:project/ci/jobs/:job_id",
             complete_ci_job,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/search",
+            "/api/v1/tenants/:tenant/projects/:project/search",
             search_project,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/releases",
+            "/api/v1/tenants/:tenant/projects/:project/releases",
             list_releases,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/releases",
+            "/api/v1/tenants/:tenant/projects/:project/releases",
             create_release,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/releases/:item_id/artifacts",
+            "/api/v1/tenants/:tenant/projects/:project/releases/:item_id/artifacts",
             upload_release_artifact,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/releases/:item_id/artifacts/:artifact_id/download",
+            "/api/v1/tenants/:tenant/projects/:project/releases/:version/download/:filename",
+            download_release_artifact_by_name,
+        )
+        .get_async(
+            "/api/v1/tenants/:tenant/projects/:project/releases/:item_id/artifacts/:artifact_id/download",
             download_release_artifact,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/releases/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/releases/:item_id",
             get_release,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/releases/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/releases/:item_id",
             update_release,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/releases/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/releases/:item_id",
             delete_release,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/keys", list_keys)
-        .post_async("/v1/tenants/:tenant/projects/:project/keys", create_key)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/keys", list_keys)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/keys", create_key)
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/keys/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/keys/:item_id",
             delete_protocol_item,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/snapshots/verify",
+            "/api/v1/tenants/:tenant/projects/:project/snapshots/verify",
             verify_all_snapshots,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/snapshots/:item_id/verify",
+            "/api/v1/tenants/:tenant/projects/:project/snapshots/:item_id/verify",
             verify_snapshot,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/users/me", profile_me)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/users/me", profile_me)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/users/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/users/:item_id",
             profile_user,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/ssh-keys",
+            "/api/v1/tenants/:tenant/projects/:project/ssh-keys",
             list_ssh_keys,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/ssh-keys",
+            "/api/v1/tenants/:tenant/projects/:project/ssh-keys",
             create_ssh_key,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/ssh-keys/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/ssh-keys/:item_id",
             delete_protocol_item,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments",
             issue_comments,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments",
+            "/api/v1/tenants/:tenant/projects/:project/issues/:issue_id/comments",
             create_comment,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head",
             get_head,
         )
         .put_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/head",
             update_head,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/history",
+            "/api/v1/tenants/:tenant/projects/:project/history",
             project_history,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history",
             workspace_history,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history",
             log_history,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history/rewrite",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/history/rewrite",
             rewrite_history,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews",
             list_workspace_reviews,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reviews",
             submit_workspace_review,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks",
             list_workspace_checks,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/checks",
             submit_workspace_check,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge-preview",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge-preview",
             merge_preview,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/labels",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/labels",
             update_workspace_labels,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/metadata",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/metadata",
             update_workspace_metadata,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/close",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/close",
             close_workspace,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reopen",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/reopen",
             reopen_workspace,
         )
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace",
             delete_draft_workspace,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/history/:entry_id",
+            "/api/v1/tenants/:tenant/projects/:project/history/:entry_id",
             history_entry,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/ready",
             mark_ready,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/merge",
             merge_workspace,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/parent",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/parent",
             set_parent,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare",
+            "/api/v1/tenants/:tenant/projects/:project/workspaces/:workspace/compare",
             compare,
         )
-        .post_async("/v1/tenants/:tenant/projects/:project/sendwork", send_work)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/sendwork", send_work)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/settings",
+            "/api/v1/tenants/:tenant/projects/:project/settings",
             get_settings,
         )
         .patch_async(
-            "/v1/tenants/:tenant/projects/:project/settings",
+            "/api/v1/tenants/:tenant/projects/:project/settings",
             update_settings,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/audit-log",
+            "/api/v1/tenants/:tenant/projects/:project/audit-log",
             list_audit_log,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/follow", project_follow)
-        .post_async("/v1/tenants/:tenant/projects/:project/follow", follow_project)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/follow", project_follow)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/follow", follow_project)
         .delete_async(
-            "/v1/tenants/:tenant/projects/:project/follow",
+            "/api/v1/tenants/:tenant/projects/:project/follow",
             unfollow_project,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/missing",
+            "/api/v1/tenants/:tenant/projects/:project/objects/missing",
             missing,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/check",
+            "/api/v1/tenants/:tenant/projects/:project/objects/check",
             missing,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/download",
+            "/api/v1/tenants/:tenant/projects/:project/objects/download",
             download_objects,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/upload",
+            "/api/v1/tenants/:tenant/projects/:project/objects/upload",
             upload_objects,
         )
         .post_async(
-            "/v1/tenants/:tenant/projects/:project/objects/path-closure",
+            "/api/v1/tenants/:tenant/projects/:project/objects/path-closure",
             object_path_closure,
         )
         .put_async(
-            "/v1/tenants/:tenant/projects/:project/objects/:object",
+            "/api/v1/tenants/:tenant/projects/:project/objects/:object",
             put_object,
         )
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/objects/:object",
+            "/api/v1/tenants/:tenant/projects/:project/objects/:object",
             get_object,
         )
-        .get_async("/v1/tenants/:tenant/projects/:project/tags", list_tags)
-        .post_async("/v1/tenants/:tenant/projects/:project/tags", create_tag)
+        .get_async("/api/v1/tenants/:tenant/projects/:project/tags", list_tags)
+        .post_async("/api/v1/tenants/:tenant/projects/:project/tags", create_tag)
         .get_async(
-            "/v1/tenants/:tenant/projects/:project/tags/:item_id",
+            "/api/v1/tenants/:tenant/projects/:project/tags/:item_id",
             get_protocol_item,
         )
 }

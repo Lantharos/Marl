@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::UserProfile;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HistoryEntry {
     pub id: String,
     pub kind: String,
@@ -13,6 +13,8 @@ pub struct HistoryEntry {
     pub timestamp: String,
     pub workspace: String,
     pub snapshot_id: Option<String>,
+    #[serde(default)]
+    pub components: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

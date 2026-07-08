@@ -59,12 +59,16 @@ pub(crate) async fn clear_latest_releases(
     tenant: &str,
     project: &str,
     except_id: &str,
+    components: &[String],
 ) -> Result<()> {
     for mut item in list_release_values(database, tenant, project).await? {
         let Some(id) = item["id"].as_str().map(ToOwned::to_owned) else {
             continue;
         };
         if id == except_id || !item["latest"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        if release_components(&item) != components {
             continue;
         }
         item["latest"] = json!(false);
@@ -120,6 +124,9 @@ pub(crate) async fn release_item_by_id_or_tag(
     project: &str,
     id_or_tag: &str,
 ) -> Result<Option<serde_json::Value>> {
+    if id_or_tag == "latest" {
+        return latest_release_item(database, tenant, project).await;
+    }
     let decoded = percent_decode_component(id_or_tag);
     let decoded_twice = percent_decode_component(&decoded);
     let mut candidates = vec![id_or_tag.to_string()];
@@ -165,11 +172,45 @@ pub(crate) fn release_artifact<'a>(
         .find(|artifact| artifact["id"].as_str() == Some(artifact_id))
 }
 
-pub(crate) fn release_id(tenant: &str, project: &str, tag: &str) -> String {
+pub(crate) fn scoped_release_id(
+    tenant: &str,
+    project: &str,
+    tag: &str,
+    components: &[String],
+) -> String {
     let digest = hex::encode(Sha256::digest(
-        format!("{tenant}/{project}:{tag}").as_bytes(),
+        format!("{tenant}/{project}:{tag}:{}", release_scope_key(components)).as_bytes(),
     ));
     format!("release:{}", &digest[..24])
+}
+
+pub(crate) fn release_scope_key(components: &[String]) -> String {
+    if components.is_empty() {
+        "project".to_string()
+    } else {
+        let mut components = components.to_vec();
+        components.sort();
+        format!("component:{}", components.join("+"))
+    }
+}
+
+pub(crate) fn release_components(release: &serde_json::Value) -> Vec<String> {
+    release["components"]
+        .as_array()
+        .map(|items| {
+            let mut components = items
+                .iter()
+                .filter_map(|item| item.as_str().map(ToOwned::to_owned))
+                .collect::<Vec<_>>();
+            components.sort();
+            components
+        })
+        .or_else(|| {
+            release["component"]
+                .as_str()
+                .map(|item| vec![item.to_string()])
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) fn release_artifact_key(
@@ -222,12 +263,63 @@ pub(crate) fn release_artifact_download_url(
     artifact_id: &str,
 ) -> String {
     format!(
-        "/v1/tenants/{}/projects/{}/releases/{}/artifacts/{}/download",
+        "/api/v1/tenants/{}/projects/{}/releases/{}/artifacts/{}/download",
         tenant,
         project,
         percent_encode_component(release_id),
         artifact_id
     )
+}
+
+pub(crate) fn release_public_artifact_url(
+    tenant: &str,
+    project: &str,
+    version: &str,
+    file_name: &str,
+) -> String {
+    format!(
+        "/{}/{}/releases/{}/{}",
+        percent_encode_component(tenant),
+        percent_encode_component(project),
+        percent_encode_component(version),
+        percent_encode_component(file_name)
+    )
+}
+
+pub(crate) fn release_artifact_by_name<'a>(
+    release: &'a serde_json::Value,
+    file_name: &str,
+) -> Option<&'a serde_json::Value> {
+    let decoded = percent_decode_component(file_name);
+    release["artifacts"].as_array()?.iter().find(|artifact| {
+        artifact["name"].as_str() == Some(file_name)
+            || artifact["name"].as_str() == Some(decoded.as_str())
+            || artifact["id"].as_str() == Some(file_name)
+            || artifact["id"].as_str() == Some(decoded.as_str())
+    })
+}
+
+pub(crate) async fn latest_release_item(
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+) -> Result<Option<serde_json::Value>> {
+    let mut releases = list_release_values(database, tenant, project).await?;
+    releases.retain(|item| !item["draft"].as_bool().unwrap_or(false));
+    releases.sort_by(|left, right| {
+        right["created_at"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(left["created_at"].as_str().unwrap_or(""))
+    });
+    if let Some(latest) = releases
+        .iter()
+        .find(|item| item["latest"].as_bool().unwrap_or(false))
+        .cloned()
+    {
+        return Ok(Some(latest));
+    }
+    Ok(releases.into_iter().next())
 }
 
 pub(crate) fn safe_file_name(value: &str) -> String {

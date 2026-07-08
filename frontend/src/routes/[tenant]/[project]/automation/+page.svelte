@@ -81,7 +81,11 @@
 	let ciCommandTimeout = $state(900);
 	let ciCommandArtifacts = $state('');
 	let ciCommandCaches = $state('');
+	let ciCommandEvents = $state('workspace.ready');
 	let ciCommandWorkspaces = $state('');
+	let ciCommandComponents = $state('');
+	let ciCommandMatrix = $state('');
+	let ciCommandBlocks = $state('');
 	let ciCommandPaths = $state('');
 	let ciCommandLabels = $state('');
 	let ciCommandEnv = $state('');
@@ -316,7 +320,11 @@
 		if (!settings || !ciCommandName.trim() || !ciCommandRun.trim()) return;
 		const artifacts = splitList(ciCommandArtifacts);
 		const cache = parseCacheEntries(ciCommandCaches);
+		const events = splitList(ciCommandEvents);
 		const workspaces = splitList(ciCommandWorkspaces);
+		const components = splitList(ciCommandComponents);
+		const matrix = parseMatrixEntries(ciCommandMatrix);
+		const uses_blocks = splitList(ciCommandBlocks);
 		const paths = splitList(ciCommandPaths);
 		const labels = splitList(ciCommandLabels);
 		const env = parseEnvEntries(ciCommandEnv);
@@ -330,7 +338,11 @@
 					name,
 					run: ciCommandRun.trim(),
 					timeout_seconds: Math.max(1, Math.min(14400, ciCommandTimeout || 900)),
+					...(events.length ? { events } : {}),
 					...(workspaces.length ? { workspaces } : {}),
+					...(components.length ? { components } : {}),
+					...(matrix.length ? { matrix } : {}),
+					...(uses_blocks.length ? { uses_blocks } : {}),
 					...(paths.length ? { paths } : {}),
 					...(labels.length ? { labels } : {}),
 					...(env.length ? { env } : {}),
@@ -345,7 +357,11 @@
 		ciCommandTimeout = 900;
 		ciCommandArtifacts = '';
 		ciCommandCaches = '';
+		ciCommandEvents = 'workspace.ready';
 		ciCommandWorkspaces = '';
+		ciCommandComponents = '';
+		ciCommandMatrix = '';
+		ciCommandBlocks = '';
 		ciCommandPaths = '';
 		ciCommandLabels = '';
 		ciCommandEnv = '';
@@ -515,6 +531,18 @@
 			.filter((entry): entry is { key: string; path: string } => Boolean(entry));
 	}
 
+	function parseMatrixEntries(value: string) {
+		return splitList(value)
+			.map((item) => {
+				const index = item.indexOf('=');
+				if (index <= 0) return null;
+				const key = item.slice(0, index).trim();
+				const values = item.slice(index + 1).split('|').map((value) => value.trim()).filter(Boolean);
+				return key && values.length ? { key, values } : null;
+			})
+			.filter((entry): entry is { key: string; values: string[] } => Boolean(entry));
+	}
+
 	function parseEnvEntries(value: string) {
 		return splitList(value)
 			.map((item) => {
@@ -556,6 +584,9 @@
 			{ciSecrets}
 			{webhookDeliveriesByHook}
 			ci={settings?.ci ?? { enabled: false, commands: [] }}
+			{tenant}
+			{project}
+			components={settings?.components ?? []}
 			{busy}
 			{generatedKey}
 			{createdWebhook}
@@ -573,7 +604,11 @@
 			bind:ciCommandTimeout
 			bind:ciCommandArtifacts
 			bind:ciCommandCaches
+			bind:ciCommandEvents
 			bind:ciCommandWorkspaces
+			bind:ciCommandComponents
+			bind:ciCommandMatrix
+			bind:ciCommandBlocks
 			bind:ciCommandPaths
 			bind:ciCommandLabels
 			bind:ciCommandEnv

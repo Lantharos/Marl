@@ -38,7 +38,7 @@
 	let error = $state('');
 	let canMutate = $state(false);
 	let projectAccess = $state<AccessResponse | null>(null);
-	let tab = $state<'releases' | 'tags'>('releases');
+	let tab = $state<'releases' | 'tags' | 'components'>('releases');
 	let searchInput = $state('');
 	let searchQuery = $state('');
 	let dateFrom = $state('');
@@ -62,6 +62,17 @@
 	const filteredTags = $derived(tags.filter((tag) => dateInRange(tag.created_at, dateFrom, dateTo)));
 	const projectChrome = $derived(($page.data as { projectChrome?: { settings: ProjectSettings | null; access: AccessResponse | null } }).projectChrome ?? null);
 	const canDownloadSource = $derived(projectChrome?.settings?.visibility === 'public' || Boolean(projectAccess?.can_read || projectChrome?.access?.can_read));
+	const componentRows = $derived.by(() => (projectChrome?.settings?.components ?? [])
+		.filter((component) => component.visible !== false)
+		.map((component) => {
+			const releases = releaseItems.filter((release) => release.components?.includes(component.id));
+			return {
+				component,
+				latest: releases.find((release) => release.latest) ?? releases[0] ?? null,
+				count: releases.length,
+				drafts: releases.filter((release) => release.draft).length
+			};
+		}));
 
 	$effect(() => {
 		if (!tenant || !project) return;
@@ -211,6 +222,11 @@
 				<button class="{tab === 'tags' ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" type="button" onclick={() => (tab = 'tags')}>
 					Tags <span class="ml-1 text-xs text-[#6f6b5f]">{tagTotal}</span>
 				</button>
+				{#if componentRows.length}
+					<button class="{tab === 'components' ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" type="button" onclick={() => (tab = 'components')}>
+						Components <span class="ml-1 text-xs text-[#6f6b5f]">{componentRows.length}</span>
+					</button>
+				{/if}
 			</div>
 			<div class="text-sm text-[#8c887e]">Newest</div>
 		</div>
@@ -231,6 +247,32 @@
 			{/each}
 		</div>
 		<InfiniteLoader active={Boolean(releaseNext)} onVisible={loadMoreReleases} />
+	{:else if tab === 'components'}
+		<div class="border border-[#2a2a28] bg-[#141412]">
+			{#each componentRows as row (row.component.id)}
+				<div class="grid gap-3 border-b border-[#252522] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+					<div class="min-w-0">
+						<div class="flex flex-wrap items-baseline gap-2">
+							<div class="truncate text-sm font-medium text-[#eae9e4]">{row.component.name}</div>
+							<div class="font-mono text-xs text-[#6f6b5f]">{row.component.paths.join(', ')}</div>
+						</div>
+						<div class="mt-1 flex flex-wrap gap-2 text-xs text-[#6f6b5f]">
+							<span>{row.count} {row.count === 1 ? 'release' : 'releases'}</span>
+							{#if row.drafts}<span>{row.drafts} draft</span>{/if}
+							{#if row.component.version_policy}<span>{row.component.version_policy}</span>{/if}
+						</div>
+					</div>
+					<div class="text-right">
+						{#if row.latest}
+							<a class="font-mono text-sm text-[#d9a66c] hover:text-[#e6bd86]" href={`/${tenant}/${project}/releases/${encodeURIComponent(row.latest.id ?? row.latest.tag)}/edit`}>{row.latest.tag}</a>
+							<div class="mt-1 text-xs text-[#6f6b5f]">{formatDate(row.latest.created_at ?? row.latest.updated_at)}</div>
+						{:else}
+							<div class="text-sm text-[#6f6b5f]">No release</div>
+						{/if}
+					</div>
+				</div>
+			{/each}
+		</div>
 	{:else}
 		<div class="border border-[#2a2a28] bg-[#141412]">
 			<div class="flex min-h-12 items-center justify-between border-b border-[#252522] px-4">

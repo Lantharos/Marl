@@ -9,6 +9,7 @@
 		deleteReviewComment,
 		deleteDraftWorkspace,
 		getHistoryEntryDetail,
+		getReadyWorkspaceReview,
 		getWorkspaceDetail,
 		getWorkspaceMergePreview,
 		isAbortError,
@@ -23,6 +24,7 @@
 		updateWorkspaceMetadata,
 		updateWorkspaceLabels,
 		type ChangedFile,
+		type ReadyWorkspaceDetail,
 		type ReviewComment,
 		type UserProfile
 	} from '$lib/api';
@@ -62,6 +64,7 @@
 	let canMaintain = $state(false);
 	let currentUser = $state<string | null>(null);
 	let currentUserProfile = $state<UserProfile | null>(null);
+	let readyReview = $state<ReadyWorkspaceDetail | null>(null);
 
 	const unsubscribe = currentProjectAccess.subscribe((value) => {
 		canWrite = Boolean(value?.can_write);
@@ -92,6 +95,9 @@
 				})
 			]);
 			detail = workspaceDetail;
+			readyReview = workspaceDetail.is_ready
+				? await getReadyWorkspaceReview(tenant, project, workspaceName, signal ? { signal } : {}).catch(() => null)
+				: null;
 			reviewComments = comments.items;
 			pendingReviewComments = [];
 			changedFiles = [...preview.files].sort((a, b) => a.path.localeCompare(b.path));
@@ -405,6 +411,17 @@
 					<span class="text-[#d96c5a]">-{detail.deletions}</span>
 				</div>
 			</div>
+
+			{#if detail.is_ready && readyReview?.merge_requirements?.blocked_by?.length}
+				<div class="mb-4 border border-[#3a2d20] bg-[#17130f] px-3 py-2 text-sm text-[#d9a66c]">
+					<div class="font-medium text-[#e6bd86]">Merge blocked</div>
+					<div class="mt-1 flex flex-wrap gap-2 text-xs text-[#a09d94]">
+						{#each readyReview.merge_requirements.blocked_by as reason (reason)}
+							<span>{reason}</span>
+						{/each}
+					</div>
+				</div>
+			{/if}
 
 			<div class="flex flex-wrap gap-1 {activeTab === 'files' ? '' : 'mb-5 border-b border-[#2a2a28]'}">
 				{#each [

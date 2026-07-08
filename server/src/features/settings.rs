@@ -61,6 +61,7 @@ pub async fn project_settings(
                 merge_rules: MergeRules::default(),
                 protected_workspaces: vec![],
                 path_visibility: vec![],
+                components: vec![],
                 ci: ProjectCiSettings::default(),
             });
         }
@@ -71,6 +72,7 @@ pub async fn project_settings(
     settings.appearance = normalize_project_appearance(settings.appearance);
     settings.ci = normalize_ci_settings(settings.ci);
     settings.path_visibility = normalize_path_visibility(settings.path_visibility);
+    settings.components = normalize_project_components(settings.components);
 
     settings.follower_count = follower_count(db, tenant, project).await?;
     settings.is_following = is_following(db, tenant, project, principal).await?;
@@ -125,6 +127,7 @@ pub async fn update_project_settings(
     merge_rules: Option<MergeRules>,
     protected_workspaces: Option<Vec<String>>,
     path_visibility: Option<Vec<PathVisibilityRule>>,
+    components: Option<Vec<ProjectComponent>>,
     ci: Option<ProjectCiSettings>,
     archived: Option<bool>,
     public_releases: Option<bool>,
@@ -152,6 +155,9 @@ pub async fn update_project_settings(
     }
     if let Some(rules) = path_visibility {
         settings.path_visibility = normalize_path_visibility(rules);
+    }
+    if let Some(components) = components {
+        settings.components = normalize_project_components(components);
     }
     if let Some(ci) = ci {
         settings.ci = normalize_ci_settings(ci);
@@ -208,6 +214,51 @@ pub fn path_policy_can_read_all(policy: &PathVisibilityPolicy) -> bool {
         .rules
         .iter()
         .all(|rule| path_can_read(policy, &rule.path))
+}
+
+pub fn normalize_component_ids(
+    settings: &ProjectSettings,
+    components: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for component in components {
+        let id = normalize_component_id(&component);
+        if id.is_empty()
+            || normalized.iter().any(|item| item == &id)
+            || !settings.components.iter().any(|item| item.id == id)
+        {
+            continue;
+        }
+        normalized.push(id);
+        if normalized.len() >= 20 {
+            break;
+        }
+    }
+    normalized
+}
+
+pub fn component_ids_for_paths(settings: &ProjectSettings, paths: &[String]) -> Vec<String> {
+    let mut ids = Vec::new();
+    for component in &settings.components {
+        if component
+            .paths
+            .iter()
+            .any(|rule| paths.iter().any(|path| path_rule_matches(rule, path)))
+        {
+            ids.push(component.id.clone());
+        }
+    }
+    let mut index = 0;
+    while index < ids.len() {
+        let id = ids[index].clone();
+        for component in &settings.components {
+            if component.depends_on.iter().any(|dep| dep == &id) && !ids.contains(&component.id) {
+                ids.push(component.id.clone());
+            }
+        }
+        index += 1;
+    }
+    ids
 }
 
 fn path_visibility_for(policy: &PathVisibilityPolicy, path: &str) -> String {
@@ -269,6 +320,141 @@ fn normalize_path_visibility(rules: Vec<PathVisibilityRule>) -> Vec<PathVisibili
     normalized
 }
 
+fn normalize_project_components(components: Vec<ProjectComponent>) -> Vec<ProjectComponent> {
+    let mut normalized: Vec<ProjectComponent> = Vec::new();
+    for component in components {
+        let id = normalize_component_id(&component.id);
+        let name = component.name.trim();
+        if id.is_empty() || name.is_empty() || normalized.iter().any(|item| item.id == id) {
+            continue;
+        }
+        let paths = normalize_component_paths(component.paths);
+        if paths.is_empty() {
+            continue;
+        }
+        let owners = normalize_component_values(component.owners, 20, 80, true);
+        let deploy_targets = normalize_component_values(component.deploy_targets, 20, 80, true);
+        let issue_labels = normalize_component_values(component.issue_labels, 20, 80, false);
+        normalized.push(ProjectComponent {
+            id,
+            name: name.chars().take(80).collect(),
+            paths,
+            depends_on: normalize_component_refs(component.depends_on, &normalized),
+            owners,
+            language: normalize_component_text(component.language, 40),
+            framework: normalize_component_text(component.framework, 60),
+            build_command: normalize_component_command(component.build_command),
+            test_command: normalize_component_command(component.test_command),
+            deploy_targets,
+            issue_labels,
+            release_policy: normalize_component_policy(component.release_policy),
+            version_policy: normalize_component_policy(component.version_policy),
+            visible: component.visible,
+            require_owner_approval: component.require_owner_approval,
+            order: component.order.min(10_000),
+        });
+        if normalized.len() >= 100 {
+            break;
+        }
+    }
+    normalized.sort_by_key(|component| (component.order, component.name.to_ascii_lowercase()));
+    normalized
+}
+
+fn normalize_component_id(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .take(80)
+        .map(|ch| ch.to_ascii_lowercase())
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_' || *ch == '.')
+        .collect()
+}
+
+fn normalize_component_paths(paths: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for path in paths {
+        let Some(path) = normalize_visibility_path(&path) else {
+            continue;
+        };
+        if normalized.iter().any(|item| item == &path) {
+            continue;
+        }
+        normalized.push(path);
+        if normalized.len() >= 50 {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_component_refs(values: Vec<String>, existing: &[ProjectComponent]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for value in values {
+        let id = normalize_component_id(&value);
+        if id.is_empty()
+            || !existing.iter().any(|component| component.id == id)
+            || normalized.iter().any(|item| item == &id)
+        {
+            continue;
+        }
+        normalized.push(id);
+        if normalized.len() >= 20 {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_component_values(
+    values: Vec<String>,
+    limit: usize,
+    max_len: usize,
+    strict: bool,
+) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for value in values {
+        let value = value.trim().trim_start_matches('@');
+        if value.is_empty()
+            || value.chars().any(char::is_control)
+            || (strict
+                && !value
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.'))
+        {
+            continue;
+        }
+        let value: String = value.chars().take(max_len).collect();
+        if normalized.iter().any(|item| item == &value) {
+            continue;
+        }
+        normalized.push(value);
+        if normalized.len() >= limit {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_component_text(value: Option<String>, max_len: usize) -> Option<String> {
+    value
+        .map(|value| value.trim().chars().take(max_len).collect::<String>())
+        .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
+}
+
+fn normalize_component_command(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().chars().take(1_000).collect::<String>())
+        .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
+}
+
+fn normalize_component_policy(value: Option<String>) -> Option<String> {
+    value.and_then(|value| match value.trim() {
+        "independent" | "locked" | "manual" | "none" => Some(value.trim().to_string()),
+        _ => None,
+    })
+}
+
 fn normalize_visibility_path(path: &str) -> Option<String> {
     let path = normalize_visibility_path_text(path);
     if path.is_empty()
@@ -305,6 +491,8 @@ fn path_rule_matches(rule_path: &str, path: &str) -> bool {
 }
 
 fn normalize_ci_settings(settings: ProjectCiSettings) -> ProjectCiSettings {
+    let blocks = normalize_ci_blocks(settings.blocks);
+    let block_names: Vec<String> = blocks.iter().map(|block| block.name.clone()).collect();
     let mut commands = Vec::new();
     for command in settings.commands {
         let name = command.name.trim();
@@ -318,9 +506,13 @@ fn normalize_ci_settings(settings: ProjectCiSettings) -> ProjectCiSettings {
         commands.push(CiCommand {
             name: name.chars().take(80).collect(),
             run: run.chars().take(4_000).collect(),
+            uses_blocks: normalize_ci_block_refs(command.uses_blocks, &block_names),
             timeout_seconds: command.timeout_seconds.clamp(1, 14_400),
+            events: normalize_ci_events(command.events, 20),
             workspaces: normalize_ci_patterns(command.workspaces, 20),
             paths: normalize_ci_patterns(command.paths, 50),
+            components: normalize_ci_labels(command.components, 50),
+            matrix: normalize_ci_matrix(command.matrix, 8),
             labels: normalize_ci_labels(command.labels, 20),
             env: normalize_ci_env(command.env, 50),
             secrets: normalize_ci_secrets(command.secrets, 50),
@@ -334,6 +526,7 @@ fn normalize_ci_settings(settings: ProjectCiSettings) -> ProjectCiSettings {
     ProjectCiSettings {
         enabled: settings.enabled && !commands.is_empty(),
         commands,
+        blocks,
         max_concurrent_jobs: settings.max_concurrent_jobs.clamp(1, 100),
         max_jobs_per_head: settings.max_jobs_per_head.clamp(1, 100),
         max_attempts: settings.max_attempts.clamp(1, 10),
@@ -341,6 +534,55 @@ fn normalize_ci_settings(settings: ProjectCiSettings) -> ProjectCiSettings {
         artifact_retention_days: settings.artifact_retention_days.clamp(1, 365),
         cache_retention_days: settings.cache_retention_days.clamp(1, 365),
     }
+}
+
+fn normalize_ci_blocks(blocks: Vec<CiCommandBlock>) -> Vec<CiCommandBlock> {
+    let mut normalized = Vec::new();
+    for block in blocks {
+        let name = normalize_ci_block_name(&block.name);
+        let run = block.run.trim();
+        if name.is_empty() || run.is_empty() || normalized.iter().any(|item: &CiCommandBlock| item.name == name) {
+            continue;
+        }
+        normalized.push(CiCommandBlock {
+            name,
+            run: run.chars().take(2_000).collect(),
+            env: normalize_ci_env(block.env, 20),
+            secrets: normalize_ci_secrets(block.secrets, 20),
+            cache: normalize_ci_cache(block.cache, 10),
+        });
+        if normalized.len() >= 20 {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_ci_block_refs(blocks: Vec<String>, available: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for block in blocks {
+        let name = normalize_ci_block_name(&block);
+        if name.is_empty()
+            || !available.iter().any(|item| item == &name)
+            || normalized.iter().any(|item| item == &name)
+        {
+            continue;
+        }
+        normalized.push(name);
+        if normalized.len() >= 10 {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_ci_block_name(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .take(60)
+        .filter(|ch| !ch.is_control())
+        .collect()
 }
 
 fn normalize_ci_paths(paths: Vec<String>, limit: usize) -> Vec<String> {
@@ -395,6 +637,39 @@ fn normalize_ci_labels(labels: Vec<String>, limit: usize) -> Vec<String> {
             continue;
         }
         normalized.push(label);
+        if normalized.len() >= limit {
+            break;
+        }
+    }
+    normalized
+}
+
+fn normalize_ci_events(events: Vec<String>, limit: usize) -> Vec<String> {
+    let events = normalize_ci_labels(events, limit);
+    if events.is_empty() {
+        vec!["workspace.ready".to_string()]
+    } else {
+        events
+    }
+}
+
+fn normalize_ci_matrix(
+    entries: Vec<sty_protocol::CiMatrixEntry>,
+    limit: usize,
+) -> Vec<sty_protocol::CiMatrixEntry> {
+    let mut normalized = Vec::new();
+    for entry in entries {
+        let key = normalize_ci_label(&entry.key);
+        let values = normalize_ci_patterns(entry.values, 20);
+        if key.is_empty()
+            || values.is_empty()
+            || normalized
+                .iter()
+                .any(|item: &sty_protocol::CiMatrixEntry| item.key == key)
+        {
+            continue;
+        }
+        normalized.push(sty_protocol::CiMatrixEntry { key, values });
         if normalized.len() >= limit {
             break;
         }

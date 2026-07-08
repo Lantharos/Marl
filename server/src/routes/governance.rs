@@ -140,6 +140,7 @@ pub async fn submit_workspace_check(
     )
     .await?;
     let merge_status = workspace_merge_status(
+        Some(&ctx.env),
         &database,
         &tenant,
         &project,
@@ -171,6 +172,7 @@ pub async fn submit_workspace_check(
 }
 
 pub async fn require_workspace_mergeable(
+    env: Option<&Env>,
     database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
@@ -178,8 +180,8 @@ pub async fn require_workspace_mergeable(
     head: Option<&str>,
     settings: &ProjectSettings,
 ) -> Result<Option<Response>> {
-    let status =
-        workspace_merge_status(database, tenant, project, workspace, head, settings).await?;
+    let status = workspace_merge_status(env, database, tenant, project, workspace, head, settings)
+        .await?;
     features::set_workspace_mergeable(database, tenant, project, workspace, status.can_merge)
         .await?;
     if status.can_merge {
@@ -193,6 +195,7 @@ pub async fn require_workspace_mergeable(
 }
 
 pub async fn workspace_merge_status(
+    env: Option<&Env>,
     database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
@@ -226,6 +229,9 @@ pub async fn workspace_merge_status(
     if rules.block_unresolved_comments && unresolved > 0 {
         blocked_by.push(format!("{unresolved} unresolved file conversation(s)"));
     }
+    blocked_by.extend(
+        component_owner_approval_blocks(env, tenant, project, head, settings, &approvals).await?,
+    );
     Ok(MergeRequirementStatus {
         can_merge: blocked_by.is_empty(),
         blocked_by,
@@ -235,6 +241,59 @@ pub async fn workspace_merge_status(
         unresolved_comments: unresolved,
         checks,
     })
+}
+
+async fn component_owner_approval_blocks(
+    env: Option<&Env>,
+    tenant: &str,
+    project: &str,
+    head: Option<&str>,
+    settings: &ProjectSettings,
+    approvals: &[features::WorkspaceReview],
+) -> Result<Vec<String>> {
+    if settings.components.is_empty() || !settings.components.iter().any(|component| component.require_owner_approval) {
+        return Ok(Vec::new());
+    }
+    let (Some(env), Some(head)) = (env, head) else {
+        return Ok(Vec::new());
+    };
+    let Some(changed_paths) =
+        crate::routes::sync::ci_changed_paths_for_head(env, tenant, project, head).await?
+    else {
+        return Ok(Vec::new());
+    };
+    let touched_components = features::component_ids_for_paths(settings, &changed_paths);
+    if touched_components.is_empty() {
+        return Ok(Vec::new());
+    }
+    let approvers: Vec<String> = approvals
+        .iter()
+        .map(|approval| normalize_owner_ref(&approval.author))
+        .collect();
+    let mut blocked_by = Vec::new();
+    for component in &settings.components {
+        if !component.require_owner_approval || !touched_components.contains(&component.id) {
+            continue;
+        }
+        let owners: Vec<String> = component
+            .owners
+            .iter()
+            .map(|owner| normalize_owner_ref(owner))
+            .filter(|owner| !owner.is_empty())
+            .collect();
+        if owners.is_empty() {
+            blocked_by.push(format!("owner approval required for {}", component.name));
+            continue;
+        }
+        if !approvers.iter().any(|approver| owners.contains(approver)) {
+            blocked_by.push(format!("owner approval required for {}", component.name));
+        }
+    }
+    Ok(blocked_by)
+}
+
+fn normalize_owner_ref(value: &str) -> String {
+    value.trim().trim_start_matches('@').to_ascii_lowercase()
 }
 
 pub async fn notify_users(

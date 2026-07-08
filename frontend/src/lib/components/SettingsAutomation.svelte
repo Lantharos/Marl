@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { CiArtifact, CiJob, CiLogLine, CiRunner, CiSecret, ProjectApiKey, ProjectCiSettings, ProjectIntegration, ProjectWebhook, ProjectWebhookDelivery } from '$lib/api';
+	import type { CiArtifact, CiJob, CiLogLine, CiRunner, CiSecret, ProjectApiKey, ProjectCiSettings, ProjectComponent, ProjectIntegration, ProjectWebhook, ProjectWebhookDelivery } from '$lib/api';
 	import SettingsCi from '$lib/components/SettingsCi.svelte';
 	import SettingsSection from '$lib/components/SettingsSection.svelte';
 	import AlertCircle from 'lucide-svelte/icons/alert-circle';
@@ -73,6 +73,7 @@
 		'issue.created',
 		'issue.updated'
 	];
+	type AutomationTab = 'ci' | 'keys' | 'webhooks' | 'apps';
 
 	let {
 		apiKeys,
@@ -85,6 +86,9 @@
 		ciSecrets,
 		webhookDeliveriesByHook,
 		ci,
+		tenant,
+		project,
+		components = [],
 		busy,
 		generatedKey,
 		createdWebhook,
@@ -102,7 +106,11 @@
 		ciCommandTimeout = $bindable(),
 		ciCommandArtifacts = $bindable(),
 		ciCommandCaches = $bindable(),
+		ciCommandEvents = $bindable(),
 		ciCommandWorkspaces = $bindable(),
+		ciCommandComponents = $bindable(),
+		ciCommandMatrix = $bindable(),
+		ciCommandBlocks = $bindable(),
 		ciCommandPaths = $bindable(),
 		ciCommandLabels = $bindable(),
 		ciCommandEnv = $bindable(),
@@ -142,6 +150,9 @@
 		ciSecrets: CiSecret[];
 		webhookDeliveriesByHook: Record<string, ProjectWebhookDelivery[]>;
 		ci: ProjectCiSettings;
+		tenant: string;
+		project: string;
+		components?: ProjectComponent[];
 		busy: boolean;
 		generatedKey: ProjectApiKey | null;
 		createdWebhook: ProjectWebhook | null;
@@ -159,7 +170,11 @@
 		ciCommandTimeout: number;
 		ciCommandArtifacts: string;
 		ciCommandCaches: string;
+		ciCommandEvents: string;
 		ciCommandWorkspaces: string;
+		ciCommandComponents: string;
+		ciCommandMatrix: string;
+		ciCommandBlocks: string;
 		ciCommandPaths: string;
 		ciCommandLabels: string;
 		ciCommandEnv: string;
@@ -197,6 +212,7 @@
 	let showWebhookModal = $state(false);
 	let keyCreatedInModal = $state(false);
 	let webhookCreatedInModal = $state(false);
+	let automationTab = $state<AutomationTab>('ci');
 
 	function toggle(list: string[], value: string) {
 		if (list.includes(value)) return list.filter((item) => item !== value);
@@ -272,6 +288,12 @@
 		showWebhookModal = true;
 	}
 
+	function setAutomationTab(tab: string) {
+		if (tab === 'ci' || tab === 'keys' || tab === 'webhooks' || tab === 'apps') {
+			automationTab = tab;
+		}
+	}
+
 	async function createKeyFromModal() {
 		keyCreatedInModal = false;
 		await addApiKey();
@@ -294,6 +316,20 @@
 		</div>
 	{/if}
 
+	<div class="flex flex-wrap gap-1 border-b border-[#2a2a28]">
+		{#each [
+			{ id: 'ci', label: 'CI', count: ciJobs.length },
+			{ id: 'keys', label: 'API keys', count: apiKeys.length },
+			{ id: 'webhooks', label: 'Webhooks', count: webhooks.length },
+			{ id: 'apps', label: 'Connected apps', count: integrations.length }
+		] as tab (tab.id)}
+			<button class="px-3 py-2 text-sm {automationTab === tab.id ? 'text-[#f0eee4]' : 'text-[#8c887e] hover:text-[#eae9e4]'}" type="button" onclick={() => setAutomationTab(tab.id)}>
+				{tab.label} <span class="ml-1 text-xs text-[#6f6b5f]">{tab.count}</span>
+			</button>
+		{/each}
+	</div>
+
+	{#if automationTab === 'ci'}
 	<SettingsCi
 		{runners}
 		{ciJobs}
@@ -302,6 +338,9 @@
 		{createdRunner}
 		{ciLogsByJob}
 		{ciSecrets}
+		{tenant}
+		{project}
+		{components}
 		bind:runnerName
 		bind:runnerConcurrency
 		bind:runnerLabels
@@ -310,7 +349,11 @@
 		bind:ciCommandTimeout
 		bind:ciCommandArtifacts
 		bind:ciCommandCaches
+		bind:ciCommandEvents
 		bind:ciCommandWorkspaces
+		bind:ciCommandComponents
+		bind:ciCommandMatrix
+		bind:ciCommandBlocks
 		bind:ciCommandPaths
 		bind:ciCommandLabels
 		bind:ciCommandEnv
@@ -333,6 +376,7 @@
 		{removeRunner}
 	/>
 
+	{:else if automationTab === 'keys'}
 	<SettingsSection title="API keys" open>
 		{#snippet actions()}
 			<button class="inline-flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] px-2.5 text-xs text-[#eae9e4] hover:bg-[#2a2a28]" onclick={openKeyModal}>
@@ -363,6 +407,7 @@
 		</div>
 	</SettingsSection>
 
+	{:else if automationTab === 'webhooks'}
 	<SettingsSection title="Webhooks" open>
 		{#snippet actions()}
 			<button class="inline-flex h-8 items-center gap-1 border border-[#2a2a28] bg-[#1e1e1c] px-2.5 text-xs text-[#eae9e4] hover:bg-[#2a2a28]" onclick={openWebhookModal}>
@@ -433,6 +478,7 @@
 		</div>
 	</SettingsSection>
 
+	{:else}
 	<SettingsSection title="Connected apps">
 		<div class="border border-[#252522] bg-[#0f0f0d]">
 			{#each integrations as app (app.id)}
@@ -451,6 +497,7 @@
 			{/each}
 		</div>
 	</SettingsSection>
+	{/if}
 </div>
 
 {#if showKeyModal}

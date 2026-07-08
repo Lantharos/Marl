@@ -34,6 +34,40 @@ pub struct PanelItem {
     pub order: u32,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProjectComponent {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(default)]
+    pub owners: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub framework: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_command: Option<String>,
+    #[serde(default)]
+    pub deploy_targets: Vec<String>,
+    #[serde(default)]
+    pub issue_labels: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version_policy: Option<String>,
+    #[serde(default = "default_true")]
+    pub visible: bool,
+    #[serde(default)]
+    pub require_owner_approval: bool,
+    #[serde(default)]
+    pub order: u32,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -150,6 +184,8 @@ pub struct ProjectSettings {
     #[serde(default)]
     pub path_visibility: Vec<PathVisibilityRule>,
     #[serde(default)]
+    pub components: Vec<ProjectComponent>,
+    #[serde(default)]
     pub ci: ProjectCiSettings,
 }
 
@@ -165,6 +201,7 @@ pub struct UpdateSettingsRequest {
     pub merge_rules: Option<MergeRules>,
     pub protected_workspaces: Option<Vec<String>>,
     pub path_visibility: Option<Vec<PathVisibilityRule>>,
+    pub components: Option<Vec<ProjectComponent>>,
     pub ci: Option<ProjectCiSettings>,
 }
 
@@ -211,6 +248,8 @@ pub struct ProjectCiSettings {
     pub enabled: bool,
     #[serde(default)]
     pub commands: Vec<CiCommand>,
+    #[serde(default)]
+    pub blocks: Vec<CiCommandBlock>,
     #[serde(default = "default_ci_max_concurrent_jobs")]
     pub max_concurrent_jobs: u32,
     #[serde(default = "default_ci_max_jobs_per_head")]
@@ -230,6 +269,7 @@ impl Default for ProjectCiSettings {
         Self {
             enabled: false,
             commands: Vec::new(),
+            blocks: Vec::new(),
             max_concurrent_jobs: default_ci_max_concurrent_jobs(),
             max_jobs_per_head: default_ci_max_jobs_per_head(),
             max_attempts: default_ci_max_attempts(),
@@ -244,12 +284,20 @@ impl Default for ProjectCiSettings {
 pub struct CiCommand {
     pub name: String,
     pub run: String,
+    #[serde(default)]
+    pub uses_blocks: Vec<String>,
     #[serde(default = "default_ci_timeout_seconds")]
     pub timeout_seconds: u32,
+    #[serde(default = "default_ci_events")]
+    pub events: Vec<String>,
     #[serde(default)]
     pub workspaces: Vec<String>,
     #[serde(default)]
     pub paths: Vec<String>,
+    #[serde(default)]
+    pub components: Vec<String>,
+    #[serde(default)]
+    pub matrix: Vec<CiMatrixEntry>,
     #[serde(default)]
     pub labels: Vec<String>,
     #[serde(default)]
@@ -263,13 +311,36 @@ pub struct CiCommand {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CiCommandBlock {
+    pub name: String,
+    pub run: String,
+    #[serde(default)]
+    pub env: Vec<CiEnvEntry>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
+    #[serde(default)]
+    pub cache: Vec<CiCacheEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CiEnvEntry {
     pub key: String,
     pub value: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CiMatrixEntry {
+    pub key: String,
+    #[serde(default)]
+    pub values: Vec<String>,
+}
+
 fn default_ci_timeout_seconds() -> u32 {
     900
+}
+
+fn default_ci_events() -> Vec<String> {
+    vec!["workspace.ready".to_string()]
 }
 
 fn default_ci_max_concurrent_jobs() -> u32 {

@@ -88,7 +88,27 @@ export interface ProjectSettings {
 	merge_rules: MergeRules;
 	protected_workspaces: string[];
 	path_visibility: PathVisibilityRule[];
+	components: ProjectComponent[];
 	ci: ProjectCiSettings;
+}
+
+export interface ProjectComponent {
+	id: string;
+	name: string;
+	paths: string[];
+	depends_on?: string[];
+	owners?: string[];
+	language?: string | null;
+	framework?: string | null;
+	build_command?: string | null;
+	test_command?: string | null;
+	deploy_targets?: string[];
+	issue_labels?: string[];
+	release_policy?: string | null;
+	version_policy?: string | null;
+	visible?: boolean;
+	require_owner_approval?: boolean;
+	order?: number;
 }
 
 export interface PathVisibilityRule {
@@ -106,6 +126,7 @@ export interface MergeRules {
 export interface ProjectCiSettings {
 	enabled: boolean;
 	commands: CiCommand[];
+	blocks?: CiCommandBlock[];
 	max_concurrent_jobs?: number;
 	max_jobs_per_head?: number;
 	max_attempts?: number;
@@ -117,14 +138,31 @@ export interface ProjectCiSettings {
 export interface CiCommand {
 	name: string;
 	run: string;
+	uses_blocks?: string[];
 	timeout_seconds: number;
+	events?: string[];
 	workspaces?: string[];
 	paths?: string[];
+	components?: string[];
+	matrix?: CiMatrixEntry[];
 	labels?: string[];
 	env?: { key: string; value: string }[];
 	secrets?: string[];
 	artifacts?: string[];
 	cache?: CiCacheEntry[];
+}
+
+export interface CiCommandBlock {
+	name: string;
+	run: string;
+	env?: { key: string; value: string }[];
+	secrets?: string[];
+	cache?: CiCacheEntry[];
+}
+
+export interface CiMatrixEntry {
+	key: string;
+	values: string[];
 }
 
 export interface CiSecret {
@@ -177,6 +215,20 @@ export interface ProjectOverview {
 	featured_screenshot?: ProjectScreenshot | null;
 	pinned_leaves?: Leaf[];
 	default_workspace: string;
+}
+
+export interface ProjectComponentOverview {
+	component: ProjectComponent;
+	open_issue_count: number;
+	open_issues: Issue[];
+	latest_release?: Release | null;
+	latest_job?: CiJob | null;
+	recent_history: import('./projectDataApi').HistoryEntry[];
+}
+
+export interface ComponentOverview {
+	components: ProjectComponentOverview[];
+	can_view_ci: boolean;
 }
 
 export type MeResponse = {
@@ -800,6 +852,11 @@ function protocolEndpoint(kind: string) {
 export async function getProjectOverview(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectOverview> {
 	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/overview`, { signal: options.signal });
 	return (await response.json()) as ProjectOverview;
+}
+
+export async function getComponentOverview(tenant: string, project: string, options: ApiOptions = {}): Promise<ComponentOverview> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/components/overview`, { signal: options.signal });
+	return (await response.json()) as ComponentOverview;
 }
 
 export async function getProjectSettings(tenant: string, project: string, options: ApiOptions = {}): Promise<ProjectSettings> {

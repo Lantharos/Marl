@@ -592,7 +592,7 @@ pub(crate) async fn optional_auth(
         return Ok(None);
     };
     let Some(token) = value.strip_prefix("Bearer ") else {
-        return Ok(None);
+        return Err(Error::RustError("invalid authorization header".to_string()));
     };
     let database = db(ctx)?;
     match features::principal_for_token(&database, token).await? {

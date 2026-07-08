@@ -2,9 +2,12 @@ import { env } from '$env/dynamic/public';
 import { applyD1Bookmark, rememberD1Bookmark } from './d1Session';
 import { currentStyToken } from './session';
 
+export const DEFAULT_API_BASE = 'https://sty.sh/api';
+
 export function apiUrl(path: string) {
-	const base = env.PUBLIC_STY_API_BASE || 'http://127.0.0.1:8787';
-	return `${base}${path}`;
+	const configured = env.PUBLIC_STY_API_BASE?.replace(/\/$/, '');
+	const base = configured || DEFAULT_API_BASE;
+	return `${base}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 export function loadApiFetch(fetcher: typeof fetch, path: string, init: RequestInit = {}) {

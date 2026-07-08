@@ -1,4 +1,24 @@
 use super::prelude::*;
+use serde::Serialize;
+use serde_json::Value;
+use sty_protocol::{Issue, ProjectComponent};
+
+#[derive(Serialize)]
+struct ComponentOverviewResponse {
+    components: Vec<ProjectComponentOverview>,
+    can_view_ci: bool,
+}
+
+#[derive(Serialize)]
+struct ProjectComponentOverview {
+    component: ProjectComponent,
+    open_issue_count: usize,
+    open_issues: Vec<Issue>,
+    latest_release: Option<Value>,
+    latest_job: Option<features::CiJob>,
+    recent_history: Vec<HistoryEntry>,
+}
+
 pub(crate) async fn project_overview(
     req: Request,
     ctx: crate::request_context::AppRouteContext,
@@ -161,6 +181,144 @@ pub(crate) async fn project_stats(
     let mut response = Response::from_json(&stats)?;
     apply_cache_headers(response.headers_mut(), &etag, public_cache, 15, false)?;
     Ok(response)
+}
+
+pub(crate) async fn component_overview(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let user = optional_auth(&req, &ctx).await?;
+    let (tenant, project) = project_params(&ctx)?;
+    let database = db(&ctx)?;
+    check_project_read_capability(&database, &tenant, &project, user.as_deref(), "main:read")
+        .await?;
+    let principal = user
+        .as_ref()
+        .map(|user| sty_protocol::TokenPrincipal { user: user.clone() });
+    let settings =
+        features::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
+    let components = settings
+        .components
+        .iter()
+        .filter(|component| component.visible)
+        .cloned()
+        .collect::<Vec<_>>();
+    if components.is_empty() {
+        return Response::from_json(&ComponentOverviewResponse {
+            components: vec![],
+            can_view_ci: false,
+        });
+    }
+
+    let can_manage = match user.as_deref() {
+        Some(user) => features::role_allows(
+            features::project_effective_role(&database, &tenant, &project, user)
+                .await?
+                .as_deref(),
+            "maintainer",
+        ),
+        None => false,
+    };
+    let can_view_ci = can_manage;
+    let issues = features::list_issues(&database, &tenant, &project).await?;
+    let mut releases = crate::release_support::list_release_values(&database, &tenant, &project)
+        .await?
+        .into_iter()
+        .filter(|release| can_manage || !release["draft"].as_bool().unwrap_or(false))
+        .collect::<Vec<_>>();
+    releases.sort_by(|a, b| {
+        b["latest"]
+            .as_bool()
+            .unwrap_or(false)
+            .cmp(&a["latest"].as_bool().unwrap_or(false))
+            .then_with(|| {
+                b["created_at"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .cmp(a["created_at"].as_str().unwrap_or_default())
+            })
+    });
+    let jobs = if can_view_ci {
+        features::list_ci_jobs(&database, &tenant, &project, None, 100).await?
+    } else {
+        vec![]
+    };
+    let mut history =
+        features::project_history_with_limit(&database, &tenant, &project, Some(80)).await?;
+    enrich_component_history(&ctx.env, &tenant, &project, &settings, &mut history).await?;
+
+    let rows = components
+        .into_iter()
+        .map(|component| {
+            let component_issues = issues
+                .iter()
+                .filter(|issue| {
+                    issue.status == "open" && issue.components.iter().any(|id| id == &component.id)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let latest_release = releases
+                .iter()
+                .find(|release| {
+                    crate::release_support::release_components(release)
+                        .iter()
+                        .any(|id| id == &component.id)
+                })
+                .cloned();
+            let latest_job = jobs
+                .iter()
+                .find(|job| {
+                    job.name.contains(&component.id)
+                        || job.summary.as_deref().unwrap_or_default().contains(&component.id)
+                        || job.env.iter().any(|entry| entry.value == component.id)
+                })
+                .cloned();
+            let recent_history = history
+                .iter()
+                .filter(|entry| entry.components.iter().any(|id| id == &component.id))
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>();
+            ProjectComponentOverview {
+                component,
+                open_issue_count: component_issues.len(),
+                open_issues: component_issues.into_iter().take(3).collect(),
+                latest_release,
+                latest_job,
+                recent_history,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Response::from_json(&ComponentOverviewResponse {
+        components: rows,
+        can_view_ci,
+    })
+}
+
+async fn enrich_component_history(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    settings: &sty_protocol::ProjectSettings,
+    entries: &mut [HistoryEntry],
+) -> Result<()> {
+    if settings.components.is_empty() {
+        return Ok(());
+    }
+    for entry in entries {
+        let Some(snapshot_id) = entry.snapshot_id.as_deref() else {
+            continue;
+        };
+        let Some(changed_paths) =
+            crate::routes::sync::ci_changed_paths_for_head(env, tenant, project, snapshot_id)
+                .await?
+        else {
+            continue;
+        };
+        entry.components = features::component_ids_for_paths(settings, &changed_paths);
+    }
+    Ok(())
 }
 
 async fn visible_project_stats(

@@ -145,12 +145,14 @@
 		}
 	}
 
-	async function saveMetadata(patch: { labels?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; close_issue?: boolean; locked?: boolean; pinned?: boolean }) {
+	async function saveMetadata(patch: { labels?: string[]; components?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; close_issue?: boolean; locked?: boolean; pinned?: boolean }) {
 		if (!issue) return;
 		busy = true;
 		try {
 			let updated = patch.labels
 				? await setIssueLabels(tenant, project, issue.id, patch.labels)
+				: patch.components
+					? await updateIssue(tenant, project, issue.id, { components: patch.components })
 				: patch.assignees
 					? await setIssueAssignees(tenant, project, issue.id, patch.assignees)
 					: 'milestone' in patch
@@ -346,6 +348,7 @@
 				{tenant}
 				{project}
 				labels={issue.labels}
+				components={issue.components ?? []}
 				assignees={issue.assignees ?? []}
 				milestone={issue.milestone ?? null}
 				issueType={issue.issue_type ?? null}

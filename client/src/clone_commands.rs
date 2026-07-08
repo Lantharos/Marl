@@ -16,8 +16,9 @@ use sty_protocol::{
 use url::Url;
 use zip::ZipArchive;
 
-use crate::auth_commands::{DEFAULT_REMOTE_URL, try_load_config};
+use crate::auth_commands::try_load_config;
 use crate::http::response_error;
+use crate::remote::{resolve_remote_url};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -29,6 +30,7 @@ pub(crate) fn clone_project(
     include: Option<String>,
     force: bool,
     remote_url: Option<String>,
+    port: Option<u16>,
 ) -> Result<()> {
     let (tenant, project) = validate_target(&source)?;
     validate_segment(&workspace)?;
@@ -40,7 +42,7 @@ pub(crate) fn clone_project(
     let destination = path.unwrap_or_else(|| PathBuf::from(project));
     prepare_destination(&destination, force)?;
 
-    let session = CloneSession::new(remote_url)?;
+    let session = CloneSession::new(remote_url, port)?;
     let file_count = if let Some(include) = include.as_deref() {
         session.download_path(
             tenant,
@@ -76,11 +78,15 @@ struct CloneSession {
 }
 
 impl CloneSession {
-    fn new(remote_url: Option<String>) -> Result<Self> {
+    fn new(remote_url: Option<String>, port: Option<u16>) -> Result<Self> {
         let config = try_load_config();
-        let remote_url = remote_url
-            .or_else(|| config.as_ref().map(|config| config.remote_url.clone()))
-            .unwrap_or_else(|| DEFAULT_REMOTE_URL.to_string());
+        let remote_url = if remote_url.is_some() || port.is_some() {
+            resolve_remote_url(remote_url.as_deref(), port)
+        } else if let Some(config) = &config {
+            config.remote_url.clone()
+        } else {
+            resolve_remote_url(None, None)
+        };
         let token = config
             .filter(|config| same_remote(&config.remote_url, &remote_url))
             .map(|config| config.token);

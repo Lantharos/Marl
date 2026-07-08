@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-pub(crate) use crate::auth_commands::DEFAULT_REMOTE_URL;
 use crate::auth_commands::{login, whoami};
+use crate::remote::RemoteOpts;
 use crate::ci_commands::{self, CiCommands};
 use crate::clone_commands;
 use crate::collaborator_commands::{
@@ -30,8 +30,8 @@ enum Commands {
         token: Option<String>,
         #[arg(long, default_value_t = 7390)]
         callback_port: u16,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
         #[arg(long, default_value = "pig")]
         pig: String,
     },
@@ -48,8 +48,8 @@ enum Commands {
         new_tenant: Option<String>,
         #[arg(long)]
         folder: Option<String>,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
         #[arg(long, default_value = "pig")]
         pig: String,
     },
@@ -69,8 +69,8 @@ enum Commands {
         yes: bool,
         #[arg(long)]
         no_sync: bool,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
         #[arg(long, default_value = "pig")]
         pig: String,
     },
@@ -85,8 +85,8 @@ enum Commands {
         include: Option<String>,
         #[arg(long)]
         force: bool,
-        #[arg(long)]
-        remote_url: Option<String>,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     #[command(alias = "sw")]
     Sendwork {
@@ -98,8 +98,8 @@ enum Commands {
         workspace: Option<String>,
         #[arg(long)]
         yes: bool,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
         #[arg(long, default_value = "pig")]
         pig: String,
     },
@@ -138,12 +138,12 @@ enum ProjectCommands {
         new_tenant: Option<String>,
         #[arg(long)]
         folder: Option<String>,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     List {
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Collaborators {
         #[command(subcommand)]
@@ -158,8 +158,8 @@ enum TenantCommands {
         name: Option<String>,
         #[arg(long = "name", value_name = "NAME")]
         name_flag: Option<String>,
-        #[arg(long, default_value = DEFAULT_REMOTE_URL)]
-        remote_url: String,
+        #[command(flatten)]
+        remote: RemoteOpts,
     },
     Collaborators {
         #[command(subcommand)]
@@ -173,9 +173,9 @@ pub fn run() -> Result<()> {
         Commands::Login {
             token,
             callback_port,
-            remote_url,
+            remote,
             pig,
-        } => login(token, callback_port, remote_url, pig),
+        } => login(token, callback_port, remote, pig),
         Commands::Init {
             target,
             target_flag,
@@ -183,7 +183,7 @@ pub fn run() -> Result<()> {
             project,
             new_tenant,
             folder,
-            remote_url,
+            remote,
             pig,
         } => project_commands::init(
             target,
@@ -192,7 +192,7 @@ pub fn run() -> Result<()> {
             project,
             new_tenant,
             folder,
-            remote_url,
+            remote.resolve(),
             pig,
         ),
         Commands::Fork {
@@ -204,10 +204,19 @@ pub fn run() -> Result<()> {
             workspace,
             yes,
             no_sync,
-            remote_url,
+            remote,
             pig,
         } => fork_commands::fork(
-            source, target, tenant, project, mode, workspace, yes, no_sync, remote_url, pig,
+            source,
+            target,
+            tenant,
+            project,
+            mode,
+            workspace,
+            yes,
+            no_sync,
+            remote.resolve(),
+            pig,
         ),
         Commands::Clone {
             source,
@@ -216,18 +225,25 @@ pub fn run() -> Result<()> {
             snapshot,
             include,
             force,
-            remote_url,
+            remote,
         } => clone_commands::clone_project(
-            source, path, workspace, snapshot, include, force, remote_url,
+            source,
+            path,
+            workspace,
+            snapshot,
+            include,
+            force,
+            remote.remote_url,
+            remote.port,
         ),
         Commands::Sendwork {
             title,
             message,
             workspace,
             yes,
-            remote_url,
+            remote,
             pig,
-        } => fork_commands::sendwork(title, message, workspace, yes, remote_url, pig),
+        } => fork_commands::sendwork(title, message, workspace, yes, remote.resolve(), pig),
         Commands::Whoami => whoami(),
         Commands::Ci { command } => ci_commands::run(command),
         Commands::Project { command } => match command {
@@ -238,7 +254,7 @@ pub fn run() -> Result<()> {
                 project,
                 new_tenant,
                 folder,
-                remote_url,
+                remote,
             } => project_commands::create_project_command(
                 target,
                 target_flag,
@@ -246,17 +262,17 @@ pub fn run() -> Result<()> {
                 project,
                 new_tenant,
                 folder,
-                remote_url,
+                remote.resolve(),
             ),
-            ProjectCommands::List { remote_url } => project_commands::list_projects(&remote_url),
+            ProjectCommands::List { remote } => project_commands::list_projects(&remote.resolve()),
             ProjectCommands::Collaborators { command } => project_collaborators(command),
         },
         Commands::Tenant { command } => match command {
             TenantCommands::New {
                 name,
                 name_flag,
-                remote_url,
-            } => project_commands::create_tenant_command(name, name_flag, remote_url),
+                remote,
+            } => project_commands::create_tenant_command(name, name_flag, remote.resolve()),
             TenantCommands::Collaborators { command } => tenant_collaborators(command),
         },
         Commands::Leaf { command } => leaf_commands::run(command),

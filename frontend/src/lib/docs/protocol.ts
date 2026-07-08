@@ -160,7 +160,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Work review and history',
-		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default and accept a limit query parameter. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, lock state, and private, team, or public visibility. Merge rules can require approvals, passing checks, current-head approvals, and resolved file conversations. Project CI settings enqueue filtered jobs for ready workspace heads, runner labels route jobs to compatible self-hosted runners, command env and secret selection are injected into claimed jobs, runner wakeups use WebSockets when available, runner job state mirrors into workspace checks, and maintainers can cancel or rerun jobs.',
+		note: 'Ready review lives on workspaces. Review states include draft, ready, approved, changes requested, merged, closed, reopened, and not planned. History list endpoints return a bounded window by default, accept a limit query parameter, and include affected components when project components are configured. Project comments can target a workspace, save, file, line, or line range. Workspace metadata stores reviewers, assignees, milestone, linked issues, lock state, and private, team, or public visibility. Merge rules can require approvals, passing checks, current-head approvals, component owner approvals, and resolved file conversations. Project CI settings enqueue filtered jobs for workspace pushes, ready workspace heads, and release events. Runner labels route jobs to compatible self-hosted runners, command env and secret selection are injected into claimed jobs, reusable command blocks are materialized before queueing, runner wakeups use WebSockets when available, runner job state mirrors into workspace checks, and maintainers can cancel or rerun jobs.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/history',
 			'GET /v1/tenants/:tenant/projects/:project/history/:entry_id',
@@ -198,7 +198,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Issues and project records',
-		note: 'Issues support filtered listing, comments, persisted reactions, metadata activity, labels, assignees, milestones, linked workspaces, issue types, lock or pin state, transfer, deletion, and open, closed, or closed-as-not-planned state updates. Labels, milestones, hooks, and tags use standard paginated protocol collections. Project comments can also carry review target fields when they belong to code review.',
+		note: 'Issues support filtered listing, comments, persisted reactions, metadata activity, labels, first-class components, assignees, milestones, linked workspaces, issue types, lock or pin state, transfer, deletion, and open, closed, or closed-as-not-planned state updates. Labels, milestones, hooks, and tags use standard paginated protocol collections. Project comments can also carry review target fields when they belong to code review.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/issues',
 			'POST /v1/tenants/:tenant/projects/:project/issues',
@@ -231,7 +231,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Automation and integrations',
-		note: 'Maintainers manage these. OAuth integrations mint project-scoped tokens with the same granular scopes as API keys. Webhook deliveries and CI job creation are queued before workers process them. CI runners use dedicated runner tokens, wait on project runner events when available, and claim queued jobs for a single project when their labels match the command. CI artifacts can be downloaded from job history, caches may be raw files or tar.gz directory archives, and CI secrets are injected into runner jobs with log redaction.',
+		note: 'Maintainers manage these. OAuth integrations mint project-scoped tokens with the same granular scopes as API keys. Webhook deliveries and CI job creation are queued before workers process them. CI commands can target events, workspaces, changed paths, affected components, matrices, reusable blocks, and runner labels. CI runners use dedicated runner tokens, wait on project runner events when available, and claim queued jobs for a single project when their labels match the command. Runner tokens can upload logs, job artifacts, and cache data for active jobs. CI artifacts can be downloaded from job history, caches may be raw files or tar.gz directory archives, and CI secrets are injected into runner jobs with log redaction.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/api-keys',
 			'POST /v1/tenants/:tenant/projects/:project/api-keys',
@@ -277,7 +277,7 @@ export const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		title: 'Releases and account keys',
-		note: 'Release artifacts are stored by sty. Private projects can make release files public, but source archives are public only when the project is public. Signing keys are user-scoped, not project-scoped.',
+		note: 'Release artifacts are stored by sty. Releases can be project-scoped or tied to one or more project components, which keeps monorepo package releases separate without splitting the project history. Private projects can make release files public, but source archives are public only when the project is public. Signing keys are user-scoped, not project-scoped.',
 		endpoints: [
 			'GET /v1/tenants/:tenant/projects/:project/releases',
 			'POST /v1/tenants/:tenant/projects/:project/releases',

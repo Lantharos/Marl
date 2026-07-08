@@ -3,7 +3,7 @@
 	import DocsPage from '$lib/components/docs/DocsPage.svelte';
 
 	const workerLocal = `cd sty/server
-bunx wrangler d1 migrations apply sty-db --local
+bunx wrangler d1 migrations apply sty --local
 bunx wrangler dev`;
 
 	const workerRemote = `cd sty/server
@@ -11,13 +11,17 @@ bunx wrangler queues create sty-webhooks
 bunx wrangler queues create sty-webhooks-dlq
 bunx wrangler queues create sty-ci
 bunx wrangler queues create sty-ci-dlq
-bunx wrangler d1 migrations apply sty-db --remote
+bunx wrangler d1 migrations apply sty --remote
 bunx wrangler deploy --dry-run
 bunx wrangler deploy`;
 
 	const frontend = `cd sty/frontend
 bun install
 bun run dev`;
+
+	const frontendDeploy = `cd sty/frontend
+bun install
+bun run deploy`;
 
 	const rustBuild = `cd sty
 cargo build
@@ -73,9 +77,17 @@ cargo build`;
 	<section class="grid gap-4 lg:grid-cols-2">
 		<div>
 			<h2 class="text-lg font-semibold text-[#eae9e4]">Run the frontend</h2>
-			<p class="mt-2 text-sm leading-6 text-[#8c887e]">The default frontend API base points at the local Worker. Set <code>PUBLIC_STY_API_BASE</code> only when using a different API origin.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">Production API base is <code>https://sty.sh/api</code>. For local development, run the worker with <code>bunx wrangler dev</code> and point the CLI or frontend at <code>http://127.0.0.1:8787/api</code>. Use <code>sty login --port 8787</code> instead of passing a full URL.</p>
 		</div>
 		<CodeBlock code={frontend} />
+	</section>
+
+	<section class="grid gap-4 lg:grid-cols-2">
+		<div>
+			<h2 class="text-lg font-semibold text-[#eae9e4]">Deploy the frontend</h2>
+			<p class="mt-2 text-sm leading-6 text-[#8c887e]">The SvelteKit app deploys as a separate worker on <code>sty.sh/*</code>. Deploy the API worker first so <code>/api</code> routes are live.</p>
+		</div>
+		<CodeBlock code={frontendDeploy} />
 	</section>
 
 	<section class="grid gap-4 lg:grid-cols-2">

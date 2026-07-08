@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/public';
 import { AveSession, createLocalStorageAdapter } from '@ave-id/sdk';
 import { completeOAuthCallback, startPkceLogin } from '@ave-id/sdk/client';
 import { clearD1Bookmark, d1Fetch } from './d1Session';
+import { DEFAULT_API_BASE } from './loadApi';
 
 export type AveProfile = {
 	sub: string;
@@ -37,9 +38,9 @@ let styTokenPromise: Promise<string | null> | null = null;
 
 export function apiBase() {
 	if (env.PUBLIC_STY_API_BASE) {
-		return env.PUBLIC_STY_API_BASE;
+		return env.PUBLIC_STY_API_BASE.replace(/\/$/, '');
 	}
-	return 'http://127.0.0.1:8787';
+	return DEFAULT_API_BASE;
 }
 
 export function aveClientId() {

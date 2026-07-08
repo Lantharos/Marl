@@ -113,7 +113,7 @@ pub(crate) async fn list_ci_job_artifacts(
                 "digest": artifact.digest,
                 "content_type": artifact.content_type,
                 "created_at": artifact.created_at,
-                "download_url": format!("/v1/tenants/{tenant}/projects/{project}/ci/jobs/{job_id}/artifacts/{}/download", artifact.id),
+                "download_url": format!("/api/v1/tenants/{tenant}/projects/{project}/ci/jobs/{job_id}/artifacts/{}/download", artifact.id),
             })
         })
         .collect::<Vec<_>>();

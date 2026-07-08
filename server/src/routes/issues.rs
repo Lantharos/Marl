@@ -22,6 +22,9 @@ pub(crate) async fn project_issues(
     let issue_type = url
         .query_pairs()
         .find_map(|(k, v)| (k == "type" || k == "issue_type").then(|| v.to_string()));
+    let component = url
+        .query_pairs()
+        .find_map(|(k, v)| (k == "component").then(|| v.to_string()));
     let query = url
         .query_pairs()
         .find_map(|(k, v)| (k == "q").then(|| v.to_string().to_ascii_lowercase()));
@@ -39,14 +42,18 @@ pub(crate) async fn project_issues(
     if let Some(issue_type) = issue_type {
         issues.retain(|issue| issue.issue_type.as_deref() == Some(issue_type.as_str()));
     }
+    if let Some(component) = component {
+        issues.retain(|issue| issue.components.iter().any(|item| item == &component));
+    }
     if let Some(query) = query {
         if !query.trim().is_empty() {
             issues.retain(|issue| {
                 let haystack = format!(
-                    "{} {} {} {} {}",
+                    "{} {} {} {} {} {}",
                     issue.title,
                     issue.body,
                     issue.labels.join(" "),
+                    issue.components.join(" "),
                     issue.assignees.join(" "),
                     issue.issue_type.as_deref().unwrap_or("")
                 )
@@ -82,6 +89,14 @@ pub(crate) async fn create_issue(
             assignees.push(assignee);
         }
     }
+    let settings = features::project_settings(
+        &database,
+        &tenant,
+        &project,
+        Some(&sty_protocol::TokenPrincipal { user: user.clone() }),
+    )
+    .await?;
+    let components = features::normalize_component_ids(&settings, body.components);
     let issue = features::create_issue(
         &database,
         &tenant,
@@ -90,6 +105,7 @@ pub(crate) async fn create_issue(
         &body.title,
         &body.body,
         &body.labels,
+        &components,
         &assignees,
         body.milestone.as_deref(),
         sanitize_issue_type(body.issue_type.as_deref())?,
@@ -167,6 +183,18 @@ pub(crate) async fn update_issue(
         .map(|value| sanitize_issue_type(value.as_deref()))
         .transpose()?;
     let workspace = body.workspace.as_ref().map(|value| value.as_deref());
+    let components = if let Some(components) = body.components {
+        let settings = features::project_settings(
+            &database,
+            &tenant,
+            &project,
+            Some(&sty_protocol::TokenPrincipal { user: user.clone() }),
+        )
+        .await?;
+        Some(features::normalize_component_ids(&settings, components))
+    } else {
+        None
+    };
     let issue = features::update_issue(
         &database,
         &tenant,
@@ -176,6 +204,7 @@ pub(crate) async fn update_issue(
         body.body.as_deref(),
         status.as_deref(),
         body.labels.as_deref(),
+        components.as_deref(),
         body.assignees.as_deref(),
         milestone,
         issue_type,
@@ -584,6 +613,9 @@ fn issue_metadata_messages(
     }
     if before.assignees != after.assignees {
         messages.push("updated assignees".to_string());
+    }
+    if before.components != after.components {
+        messages.push("updated components".to_string());
     }
     if before.milestone != after.milestone {
         match after.milestone.as_deref() {

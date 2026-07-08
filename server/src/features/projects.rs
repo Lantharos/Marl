@@ -51,6 +51,7 @@ pub async fn ensure_project(
         merge_rules: MergeRules::default(),
         protected_workspaces: vec![],
         path_visibility: vec![],
+        components: vec![],
         ci: ProjectCiSettings::default(),
     })
     .map_err(|e| err(e.to_string()))?;

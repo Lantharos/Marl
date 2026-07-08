@@ -31,6 +31,12 @@ pub async fn list_releases(
         let query = query.to_ascii_lowercase();
         items.retain(|item| value_matches_query(item, &query));
     }
+    if let Some(component) = query_text(&url, "component") {
+        items.retain(|item| release_components(item).iter().any(|id| id == &component));
+    }
+    if let Some(scope) = query_text(&url, "scope") {
+        items.retain(|item| item["scope"].as_str().unwrap_or("project") == scope);
+    }
     Response::from_json(&paginate_vec(url, items))
 }
 
@@ -59,6 +65,7 @@ pub async fn create_release(
     let principal = TokenPrincipal { user: user.clone() };
     let settings =
         features::project_settings(&database, &tenant, &project, Some(&principal)).await?;
+    let components = normalized_release_components(&settings, &body);
     let latest_snapshot =
         features::head(&database, &tenant, &project, &settings.default_workspace).await?;
     let tag_item = ensure_tag(
@@ -76,7 +83,7 @@ pub async fn create_release(
         .map(ToOwned::to_owned)
         .or_else(|| latest_snapshot.clone())
         .or_else(|| tag_item["snapshot"].as_str().map(ToOwned::to_owned));
-    let id = release_id(&tenant, &project, &tag);
+    let id = scoped_release_id(&tenant, &project, &tag, &components);
 
     body["id"] = json!(id.clone());
     body["kind"] = json!("release");
@@ -89,6 +96,12 @@ pub async fn create_release(
         body["created_at"] = json!(now.clone());
     }
     body["updated_at"] = json!(now);
+    body["components"] = json!(components);
+    body["scope"] = json!(if release_components(&body).is_empty() {
+        "project"
+    } else {
+        "component"
+    });
     if let Some(snapshot) = snapshot {
         body["snapshot"] = json!(snapshot);
         body["source"] = json!({
@@ -109,9 +122,28 @@ pub async fn create_release(
     if body["draft"].as_bool().unwrap_or(false) {
         body["latest"] = json!(false);
     } else if body["latest"].as_bool().unwrap_or(false) {
-        clear_latest_releases(&database, &tenant, &project, &id).await?;
+        clear_latest_releases(
+            &database,
+            &tenant,
+            &project,
+            &id,
+            &release_components(&body),
+        )
+        .await?;
     }
     upsert_release(&database, &tenant, &project, &id, body.clone()).await?;
+    if !body["draft"].as_bool().unwrap_or(false) {
+        enqueue_release_ci(
+            &ctx,
+            &database,
+            &tenant,
+            &project,
+            &settings,
+            &body,
+            "release.created",
+        )
+        .await?;
+    }
     features::recompute_project_stats(&database, &tenant, &project).await?;
     let _ = crate::webhooks::emit_project_event(
         &ctx,
@@ -150,6 +182,9 @@ pub async fn update_release(
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| release_id.clone());
     let body: Value = req.json().await.unwrap_or_else(|_| json!({}));
+    let principal = TokenPrincipal { user: user.clone() };
+    let settings =
+        features::project_settings(&database, &tenant, &project, Some(&principal)).await?;
     if body.get("name").is_some() {
         release["name"] = body["name"].clone();
     }
@@ -165,10 +200,26 @@ pub async fn update_release(
     if let Some(latest) = body["latest"].as_bool() {
         release["latest"] = json!(latest);
     }
+    if body.get("component").is_some() || body.get("components").is_some() {
+        let components = normalized_release_components(&settings, &body);
+        release["components"] = json!(components);
+        release["scope"] = json!(if release_components(&release).is_empty() {
+            "project"
+        } else {
+            "component"
+        });
+    }
     if release["draft"].as_bool().unwrap_or(false) {
         release["latest"] = json!(false);
     } else if release["latest"].as_bool().unwrap_or(false) {
-        clear_latest_releases(&database, &tenant, &project, &storage_release_id).await?;
+        clear_latest_releases(
+            &database,
+            &tenant,
+            &project,
+            &storage_release_id,
+            &release_components(&release),
+        )
+        .await?;
     }
     release["updated_at"] = json!(now_iso());
     if let Some(snapshot) = release["snapshot"]
@@ -197,6 +248,18 @@ pub async fn update_release(
         release.clone(),
     )
     .await?;
+    if !release["draft"].as_bool().unwrap_or(false) {
+        enqueue_release_ci(
+            &ctx,
+            &database,
+            &tenant,
+            &project,
+            &settings,
+            &release,
+            "release.updated",
+        )
+        .await?;
+    }
     features::recompute_project_stats(&database, &tenant, &project).await?;
     let _ = crate::webhooks::emit_project_event(
         &ctx,
@@ -206,6 +269,84 @@ pub async fn update_release(
         json!({ "release": release.clone(), "actor": user }),
     );
     Response::from_json(&release)
+}
+
+async fn enqueue_release_ci(
+    ctx: &crate::request_context::AppRouteContext,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    settings: &sty_protocol::ProjectSettings,
+    release: &Value,
+    event: &str,
+) -> Result<()> {
+    let Some(head) = release["snapshot"]
+        .as_str()
+        .or_else(|| release["source"]["snapshot"].as_str())
+    else {
+        return Ok(());
+    };
+    let components = release_components(release);
+    let jobs = features::enqueue_ci_jobs_for_head(
+        database,
+        tenant,
+        project,
+        &settings.default_workspace,
+        head,
+        &settings.ci,
+        event,
+        None,
+        Some(&components),
+    )
+    .await?;
+    if jobs.is_empty() {
+        return Ok(());
+    }
+    features::record_audit_event(
+        database,
+        tenant,
+        project,
+        "system",
+        "ci.jobs_queued",
+        "release",
+        release["id"].as_str().unwrap_or_default(),
+        json!({
+            "event": event,
+            "release": release["id"],
+            "tag": release["tag"],
+            "jobs": jobs.iter().map(|job| job.id.clone()).collect::<Vec<_>>(),
+            "affected_components": components,
+        }),
+    )
+    .await?;
+    ctx.data.wait_until({
+        let env = ctx.env.clone();
+        let tenant = tenant.to_string();
+        let project = project.to_string();
+        let count = jobs.len();
+        async move {
+            let _ = crate::ci_runner_pool::notify_runners(&env, &tenant, &project, count).await;
+        }
+    });
+    Ok(())
+}
+
+fn normalized_release_components(
+    settings: &sty_protocol::ProjectSettings,
+    body: &Value,
+) -> Vec<String> {
+    let mut requested = Vec::new();
+    if let Some(component) = body["component"].as_str() {
+        requested.push(component.to_string());
+    }
+    if let Some(components) = body["components"].as_array() {
+        requested.extend(
+            components
+                .iter()
+                .filter_map(|component| component.as_str().map(ToOwned::to_owned)),
+        );
+    }
+    features::normalize_component_ids(settings, requested)
 }
 
 pub async fn delete_release(
@@ -337,16 +478,30 @@ pub async fn upload_release_artifact(
         .await?;
 
     let now = now_iso();
+    let release_tag = release["tag"]
+        .as_str()
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| {
+            if release["latest"].as_bool().unwrap_or(false) {
+                "latest".to_string()
+            } else {
+                storage_release_id.clone()
+            }
+        });
     let download_url =
         release_artifact_download_url(&tenant, &project, &storage_release_id, &artifact_id);
+    let public_url =
+        release_public_artifact_url(&tenant, &project, &release_tag, &file_name);
     let artifact = json!({
         "id": artifact_id,
         "name": original_name,
         "size": file.size(),
         "digest": format!("sha256:{digest}"),
         "content_type": content_type,
-        "url": download_url,
+        "url": public_url,
         "download_url": download_url,
+        "public_url": public_url,
         "storage_key": storage_key,
         "uploaded_at": now,
         "uploaded_by": user,
@@ -451,6 +606,90 @@ pub async fn download_release_artifact(
         31_536_000,
         true,
     )?;
+    Ok(response)
+}
+
+pub async fn download_release_artifact_by_name(
+    req: Request,
+    ctx: crate::request_context::AppRouteContext,
+) -> Result<Response> {
+    let (tenant, project) = project_params(&ctx)?;
+    let version = param(&ctx, "version")?;
+    let file_name = param(&ctx, "filename")?;
+    let database = db(&ctx)?;
+    let public_project = release_source_downloads_are_public(&database, &tenant, &project).await?;
+    let public_release_downloads =
+        public_project || features::project_public_releases(&database, &tenant, &project).await?;
+    let user = if public_release_downloads {
+        optional_auth(&req, &ctx).await.unwrap_or(None)
+    } else {
+        optional_auth(&req, &ctx).await?
+    };
+    let Some(release) =
+        release_item_by_id_or_tag(&database, &tenant, &project, &version).await?
+    else {
+        return json_error(404, "release not found");
+    };
+    if release_is_draft(&release)
+        && !can_manage_releases(&database, &tenant, &project, user.as_deref()).await?
+    {
+        return json_error(404, "release not found");
+    }
+    let Some(artifact) = release_artifact_by_name(&release, &file_name) else {
+        return json_error(404, "artifact not found");
+    };
+    let release_id = release["id"]
+        .as_str()
+        .ok_or_else(|| Error::RustError("release id is missing".to_string()))?;
+    let artifact_id = artifact["id"]
+        .as_str()
+        .ok_or_else(|| Error::RustError("artifact id is missing".to_string()))?;
+    let source_artifact = artifact["source"].as_bool().unwrap_or(false)
+        || artifact["id"].as_str() == Some(release_source_artifact_id());
+    let public_cache = if source_artifact {
+        public_project
+    } else {
+        public_release_downloads
+    };
+    if !public_cache {
+        check_project_read_capability(
+            &database,
+            &tenant,
+            &project,
+            user.as_deref(),
+            "releases:read",
+        )
+        .await?;
+    }
+    let Some(storage_key) = artifact["storage_key"].as_str() else {
+        return json_error(404, "artifact not found");
+    };
+    let features = bucket(&ctx.env)?;
+    let Some(object) = features.get(storage_key).execute().await? else {
+        return json_error(404, "artifact not found");
+    };
+    let Some(body) = object.body() else {
+        return json_error(404, "artifact not found");
+    };
+    let mut response = Response::from_body(body.response_body()?)?;
+    let headers = response.headers_mut();
+    if let Some(content_type) = artifact["content_type"].as_str() {
+        headers.set("content-type", content_type)?;
+    }
+    if let Some(name) = artifact["name"].as_str() {
+        headers.set(
+            "content-disposition",
+            &format!("attachment; filename=\"{}\"", safe_file_name(name)),
+        )?;
+    }
+    apply_cache_headers(
+        headers,
+        object.etag().as_str(),
+        public_cache,
+        31_536_000,
+        true,
+    )?;
+    let _ = (release_id, artifact_id);
     Ok(response)
 }
 
@@ -563,14 +802,16 @@ async fn attach_release_source_archive(
     let now = now_iso();
     let artifact_id = release_source_artifact_id().to_string();
     let download_url = release_artifact_download_url(tenant, project, release_id, &artifact_id);
+    let public_url = release_public_artifact_url(tenant, project, tag, &file_name);
     let artifact = json!({
         "id": artifact_id,
         "name": file_name,
         "size": size,
         "digest": format!("sha256:{digest}"),
         "content_type": "application/zip",
-        "url": download_url,
+        "url": public_url,
         "download_url": download_url,
+        "public_url": public_url,
         "storage_key": storage_key,
         "source": true,
         "snapshot": snapshot,

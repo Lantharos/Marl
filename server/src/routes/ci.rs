@@ -351,7 +351,7 @@ pub(crate) async fn cancel_ci_job(
     else {
         return json_error(404, "ci job not found");
     };
-    refresh_job_mergeability(database, &job).await?;
+    refresh_job_mergeability(&ctx.env, database, &job).await?;
     features::record_audit_event(
         database,
         &tenant,
@@ -463,7 +463,9 @@ async fn ci_job_env(
     ci: &sty_protocol::ProjectCiSettings,
 ) -> Result<Vec<features::CiEnvVar>> {
     let mut env = features::ci_secret_env(database, tenant, project).await?;
-    if let Some(command) = ci.commands.iter().find(|command| command.name == job_name) {
+    if let Some(command) = ci.commands.iter().find(|command| {
+        command.name == job_name || job_name.starts_with(&format!("{} (", command.name))
+    }) {
         if !command.secrets.is_empty() {
             env.retain(|item| command.secrets.iter().any(|key| key == &item.key));
         }
@@ -477,8 +479,38 @@ async fn ci_job_env(
                 });
             }
         }
+        env.extend(matrix_env_from_job_name(job_name, &command.name));
     }
     Ok(env)
+}
+
+fn matrix_env_from_job_name(job_name: &str, command_name: &str) -> Vec<features::CiEnvVar> {
+    let Some(suffix) = job_name
+        .strip_prefix(command_name)
+        .and_then(|value| value.strip_prefix(" ("))
+        .and_then(|value| value.strip_suffix(')'))
+    else {
+        return Vec::new();
+    };
+    suffix
+        .split(',')
+        .filter_map(|pair| {
+            let (key, value) = pair.trim().split_once('=')?;
+            Some(features::CiEnvVar {
+                key: format!(
+                    "MATRIX_{}",
+                    key.chars()
+                        .map(|ch| if ch.is_ascii_alphanumeric() {
+                            ch.to_ascii_uppercase()
+                        } else {
+                            '_'
+                        })
+                        .collect::<String>()
+                ),
+                value: value.trim().to_string(),
+            })
+        })
+        .collect()
 }
 
 fn normalize_runner_claim_labels(labels: Vec<String>) -> Vec<String> {
@@ -613,7 +645,7 @@ pub(crate) async fn complete_ci_job(
     else {
         return json_error(404, "active ci job not found");
     };
-    refresh_job_mergeability(database, &job).await?;
+    refresh_job_mergeability(&ctx.env, database, &job).await?;
     let _ = crate::webhooks::emit_project_event(
         &ctx,
         &tenant,
@@ -694,6 +726,9 @@ pub(crate) async fn materialize_ci_for_ready_head(
 ) -> Result<Vec<String>> {
     let settings = features::project_settings(database, tenant, project, None).await?;
     let changed_paths = ci_changed_paths(env, database, tenant, project, workspace, head).await?;
+    let affected_components = changed_paths
+        .as_ref()
+        .map(|paths| features::component_ids_for_paths(&settings, paths));
     let jobs = features::enqueue_ci_jobs_for_head(
         database,
         tenant,
@@ -701,7 +736,9 @@ pub(crate) async fn materialize_ci_for_ready_head(
         workspace,
         head,
         &settings.ci,
+        "workspace.ready",
         changed_paths.as_deref(),
+        affected_components.as_deref(),
     )
     .await?;
     if !jobs.is_empty() {
@@ -713,11 +750,15 @@ pub(crate) async fn materialize_ci_for_ready_head(
             "ci.jobs_queued",
             "workspace",
             workspace,
-            json!({ "head": head, "jobs": jobs.iter().map(|job| job.id.clone()).collect::<Vec<_>>() }),
+            json!({
+                "head": head,
+                "jobs": jobs.iter().map(|job| job.id.clone()).collect::<Vec<_>>(),
+                "affected_components": affected_components.unwrap_or_default(),
+            }),
         )
         .await?;
     }
-    refresh_workspace_mergeability(database, tenant, project, workspace, Some(head)).await?;
+    refresh_workspace_mergeability(env, database, tenant, project, workspace, Some(head)).await?;
     Ok(jobs.into_iter().map(|job| job.id).collect())
 }
 
@@ -763,10 +804,12 @@ pub(crate) async fn require_ci_runner(
 }
 
 async fn refresh_job_mergeability(
+    env: &Env,
     database: &crate::request_context::Database,
     job: &features::CiJob,
 ) -> Result<()> {
     refresh_workspace_mergeability(
+        env,
         database,
         &job.tenant,
         &job.project,
@@ -777,6 +820,7 @@ async fn refresh_job_mergeability(
 }
 
 async fn refresh_workspace_mergeability(
+    env: &Env,
     database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
@@ -785,7 +829,13 @@ async fn refresh_workspace_mergeability(
 ) -> Result<()> {
     let settings = features::project_settings(database, tenant, project, None).await?;
     let status = crate::routes::governance::workspace_merge_status(
-        database, tenant, project, workspace, head, &settings,
+        Some(env),
+        database,
+        tenant,
+        project,
+        workspace,
+        head,
+        &settings,
     )
     .await?;
     features::set_workspace_mergeable(database, tenant, project, workspace, status.can_merge).await

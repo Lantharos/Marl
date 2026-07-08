@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { d1Fetch } from '$lib/d1Session';
 	import { apiBase, getStyToken } from '$lib/session';
 	import type { Release, ReleaseArtifact } from '$lib/api';
@@ -7,6 +8,7 @@
 	import Archive from 'lucide-svelte/icons/archive';
 	import Box from 'lucide-svelte/icons/box';
 	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import Copy from 'lucide-svelte/icons/copy';
 	import Download from 'lucide-svelte/icons/download';
 	import Pencil from 'lucide-svelte/icons/pencil';
 	import GitCommit from 'lucide-svelte/icons/git-commit';
@@ -34,13 +36,15 @@
 	let notesExpanded = $state(false);
 	let downloadBusyKey = $state('');
 	let downloadError = $state('');
+	let copyBusyKey = $state('');
+	let copyMessage = $state('');
 
 	const rawArtifacts = $derived(artifactList(release));
 	const hiddenSourceDownload = $derived(!showSourceDownloads && rawArtifacts.some(isSourceArtifact));
 	const artifacts = $derived(showSourceDownloads ? rawArtifacts : rawArtifacts.filter((artifact) => !isSourceArtifact(artifact)));
 	const title = $derived(release.name?.trim() || release.tag);
 	const releasedAt = $derived(formatDate(release.created_at ?? release.updated_at));
-	const releasePath = $derived(encodeURIComponent(release.tag));
+	const releasePath = $derived(encodeURIComponent(release.id ?? release.tag));
 	const notesAreLong = $derived(Boolean(release.notes && (release.notes.length > 900 || release.notes.split('\n').length > 18)));
 
 	function artifactList(item: Release) {
@@ -66,9 +70,23 @@
 	}
 
 	function artifactHref(artifact: ReleaseArtifact) {
+		if (artifact.public_url) {
+			if (artifact.public_url.startsWith('http')) return artifact.public_url;
+			const origin = browser ? window.location.origin : 'https://sty.sh';
+			return `${origin}${artifact.public_url}`;
+		}
 		const href = artifact.download_url ?? artifact.url;
 		if (!href) return null;
-		return href.startsWith('/') ? `${apiBase()}${href}` : href;
+		if (href.startsWith('http')) return href;
+		if (href.startsWith('/api/')) {
+			const origin = browser ? window.location.origin : 'https://sty.sh';
+			return `${origin}${href}`;
+		}
+		return `${apiBase()}${href}`;
+	}
+
+	function artifactCopyUrl(artifact: ReleaseArtifact) {
+		return artifactHref(artifact);
 	}
 
 	function isSourceArtifact(artifact: ReleaseArtifact) {
@@ -80,7 +98,26 @@
 	}
 
 	function isInternalDownload(href: string) {
-		return href.startsWith(`${apiBase()}/v1/`);
+		return href.includes('/api/v1/') || href.startsWith(`${apiBase()}/v1/`);
+	}
+
+	async function copyArtifactLink(artifact: ReleaseArtifact) {
+		const url = artifactCopyUrl(artifact);
+		if (!url) return;
+		const key = artifactKey(artifact);
+		copyBusyKey = key;
+		copyMessage = '';
+		try {
+			await navigator.clipboard.writeText(url);
+			copyMessage = 'Copied link';
+		} catch {
+			copyMessage = 'Copy failed';
+		} finally {
+			copyBusyKey = '';
+			setTimeout(() => {
+				if (copyMessage) copyMessage = '';
+			}, 2000);
+		}
 	}
 
 	function artifactMeta(artifact: ReleaseArtifact) {
@@ -183,6 +220,9 @@
 					{#if release.draft}
 						<span class="text-xs text-[#8c887e]">Draft</span>
 					{/if}
+					{#if release.components?.length}
+						<span class="text-xs text-[#d9a66c]">{release.components.join(', ')}</span>
+					{/if}
 				</div>
 				<div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#6f6b5f]">
 					{#if release.author && userName(release.author) !== 'Unknown user'}
@@ -228,22 +268,34 @@
 				{@const meta = artifactMeta(artifact)}
 				{#if href}
 					{#if isInternalDownload(href)}
-						<button class="flex min-h-10 items-center gap-2 border border-[#252522] bg-[#0f0f0d] px-3 text-left hover:bg-[#171714] disabled:opacity-60" type="button" disabled={Boolean(downloadBusyKey)} onclick={() => downloadArtifact(artifact, href)}>
-							{#if artifact.source}
-								<Archive class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
-							{:else}
-								<Box class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
-							{/if}
-							<span class="min-w-0 flex-1">
-								<span class="block truncate text-sm text-[#eae9e4]">{artifact.name}</span>
-								{#if meta}
-									<span class="block truncate font-mono text-[11px] text-[#6f6b5f]">{downloadBusyKey === artifactKey(artifact) ? 'Downloading...' : meta}</span>
+						<div class="flex min-h-10 items-center gap-0 border border-[#252522] bg-[#0f0f0d]">
+							<button class="flex min-w-0 flex-1 items-center gap-2 px-3 text-left hover:bg-[#171714] disabled:opacity-60" type="button" disabled={Boolean(downloadBusyKey)} onclick={() => downloadArtifact(artifact, href)}>
+								{#if artifact.source}
+									<Archive class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
+								{:else}
+									<Box class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
 								{/if}
-							</span>
-							<Download class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
-						</button>
+								<span class="min-w-0 flex-1">
+									<span class="block truncate text-sm text-[#eae9e4]">{artifact.name}</span>
+									{#if meta}
+										<span class="block truncate font-mono text-[11px] text-[#6f6b5f]">{downloadBusyKey === artifactKey(artifact) ? 'Downloading...' : meta}</span>
+									{/if}
+								</span>
+								<Download class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
+							</button>
+							<button
+								class="grid h-10 w-10 shrink-0 place-items-center border-l border-[#252522] text-[#8c887e] hover:bg-[#171714] hover:text-[#eae9e4]"
+								type="button"
+								aria-label="Copy download link"
+								disabled={copyBusyKey === artifactKey(artifact)}
+								onclick={() => copyArtifactLink(artifact)}
+							>
+								<Copy class="h-3.5 w-3.5" />
+							</button>
+						</div>
 					{:else}
-						<a class="flex min-h-10 items-center gap-2 border border-[#252522] bg-[#0f0f0d] px-3 hover:bg-[#171714]" href={href}>
+						<div class="flex min-h-10 items-center gap-0 border border-[#252522] bg-[#0f0f0d]">
+							<a class="flex min-w-0 flex-1 items-center gap-2 px-3 hover:bg-[#171714]" href={href}>
 							{#if artifact.source}
 								<Archive class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
 							{:else}
@@ -257,6 +309,16 @@
 							</span>
 							<Download class="h-3.5 w-3.5 shrink-0 text-[#8c887e]" />
 						</a>
+							<button
+								class="grid h-10 w-10 shrink-0 place-items-center border-l border-[#252522] text-[#8c887e] hover:bg-[#171714] hover:text-[#eae9e4]"
+								type="button"
+								aria-label="Copy download link"
+								disabled={copyBusyKey === artifactKey(artifact)}
+								onclick={() => copyArtifactLink(artifact)}
+							>
+								<Copy class="h-3.5 w-3.5" />
+							</button>
+						</div>
 					{/if}
 				{:else}
 					<div class="flex min-h-10 items-center gap-2 border border-[#252522] bg-[#0f0f0d] px-3">
@@ -282,6 +344,9 @@
 			{/if}
 			{#if downloadError}
 				<p class="text-xs text-[#d96c5a]">{downloadError}</p>
+			{/if}
+			{#if copyMessage}
+				<p class="text-xs text-[#7cb97c]">{copyMessage}</p>
 			{/if}
 		</div>
 

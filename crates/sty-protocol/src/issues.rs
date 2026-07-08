@@ -20,6 +20,8 @@ pub struct Issue {
     pub updated_at: String,
     pub closed_at: Option<String>,
     pub labels: Vec<String>,
+    #[serde(default)]
+    pub components: Vec<String>,
     pub milestone: Option<String>,
     pub workspace: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -38,6 +40,8 @@ pub struct CreateIssueRequest {
     pub body: String,
     #[serde(default)]
     pub labels: Vec<String>,
+    #[serde(default)]
+    pub components: Vec<String>,
     #[serde(default)]
     pub assignee: Option<String>,
     #[serde(default)]
@@ -60,6 +64,8 @@ pub struct UpdateIssueRequest {
     pub body: Option<String>,
     #[serde(default)]
     pub labels: Option<Vec<String>>,
+    #[serde(default)]
+    pub components: Option<Vec<String>>,
     #[serde(default)]
     pub assignees: Option<Vec<String>>,
     #[serde(default)]

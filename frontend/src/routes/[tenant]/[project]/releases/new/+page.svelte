@@ -3,10 +3,12 @@
 	import { page } from '$app/stores';
 	import {
 		createRelease,
+		getProjectSettings,
 		isAbortError,
 		listReleasesPage,
 		listTags,
 		uploadReleaseArtifact,
+		type ProjectComponent,
 		type Release,
 		type TagInfo
 	} from '$lib/api';
@@ -19,6 +21,7 @@
 
 	let releases = $state<Release[]>([]);
 	let tags = $state<TagInfo[]>([]);
+	let components = $state<ProjectComponent[]>([]);
 	let loading = $state(true);
 	let busy = $state(false);
 	let error = $state('');
@@ -34,12 +37,14 @@
 		loading = true;
 		error = '';
 		try {
-			const [releaseResult, tagResult] = await Promise.all([
+			const [releaseResult, tagResult, settingsResult] = await Promise.all([
 				listReleasesPage(tenant, project, { page: 1, perPage: 500, signal }),
-				listTags(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null)
+				listTags(tenant, project, { page: 1, perPage: 500, signal }).catch(() => null),
+				getProjectSettings(tenant, project, { signal }).catch(() => null)
 			]);
 			releases = releaseResult.items;
 			tags = tagResult?.items ?? [];
+			components = settingsResult?.components ?? [];
 		} catch (e) {
 			if (isAbortError(e)) return;
 			error = e instanceof Error ? e.message : 'Failed';
@@ -58,6 +63,7 @@
 				notes: input.notes || null,
 				prerelease: input.prerelease,
 				draft: input.draft,
+				components: input.components,
 				latest: !input.draft && !input.prerelease
 			});
 			const releaseId = release.id ?? input.tag;
@@ -106,6 +112,6 @@
 		{#if error}
 			<div class="mb-4 border border-[#2a2a28] bg-[#141412] p-4 text-sm text-[#d96c5a]">{error}</div>
 		{/if}
-		<ReleaseComposer {tags} {releases} {busy} onCreate={handleCreate} onCancel={() => goto(`/${tenant}/${project}/releases`)} onGenerateNotes={generateNotes} />
+		<ReleaseComposer {tags} {releases} projectComponents={components} {busy} onCreate={handleCreate} onCancel={() => goto(`/${tenant}/${project}/releases`)} onGenerateNotes={generateNotes} />
 	{/if}
 </div>

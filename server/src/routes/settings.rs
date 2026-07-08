@@ -14,6 +14,7 @@ pub(crate) async fn get_settings(
         features::project_settings(&database, &tenant, &project, principal.as_ref()).await?;
     if !settings_can_read_source_boundaries(&database, &tenant, &project, user.as_deref()).await? {
         settings.path_visibility = vec![];
+        redact_ci_settings_for_viewers(&mut settings.ci);
     }
     Response::from_json(&settings)
 }
@@ -53,6 +54,7 @@ pub(crate) async fn update_settings(
         body.merge_rules,
         body.protected_workspaces,
         body.path_visibility,
+        body.components,
         body.ci,
         body.archived,
         body.public_releases,
@@ -73,6 +75,7 @@ pub(crate) async fn update_settings(
             "merge_rules": settings.merge_rules.clone(),
             "protected_workspaces": settings.protected_workspaces.clone(),
             "path_visibility": settings.path_visibility.clone(),
+            "components": settings.components.clone(),
             "ci": settings.ci.clone(),
         }),
     )
@@ -168,4 +171,15 @@ async fn settings_can_read_source_boundaries(
         return Ok(false);
     };
     features::project_role_allows(database, tenant, project, user, "maintainer").await
+}
+
+fn redact_ci_settings_for_viewers(ci: &mut sty_protocol::ProjectCiSettings) {
+    for command in &mut ci.commands {
+        command.secrets.clear();
+        command.env.clear();
+    }
+    for block in &mut ci.blocks {
+        block.secrets.clear();
+        block.env.clear();
+    }
 }

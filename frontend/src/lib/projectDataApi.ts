@@ -85,6 +85,7 @@ export interface HistoryEntry {
 	timestamp: string;
 	workspace: string;
 	snapshot_id: string | null;
+	components?: string[];
 	agent?: string;
 	model?: string;
 	tool?: string;
@@ -132,6 +133,18 @@ export interface WorkspaceReview {
 	body?: string | null;
 	head?: string | null;
 	submitted_at: string;
+}
+
+export interface ReadyWorkspaceDetail {
+	approved_by: string[];
+	merge_requirements: {
+		can_merge: boolean;
+		blocked_by: string[];
+		required_approvals: number;
+		approvals: number;
+		stale_approvals: number;
+		unresolved_comments: number;
+	};
 }
 
 export interface WorkspaceCheck {
@@ -246,6 +259,11 @@ export async function getReadyWorkspaceDetail(tenant: string, project: string, w
 	const ws = workspaces.find((w) => w.name === workspace);
 	if (!ws) throw new Error('Workspace not found');
 	return { ...ws, comments: [] };
+}
+
+export async function getReadyWorkspaceReview(tenant: string, project: string, workspace: string, options: ApiOptions = {}): Promise<ReadyWorkspaceDetail> {
+	const response = await publicFetch(`/v1/tenants/${tenant}/projects/${project}/ready/${encodeURIComponent(workspace)}`, { signal: options.signal });
+	return (await response.json()) as ReadyWorkspaceDetail;
 }
 
 export async function listReviewComments(

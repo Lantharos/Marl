@@ -354,13 +354,14 @@ pub(crate) async fn list_workspaces(
     enrich_workspace_change_summaries(&ctx, &tenant, &project, &mut workspaces)
         .await
         .ok();
-    enrich_workspace_mergeability(&database, &tenant, &project, &mut workspaces)
+    enrich_workspace_mergeability(&ctx.env, &database, &tenant, &project, &mut workspaces)
         .await
         .ok();
     Response::from_json(&WorkspaceStateResponse { workspaces })
 }
 
 async fn enrich_workspace_mergeability(
+    env: &Env,
     database: &crate::request_context::Database,
     tenant: &str,
     project: &str,
@@ -371,6 +372,7 @@ async fn enrich_workspace_mergeability(
         workspace.is_ready && workspace.status == "ready" && workspace.name != "main"
     }) {
         let status = crate::routes::governance::workspace_merge_status(
+            Some(env),
             database,
             tenant,
             project,

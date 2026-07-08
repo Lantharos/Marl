@@ -94,6 +94,15 @@ pub(crate) async fn update_head(
             "sync",
             serde_json::json!({ "workspace": workspace, "head": body.new_head.clone(), "actor": user }),
         );
+        enqueue_ci_for_pushed_head(
+            &ctx,
+            &database,
+            &tenant,
+            &project,
+            &workspace,
+            &body.new_head,
+        )
+        .await?;
         if let Some(state) =
             features::workspace_state(&database, &tenant, &project, &workspace).await?
             && state.status == "ready"
@@ -114,6 +123,7 @@ pub(crate) async fn update_head(
             )
             .await?;
             let merge_status = crate::routes::governance::workspace_merge_status(
+                Some(&ctx.env),
                 &database,
                 &tenant,
                 &project,
@@ -156,6 +166,8 @@ pub(crate) async fn workspace_history(
         Some(limit),
     )
     .await?;
+    let entries =
+        enrich_history_components(&ctx.env, &database, &tenant, &project, entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -177,6 +189,8 @@ pub(crate) async fn project_history(
     let limit = query_limit(&req, 100, 500)?;
     let entries =
         features::project_history_with_limit(&database, &tenant, &project, Some(limit)).await?;
+    let entries =
+        enrich_history_components(&ctx.env, &database, &tenant, &project, entries).await?;
     Response::from_json(&HistoryResponse { entries })
 }
 
@@ -199,11 +213,148 @@ pub(crate) async fn history_entry(
         )
         .await?;
         enrich_history_entry(&ctx.env, &tenant, &project, entry).await?;
+        enrich_history_components_for_entry(&ctx.env, &database, &tenant, &project, entry).await?;
     }
     match entry {
         Some(e) => Response::from_json(&e),
         None => json_error(404, "history entry not found"),
     }
+}
+
+async fn enqueue_ci_for_pushed_head(
+    ctx: &crate::request_context::AppRouteContext,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    workspace: &str,
+    head: &str,
+) -> Result<()> {
+    let settings = features::project_settings(database, tenant, project, None).await?;
+    let changed_paths = ci_changed_paths_for_head(&ctx.env, tenant, project, head).await?;
+    let affected_components = changed_paths
+        .as_ref()
+        .map(|paths| features::component_ids_for_paths(&settings, paths));
+    let jobs = features::enqueue_ci_jobs_for_head(
+        database,
+        tenant,
+        project,
+        workspace,
+        head,
+        &settings.ci,
+        "workspace.push",
+        changed_paths.as_deref(),
+        affected_components.as_deref(),
+    )
+    .await?;
+    if jobs.is_empty() {
+        return Ok(());
+    }
+    features::record_audit_event(
+        database,
+        tenant,
+        project,
+        "system",
+        "ci.jobs_queued",
+        "workspace",
+        workspace,
+        serde_json::json!({
+            "event": "workspace.push",
+            "head": head,
+            "jobs": jobs.iter().map(|job| job.id.clone()).collect::<Vec<_>>(),
+            "affected_components": affected_components.unwrap_or_default(),
+        }),
+    )
+    .await?;
+    ctx.data.wait_until({
+        let env = ctx.env.clone();
+        let tenant = tenant.to_string();
+        let project = project.to_string();
+        let count = jobs.len();
+        async move {
+            let _ = crate::ci_runner_pool::notify_runners(&env, &tenant, &project, count).await;
+        }
+    });
+    Ok(())
+}
+
+async fn enrich_history_components(
+    env: &Env,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    mut entries: Vec<HistoryEntry>,
+) -> Result<Vec<HistoryEntry>> {
+    let settings = features::project_settings(database, tenant, project, None).await?;
+    if settings.components.is_empty() {
+        return Ok(entries);
+    }
+    for entry in &mut entries {
+        enrich_history_components_with_settings(env, tenant, project, &settings, entry).await?;
+    }
+    Ok(entries)
+}
+
+async fn enrich_history_components_for_entry(
+    env: &Env,
+    database: &crate::request_context::Database,
+    tenant: &str,
+    project: &str,
+    entry: &mut HistoryEntry,
+) -> Result<()> {
+    let settings = features::project_settings(database, tenant, project, None).await?;
+    enrich_history_components_with_settings(env, tenant, project, &settings, entry).await
+}
+
+async fn enrich_history_components_with_settings(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    settings: &sty_protocol::ProjectSettings,
+    entry: &mut HistoryEntry,
+) -> Result<()> {
+    let Some(snapshot_id) = entry.snapshot_id.as_deref() else {
+        return Ok(());
+    };
+    let Some(changed_paths) = ci_changed_paths_for_head(env, tenant, project, snapshot_id).await?
+    else {
+        return Ok(());
+    };
+    entry.components = features::component_ids_for_paths(settings, &changed_paths);
+    Ok(())
+}
+
+pub(crate) async fn ci_changed_paths_for_head(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    head: &str,
+) -> Result<Option<Vec<String>>> {
+    let Some(parent) = snapshot_parent(env, tenant, project, head).await? else {
+        return Ok(None);
+    };
+    crate::routes::graph::changed_paths_between_snapshots(env, tenant, project, head, &parent)
+        .await
+        .map(Some)
+}
+
+async fn snapshot_parent(
+    env: &Env,
+    tenant: &str,
+    project: &str,
+    snapshot_id: &str,
+) -> Result<Option<String>> {
+    let features = bucket(env)?;
+    let bytes = match r2_bytes(&features, &object_key(tenant, project, snapshot_id)).await {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(None),
+    };
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|error| Error::RustError(error.to_string()))?;
+    Ok(snapshot["parents"]
+        .as_array()
+        .and_then(|parents| parents.first())
+        .and_then(|parent| parent.as_str())
+        .map(ToOwned::to_owned))
 }
 
 async fn enrich_history_entry(
@@ -472,6 +623,7 @@ pub(crate) async fn mark_ready(
     )
     .await?;
     let merge_status = crate::routes::governance::workspace_merge_status(
+        Some(&ctx.env),
         &database,
         &tenant,
         &project,
@@ -562,6 +714,7 @@ pub(crate) async fn merge_workspace(
     let settings =
         features::project_settings(&database, &tenant, &project, Some(&principal)).await?;
     if let Some(response) = crate::routes::governance::require_workspace_mergeable(
+        Some(&ctx.env),
         &database,
         &tenant,
         &project,

@@ -1,6 +1,10 @@
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static ISSUE_SCHEMA_READY: AtomicBool = AtomicBool::new(false);
 
 pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<Vec<Issue>> {
+    ensure_issue_schema(db).await?;
     #[derive(Deserialize)]
     struct Row {
         id: String,
@@ -20,6 +24,7 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
         locked: Option<f64>,
         pinned: Option<f64>,
         labels_json: String,
+        components_json: String,
         display_name: Option<String>,
         handle: Option<String>,
         account_tenant: Option<String>,
@@ -36,7 +41,7 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
                 WHERE tenant = ?1 AND project = ?2 AND COALESCE(target_type, 'comment') != 'activity'
                 GROUP BY tenant, project, issue_id
              )
-             SELECT i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author, i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone, i.workspace, i.issue_type, i.locked, i.pinned, i.labels_json, \
+             SELECT i.id, i.number, i.title, i.body, i.status, i.state_reason, i.author, i.created_at, i.updated_at, i.closed_at, i.assignees_json, i.milestone, i.workspace, i.issue_type, i.locked, i.pinned, i.labels_json, i.components_json, \
              u.display_name, u.handle, \
              (SELECT t.name FROM tenants t WHERE t.owner = i.author AND t.kind = 'user' ORDER BY t.name LIMIT 1) AS account_tenant, \
              u.avatar_url, u.email, u.updated_at AS profile_updated_at, \
@@ -78,6 +83,7 @@ pub async fn list_issues(db: &Database, tenant: &str, project: &str) -> Result<V
                 created_at,
                 closed_at: r.closed_at,
                 labels: serde_json::from_str(&r.labels_json).unwrap_or_default(),
+                components: serde_json::from_str(&r.components_json).unwrap_or_default(),
                 milestone: r.milestone,
                 workspace: r.workspace,
                 issue_type: r.issue_type,
@@ -97,10 +103,12 @@ pub async fn create_issue(
     title: &str,
     body: &str,
     labels: &[String],
+    components: &[String],
     assignees: &[String],
     milestone: Option<&str>,
     issue_type: Option<&str>,
 ) -> Result<Issue> {
+    ensure_issue_schema(db).await?;
     #[derive(Deserialize)]
     struct CountRow {
         count: f64,
@@ -115,11 +123,12 @@ pub async fn create_issue(
     let id = format!("issue-{}", Uuid::new_v4().simple());
     let created_at = now_rfc3339();
     let labels_json = serde_json::to_string(labels).map_err(|e| err(e.to_string()))?;
+    let components_json = serde_json::to_string(components).map_err(|e| err(e.to_string()))?;
     let assignees_json = serde_json::to_string(&assignees).map_err(|e| err(e.to_string()))?;
 
     db.prepare(
-        "INSERT INTO issues (id, tenant, project, number, title, body, status, author, created_at, updated_at, closed_at, assignees_json, milestone, workspace, issue_type, locked, pinned, labels_json) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7, ?8, ?8, NULL, ?9, ?10, NULL, ?11, 0, 0, ?12)"
+        "INSERT INTO issues (id, tenant, project, number, title, body, status, author, created_at, updated_at, closed_at, assignees_json, milestone, workspace, issue_type, locked, pinned, labels_json, components_json) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7, ?8, ?8, NULL, ?9, ?10, NULL, ?11, 0, 0, ?12, ?13)"
     )
     .bind(&[
         js_str(&id),
@@ -134,6 +143,7 @@ pub async fn create_issue(
         js_opt(milestone),
         js_opt(issue_type),
         js_str(&labels_json),
+        js_str(&components_json),
     ])?
     .run()
     .await?;
@@ -280,6 +290,7 @@ pub async fn update_issue(
     body: Option<&str>,
     status: Option<&str>,
     labels: Option<&[String]>,
+    components: Option<&[String]>,
     assignees: Option<&[String]>,
     milestone: Option<Option<&str>>,
     issue_type: Option<Option<&str>>,
@@ -300,6 +311,7 @@ pub async fn update_issue(
         None
     };
     let next_labels = labels.unwrap_or(&issue.labels);
+    let next_components = components.unwrap_or(&issue.components);
     let next_assignees = assignees.unwrap_or(&issue.assignees);
     let next_milestone = milestone
         .map(|value| value.map(str::to_string))
@@ -313,12 +325,13 @@ pub async fn update_issue(
     let next_locked = locked.unwrap_or(issue.locked);
     let next_pinned = pinned.unwrap_or(issue.pinned);
     let labels_json = serde_json::to_string(next_labels).map_err(|e| err(e.to_string()))?;
+    let components_json = serde_json::to_string(next_components).map_err(|e| err(e.to_string()))?;
     let assignees_json = serde_json::to_string(next_assignees).map_err(|e| err(e.to_string()))?;
 
     db.prepare(
         "UPDATE issues SET title = ?1, body = ?2, status = ?3, updated_at = ?4, closed_at = ?5, \
-         labels_json = ?6, assignees_json = ?7, milestone = ?8, issue_type = ?9, workspace = ?10, locked = ?11, pinned = ?12 \
-         WHERE tenant = ?13 AND project = ?14 AND id = ?15",
+         labels_json = ?6, components_json = ?7, assignees_json = ?8, milestone = ?9, issue_type = ?10, workspace = ?11, locked = ?12, pinned = ?13 \
+         WHERE tenant = ?14 AND project = ?15 AND id = ?16",
     )
     .bind(&[
         js_str(title.unwrap_or(&issue.title)),
@@ -327,6 +340,7 @@ pub async fn update_issue(
         js_str(&updated_at),
         js_opt(next_closed_at),
         js_str(&labels_json),
+        js_str(&components_json),
         js_str(&assignees_json),
         js_opt(next_milestone.as_deref()),
         js_opt(next_issue_type.as_deref()),
@@ -346,6 +360,18 @@ pub async fn update_issue(
         .into_iter()
         .find(|item| item.id == issue.id)
         .ok_or_else(|| err("issue not found"))
+}
+
+async fn ensure_issue_schema(db: &Database) -> Result<()> {
+    if ISSUE_SCHEMA_READY.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+    let _ = db
+        .prepare("ALTER TABLE issues ADD COLUMN components_json TEXT NOT NULL DEFAULT '[]'")
+        .run()
+        .await;
+    ISSUE_SCHEMA_READY.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 // -- Comments ---------------------------------------------

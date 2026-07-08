@@ -44,6 +44,7 @@ pub(super) fn history_entry_from_row(row: HistoryRow) -> HistoryEntry {
         timestamp: row.timestamp,
         workspace: row.workspace,
         snapshot_id: row.snapshot_id,
+        components: Vec::new(),
         agent: row.agent,
         model: row.model,
         signature: row

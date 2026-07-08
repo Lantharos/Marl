@@ -9,6 +9,7 @@ Content-Type: application/json
 {
   "tag": "v1.0.0",
   "name": "First public build",
+  "components": ["sty-web"],
   "notes": "Changelog text",
   "draft": false
 }`;
@@ -42,7 +43,7 @@ file=<binary>`;
 >
 	<section>
 		<h2 class="text-lg font-semibold text-[#eae9e4]">Create a release</h2>
-		<p class="mt-2 text-sm leading-6 text-[#8c887e]">When a release is created, sty attaches the latest project snapshot and stores a source zip alongside the uploaded artifacts.</p>
+		<p class="mt-2 text-sm leading-6 text-[#8c887e]">When a release is created, sty attaches the latest project snapshot and stores a source zip alongside the uploaded artifacts. Monorepo projects can attach one or more components to keep package releases distinct inside the same project. The latest flag is tracked per project or component lane, so publishing <code>pig@0.3.0</code> does not move the latest release for <code>sty-web</code>. The releases page includes a component lane view with the latest release, draft count, and version policy for every visible component.</p>
 		<div class="mt-4">
 			<CodeBlock code={createRelease} />
 		</div>

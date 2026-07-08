@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createLabel, listLabels, listMilestones, listProjects, listWorkspaceStatuses, searchUsers, type IssueType, type Label, type Milestone, type ProjectSummary, type UserProfile, type WorkspaceStatus } from '$lib/api';
+	import { createLabel, getProjectSettings, listLabels, listMilestones, listProjects, listWorkspaceStatuses, searchUsers, type IssueType, type Label, type Milestone, type ProjectComponent, type ProjectSummary, type UserProfile, type WorkspaceStatus } from '$lib/api';
 	import UserAvatar from './UserAvatar.svelte';
 	import UserProfileLink from './UserProfileLink.svelte';
 	import ArrowRight from 'lucide-svelte/icons/arrow-right';
@@ -13,7 +13,7 @@
 	import Trash2 from 'lucide-svelte/icons/trash-2';
 	import Unlock from 'lucide-svelte/icons/unlock';
 
-	type Patch = { labels?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; close_issue?: boolean; locked?: boolean; pinned?: boolean };
+	type Patch = { labels?: string[]; components?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; close_issue?: boolean; locked?: boolean; pinned?: boolean };
 	type Participant = { user: string; profile?: UserProfile | null };
 	type IssueTypeOption = { value: IssueType; label: string; description: string; color: string };
 
@@ -27,6 +27,7 @@
 		tenant,
 		project,
 		labels: selectedLabels,
+		components: selectedComponents = [],
 		assignees,
 		milestone,
 		issueType = null,
@@ -44,6 +45,7 @@
 		tenant: string;
 		project: string;
 		labels: string[];
+		components?: string[];
 		assignees: string[];
 		milestone: string | null;
 		issueType?: IssueType | null;
@@ -70,6 +72,7 @@
 	let milestones = $state.raw<Milestone[]>([]);
 	let users = $state.raw<UserProfile[]>([]);
 	let workspaces = $state.raw<WorkspaceStatus[]>([]);
+	let projectComponents = $state.raw<ProjectComponent[]>([]);
 	let projects = $state.raw<ProjectSummary[]>([]);
 	let busy = $state(false);
 	let subscribed = $state(true);
@@ -85,6 +88,8 @@
 	let milestonesLoading = false;
 	let workspacesLoaded = false;
 	let workspacesLoading = false;
+	let componentsLoaded = false;
+	let componentsLoading = false;
 	let projectsLoaded = false;
 	let projectsLoading = false;
 	let usersLoaded = false;
@@ -95,6 +100,7 @@
 	const filteredUsers = $derived(userChoices.filter((user) => personLabel(user).toLowerCase().includes(userFilter.trim().toLowerCase())));
 	const filteredIssueTypes = $derived(issueTypes.filter((type) => `${type.label} ${type.description}`.toLowerCase().includes(typeFilter.trim().toLowerCase())));
 	const filteredWorkspaces = $derived(workspaces.filter((item) => item.name !== 'main' && item.status !== 'deleted').filter((item) => item.name.toLowerCase().includes(workspaceFilter.trim().toLowerCase())));
+	const visibleComponents = $derived(projectComponents.filter((component) => component.visible !== false));
 	const visibleWorkspaces = $derived(filteredWorkspaces.slice(0, 10));
 	const filteredProjects = $derived(projects.filter((item) => `${item.tenant}/${item.project}`.toLowerCase().includes(projectFilter.trim().toLowerCase()) && !(item.tenant === tenant && item.project === project)));
 	const selectedIssueType = $derived(issueTypes.find((type) => type.value === issueType) ?? null);
@@ -129,6 +135,7 @@
 		milestones = [];
 		users = [];
 		workspaces = [];
+		projectComponents = [];
 		projects = [];
 		labelsLoaded = false;
 		labelsLoading = false;
@@ -136,6 +143,8 @@
 		milestonesLoading = false;
 		workspacesLoaded = false;
 		workspacesLoading = false;
+		componentsLoaded = false;
+		componentsLoading = false;
 		projectsLoaded = false;
 		projectsLoading = false;
 		usersLoaded = false;
@@ -144,6 +153,10 @@
 
 	$effect(() => {
 		if (selectedLabels.length > 0) void ensureLabels();
+	});
+
+	$effect(() => {
+		if (selectedComponents.length > 0) void ensureComponents();
 	});
 
 	function ignoreAbort(error: unknown) {
@@ -155,6 +168,7 @@
 		openPanel = openPanel === panel ? '' : panel;
 		if (openPanel === 'assignees' && !usersLoaded) void refreshUsers(userFilter);
 		if (openPanel === 'labels') void ensureLabels();
+		if (openPanel === 'components') void ensureComponents();
 		if (openPanel === 'milestone') void ensureMilestones();
 		if (openPanel === 'development') void ensureWorkspaces();
 		if (openPanel === 'transfer') void ensureProjects();
@@ -211,6 +225,22 @@
 			ignoreAbort(error);
 		} finally {
 			workspacesLoading = false;
+			releaseController(controller);
+		}
+	}
+
+	async function ensureComponents() {
+		if (componentsLoaded || componentsLoading) return;
+		componentsLoading = true;
+		const controller = trackController();
+		try {
+			const settings = await getProjectSettings(tenant, project, { signal: controller.signal });
+			projectComponents = settings.components ?? [];
+			componentsLoaded = true;
+		} catch (error) {
+			ignoreAbort(error);
+		} finally {
+			componentsLoading = false;
 			releaseController(controller);
 		}
 	}
@@ -308,6 +338,11 @@
 		await save({ labels: next });
 	}
 
+	async function toggleComponent(id: string) {
+		const next = selectedComponents.includes(id) ? selectedComponents.filter((item) => item !== id) : [...selectedComponents, id];
+		await save({ components: next });
+	}
+
 	async function createAndApplyLabel() {
 		const name = labelFilter.trim();
 		if (!name || !canMaintain) return;
@@ -402,6 +437,39 @@
 					{#if labelFilter.trim() && !exactLabel && canMaintain}
 						<button class="w-full px-3 py-2 text-left text-xs text-[#d9a66c] hover:bg-[#181816]" onclick={createAndApplyLabel}>Create new label "{labelFilter.trim()}"</button>
 					{/if}
+				</div>
+			</div>
+		{/if}
+	</section>
+
+	<section class="relative border-b border-[#2a2a28] pb-4">
+		<div class="mb-3 flex items-center justify-between gap-3">
+			<div class="font-medium text-[#eae9e4]">Components</div>
+			<button class="text-[#8c887e] hover:text-[#d9a66c] disabled:opacity-40" aria-label="Edit components" disabled={!canWrite || busy} onclick={() => togglePanel('components')}><CirclePlus class="h-4 w-4" /></button>
+		</div>
+		<div class="flex flex-wrap gap-1.5">
+			{#each selectedComponents as id (id)}
+				{@const item = projectComponents.find((component) => component.id === id)}
+				<span class="bg-[#1e1e1c] px-2 py-0.5 text-xs text-[#d8d5ca]">{item?.name ?? id}</span>
+			{:else}
+				<span class="text-xs text-[#6f6b5f]">No components</span>
+			{/each}
+		</div>
+		{#if openPanel === 'components'}
+			<div class="absolute right-0 top-7 z-30 w-[320px] border border-[#2a2a28] bg-[#141412] shadow-lg">
+				<div class="border-b border-[#2a2a28] px-3 py-2 text-xs font-medium text-[#eae9e4]">Set components</div>
+				<div class="max-h-72 overflow-auto">
+					{#each visibleComponents as component (component.id)}
+						<button class="flex w-full items-start gap-2 border-b border-[#242420] px-3 py-2 text-left hover:bg-[#181816]" onclick={() => toggleComponent(component.id)}>
+							<span class="min-w-0 flex-1">
+								<span class="block truncate text-sm text-[#eae9e4]">{component.name}</span>
+								<span class="block truncate text-xs text-[#8c887e]">{component.paths.join(', ')}</span>
+							</span>
+							<span class="text-xs text-[#d9a66c]">{selectedComponents.includes(component.id) ? 'selected' : ''}</span>
+						</button>
+					{:else}
+						<div class="px-3 py-3 text-xs text-[#6f6b5f]">No components configured</div>
+					{/each}
 				</div>
 			</div>
 		{/if}

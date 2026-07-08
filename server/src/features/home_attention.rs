@@ -281,6 +281,7 @@ fn issue_from_row(row: IssueRow) -> Issue {
         created_at,
         closed_at: row.closed_at,
         labels: serde_json::from_str(&row.labels_json).unwrap_or_default(),
+        components: vec![],
         milestone: row.milestone,
         workspace: row.workspace,
         issue_type: row.issue_type,

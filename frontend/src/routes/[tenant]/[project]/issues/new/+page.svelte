@@ -18,6 +18,7 @@
 	let title = $state('');
 	let body = $state('');
 	let labels = $state<string[]>([]);
+	let components = $state<string[]>([]);
 	let assignees = $state<string[]>([]);
 	let milestone = $state<string | null>(null);
 	let issueType = $state<IssueType | null>(null);
@@ -111,6 +112,7 @@
 				title: title.trim(),
 				body: body.trim(),
 				labels,
+				components,
 				assignees,
 				milestone,
 				issue_type: issueType
@@ -119,6 +121,7 @@
 				title = '';
 				body = '';
 				labels = [];
+				components = [];
 				assignees = [];
 				milestone = null;
 				issueType = null;
@@ -133,8 +136,9 @@
 		}
 	}
 
-	function updateMetadata(patch: { labels?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; close_issue?: boolean; locked?: boolean; pinned?: boolean }) {
+	function updateMetadata(patch: { labels?: string[]; components?: string[]; assignees?: string[]; milestone?: string | null; issue_type?: IssueType | null; workspace?: string | null; close_issue?: boolean; locked?: boolean; pinned?: boolean }) {
 		if (patch.labels) labels = patch.labels;
+		if (patch.components) components = patch.components;
 		if (patch.assignees) assignees = patch.assignees;
 		if ('milestone' in patch) milestone = patch.milestone ?? null;
 		if ('issue_type' in patch) issueType = patch.issue_type ?? null;
@@ -193,7 +197,7 @@
 			</div>
 		</section>
 
-		<IssueMetadataSidebar {tenant} {project} {labels} {assignees} {milestone} issueType={issueType} {canWrite} {canMaintain} mode="new" onChange={updateMetadata} />
+		<IssueMetadataSidebar {tenant} {project} {labels} {components} {assignees} {milestone} issueType={issueType} {canWrite} {canMaintain} mode="new" onChange={updateMetadata} />
 	</div>
 </div>
 
