@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { tick } from 'svelte';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import BookOpen from 'lucide-svelte/icons/book-open';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -15,6 +15,7 @@
   import { api, apiText } from '$lib/api';
   import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
   import { dismissable } from '$lib/actions/dismissable';
+  import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
 
   type BranchItem = { name: string; commit: string; title: string; updatedAt: string; isDefault: boolean; ahead: number; behind: number };
   type FileItem = { path: string; name: string; kind: 'folder' | 'file'; size?: string; message: string; updatedAt: string };
@@ -30,21 +31,46 @@
   let finderInput = $state<HTMLInputElement>();
   let branchItems = $state<BranchItem[]>([]);
   let fileItems = $state<FileItem[]>([]);
+  let finderItems = $state<FileItem[]>([]);
+  let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
+  let fileSearchRequest = 0;
   let latestCommit = $state<CommitItem | null>(null);
   let readme = $state('');
   let liveError = $state(false);
-  const matchingFiles = $derived(fileItems.filter((item) => item.name.toLowerCase().includes(fileQuery.toLowerCase())));
+  const revisionPath = $derived(encodeRevision(selectedBranch));
   const matchingBranches = $derived(branchItems.filter((branch) => branch.name.toLowerCase().includes(branchQuery.toLowerCase())));
   const authorInitials = $derived(latestCommit?.author.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || '?');
 
   async function openFileFinder() {
+    fileQuery = '';
+    finderItems = fileItems;
     fileFinderOpen = true;
     await tick();
     finderInput?.focus();
   }
 
+  function searchFiles(query: string) {
+    fileQuery = query;
+    clearTimeout(fileSearchTimer);
+    const request = ++fileSearchRequest;
+    if (!query.trim()) {
+      finderItems = fileItems;
+      return;
+    }
+    fileSearchTimer = setTimeout(async () => {
+      try {
+        const result = await api<{ entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number }> }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(selectedBranch)}&query=${encodeURIComponent(query)}`);
+        if (request !== fileSearchRequest) return;
+        finderItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: '', updatedAt: '' }));
+      } catch {
+        if (request === fileSearchRequest) finderItems = [];
+      }
+    }, 120);
+  }
+
   async function loadTree(branch: string) {
-    const result = await api<{ entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number }> }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
+    const result = await api<{ commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number }> }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
+    latestCommit = { ...result.commit, verified: result.commit.signatureStatus === 'verified' };
     fileItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: latestCommit?.title ?? '', updatedAt: latestCommit?.authoredAt ?? '' }));
     try { readme = await apiText(`/repositories/${owner}/${repo}/blob/${encodeURIComponent(branch)}/README.md`); } catch { readme = ''; }
   }
@@ -54,19 +80,24 @@
     try { await loadTree(name); } catch { liveError = true; }
   }
 
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    branchOpen = false;
+    fileFinderOpen = false;
+  }
+
   onMount(async () => {
     try {
-      const [branchData, commitData] = await Promise.all([
-        api<{ defaultBranch: string; branches: Array<{ name: string; commitId: string; title: string; updatedAt: string }> }>(`/repositories/${owner}/${repo}/branches`),
-        api<{ commits: Array<{ id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }> }>(`/repositories/${owner}/${repo}/commits?limit=100`)
-      ]);
+      const branchData = await api<{ defaultBranch: string; branches: Array<{ name: string; commitId: string; title: string; updatedAt: string }> }>(`/repositories/${owner}/${repo}/branches`);
       selectedBranch = branchData.defaultBranch;
       branchItems = branchData.branches.map((branch) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), title: branch.title, updatedAt: branch.updatedAt, isDefault: branch.name === branchData.defaultBranch, ahead: 0, behind: 0 }));
-      if (commitData.commits[0]) latestCommit = { ...commitData.commits[0], verified: commitData.commits[0].signatureStatus === 'verified' };
       await loadTree(selectedBranch);
     } catch { liveError = true; }
   });
+  onDestroy(() => clearTimeout(fileSearchTimer));
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
   <title>{owner}/{repo} · Sty</title>
@@ -92,12 +123,12 @@
         <span class="commit-avatar">{authorInitials}</span>
           <span class="commit-copy"><strong>{latestCommit.author}</strong><span>{latestCommit.title}</span></span>
           <a class="commit-id" href="/{owner}/{repo}/commit/{latestCommit.id}">{latestCommit.shortId}</a>
-        <a class="history" href="/{owner}/{repo}/commits/{selectedBranch}"><History size={14} />History</a>
+        <a class="history" href="/{owner}/{repo}/commits/{revisionPath}"><History size={14} />History</a>
       </header>{/if}
 
       <div class="file-list">
         {#each fileItems as item}
-          <a class="file-row" href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{selectedBranch}/{item.name}">
+          <a class="file-row" href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(item.name)}">
             <span class="file-name">
               {#if item.kind === 'folder'}<Folder size={16} fill="currentColor" />{:else}<File size={16} />{/if}
               <strong>{item.name}</strong>
@@ -110,7 +141,7 @@
     </section>
 
     <article class="readme">
-      <header><span><BookOpen size={16} />README.md</span>{#if readme}<a href="/{owner}/{repo}/blob/{selectedBranch}/README.md"><FileText size={14} />View file</a>{/if}</header>
+      <header><span><BookOpen size={16} />README.md</span>{#if readme}<a href="/{owner}/{repo}/blob/{revisionPath}/README.md"><FileText size={14} />View file</a>{/if}</header>
       <div class="readme-content">
         {#if readme}<MarkdownPreview source={readme} />{:else}<p class="no-readme">This repository does not have a README on {selectedBranch}.</p>{/if}
       </div>
@@ -123,8 +154,8 @@
 {#if fileFinderOpen}
   <div class="finder-layer" role="presentation" onclick={(event) => event.currentTarget === event.target && (fileFinderOpen = false)}>
     <div class="file-finder" role="dialog" aria-modal="true" aria-label="Go to file">
-      <header><Search size={17} /><input bind:this={finderInput} bind:value={fileQuery} placeholder="Search files in this repository" /><button aria-label="Close file finder" onclick={() => (fileFinderOpen = false)}><X size={16} /></button></header>
-      <div>{#each matchingFiles as item}<a href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{selectedBranch}/{item.path}"><span>{#if item.kind === 'folder'}<Folder size={15} />{:else}<File size={15} />{/if}{item.path}</span><small>{item.kind}</small></a>{/each}</div>
+      <header><Search size={17} /><input bind:this={finderInput} value={fileQuery} oninput={(event) => searchFiles(event.currentTarget.value)} placeholder="Search files in this repository" /><button aria-label="Close file finder" onclick={() => (fileFinderOpen = false)}><X size={16} /></button></header>
+      <div>{#each finderItems as item}<a href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(item.path)}"><span>{#if item.kind === 'folder'}<Folder size={15} />{:else}<File size={15} />{/if}{item.path}</span><small>{item.kind}</small></a>{/each}</div>
     </div>
   </div>
 {/if}

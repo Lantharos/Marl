@@ -7,8 +7,10 @@
   import FileCode2 from 'lucide-svelte/icons/file-code-2';
   import History from 'lucide-svelte/icons/history';
   import { apiText } from '$lib/api';
+  import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
   const filePath = $derived($page.params.path ?? 'README.md');
   const revision = $derived($page.params.revision ?? 'main');
+  const revisionPath = $derived(encodeRevision(revision));
   let content = $state('');
   const lines = $derived(content.split('\n'));
   const base = $derived(`/${$page.params.owner}/${$page.params.repo}`);
@@ -22,13 +24,13 @@
     URL.revokeObjectURL(url);
   }
   onMount(async () => {
-    try { content = await apiText(`/repositories/${$page.params.owner}/${$page.params.repo}/blob/${encodeURIComponent(revision)}/${filePath.split('/').map(encodeURIComponent).join('/')}`); }
+    try { content = await apiText(`/repositories/${$page.params.owner}/${$page.params.repo}/blob/${revisionPath}/${encodeRepositoryPath(filePath)}`); }
     catch { loadError = true; }
   });
 </script>
 <svelte:head><title>{filePath} · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
-<nav class="crumbs"><a href={base}>{$page.params.repo}</a><span>/</span>{#each filePath.split('/') as part, index}<a href="{base}/tree/{revision}/{filePath.split('/').slice(0,index+1).join('/')}">{part}</a>{#if index < filePath.split('/').length - 1}<span>/</span>{/if}{/each}</nav>
-<header class="file-head"><div><FileCode2 size={16} /><strong>{filePath.split('/').at(-1)}</strong><span>{lines.length} lines</span></div><div><a href="{base}/commits/{revision}"><History size={14} />History</a><button aria-label="Copy file" onclick={copyFile}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button><button aria-label="Download file" onclick={downloadFile}><Download size={14} /></button></div></header>
+<nav class="crumbs"><a href={base}>{$page.params.repo}</a><span>/</span>{#each filePath.split('/') as part, index}<a href="{base}/{index === filePath.split('/').length - 1 ? 'blob' : 'tree'}/{revisionPath}/{encodeRepositoryPath(filePath.split('/').slice(0,index+1).join('/'))}">{part}</a>{#if index < filePath.split('/').length - 1}<span>/</span>{/if}{/each}</nav>
+<header class="file-head"><div><FileCode2 size={16} /><strong>{filePath.split('/').at(-1)}</strong><span>{lines.length} lines</span></div><div><a href="{base}/commits/{revisionPath}"><History size={14} />History</a><button aria-label="Copy file" onclick={copyFile}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button><button aria-label="Download file" onclick={downloadFile}><Download size={14} /></button></div></header>
 <section class="code"><table><tbody>{#each lines as line, index}<tr><td><a href="#L{index + 1}" id="L{index + 1}">{index + 1}</a></td><td><pre>{line || ' '}</pre></td></tr>{/each}</tbody></table></section>
 {#if loadError}<p class="error" role="status">This file could not be loaded from the repository service.</p>{/if}
 <style>

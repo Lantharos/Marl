@@ -18,18 +18,16 @@ async fn main() -> Result<()> {
     let local_storage = std::env::var("STY_GIT_LOCAL").map_or(true, |value| value != "0");
     let repositories = std::env::var("STY_GIT_ROOT").map_or_else(
         |_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .join(".sty-data/repositories")
+            let mut workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            workspace.pop();
+            workspace.pop();
+            workspace.join(".sty-data/repositories")
         },
         PathBuf::from,
     );
     fs::create_dir_all(&repositories)
         .await
         .context("create repository root")?;
-    let repositories = fs::canonicalize(repositories)
-        .await
-        .context("resolve repository root")?;
     let state = Arc::new(AppState {
         repositories,
         control_plane: std::env::var("STY_API_URL")

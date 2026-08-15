@@ -39,8 +39,8 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   for (const value of body.commits.slice(0, 5000)) {
     if (!value || typeof value !== 'object') continue;
     const commit = value as Record<string, unknown>;
-    if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string')) continue;
-    statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id) VALUES (?, ?, ?, ?, '', ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name, authored_at=excluded.authored_at, tree_id=excluded.tree_id`).bind(body.repositoryId, commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId));
+    if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string') || !Array.isArray(commit.parents) || !commit.parents.every((parent) => typeof parent === 'string' && /^[0-9a-f]{40,64}$/.test(parent))) continue;
+    statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id, parent_ids) VALUES (?, ?, ?, ?, '', ?, ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name, authored_at=excluded.authored_at, tree_id=excluded.tree_id, parent_ids=excluded.parent_ids`).bind(body.repositoryId, commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents)));
   }
   const indexedBranches: Array<{ name: string; commitId: string }> = [];
   for (const value of body.branches.slice(0, 1000)) {
@@ -107,7 +107,7 @@ export async function getRepository(env: Env, principal: Principal, owner: strin
   const repo = await repository(env, owner, name);
   if (!repo || !(await canRead(env, principal, repo))) return problem(404, 'repository_not_found', 'Repository not found.');
   const { organizationId: _, ...visible } = repo;
-  return json({ repository: visible });
+  return json({ repository: { ...visible, cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git` } });
 }
 
 export async function listBranches(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -121,7 +121,10 @@ export async function listCommits(env: Env, principal: Principal, owner: string,
   const repo = await repository(env, owner, name);
   if (!repo || !(await canRead(env, principal, repo))) return problem(404, 'repository_not_found', 'Repository not found.');
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 50) || 50, 1), 100);
-  const result = await env.DB.prepare(`SELECT id, substr(id, 1, 7) AS shortId, title, author_name AS author, authored_at AS authoredAt, signature_status AS signatureStatus FROM commits WHERE repository_id = ? ORDER BY authored_at DESC LIMIT ?`).bind(repo.id, limit).all();
+  const revision = url.searchParams.get('revision') ?? repo.defaultBranch;
+  const resolved = await resolveRevision(env, repo.id, revision);
+  if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
+  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id = ? AND commits.id = history.id JOIN json_each(commits.parent_ids)) SELECT commits.id, substr(commits.id, 1, 7) AS shortId, commits.title, commits.author_name AS author, commits.authored_at AS authoredAt, commits.signature_status AS signatureStatus FROM commits JOIN history ON history.id = commits.id WHERE commits.repository_id = ? ORDER BY commits.authored_at DESC LIMIT ?`).bind(resolved.id, repo.id, repo.id, limit).all();
   return json({ commits: result.results });
 }
 
@@ -141,11 +144,15 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
   if (!repo || !(await canRead(env, principal, repo))) return problem(404, 'repository_not_found', 'Repository not found.');
   const revision = url.searchParams.get('revision') ?? repo.defaultBranch;
   const parentPath = url.searchParams.get('path') ?? '';
+  const query = url.searchParams.get('query')?.trim() ?? '';
   if (parentPath && !safeRepositoryPath(parentPath)) return problem(422, 'invalid_path', 'Repository path is invalid.');
+  if (query.length > 120) return problem(422, 'invalid_query', 'File search is too long.');
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const result = await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND parent_path = ? ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, name COLLATE NOCASE').bind(repo.id, resolved.treeId, parentPath).all();
-  return json({ revision, path: parentPath, entries: result.results });
+  const result = query
+    ? await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND instr(lower(path), lower(?)) > 0 ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, path COLLATE NOCASE LIMIT 100').bind(repo.id, resolved.treeId, query).all()
+    : await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND parent_path = ? ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, name COLLATE NOCASE').bind(repo.id, resolved.treeId, parentPath).all();
+  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: result.results });
 }
 
 export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string): Promise<Response> {
@@ -171,6 +178,6 @@ function contentType(path: string) {
   return 'application/octet-stream';
 }
 
-async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ treeId: string } | null> {
-  return env.DB.prepare(`SELECT tree_id AS treeId FROM commits WHERE repository_id=? AND id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)`).bind(repositoryId, repositoryId, revision, revision).first<{ treeId: string }>();
+async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authoredAt: string; signatureStatus: string } | null> {
+  return env.DB.prepare(`SELECT id, tree_id AS treeId, title, author_name AS author, authored_at AS authoredAt, signature_status AS signatureStatus FROM commits WHERE repository_id=? AND id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authoredAt: string; signatureStatus: string }>();
 }

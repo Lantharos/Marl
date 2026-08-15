@@ -4,18 +4,21 @@
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import { api } from '$lib/api';
+  import { encodeRevision } from '$lib/repository-path';
   const base = $derived(`/${$page.params.owner}/${$page.params.repo}`);
+  const revision = $derived($page.params.revision ?? 'main');
+  const revisionPath = $derived(encodeRevision(revision));
   let items = $state<Array<{id:string;shortId:string;title:string;author:string;authoredAt:string;verified:boolean}>>([]);
   let loadError = $state(false);
   onMount(async () => {
     try {
-      const result = await api<{ commits: Array<{ id:string;shortId:string;title:string;author:string;authoredAt:string;signatureStatus:string }> }>(`/repositories/${$page.params.owner}/${$page.params.repo}/commits?limit=100`);
+      const result = await api<{ commits: Array<{ id:string;shortId:string;title:string;author:string;authoredAt:string;signatureStatus:string }> }>(`/repositories/${$page.params.owner}/${$page.params.repo}/commits?revision=${encodeURIComponent(revision)}&limit=100`);
       items = result.commits.map((commit) => ({ ...commit, verified: commit.signatureStatus === 'verified' }));
     } catch { loadError = true; }
   });
 </script>
 <svelte:head><title>Commits · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
-<header><div><h1>Commits</h1><p>History for <code>{$page.params.revision}</code></p></div><a href="{base}/tree/{$page.params.revision}">Browse files</a></header>
+<header><div><h1>Commits</h1><p>History for <code>{$page.params.revision}</code></p></div><a href="{base}/tree/{revisionPath}">Browse files</a></header>
 <section class="timeline">
   <h2>Today</h2>
   {#each items as commit}

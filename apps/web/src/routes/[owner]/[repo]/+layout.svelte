@@ -17,13 +17,13 @@
   const repo = $derived($page.params.repo ?? '');
   const base = $derived(`/${owner}/${repo}`);
   const path = $derived($page.url.pathname);
-  let repository = $state<RepositorySummary | null>(null);
+  let repository = $state<(RepositorySummary & { cloneUrl: string }) | null>(null);
   let cloneOpen = $state(false);
   let copied = $state(false);
-  const cloneUrl = $derived(`https://sty.sh/${owner}/${repo}.git`);
+  const cloneUrl = $derived(repository?.cloneUrl ?? '');
 
-  onMount(async () => { try { repository = (await api<{ repository: RepositorySummary }>(`/repositories/${owner}/${repo}`)).repository; } catch {} });
-  async function copyCloneUrl() { await navigator.clipboard.writeText(cloneUrl); copied = true; setTimeout(() => (copied = false), 1600); }
+  onMount(async () => { try { repository = (await api<{ repository: RepositorySummary & { cloneUrl: string } }>(`/repositories/${owner}/${repo}`)).repository; } catch {} });
+  async function copyCloneUrl() { if (!cloneUrl) return; await navigator.clipboard.writeText(cloneUrl); copied = true; setTimeout(() => (copied = false), 1600); }
   function tabActive(tab: string) { if (tab === 'code') return path === base || path.startsWith(`${base}/tree`) || path.startsWith(`${base}/blob`) || path.startsWith(`${base}/commit`) || path.startsWith(`${base}/branches`); return path.startsWith(`${base}/${tab}`); }
 </script>
 

@@ -40,6 +40,7 @@ struct IndexedCommit {
     author: String,
     authored_at: String,
     tree_id: String,
+    parents: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -121,14 +122,14 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
                 "log",
                 "--all",
                 "--date=iso-strict",
-                "--format=%H%x1f%s%x1f%an%x1f%aI%x1f%T%x1e",
+                "--format=%H%x1f%s%x1f%an%x1f%aI%x1f%T%x1f%P%x1e",
                 "-n",
                 "5000",
             ],
         )
         .await?
     };
-    let commits = parse_records(&history, 5)
+    let commits = parse_records(&history, 6)
         .into_iter()
         .map(|fields| IndexedCommit {
             id: fields[0].clone(),
@@ -136,6 +137,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
             author: fields[2].clone(),
             authored_at: fields[3].clone(),
             tree_id: fields[4].clone(),
+            parents: fields[5].split_whitespace().map(str::to_owned).collect(),
         })
         .collect::<Vec<_>>();
     let trees = commits
