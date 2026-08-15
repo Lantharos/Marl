@@ -82,7 +82,7 @@ async function createPush(request: Request, env: GitEdgeEnv, repository: string,
   if (maximumBytes > STORAGE_LIMITS.pushBytes) return failure(413, 'push_too_large', 'Pushes are limited to 256 MiB of compressed pack data.');
   const pushId = `push_${crypto.randomUUID().replaceAll('-', '')}`;
   const expiresAt = Date.now() + STORAGE_LIMITS.leaseSeconds * 1000;
-  const plans: PackPlan[] = sizes.map((bytes, number) => ({ bytes, parts: Math.ceil(bytes / STORAGE_LIMITS.partBytes), key: `repositories/${repository}/packs/${pushId}-${number}.pack` }));
+  const plans: PackPlan[] = sizes.map((bytes, number) => ({ bytes, parts: Math.ceil(bytes / STORAGE_LIMITS.partBytes), key: `quarantine/${repository}/${pushId}/${number}.pack` }));
   const quota = organizationQuota(env, organizationId);
   const repo = repositoryState(env, repository);
   const uploads = uploadSession(env, pushId);

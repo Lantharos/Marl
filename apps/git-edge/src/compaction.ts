@@ -1,8 +1,10 @@
 import { getContainer } from '@cloudflare/containers';
 import { DurableObject } from 'cloudflare:workers';
+import { promoteCanonicalObject } from './canonical';
 import type { GitEdgeEnv } from './env';
 import { expectContainer, hydrateRepository, internalRequest } from './hydration';
-import { StateRequestError, organizationQuota, repositoryState, type RepositorySnapshotResponse } from './state-client';
+import { acknowledgeCommittedPush, committedPush, publishWithReconciliation } from './reconciliation';
+import { organizationQuota, repositoryState, type RepositorySnapshotResponse } from './state-client';
 import type { PackDescriptor } from './storage-model';
 
 const COMPACTION_THRESHOLD = 12;
@@ -26,12 +28,8 @@ export class CompactionObject extends DurableObject<GitEdgeEnv> {
     } catch (error) {
       const attempts = task.attempts + 1;
       console.error('repository compaction failed', error);
-      if (attempts >= 3) {
-        await this.ctx.storage.delete('task');
-      } else {
-        await this.ctx.storage.put('task', { ...task, attempts });
-        await this.ctx.storage.setAlarm(Date.now() + 5 * 60 * 1000);
-      }
+      await this.ctx.storage.put('task', { ...task, attempts });
+      await this.ctx.storage.setAlarm(Date.now() + Math.min(5 * 60 * 1000 * 2 ** Math.min(attempts - 1, 4), 60 * 60 * 1000));
     }
   }
 }
@@ -62,11 +60,16 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
   const current = await repo.request<RepositorySnapshotResponse>('/snapshot');
   if (current.state.generation > 0) {
     const priorId = `compact_${current.state.generation - 1}`;
-    const prior = await repo.request<{ committed: { accountingDelta: number } }>('/committed', { pushId: priorId }).catch((error) => {
-      if (error instanceof StateRequestError && error.status === 404) return null;
-      throw error;
-    });
-    if (prior) await organizationQuota(env, organizationId).request('/adjust', { id: priorId, deltaBytes: prior.committed.accountingDelta });
+    const prior = await committedPush(repo, priorId);
+    if (prior) {
+      await organizationQuota(env, organizationId).request('/adjust', { id: priorId, deltaBytes: prior.accountingDelta });
+      await acknowledgeCommittedPush(repo, priorId);
+      await Promise.allSettled([
+        env.REPOSITORIES.delete(`quarantine/${repository}/${priorId}/canonical.pack`),
+        env.REPOSITORIES.delete(`quarantine/${repository}/${priorId}/canonical.idx`)
+      ]);
+      return;
+    }
   }
   if (!force && current.state.packs.length < COMPACTION_THRESHOLD) return;
   const pushId = `compact_${current.state.generation}`;
@@ -74,7 +77,7 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
   const container = getContainer(env.MAINTENANCE_CONTAINERS, `${repository}:${current.state.generation}`);
   const base = `http://container/_sty/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
   const createdKeys: string[] = [];
-  let published = false;
+  let publicationStarted = false;
   try {
     await repo.request('/begin', { pushId, reservationId: pushId, expiresAt, expectedRefs: {}, proposedRefs: current.state.refs });
     await hydrateRepository(container, env, owner, name);
@@ -89,14 +92,19 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
         expectContainer(container.fetch(internalRequest(`${base}/idx`, env)))
       ]);
       if (!pack.body || !index.body) throw new Error('Compaction returned an incomplete pack.');
-      const prefix = `repositories/${repository}/packs/${pushId}`;
+      const quarantinePrefix = `quarantine/${repository}/${pushId}/canonical`;
+      const quarantinePackKey = `${quarantinePrefix}.pack`;
+      const quarantineIndexKey = `${quarantinePrefix}.idx`;
+      createdKeys.push(quarantinePackKey, quarantineIndexKey);
+      await Promise.all([
+        env.REPOSITORIES.put(quarantinePackKey, pack.body, { httpMetadata: { contentType: 'application/x-git-packed-objects' } }),
+        env.REPOSITORIES.put(quarantineIndexKey, index.body, { httpMetadata: { contentType: 'application/x-git-packed-objects-toc' } })
+      ]);
+      const prefix = `repositories/${repository}/packs/${capture.packId}`;
       const packKey = `${prefix}.pack`;
       const indexKey = `${prefix}.idx`;
-      createdKeys.push(packKey, indexKey);
-      await Promise.all([
-        env.REPOSITORIES.put(packKey, pack.body, { httpMetadata: { contentType: 'application/x-git-packed-objects' } }),
-        env.REPOSITORIES.put(indexKey, index.body, { httpMetadata: { contentType: 'application/x-git-packed-objects-toc' } })
-      ]);
+      if (await promoteCanonicalObject(env.REPOSITORIES, quarantinePackKey, packKey, capture.packBytes, 'application/x-git-packed-objects')) createdKeys.push(packKey);
+      if (await promoteCanonicalObject(env.REPOSITORIES, quarantineIndexKey, indexKey, null, 'application/x-git-packed-objects-toc')) createdKeys.push(indexKey);
       packs.push({ id: capture.packId, packKey, indexKey, compressedBytes: capture.packBytes, expandedBytes: capture.expandedBytes, objectCount: capture.objectCount, largestBlobBytes: capture.largestBlobBytes });
     }
     const generation = current.state.generation + 1;
@@ -105,12 +113,27 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
     const manifestKey = `repositories/${repository}/manifests/${generation}-${manifestHash}.json`;
     createdKeys.push(manifestKey);
     await env.REPOSITORIES.put(manifestKey, manifest, { httpMetadata: { contentType: 'application/json' } });
-    const next = await repo.request<RepositorySnapshotResponse>('/publish', { pushId, expectedGeneration: current.state.generation, refs: current.state.refs, manifestKey, manifestHash, packs });
-    published = true;
-    const deltaBytes = next.state.storedBytes - current.state.storedBytes;
-    await organizationQuota(env, organizationId).request('/adjust', { id: pushId, deltaBytes }).catch((error) => console.error('compaction accounting deferred', error));
+    publicationStarted = true;
+    const resolution = await publishWithReconciliation({
+      publish: async () => {
+        const next = await repo.request<RepositorySnapshotResponse>('/publish', { pushId, expectedGeneration: current.state.generation, refs: current.state.refs, manifestKey, manifestHash, packs });
+        return next.state.storedBytes - current.state.storedBytes;
+      },
+      readCommitted: () => committedPush(repo, pushId),
+      recover: async (committed) => committed.accountingDelta,
+      discard: async () => {
+        await Promise.allSettled(createdKeys.map((key) => env.REPOSITORIES.delete(key)));
+        await repo.request('/abort', { pushId }).catch(() => {});
+      }
+    });
+    await organizationQuota(env, organizationId).request('/adjust', { id: pushId, deltaBytes: resolution.value });
+    await acknowledgeCommittedPush(repo, pushId);
+    await Promise.allSettled([
+      env.REPOSITORIES.delete(`quarantine/${repository}/${pushId}/canonical.pack`),
+      env.REPOSITORIES.delete(`quarantine/${repository}/${pushId}/canonical.idx`)
+    ]);
   } catch (error) {
-    if (!published) {
+    if (!publicationStarted) {
       await Promise.allSettled(createdKeys.map((key) => env.REPOSITORIES.delete(key)));
       await repo.request('/abort', { pushId }).catch(() => {});
     }

@@ -27,18 +27,13 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
     } catch (error) {
       const attempts = task.attempts + 1;
       console.error('repository indexing failed', error);
-      if (attempts >= 3) {
-        const latest = await this.ctx.storage.get<IndexTask>('task');
-        if (latest?.generation === task.generation) await this.ctx.storage.delete('task');
-      } else {
-        const latest = await this.ctx.storage.get<IndexTask>('task');
-        if (latest && latest.generation !== task.generation) {
-          await this.ctx.storage.setAlarm(Date.now());
-          return;
-        }
-        await this.ctx.storage.put('task', { ...task, attempts });
-        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+      const latest = await this.ctx.storage.get<IndexTask>('task');
+      if (latest && latest.generation !== task.generation) {
+        await this.ctx.storage.setAlarm(Date.now());
+        return;
       }
+      await this.ctx.storage.put('task', { ...task, attempts });
+      await this.ctx.storage.setAlarm(Date.now() + Math.min(60_000 * 2 ** Math.min(attempts - 1, 6), 60 * 60 * 1000));
     }
   }
 }

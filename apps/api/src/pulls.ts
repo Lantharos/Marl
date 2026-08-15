@@ -71,11 +71,20 @@ export async function createPull(request: Request, env: Env, principal: Principa
   const target = branches.results.find((branch) => branch.name === body.targetBranch);
   if (!source || !target) return problem(422, 'branch_not_found', 'Source or target branch does not exist.');
   const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id = ? AND source_branch = ? AND target_branch = ? AND state IN ('draft','open')`).bind(repository.id, body.sourceBranch, body.targetBranch).first<{ number: number }>();
-  if (duplicate) return problem(409, 'pull_request_exists', `Pull request #${duplicate.number} already proposes this branch.`);
+  if (duplicate) {
+    const existing = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, duplicate.number).first<PullRow>();
+    if (!existing) return problem(409, 'pull_request_exists', `Pull request #${duplicate.number} already proposes this branch.`);
+    const pinned = await pinPullRefs(env, repository, existing);
+    if (pinned) return pinned;
+    return json({ pullRequest: summary(existing) });
+  }
   const id = identifier('pr');
   const state = body.draft === true ? 'draft' : 'open';
   await env.DB.prepare(`INSERT INTO pull_requests (id, repository_id, number, title, body, author_id, source_branch, target_branch, source_commit_id, target_commit_id, state) SELECT ?, ?, COALESCE(MAX(number), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ? FROM pull_requests WHERE repository_id = ?`).bind(id, repository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id).run();
   const created = await env.DB.prepare(`${pullSelect} WHERE pull_requests.id = ?`).bind(id).first<PullRow>();
+  if (!created) return problem(500, 'pull_request_create_failed', 'Pull request creation did not persist.');
+  const pinned = await pinPullRefs(env, repository, created);
+  if (pinned) return pinned;
   return json({ pullRequest: created && summary(created) }, { status: 201 });
 }
 
@@ -162,7 +171,9 @@ export async function mergePull(env: Env, principal: Principal, owner: string, n
   const repository = await repo(env, owner, name);
   if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, number).first<PullRow>();
-  if (!pull || pull.state !== 'open') return problem(409, 'pull_request_not_open', 'Pull request is not open.');
+  if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
+  if (pull.state === 'merged' && pull.mergedCommitId) return json({ merged: true, commitId: pull.mergedCommitId });
+  if (pull.state !== 'open') return problem(409, 'pull_request_not_open', 'Pull request is not open.');
   const [source, target, checks, reviews, unresolvedThreads] = await Promise.all([
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.sourceBranch).first<{ commitId: string }>(),
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.targetBranch).first<{ commitId: string }>(),
@@ -171,17 +182,40 @@ export async function mergePull(env: Env, principal: Principal, owner: string, n
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id = ? AND commit_id = ? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>()
   ]);
   if (!source || !target) return problem(409, 'branch_missing', 'Source or target branch no longer exists.');
-  if (source.commitId !== pull.sourceCommitId) return problem(409, 'source_changed', 'The source branch changed. Refresh the pull request before merging.');
-  if (target.commitId !== pull.targetCommitId) return problem(409, 'target_changed', 'The target branch changed. Refresh the pull request before merging.');
   if (checks.results.some((check) => check.state !== 'success')) return problem(409, 'checks_not_passed', 'Every check must pass before merging.');
   if (reviews.results.some((review) => review.state === 'changes_requested')) return problem(409, 'changes_requested', 'Resolve requested changes before merging.');
   if ((unresolvedThreads?.count ?? 0) > 0) return problem(409, 'unresolved_threads', 'Resolve every current review conversation before merging.');
-  const gateway = await fetch(`${env.GIT_GATEWAY_URL}/_sty/merge`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: source.commitId, targetCommitId: target.commitId, title: `Merge pull request #${number}: ${pull.title}`, author: principal.handle }) });
-  const result = await gateway.json().catch(() => null) as { commitId?: string; error?: string } | null;
+  const gateway = await requestGatewayWrite(env, '/_sty/merge', { operationId: pull.id, repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, title: `Merge pull request #${number}: ${pull.title}`, author: principal.handle });
+  const result = await gateway.json().catch(() => null) as { commitId?: string; targetHeadId?: string; error?: string } | null;
   if (!gateway.ok || !result?.commitId) return problem(gateway.status === 409 ? 409 : 502, gateway.status === 409 ? 'merge_conflict' : 'merge_gateway_failed', result?.error ?? 'Git gateway could not merge this pull request.');
+  const targetHeadId = result.targetHeadId ?? result.commitId;
   await env.DB.batch([
-    env.DB.prepare(`UPDATE pull_requests SET state='merged', target_commit_id=?, merged_commit_id=?, merged_by=?, merged_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND state='open'`).bind(target.commitId, result.commitId, principal.id, pull.id),
-    env.DB.prepare('UPDATE branches SET commit_id=?, updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND name=? AND commit_id=?').bind(result.commitId, repository.id, pull.targetBranch, target.commitId)
+    env.DB.prepare(`UPDATE pull_requests SET state='merged', target_commit_id=?, merged_commit_id=?, merged_by=?, merged_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND state='open'`).bind(pull.targetCommitId, result.commitId, principal.id, pull.id),
+    env.DB.prepare('UPDATE branches SET commit_id=?, updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND name=? AND commit_id IN (?, ?)').bind(targetHeadId, repository.id, pull.targetBranch, pull.targetCommitId, result.commitId)
   ]);
   return json({ merged: true, commitId: result.commitId });
+}
+
+async function pinPullRefs(env: Env, repository: Repo, pull: PullRow): Promise<Response | null> {
+  const gateway = await requestGatewayWrite(env, '/_sty/pulls/pin', { owner: repository.owner, repository: repository.name, number: pull.number, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId });
+  if (gateway.ok) return null;
+  const result = await gateway.json().catch(() => null) as { error?: string } | null;
+  return problem(gateway.status === 409 ? 409 : 502, gateway.status === 409 ? 'pull_ref_conflict' : 'pull_ref_gateway_failed', result?.error ?? 'Git gateway could not preserve the pull request commits.');
+}
+
+async function requestGatewayWrite(env: Env, path: string, body: Record<string, unknown>) {
+  let lastResponse: Response | null = null;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(`${env.GIT_GATEWAY_URL}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify(body) });
+      if (response.status < 500 || attempt === 1) return response;
+      lastResponse = response;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) throw error;
+    }
+  }
+  if (lastResponse) return lastResponse;
+  throw lastError;
 }

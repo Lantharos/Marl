@@ -8,6 +8,8 @@ This repository is undergoing a ground-up rebuild. The current product contract 
 
 Runner registration, repository workflows, service installation, labels, logs, and
 artifacts are documented in [`docs/runners.md`](docs/runners.md).
+The repository acknowledgement and recovery contract is documented in
+[`docs/repository-reliability.md`](docs/repository-reliability.md).
 
 ## Development
 

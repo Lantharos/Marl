@@ -80,18 +80,21 @@ A native push follows this flow:
 2. The client uploads up to four packs through Worker-gated 64 MiB multipart parts. Exact
    sizes, part numbers, retry counts, and a 256 MiB compressed push ceiling are enforced
    before R2 receives a part.
-3. A short-lived validator receives the submitted packs and only the active pack indexes.
+3. Uploads land under an R2 quarantine prefix. A short-lived validator receives the
+   submitted packs and only the active pack indexes.
    `git index-pack --strict` verifies pack and object integrity, followed by object-count,
    expanded-size, blob-size, graph-completeness, and proposed-ref checks.
-4. The repository Durable Object atomically publishes a new immutable manifest generation
-   and its refs. Quota settlement is idempotent and may reconcile after publication. A
-   separate alarm-backed job derives branch, commit, tree, and workflow state without holding
-   the push connection open.
+4. Validated packs and indexes are promoted to content-addressed canonical keys. The
+   repository Durable Object atomically publishes a new immutable manifest generation and
+   its refs. Quota settlement is idempotent and may reconcile after publication. A separate
+   alarm-backed job derives branch, commit, tree, and workflow state without holding the push
+   connection open.
 
-The client proposes bytes; Sty decides whether they are publishable. Uploaded pack objects
-remain unreferenced quarantine until the repository generation points to them. Upload-session
-alarms abort abandoned multipart uploads, remove tracked quarantine objects, release leases,
-or settle a push that was committed before its request disappeared.
+The client proposes bytes; Sty decides whether they are publishable. Upload-session alarms
+abort abandoned multipart uploads, remove tracked quarantine objects, release leases, or
+settle a push that was committed before its request disappeared. A successful publication is
+recorded durably before its response is returned. If that response disappears, Sty reads the
+commit record and completes accounting instead of deleting possibly published objects.
 
 Native fetch reads refs and a generation manifest from the Worker, then downloads the pack
 and index files for that exact generation. Old packs remain available for a one-hour grace
@@ -112,6 +115,16 @@ job ends. Validator and maintenance Containers have no Internet access.
 Initial defensive limits are 2 GiB per repository, 10 GiB per organization, 1 GiB expanded
 per push, 100 MiB per blob, 50,000 objects per push, and 32 changed refs per push. These are
 implementation and abuse ceilings unless they describe a user-facing storage or upload limit.
+
+Open pull requests pin their reviewed base and head commits under `refs/sty/pulls`. These refs
+are included in pack capture and compaction, so force-pushing a branch cannot silently garbage
+collect the commits used by an active review. Merge operations carry the stable pull-request
+ID into the Git commit and are idempotent across gateway retries. The relational pull-request
+row and branch index reconcile after Git publication; they are not the source of truth for
+whether the target Git ref advanced.
+
+Production storage protections, recovery checks, and the acknowledgement contract are
+documented in [`repository-reliability.md`](repository-reliability.md).
 
 ## Runner
 

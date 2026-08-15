@@ -9,11 +9,15 @@ export interface StateEnv {
   REPOSITORIES: R2Bucket;
 }
 
+type IntegritySchedule = { generation: number; attempts: number; nextVerifyAt: number };
+type RetirementSchedule = { deleteAfter: number; beforeGeneration: number; keys: string[]; attempts?: number };
+
 export class RepositoryStateObject extends DurableObject<StateEnv> {
   async fetch(request: Request): Promise<Response> {
     if (!trusted(request, this.env)) return response({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
+      const body = request.method === 'POST' ? await request.json<Record<string, unknown>>() : {};
       const state = await this.ctx.storage.get<RepositoryState>('state') ?? emptyRepositoryState();
       if (request.method === 'GET' && path === '/snapshot') return response({ state });
       const generation = path.match(/^\/generations\/(\d+)$/);
@@ -21,7 +25,6 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
         const value = await this.ctx.storage.get(`generation:${generation[1]}`);
         return value ? response({ generation: value }) : response({ error: 'generation_not_found' }, 404);
       }
-      const body = await request.json<Record<string, unknown>>();
       if (request.method === 'POST' && path === '/begin') {
         const next = beginPush(state, {
           id: requiredString(body.pushId),
@@ -39,12 +42,20 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
         const removed = state.packs.filter((pack) => !next.packs.some((active) => active.id === pack.id));
         const values: Record<string, unknown> = {
           state: next,
-          [`committed:${requiredString(body.pushId)}`]: { generation: next.generation, actualBytes, accountingDelta: next.storedBytes - state.storedBytes, committedAt: Date.now() },
-          [`generation:${next.generation}`]: { manifestKey: next.manifestKey, manifestHash: next.manifestHash }
+          [`committed:${requiredString(body.pushId)}`]: {
+            generation: next.generation,
+            actualBytes,
+            accountingDelta: next.storedBytes - state.storedBytes,
+            manifestKey: next.manifestKey,
+            manifestHash: next.manifestHash,
+            committedAt: Date.now()
+          },
+          [`generation:${next.generation}`]: { manifestKey: next.manifestKey, manifestHash: next.manifestHash },
+          integrity: { generation: next.generation, attempts: 0, nextVerifyAt: Date.now() }
         };
         if (removed.length) values[`retired:${next.generation}`] = { deleteAfter: Date.now() + 60 * 60 * 1000, beforeGeneration: next.generation, keys: removed.flatMap((pack) => [pack.packKey, pack.indexKey]) };
         await this.ctx.storage.put(values);
-        if (removed.length) await this.ctx.storage.setAlarm(Date.now() + 60 * 60 * 1000);
+        await this.ctx.storage.setAlarm(Date.now());
         return response({ state: next });
       }
       if (request.method === 'POST' && path === '/propose') {
@@ -61,6 +72,10 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
         const committed = await this.ctx.storage.get(`committed:${requiredString(body.pushId)}`);
         return committed ? response({ committed }) : response({ error: 'push_not_committed' }, 404);
       }
+      if (request.method === 'POST' && path === '/acknowledge') {
+        await this.ctx.storage.delete(`committed:${requiredString(body.pushId)}`);
+        return new Response(null, { status: 204 });
+      }
       return response({ error: 'not_found' }, 404);
     } catch (error) {
       return failure(error);
@@ -68,26 +83,90 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
   }
 
   async alarm(): Promise<void> {
-    const retired = await this.ctx.storage.list<{ deleteAfter: number; beforeGeneration: number; keys: string[] }>({ prefix: 'retired:' });
+    const integrity = await this.ctx.storage.get<IntegritySchedule>('integrity');
     let nextAlarm: number | null = null;
+    if (integrity && integrity.nextVerifyAt <= Date.now()) {
+      const state = await this.ctx.storage.get<RepositoryState>('state') ?? emptyRepositoryState();
+      try {
+        await verifyRepositoryIntegrity(this.env.REPOSITORIES, state);
+        const latest = await this.ctx.storage.get<IntegritySchedule>('integrity');
+        if (latest?.generation === integrity.generation) {
+          const nextVerifyAt = Date.now() + 24 * 60 * 60 * 1000;
+          await this.ctx.storage.put({ integrity: { generation: integrity.generation, attempts: 0, nextVerifyAt }, 'integrity:last': { generation: integrity.generation, verifiedAt: Date.now() } });
+          nextAlarm = nextVerifyAt;
+        }
+      } catch (error) {
+        const attempts = integrity.attempts + 1;
+        const nextVerifyAt = Date.now() + Math.min(5 * 60 * 1000 * 2 ** Math.min(attempts - 1, 4), 60 * 60 * 1000);
+        const latest = await this.ctx.storage.get<IntegritySchedule>('integrity');
+        if (latest?.generation === integrity.generation) await this.ctx.storage.put('integrity', { generation: integrity.generation, attempts, nextVerifyAt });
+        nextAlarm = nextVerifyAt;
+        console.error('repository integrity verification failed', error);
+      }
+    } else if (integrity) {
+      nextAlarm = integrity.nextVerifyAt;
+    }
+    const retired = await this.ctx.storage.list<RetirementSchedule>({ prefix: 'retired:' });
     for (const [key, value] of retired) {
       if (value.deleteAfter > Date.now()) {
         nextAlarm = nextAlarm === null ? value.deleteAfter : Math.min(nextAlarm, value.deleteAfter);
         continue;
       }
-      await Promise.allSettled(value.keys.map((objectKey) => this.env.REPOSITORIES.delete(objectKey)));
+      const currentState = await this.ctx.storage.get<RepositoryState>('state') ?? emptyRepositoryState();
+      const activeKeys = new Set(currentState.packs.flatMap((pack) => [pack.packKey, pack.indexKey]));
+      const remainingKeys: string[] = [];
+      for (const objectKey of value.keys) {
+        if (activeKeys.has(objectKey)) continue;
+        try {
+          await this.env.REPOSITORIES.delete(objectKey);
+        } catch (error) {
+          remainingKeys.push(objectKey);
+          console.error('canonical object retirement deferred', error);
+        }
+      }
+      let manifestRetirementDeferred = false;
       const generations = await this.ctx.storage.list<{ manifestKey: string }>({ prefix: 'generation:' });
       for (const [generationKey, generation] of generations) {
         if (Number(generationKey.slice('generation:'.length)) >= value.beforeGeneration) continue;
-        await this.env.REPOSITORIES.delete(generation.manifestKey);
-        await this.ctx.storage.delete(generationKey);
+        try {
+          await this.env.REPOSITORIES.delete(generation.manifestKey);
+          await this.ctx.storage.delete(generationKey);
+        } catch (error) {
+          manifestRetirementDeferred = true;
+          console.error('repository generation retirement deferred', error);
+        }
       }
-      const committed = await this.ctx.storage.list({ prefix: 'committed:' });
-      if (committed.size) await this.ctx.storage.delete([...committed.keys()]);
+      if (remainingKeys.length || manifestRetirementDeferred) {
+        const attempts = (value.attempts ?? 0) + 1;
+        const deleteAfter = Date.now() + Math.min(60 * 60 * 1000 * 2 ** Math.min(attempts - 1, 5), 24 * 60 * 60 * 1000);
+        await this.ctx.storage.put(key, { ...value, keys: remainingKeys, attempts, deleteAfter });
+        nextAlarm = nextAlarm === null ? deleteAfter : Math.min(nextAlarm, deleteAfter);
+        continue;
+      }
       await this.ctx.storage.delete(key);
     }
     if (nextAlarm !== null) await this.ctx.storage.setAlarm(nextAlarm);
   }
+}
+
+async function verifyRepositoryIntegrity(bucket: R2Bucket, state: RepositoryState) {
+  if (state.generation === 0) return;
+  if (!state.manifestKey || !state.manifestHash) throw new Error('Published repository state has no manifest.');
+  const manifestObject = await bucket.get(state.manifestKey);
+  if (!manifestObject) throw new Error(`Repository manifest ${state.manifestKey} is missing.`);
+  const manifest = await manifestObject.text();
+  if (await sha256(manifest) !== state.manifestHash) throw new Error(`Repository manifest ${state.manifestKey} is corrupt.`);
+  const expected = JSON.stringify({ generation: state.generation, refsVersion: state.refsVersion, refs: state.refs, packs: state.packs });
+  if (manifest !== expected) throw new Error(`Repository manifest ${state.manifestKey} disagrees with repository state.`);
+  for (const pack of state.packs) {
+    const [packObject, indexObject] = await Promise.all([bucket.head(pack.packKey), bucket.head(pack.indexKey)]);
+    if (!packObject || packObject.size !== pack.compressedBytes) throw new Error(`Canonical pack ${pack.id} is missing or truncated.`);
+    if (!indexObject || indexObject.size === 0) throw new Error(`Canonical pack index ${pack.id} is missing or empty.`);
+  }
+}
+
+async function sha256(value: string) {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export class OrganizationQuotaObject extends DurableObject<StateEnv> {
@@ -95,9 +174,9 @@ export class OrganizationQuotaObject extends DurableObject<StateEnv> {
     if (!trusted(request, this.env)) return response({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
+      const body = request.method === 'POST' ? await request.json<Record<string, unknown>>() : {};
       const state = await this.ctx.storage.get<OrganizationQuotaState>('state') ?? emptyOrganizationQuota();
       if (request.method === 'GET' && path === '/snapshot') return response({ state });
-      const body = await request.json<Record<string, unknown>>();
       if (request.method === 'POST' && path === '/reserve') {
         const reservation: StorageReservation = {
           id: requiredString(body.id),
@@ -137,9 +216,9 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
     if (!trusted(request, this.env)) return response({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
+      const body = request.method === 'POST' ? await request.json<Record<string, unknown>>() : {};
       const existing = await this.ctx.storage.get<UploadSession>('session');
       if (request.method === 'GET' && path === '/snapshot') return existing ? response({ session: existing }) : response({ error: 'upload_missing' }, 404);
-      const body = await request.json<Record<string, unknown>>();
       if (request.method === 'POST' && path === '/initialize') {
         const proposed = createUploadSession(requiredString(body.pushId), requiredString(body.repository), requiredString(body.organizationId), requiredInteger(body.expiresAt), requiredInteger(body.expectedGeneration), requiredRefs(body.refs), requiredPacks(body.packs));
         if (existing && JSON.stringify(existing) !== JSON.stringify(proposed)) throw new StorageError('upload_conflict', 'The upload session already exists with different limits.');
@@ -198,7 +277,7 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
       if (request.method === 'POST' && path === '/published') {
         const next = { ...existing, state: 'published' as const };
         await this.ctx.storage.put('session', next);
-        await this.ctx.storage.deleteAlarm();
+        await this.ctx.storage.setAlarm(Date.now());
         return response({ session: next });
       }
       if (request.method === 'POST' && path === '/aborted') {
@@ -215,7 +294,18 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
 
   async alarm(): Promise<void> {
     const session = await this.ctx.storage.get<UploadSession>('session');
-    if (!session || session.state === 'published' || session.state === 'aborted') return;
+    if (!session || session.state === 'aborted') return;
+    if (session.state === 'published') {
+      try {
+        const acknowledged = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/acknowledge', { pushId: session.pushId });
+        if (!acknowledged.ok) throw new Error(`Publication acknowledgement failed with ${acknowledged.status}.`);
+        await this.ctx.storage.deleteAlarm();
+      } catch (error) {
+        console.error('publication acknowledgement deferred', error);
+        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+      }
+      return;
+    }
     try {
       const committed = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/committed', { pushId: session.pushId });
       if (committed.ok) {
@@ -223,6 +313,9 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
         const settled = await stateFetch(this.env.ORGANIZATION_QUOTAS, session.organizationId, this.env, '/settle', { id: session.pushId, actualBytes: value.committed.actualBytes });
         if (!settled.ok) throw new Error(`Quota settlement failed with ${settled.status}.`);
         await this.ctx.storage.put('session', { ...session, state: 'published' });
+        await Promise.allSettled([...session.packs.map((pack) => pack.key), ...session.cleanupKeys.filter((key) => key.startsWith('quarantine/'))].map((key) => this.env.REPOSITORIES.delete(key)));
+        const acknowledged = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/acknowledge', { pushId: session.pushId });
+        if (!acknowledged.ok) throw new Error(`Publication acknowledgement failed with ${acknowledged.status}.`);
         return;
       }
       if (committed.status !== 404) throw new Error(`Commit reconciliation failed with ${committed.status}.`);

@@ -55,10 +55,10 @@ export default {
 async function repositoryRoute(request: Request): Promise<RepositoryRoute | null> {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/_sty/')) {
-    if (request.method !== 'POST' || !['/_sty/merge', '/_sty/compare', '/_sty/commit', '/_sty/blob'].includes(url.pathname)) return null;
+    if (request.method !== 'POST' || !['/_sty/merge', '/_sty/pulls/pin', '/_sty/compare', '/_sty/commit', '/_sty/blob'].includes(url.pathname)) return null;
     const body = await request.clone().json<Record<string, unknown>>().catch(() => null);
     if (!body || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
-    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_sty/merge' };
+    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_sty/merge' || url.pathname === '/_sty/pulls/pin' };
   }
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\.git\//);
   if (!match || !safeSegment(match[1]) || !safeSegment(match[2])) return null;

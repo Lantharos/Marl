@@ -20,6 +20,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
   const current = await repo.request<RepositorySnapshotResponse>('/snapshot');
   const uploads = uploadSession(env, pushId);
   let captureCreated = false;
+  let publicationStarted = false;
   try {
     await quota.request('/reserve', { id: pushId, repository, maximumBytes, expiresAt });
     await repo.request('/begin', { pushId, reservationId: pushId, expiresAt, expectedRefs: {}, proposedRefs: current.state.refs });
@@ -43,7 +44,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
       return new Response(body, response);
     }
     await repo.request('/propose', { pushId, refs: captured.refs });
-    const plans = captured.hasPack ? [{ bytes: captured.packBytes, parts: Math.ceil(captured.packBytes / STORAGE_LIMITS.partBytes), key: `repositories/${repository}/packs/${pushId}-0.pack` }] : [];
+    const plans = captured.hasPack ? [{ bytes: captured.packBytes, parts: Math.ceil(captured.packBytes / STORAGE_LIMITS.partBytes), key: `quarantine/${repository}/${pushId}/0.pack` }] : [];
     await uploads.request('/prepare-server', { refs: captured.refs, packs: plans });
     if (captured.hasPack) {
       if (captured.packBytes > maximumBytes) throw new Error('Compatibility push exceeded its reserved upload size.');
@@ -53,13 +54,14 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     }
     await uploads.request('/server-uploaded', {});
     const session = await uploads.request<UploadSnapshotResponse>('/snapshot');
+    publicationStarted = true;
     const published = await finalizeUploadedPush(env, repository, authorization.organizationId, session.session);
     await scheduleRepositoryIndex(env, owner, name, authorization.repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
     const forceCompaction = session.session.packs.length === 0 && published.storedBytes > 0;
     if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
     return new Response(body, response);
   } catch (error) {
-    await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+    if (!publicationStarted) await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
     throw error;
   } finally {
     if (captureCreated) {
