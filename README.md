@@ -37,7 +37,8 @@ cargo run -p sty-git
 ```
 
 Production Git hosting is packaged by `apps/git-edge` and `Dockerfile.git` as a Cloudflare
-Worker plus per-repository Containers with R2 snapshots.
+Worker backed by immutable Git packs in R2, repository and organization Durable Objects,
+and short-lived Containers for Git compatibility, validation, indexing, and compaction.
 
 The normal workspace build validates the Worker bundle without requiring Docker. Before a
 Git deployment, run `bun run --cwd apps/git-edge build:container` with Docker Engine running

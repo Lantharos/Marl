@@ -75,7 +75,6 @@ CREATE TABLE repository_entries (
   name TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('blob', 'tree', 'commit')),
   object_id TEXT NOT NULL,
-  object_key TEXT,
   byte_size INTEGER,
   PRIMARY KEY (repository_id, tree_id, path)
 );

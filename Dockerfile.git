@@ -5,7 +5,7 @@ COPY crates ./crates
 RUN cargo build --locked --release -p sty-git
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git tar zstd && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /build/target/release/sty-git /usr/local/bin/sty-git
 ENV STY_GIT_LISTEN=0.0.0.0:8788
 ENV STY_GIT_ROOT=/var/lib/sty/repositories

@@ -1,10 +1,4 @@
-use crate::{
-    index::index_after_push,
-    state::{
-        AppState, gateway_headers, git_output, is_object_id, repository_path, safe_ref,
-        safe_segment,
-    },
-};
+use crate::state::{AppState, git_output, is_object_id, repository_path, safe_ref, safe_segment};
 use anyhow::{Context, Result};
 use axum::{
     Json,
@@ -164,12 +158,5 @@ async fn perform_merge(state: &AppState, request: MergeRequest) -> Result<MergeR
     if !update.status.success() {
         anyhow::bail!("stale branch head")
     }
-    index_after_push(
-        state,
-        &repository,
-        request.repository_id,
-        gateway_headers(state),
-    )
-    .await?;
     Ok(MergeResponse { commit_id })
 }

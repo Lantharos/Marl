@@ -1,7 +1,7 @@
 import { authenticate } from './auth';
 import { json, problem } from './http';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, getCommit, getRepository, indexGit, listBranches, listCommits, listRepositories, listTree, putGitObject, readBlob } from './repositories';
+import { authorizeGit, createRepository, getCommit, getRepository, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob } from './repositories';
 import { compareBranches, createPull, createThread, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull } from './pulls';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
 import { cancelRun, createRun, downloadArtifact, getRun, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
@@ -34,16 +34,11 @@ const worker = {
       const service = url.searchParams.get('service') ?? 'git-upload-pack';
       if (!owner || !repository || !['git-upload-pack', 'git-receive-pack'].includes(service)) return problem(422, 'invalid_git_request', 'Owner, repository, or Git service is invalid.');
       if (runner && service === 'git-upload-pack') return authorizeRunnerGit(_env, runner, owner, repository);
-      return authorizeGit(_env, principal, owner, repository, service);
+      return authorizeGit(_env, principal, owner, repository, service, gatewayTrusted);
     }
     if (request.method === 'POST' && url.pathname === '/api/v1/git/index') {
       if (!principal && !gatewayTrusted) return problem(401, 'authentication_required', 'Authenticate the Git gateway.');
       return indexGit(request, _env, principal, gatewayTrusted);
-    }
-    const objectUpload = url.pathname.match(/^\/api\/v1\/git\/objects\/(repo_[a-z0-9]+)\/([0-9a-f]{40,64})$/);
-    if (request.method === 'PUT' && objectUpload) {
-      if (!principal && !gatewayTrusted) return problem(401, 'authentication_required', 'Authenticate the Git gateway.');
-      return putGitObject(request, _env, principal, objectUpload[1], objectUpload[2], gatewayTrusted);
     }
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Sty API.');
 

@@ -2,7 +2,7 @@ import { parse } from 'yaml';
 import type { Env } from './platform';
 import { parseRunJobs, queueRun, type RunJob } from './runs';
 
-type WorkflowEntry = { path: string; objectKey: string };
+type WorkflowEntry = { path: string; objectId: string };
 type WorkflowWarning = { path: string; error: string };
 type ObjectValue = Record<string, unknown>;
 
@@ -133,14 +133,17 @@ export function parseWorkflow(value: ObjectValue, path: string): { jobs: RunJob[
 }
 
 export async function queuePushWorkflows(env: Env, repositoryId: string, branch: string, commitId: string, treeId: string, actorId: string | null): Promise<{ queued: number; warnings: WorkflowWarning[] }> {
-  const entries = await env.DB.prepare(`SELECT path,object_key AS objectKey FROM repository_entries WHERE repository_id=? AND tree_id=? AND kind='blob' AND (path LIKE '.sty/workflows/%.yml' OR path LIKE '.sty/workflows/%.yaml' OR path LIKE '.github/workflows/%.yml' OR path LIKE '.github/workflows/%.yaml') ORDER BY path LIMIT 100`).bind(repositoryId, treeId).all<WorkflowEntry>();
+  const repository = await env.DB.prepare(`SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.id=?`).bind(repositoryId).first<{ owner: string; name: string }>();
+  if (!repository) return { queued: 0, warnings: [{ path: '', error: 'Repository metadata is missing.' }] };
+  const entries = await env.DB.prepare(`SELECT path,object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND kind='blob' AND (path LIKE '.sty/workflows/%.yml' OR path LIKE '.sty/workflows/%.yaml' OR path LIKE '.github/workflows/%.yml' OR path LIKE '.github/workflows/%.yaml') ORDER BY path LIMIT 100`).bind(repositoryId, treeId).all<WorkflowEntry>();
   const warnings: WorkflowWarning[] = [];
   let queued = 0;
   for (const entry of entries.results) {
-    const object = await env.OBJECTS.get(entry.objectKey);
-    if (!object || object.size > 1024 * 1024) { warnings.push({ path: entry.path, error: 'Workflow file is missing or larger than 1 MiB.' }); continue; }
+    const object = await fetch(`${env.GIT_GATEWAY_URL}/_sty/blob`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner: repository.owner, repository: repository.name, objectId: entry.objectId }) });
+    const size = Number(object.headers.get('content-length'));
+    if (!object.ok || !Number.isSafeInteger(size) || size > 1024 * 1024) { warnings.push({ path: entry.path, error: 'Workflow file is missing or larger than 1 MiB.' }); continue; }
     try {
-      const value = parse(await new Response(object.body).text(), { maxAliasCount: 10 }) as ObjectValue | null;
+      const value = parse(await object.text(), { maxAliasCount: 10 }) as ObjectValue | null;
       if (!value || typeof value.name !== 'string' || value.name.trim().length < 2 || value.name.length > 160 || !runsOnPush(value.on, branch)) continue;
       const parsed = parseWorkflow(value, entry.path);
       if (!parsed.jobs) { warnings.push({ path: entry.path, error: parsed.error ?? 'Workflow jobs are invalid.' }); continue; }

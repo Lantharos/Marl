@@ -1,8 +1,10 @@
+mod blob;
 mod compare;
-mod index;
 mod merge;
+mod metadata;
+mod pack;
+mod repository_storage;
 mod smart_http;
-mod snapshot;
 mod state;
 
 use anyhow::{Context, Result};
@@ -29,18 +31,56 @@ async fn main() -> Result<()> {
     });
     let app = Router::new()
         .route(
-            "/_sty/snapshot/status/{owner}/{repository}",
-            axum::routing::get(snapshot::status),
+            "/_sty/repositories/{owner}/{repository}/status",
+            axum::routing::get(repository_storage::repository_status),
         )
         .route(
-            "/_sty/snapshot/restore/{owner}/{repository}",
-            axum::routing::put(snapshot::restore),
+            "/_sty/repositories/{owner}/{repository}/packs/{pack}/{kind}",
+            axum::routing::put(repository_storage::upload_repository_pack),
         )
         .route(
-            "/_sty/snapshot/export/{owner}/{repository}",
-            axum::routing::get(snapshot::export),
+            "/_sty/repositories/{owner}/{repository}/activate",
+            axum::routing::post(repository_storage::activate_repository),
+        )
+        .route(
+            "/_sty/repositories/{owner}/{repository}/captures/{push}",
+            axum::routing::post(repository_storage::capture_repository)
+                .delete(repository_storage::delete_capture),
+        )
+        .route(
+            "/_sty/repositories/{owner}/{repository}/captures/{push}/{kind}",
+            axum::routing::get(repository_storage::read_capture),
+        )
+        .route(
+            "/_sty/packs/{push}/known/{index}",
+            axum::routing::put(pack::upload_known_index),
+        )
+        .route(
+            "/_sty/packs/{push}/{pack}",
+            axum::routing::put(pack::upload_pack),
+        )
+        .route(
+            "/_sty/packs/{push}/{pack}/graph",
+            axum::routing::post(pack::validate_graph),
+        )
+        .route(
+            "/_sty/packs/{push}/refs",
+            axum::routing::post(pack::validate_proposed_refs),
+        )
+        .route(
+            "/_sty/packs/{push}/{pack}/{kind}",
+            axum::routing::get(pack::read_pack_file),
+        )
+        .route(
+            "/_sty/packs/{push}",
+            axum::routing::delete(pack::remove_session),
         )
         .route("/_sty/merge", axum::routing::post(merge::merge_request))
+        .route("/_sty/blob", axum::routing::post(blob::read_blob))
+        .route(
+            "/_sty/index",
+            axum::routing::post(metadata::index_repository),
+        )
         .route(
             "/_sty/compare",
             axum::routing::post(compare::compare_request),

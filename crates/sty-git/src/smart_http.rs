@@ -1,7 +1,4 @@
-use crate::{
-    index::index_after_push,
-    state::{AppState, repository_path, safe_segment},
-};
+use crate::state::{AppState, repository_path, safe_segment};
 use anyhow::{Context, Result};
 use axum::{
     body::Body,
@@ -50,7 +47,6 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
         Some(value) => value,
         None => return Ok((StatusCode::NOT_FOUND, "Repository not found\n").into_response()),
     };
-    let forwarded_auth = forward_auth(request.headers());
     let authorization = match authorize(&state, request.headers(), &git_path).await? {
         Ok(value) => value,
         Err(status) => {
@@ -69,6 +65,9 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
     }
     let repository = repository_path(&state.repositories, &git_path.owner, &git_path.repository)?;
     ensure_bare_repository(&repository).await?;
+    if git_path.service == "git-receive-pack" {
+        let _ = fs::remove_file(repository.join("sty-generation")).await;
+    }
     let (parts, body) = request.into_parts();
     let mut command = Command::new("git");
     command
@@ -121,32 +120,43 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
     });
     let mut stdout = child.stdout.take().context("open Git stdout")?;
     let (status, headers, initial_body) = read_cgi_headers(&mut stdout).await?;
+    if git_path.service == "git-receive-pack" {
+        let mut response_body = initial_body.to_vec();
+        stdout.read_to_end(&mut response_body).await?;
+        let mut stderr = child.stderr.take().context("open Git stderr")?;
+        let stderr_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+        });
+        let result = child.wait().await?;
+        let stderr = stderr_task.await??;
+        if !result.success() {
+            anyhow::bail!(
+                "git http-backend exited {result}: {}",
+                String::from_utf8_lossy(&stderr)
+            )
+        }
+        let mut response = Response::new(Body::from(response_body));
+        *response.status_mut() = status;
+        *response.headers_mut() = headers;
+        response.headers_mut().insert(
+            "x-sty-repository",
+            HeaderValue::from_str(&authorization.repository_id)?,
+        );
+        return Ok(response);
+    }
     let stream =
         futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(initial_body) })
             .chain(ReaderStream::new(stdout));
-    let index_state = state.clone();
-    let index_repository = repository.clone();
-    let index_repository_id = authorization.repository_id.clone();
-    let should_index = git_path.service == "git-receive-pack";
     tokio::spawn(async move {
-        if let Ok(result) = child.wait_with_output().await {
-            if !result.status.success() {
-                eprintln!(
-                    "git http-backend exited {}: {}",
-                    result.status,
-                    String::from_utf8_lossy(&result.stderr)
-                );
-            } else if should_index
-                && let Err(error) = index_after_push(
-                    &index_state,
-                    &index_repository,
-                    index_repository_id,
-                    forwarded_auth,
-                )
-                .await
-            {
-                eprintln!("post-push indexing failed: {error:#}");
-            }
+        if let Ok(result) = child.wait_with_output().await
+            && !result.status.success()
+        {
+            eprintln!(
+                "git http-backend exited {}: {}",
+                result.status,
+                String::from_utf8_lossy(&result.stderr)
+            );
         }
     });
     let mut response = Response::new(Body::from_stream(stream));

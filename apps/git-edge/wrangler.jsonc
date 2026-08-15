@@ -7,13 +7,38 @@
     {
       "class_name": "GitContainer",
       "image": "../../Dockerfile.git",
-      "instance_type": "standard-2",
+      "instance_type": "basic",
       "max_instances": 100
+    },
+    {
+      "class_name": "ValidatorContainer",
+      "image": "../../Dockerfile.git",
+      "instance_type": "basic",
+      "max_instances": 100
+    },
+    {
+      "class_name": "MaintenanceContainer",
+      "image": "../../Dockerfile.git",
+      "instance_type": "standard-1",
+      "max_instances": 10
     }
   ],
   "durable_objects": {
-    "bindings": [{ "name": "GIT_CONTAINERS", "class_name": "GitContainer" }]
+    "bindings": [
+      { "name": "GIT_CONTAINERS", "class_name": "GitContainer" },
+      { "name": "VALIDATOR_CONTAINERS", "class_name": "ValidatorContainer" },
+      { "name": "MAINTENANCE_CONTAINERS", "class_name": "MaintenanceContainer" },
+      { "name": "REPOSITORY_STATE", "class_name": "RepositoryStateObject" },
+      { "name": "ORGANIZATION_QUOTAS", "class_name": "OrganizationQuotaObject" },
+      { "name": "UPLOAD_SESSIONS", "class_name": "UploadSessionObject" },
+      { "name": "COMPACTIONS", "class_name": "CompactionObject" },
+      { "name": "INDEXING", "class_name": "RepositoryIndexObject" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GitContainer"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GitContainer"] },
+    { "tag": "v2", "new_sqlite_classes": ["RepositoryStateObject", "OrganizationQuotaObject", "UploadSessionObject"] },
+    { "tag": "v3", "new_sqlite_classes": ["ValidatorContainer", "MaintenanceContainer", "CompactionObject", "RepositoryIndexObject"] }
+  ],
   "r2_buckets": [{ "binding": "REPOSITORIES", "bucket_name": "sty-git-repositories" }]
 }

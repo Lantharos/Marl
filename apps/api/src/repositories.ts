@@ -18,14 +18,14 @@ async function canRead(env: Env, principal: Principal, repo: RepositoryRow): Pro
   return Boolean(await env.DB.prepare('SELECT 1 AS allowed FROM organization_members WHERE organization_id = ? AND user_id = ?').bind(repo.organizationId, principal.id).first());
 }
 
-export async function authorizeGit(env: Env, principal: Principal | null, owner: string, name: string, service: string): Promise<Response> {
+export async function authorizeGit(env: Env, principal: Principal | null, owner: string, name: string, service: string, gatewayTrusted = false): Promise<Response> {
   const repo = await repository(env, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const membership = principal ? await env.DB.prepare('SELECT role FROM organization_members WHERE organization_id = ? AND user_id = ?').bind(repo.organizationId, principal.id).first<{ role: 'owner' | 'member' }>() : null;
-  const read = repo.visibility === 'public' || Boolean(membership);
-  const write = Boolean(membership) && (service === 'git-receive-pack');
+  const read = gatewayTrusted || repo.visibility === 'public' || Boolean(membership);
+  const write = (gatewayTrusted || Boolean(membership)) && (service === 'git-receive-pack');
   if (!read || (service === 'git-receive-pack' && !write)) return problem(principal ? 403 : 401, 'git_access_denied', 'You do not have access to this repository.');
-  return json({ repositoryId: repo.id, visibility: repo.visibility, read, write });
+  return json({ repositoryId: repo.id, organizationId: repo.organizationId, visibility: repo.visibility, read, write });
 }
 
 export async function indexGit(request: Request, env: Env, principal: Principal | null, gatewayTrusted = false): Promise<Response> {
@@ -56,8 +56,7 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     if (!value || typeof value !== 'object') continue;
     const entry = value as Record<string, unknown>;
     if (![entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId].every((field) => typeof field === 'string')) continue;
-    const objectKey = entry.kind === 'blob' ? `git/${body.repositoryId}/${entry.objectId}` : null;
-    statements.push(env.DB.prepare(`INSERT INTO repository_entries (repository_id, tree_id, path, parent_path, name, kind, object_id, object_key, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, tree_id, path) DO UPDATE SET kind=excluded.kind, object_id=excluded.object_id, object_key=excluded.object_key, byte_size=excluded.byte_size`).bind(body.repositoryId, entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId, objectKey, typeof entry.byteSize === 'number' ? entry.byteSize : null));
+    statements.push(env.DB.prepare(`INSERT INTO repository_entries (repository_id, tree_id, path, parent_path, name, kind, object_id, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, tree_id, path) DO UPDATE SET kind=excluded.kind, object_id=excluded.object_id, byte_size=excluded.byte_size`).bind(body.repositoryId, entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId, typeof entry.byteSize === 'number' ? entry.byteSize : null));
   }
   if (typeof body.defaultBranch === 'string') statements.push(env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(body.defaultBranch, body.repositoryId));
   for (let offset = 0; offset < statements.length; offset += 100) await env.DB.batch(statements.slice(offset, offset + 100));
@@ -79,17 +78,6 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     workflowWarnings.push(...result.warnings);
   }
   return json({ indexed: { commits: body.commits.length, branches: indexedBranches.length, entries: body.entries.length }, workflows: { queued: workflowsQueued, warnings: workflowWarnings } });
-}
-
-export async function putGitObject(request: Request, env: Env, principal: Principal | null, repositoryId: string, objectId: string, gatewayTrusted = false): Promise<Response> {
-  if (!/^[0-9a-f]{40,64}$/.test(objectId) || !/^repo_[a-z0-9]+$/.test(repositoryId)) return problem(422, 'invalid_git_object', 'Git object identifier is invalid.');
-  const owned = gatewayTrusted || (principal && await env.DB.prepare(`SELECT repositories.id FROM repositories JOIN organization_members ON organization_members.organization_id = repositories.organization_id WHERE repositories.id = ? AND organization_members.user_id = ?`).bind(repositoryId, principal.id).first());
-  if (!owned) return problem(403, 'git_access_denied', 'You cannot upload objects to this repository.');
-  if (!request.body) return problem(400, 'object_body_required', 'Git object body is required.');
-  const declaredSize = Number(request.headers.get('x-sty-object-size'));
-  if (!Number.isFinite(declaredSize) || declaredSize < 0 || declaredSize > 50 * 1024 * 1024) return problem(413, 'object_too_large', 'Browsable Git objects are limited to 50 MiB.');
-  await env.OBJECTS.put(`git/${repositoryId}/${objectId}`, request.body, { httpMetadata: { contentType: request.headers.get('content-type') ?? 'application/octet-stream' } });
-  return new Response(null, { status: 204 });
 }
 
 export async function listRepositories(env: Env, principal: Principal): Promise<Response> {
@@ -166,11 +154,21 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const entry = await env.DB.prepare(`SELECT object_key AS objectKey FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`).bind(repo.id, resolved.treeId, path).first<{ objectKey: string }>();
-  if (!entry?.objectKey) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const object = await env.OBJECTS.get(entry.objectKey);
-  if (!object) return problem(502, 'object_missing', 'Repository metadata points to a missing object.');
-  return new Response(object.body, { headers: { 'content-type': object.httpMetadata?.contentType ?? 'application/octet-stream', 'content-length': String(object.size), etag: object.httpEtag, 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+  const entry = await env.DB.prepare(`SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`).bind(repo.id, resolved.treeId, path).first<{ objectId: string }>();
+  if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
+  const response = await fetch(`${env.GIT_GATEWAY_URL}/_sty/blob`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner, repository: name, objectId: entry.objectId }) });
+  if (!response.ok || !response.body) return problem(502, 'blob_gateway_failed', 'Git gateway could not read this file.');
+  return new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+}
+
+function contentType(path: string) {
+  const extension = path.split('.').at(-1)?.toLowerCase();
+  if (['md', 'txt', 'rs', 'ts', 'tsx', 'js', 'jsx', 'svelte', 'toml', 'yaml', 'yml', 'css', 'html', 'json'].includes(extension ?? '')) return 'text/plain; charset=utf-8';
+  if (extension === 'svg') return 'image/svg+xml';
+  if (extension === 'png') return 'image/png';
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'gif') return 'image/gif';
+  return 'application/octet-stream';
 }
 
 async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ treeId: string } | null> {

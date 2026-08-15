@@ -9,6 +9,7 @@ anyhow.workspace = true
 axum.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
+hex = "0.4.3"
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

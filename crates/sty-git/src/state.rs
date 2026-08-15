@@ -27,6 +27,9 @@ pub(crate) fn safe_ref(value: &str) -> bool {
         && !value.contains("..")
         && !value.contains("@{")
         && !value.contains("//")
+        && value
+            .split('/')
+            .all(|part| !part.is_empty() && !part.starts_with('.') && !part.ends_with(".lock"))
         && !value.bytes().any(|byte| {
             byte <= b' '
                 || byte == 0x7f
@@ -64,13 +67,4 @@ pub(crate) async fn git_output(repository: &Path, args: &[&str]) -> Result<Strin
         );
     }
     String::from_utf8(output.stdout).context("Git output was not UTF-8")
-}
-
-pub(crate) fn gateway_headers(state: &AppState) -> reqwest::header::HeaderMap {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        "x-sty-gateway-token",
-        reqwest::header::HeaderValue::from_str(&state.gateway_token).expect("valid gateway token"),
-    );
-    headers
 }
