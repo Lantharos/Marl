@@ -16,12 +16,20 @@ use tokio::fs;
 #[tokio::main]
 async fn main() -> Result<()> {
     let local_storage = std::env::var("STY_GIT_LOCAL").map_or(true, |value| value != "0");
-    let repositories = PathBuf::from(
-        std::env::var("STY_GIT_ROOT").unwrap_or_else(|_| ".sty-data/repositories".into()),
+    let repositories = std::env::var("STY_GIT_ROOT").map_or_else(
+        |_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join(".sty-data/repositories")
+        },
+        PathBuf::from,
     );
     fs::create_dir_all(&repositories)
         .await
         .context("create repository root")?;
+    let repositories = fs::canonicalize(repositories)
+        .await
+        .context("resolve repository root")?;
     let state = Arc::new(AppState {
         repositories,
         control_plane: std::env::var("STY_API_URL")
@@ -31,6 +39,7 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|_| "sty-local".into()),
         local_storage,
     });
+    let repository_root = state.repositories.display().to_string();
     let app = Router::new()
         .route("/health", axum::routing::get(|| async { "ok\n" }))
         .route(
@@ -95,7 +104,10 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(&address)
         .await
         .with_context(|| format!("bind {address}"))?;
-    println!("Sty Git gateway listening on http://{address}");
+    println!(
+        "Sty Git gateway listening on http://{address} with repositories at {}",
+        repository_root
+    );
     axum::serve(listener, app)
         .await
         .context("serve Git gateway")?;

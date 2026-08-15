@@ -156,8 +156,8 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
   const entry = await env.DB.prepare(`SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`).bind(repo.id, resolved.treeId, path).first<{ objectId: string }>();
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const response = await fetch(`${env.GIT_GATEWAY_URL}/_sty/blob`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner, repository: name, objectId: entry.objectId }) });
-  if (!response.ok || !response.body) return problem(502, 'blob_gateway_failed', 'Git gateway could not read this file.');
+  const response = await fetch(`${env.GIT_GATEWAY_URL}/_sty/blob`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner, repository: name, objectId: entry.objectId }) }).catch(() => null);
+  if (!response?.ok || !response.body) return problem(502, 'blob_gateway_failed', 'Git gateway could not read this file.');
   return new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
 }
 
