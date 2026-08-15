@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
+  import { dismissable } from '$lib/actions/dismissable';
 
   type Option = { value: string; label: string; description?: string };
   let { value = $bindable(), options, ariaLabel, onchange }: { value: string; options: Option[]; ariaLabel: string; onchange?: () => void | Promise<void> } = $props();
@@ -14,14 +15,16 @@
   function keydown(event: KeyboardEvent) {
     if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); toggle(); return; }
     if (!open) return;
-    if (event.key === 'Escape') { event.preventDefault(); open = false; }
+    if (event.key === 'Escape' || event.key === 'Tab') { open = false; if (event.key === 'Escape') event.preventDefault(); }
+    if (event.key === 'Home') { event.preventDefault(); activeIndex = 0; }
+    if (event.key === 'End') { event.preventDefault(); activeIndex = options.length - 1; }
     if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = (activeIndex + 1) % options.length; }
     if (event.key === 'ArrowUp') { event.preventDefault(); activeIndex = (activeIndex - 1 + options.length) % options.length; }
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (options[activeIndex]) void choose(options[activeIndex]); }
   }
 </script>
 
-<div class="select">
+<div class="select" use:dismissable={() => (open = false)}>
   <button type="button" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} onkeydown={keydown} onclick={toggle}><span><strong>{selected?.label ?? 'Choose…'}</strong>{#if selected?.description}<small>{selected.description}</small>{/if}</span><ChevronDown size={14} /></button>
   {#if open}<div class="options" role="listbox" aria-label={ariaLabel}>{#each options as option,index}<button type="button" role="option" aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
 </div>

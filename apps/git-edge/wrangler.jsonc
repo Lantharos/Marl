@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sty-git",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "containers": [
+    {
+      "class_name": "GitContainer",
+      "image": "../../Dockerfile.git",
+      "instance_type": "standard-2",
+      "max_instances": 100
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "GIT_CONTAINERS", "class_name": "GitContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GitContainer"] }],
+  "r2_buckets": [{ "binding": "REPOSITORIES", "bucket_name": "sty-git-repositories" }]
+}

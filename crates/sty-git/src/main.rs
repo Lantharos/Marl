@@ -2,6 +2,7 @@ mod compare;
 mod index;
 mod merge;
 mod smart_http;
+mod snapshot;
 mod state;
 
 use anyhow::{Context, Result};
@@ -27,6 +28,18 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|_| "sty-local".into()),
     });
     let app = Router::new()
+        .route(
+            "/_sty/snapshot/status/{owner}/{repository}",
+            axum::routing::get(snapshot::status),
+        )
+        .route(
+            "/_sty/snapshot/restore/{owner}/{repository}",
+            axum::routing::put(snapshot::restore),
+        )
+        .route(
+            "/_sty/snapshot/export/{owner}/{repository}",
+            axum::routing::get(snapshot::export),
+        )
         .route("/_sty/merge", axum::routing::post(merge::merge_request))
         .route(
             "/_sty/compare",

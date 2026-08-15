@@ -178,6 +178,15 @@ export interface RunnerStep {
   run: string;
   shell?: string;
   environment?: Record<string, string>;
+  workingDirectory?: string;
+  timeoutMinutes?: number;
+  continueOnError?: boolean;
+}
+
+export interface RunnerService {
+  name: string;
+  image: string;
+  environment: Record<string, string>;
 }
 
 export interface RunnerJobLease {
@@ -190,5 +199,10 @@ export interface RunnerJobLease {
   steps: RunnerStep[];
   environment: Record<string, string>;
   artifactPaths: string[];
+  runtime: {
+    image: string;
+    timeoutMinutes: number;
+    services: RunnerService[];
+  };
   leaseExpiresAt: string;
 }

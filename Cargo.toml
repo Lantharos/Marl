@@ -23,6 +23,7 @@ sty-core = { path = "crates/sty-core" }
 axum = "0.8.9"
 bytes = "1.11.1"
 futures-util = "0.3.34"
+glob = "0.3.4"
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "stream"] }
 tokio = { version = "1.52.1", features = ["full"] }
 tokio-util = { version = "0.7.18", features = ["io"] }

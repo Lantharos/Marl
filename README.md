@@ -30,11 +30,18 @@ bun dev:web
 bun dev:api
 ```
 
-The Smart HTTP gateway is a separate Rust process:
+The Smart HTTP gateway is a separate Rust process locally:
 
 ```powershell
 cargo run -p sty-git
 ```
+
+Production Git hosting is packaged by `apps/git-edge` and `Dockerfile.git` as a Cloudflare
+Worker plus per-repository Containers with R2 snapshots.
+
+The normal workspace build validates the Worker bundle without requiring Docker. Before a
+Git deployment, run `bun run --cwd apps/git-edge build:container` with Docker Engine running
+to build and validate the container image as well.
 
 Before considering a milestone complete:
 

@@ -1,0 +1,20 @@
+{
+  "name": "@sty/git-edge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "wrangler deploy --dry-run --containers-rollout=none --outdir dist",
+    "build:container": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260815.1",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.123.0"
+  }
+}

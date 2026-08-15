@@ -55,6 +55,7 @@ pub struct JobLease {
     pub environment: BTreeMap<String, String>,
     #[serde(default)]
     pub artifact_paths: Vec<String>,
+    pub runtime: JobRuntime,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,10 +73,32 @@ pub struct RepositoryIdentity {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JobStep {
     pub name: String,
     pub run: String,
     pub shell: Option<String>,
+    #[serde(default)]
+    pub environment: BTreeMap<String, String>,
+    pub working_directory: Option<String>,
+    pub timeout_minutes: Option<u64>,
+    #[serde(default)]
+    pub continue_on_error: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobRuntime {
+    pub image: String,
+    pub timeout_minutes: u64,
+    #[serde(default)]
+    pub services: Vec<JobService>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct JobService {
+    pub name: String,
+    pub image: String,
     #[serde(default)]
     pub environment: BTreeMap<String, String>,
 }

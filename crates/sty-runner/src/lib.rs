@@ -1,5 +1,6 @@
 pub mod client;
 pub mod config;
+pub mod docker;
 pub mod executor;
 pub mod models;
 pub mod service;
@@ -20,10 +21,15 @@ pub struct RegisterOptions<'a> {
 }
 
 pub async fn register(options: RegisterOptions<'_>) -> Result<RunnerConfig> {
+    docker::verify().await?;
+    let mut labels = options.labels.to_vec();
+    if !labels.iter().any(|label| label == "docker") {
+        labels.push("docker".to_owned());
+    }
     let registration = Registration {
         enrollment_token: options.enrollment_token,
         name: options.name,
-        labels: options.labels,
+        labels: &labels,
         concurrency: options.concurrency,
         platform: std::env::consts::OS,
         architecture: std::env::consts::ARCH,
@@ -35,7 +41,7 @@ pub async fn register(options: RegisterOptions<'_>) -> Result<RunnerConfig> {
         token: response.token,
         runner_id: response.runner.id,
         name: options.name.to_owned(),
-        labels: options.labels.to_vec(),
+        labels,
         concurrency: options.concurrency,
         work_dir: options.work_dir.to_string_lossy().into_owned(),
     };

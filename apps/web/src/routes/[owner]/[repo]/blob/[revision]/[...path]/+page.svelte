@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import Copy from 'lucide-svelte/icons/copy';
+  import Check from 'lucide-svelte/icons/check';
   import Download from 'lucide-svelte/icons/download';
   import FileCode2 from 'lucide-svelte/icons/file-code-2';
   import History from 'lucide-svelte/icons/history';
@@ -12,6 +13,14 @@
   const lines = $derived(content.split('\n'));
   const base = $derived(`/${$page.params.owner}/${$page.params.repo}`);
   let loadError = $state(false);
+  let copied = $state(false);
+  async function copyFile() { await navigator.clipboard.writeText(content); copied = true; setTimeout(() => (copied = false), 1400); }
+  function downloadFile() {
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = filePath.split('/').at(-1) ?? 'file'; anchor.click();
+    URL.revokeObjectURL(url);
+  }
   onMount(async () => {
     try { content = await apiText(`/repositories/${$page.params.owner}/${$page.params.repo}/blob/${encodeURIComponent(revision)}/${filePath.split('/').map(encodeURIComponent).join('/')}`); }
     catch { loadError = true; }
@@ -19,7 +28,7 @@
 </script>
 <svelte:head><title>{filePath} · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
 <nav class="crumbs"><a href={base}>{$page.params.repo}</a><span>/</span>{#each filePath.split('/') as part, index}<a href="{base}/tree/{revision}/{filePath.split('/').slice(0,index+1).join('/')}">{part}</a>{#if index < filePath.split('/').length - 1}<span>/</span>{/if}{/each}</nav>
-<header class="file-head"><div><FileCode2 size={16} /><strong>{filePath.split('/').at(-1)}</strong><span>{lines.length} lines</span></div><div><a href="{base}/commits/{revision}"><History size={14} />History</a><button aria-label="Copy file"><Copy size={14} /></button><button aria-label="Download file"><Download size={14} /></button></div></header>
+<header class="file-head"><div><FileCode2 size={16} /><strong>{filePath.split('/').at(-1)}</strong><span>{lines.length} lines</span></div><div><a href="{base}/commits/{revision}"><History size={14} />History</a><button aria-label="Copy file" onclick={copyFile}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button><button aria-label="Download file" onclick={downloadFile}><Download size={14} /></button></div></header>
 <section class="code"><table><tbody>{#each lines as line, index}<tr><td><a href="#L{index + 1}" id="L{index + 1}">{index + 1}</a></td><td><pre>{line || ' '}</pre></td></tr>{/each}</tbody></table></section>
 {#if loadError}<p class="error" role="status">This file could not be loaded from the repository service.</p>{/if}
 <style>

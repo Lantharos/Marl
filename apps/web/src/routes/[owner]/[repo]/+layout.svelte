@@ -10,6 +10,7 @@
   import Lock from 'lucide-svelte/icons/lock';
   import PlayCircle from 'lucide-svelte/icons/play-circle';
   import { api } from '$lib/api';
+  import { dismissable } from '$lib/actions/dismissable';
 
   let { children } = $props();
   const owner = $derived($page.params.owner ?? '');
@@ -29,7 +30,7 @@
 <section class="repo-bar">
   <div class="repo-line">
     <div class="identity"><div class="crumb"><a href="/repositories">{owner}</a><span>/</span><a href={base}>{repo}</a>{#if repository?.visibility === 'private'}<span class="private"><Lock size={11} />Private</span>{/if}</div>{#if repository?.description}<p>{repository.description}</p>{/if}</div>
-    <div class="clone-anchor"><button class="clone-button" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong><p>HTTPS works with Git and your Sty access token.</p><div><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div>
+    <div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><button class="clone-button" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong><p>HTTPS works with Git and your Sty access token.</p><div><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div>
   </div>
   <nav aria-label="Repository"><a class:active={tabActive('code')} href={base}><Code2 size={14} />Code</a><a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a><a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a></nav>
 </section>

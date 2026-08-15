@@ -10,16 +10,23 @@
   import { api } from '$lib/api';
   let items = $state<PullRequestSummary[]>([]);
   let liveError = $state(false);
+  let query = $state('');
+  let activeFilter = $state('Open');
+  const filteredItems = $derived(items.filter((pull) => {
+    const stateMatches = activeFilter === 'Open' ? !['merged', 'closed'].includes(pull.state) : pull.state === activeFilter.toLowerCase();
+    const haystack = `${pull.title} ${pull.author} ${pull.repository.owner}/${pull.repository.name} ${pull.sourceBranch} ${pull.targetBranch}`.toLowerCase();
+    return stateMatches && haystack.includes(query.trim().toLowerCase());
+  }));
   onMount(async () => { try { items = (await api<{pullRequests:PullRequestSummary[]}>('/pulls')).pullRequests; } catch { liveError = true; } });
 </script>
 
 <svelte:head><title>Pull requests · Sty</title></svelte:head>
 <main class="page">
   <PageHeader title="Pull requests" description="Review, unblock, and ship changes from one queue." actionHref="/pulls/new" actionLabel="New pull request" />
-  <FilterBar placeholder="Search pull requests" tabs={['Open']} active="Open" />
+  <FilterBar placeholder="Search pull requests" tabs={['Open', 'Merged', 'Closed']} bind:active={activeFilter} bind:query />
   {#if liveError}<p class="notice" role="alert">Pull requests could not be loaded. Refresh to try again.</p>{/if}
   <section class="list" aria-label="Pull requests">
-    {#each items as pull}
+    {#each filteredItems as pull}
       <a class="row" href="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}">
         <span class:blocked={pull.state === 'blocked'} class:ready={pull.state === 'mergeable'} class="state"><GitPullRequest size={17} /></span>
         <span class="main"><strong>{pull.title}</strong><small>{pull.repository.owner}/{pull.repository.name} #{pull.number} opened by {pull.author} · {pull.updatedAt}</small><code>{pull.sourceBranch} → {pull.targetBranch}</code></span>
@@ -32,7 +39,6 @@
 
 <style>
   .page { width: min(1040px, calc(100% - 64px)); margin: 0 auto; padding: 44px 0 72px; }
-  .list { border-top: 1px solid var(--border); }
   .notice{margin:0 0 10px;color:var(--warning);font-size:10px}.empty{padding:50px 20px;color:var(--text-faint);text-align:center}.empty strong{display:block;margin-top:8px;color:var(--text-strong);font-size:12px}.empty p{font-size:10px}
   .row { display: grid; grid-template-columns: 32px minmax(0,1fr) 132px 54px; align-items: center; gap: 11px; min-height: 76px; padding: 11px 4px; border-bottom: 1px solid var(--border-subtle); color: inherit; text-decoration: none; }
   .row:hover { background: var(--surface-hover); }

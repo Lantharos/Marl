@@ -16,6 +16,7 @@
 ```text
 apps/web            SvelteKit application
 apps/api            TypeScript control-plane Worker
+apps/git-edge       Cloudflare Worker and Container routing for Git
 packages/contracts  Shared transport types and validation
 crates/sty-core      Local repository engine
 crates/sty-cli       The `sty` executable
@@ -30,7 +31,7 @@ The discarded prototype is not part of this workspace and has no compatibility l
 The web application uses SvelteKit and a semantic design-token layer. Product pages render
 control-plane state; demo fixtures do not ship in product routes.
 
-The global shell owns repository switching, search, command access, notifications, current
+The global shell owns repository switching, search, command access, current
 identity, and global navigation. Repository pages render inside that shell rather than
 creating a second navigation system.
 
@@ -64,19 +65,21 @@ rendering, HTTP sessions, or browser product concepts.
 
 Hosted Smart HTTP is a narrow Git gateway responsibility. The control-plane Worker owns
 authorization and metadata; the gateway performs protocol and packfile work with short-lived
-authorization from the control plane. Repository object bytes remain content-addressed in
-object storage. The gateway must not become a second application backend.
+authorization from the control plane. On Cloudflare, each repository routes through a named
+Container/Durable Object. Git operates on the container's local POSIX filesystem, while
+compressed bare-repository snapshots are restored from and written to R2 around mutations.
+Git never operates directly on an R2 FUSE mount. Browsable blobs remain separately
+content-addressed in object storage for the web API.
 
 ## Runner
 
 The runner ships with the `sty` executable but is internally separated from interactive CLI
 commands. It supports registration, installation as an operating-system service, concurrent
-job execution, cancellable child process trees, incremental log upload, isolated checkouts,
-artifacts, caches, and health reporting.
+job execution, Docker job and service containers, dependency-aware scheduling, matrices,
+timeouts, incremental log upload, isolated checkouts, artifacts, caches, and health reporting.
 
-Host execution is the initial backend. Its trust boundary is explicit: job code receives the
-runner service account's authority. Additional isolation backends may be added only when they
-have an end-to-end installation and debugging story.
+Repository commands never execute directly on the runner host. The host process manages Git
+checkout, authenticated leases, Docker lifecycle, log transport, caches, and artifacts.
 
 ## Completion discipline
 

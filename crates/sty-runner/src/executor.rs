@@ -1,12 +1,13 @@
 use crate::{
     client::RunnerClient,
     config::ensure_job_path,
+    docker::DockerSandbox,
     models::{JobLease, JobStep, RunnerConfig},
 };
 use anyhow::{Context, Result, bail};
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
-    process::Stdio,
     sync::Arc,
     time::Duration,
 };
@@ -166,53 +167,61 @@ async fn execute_inner(
         .join(&job.repository.owner)
         .join(&job.repository.name);
     tokio::fs::create_dir_all(&cache).await?;
-    for step in &job.steps {
-        upload_text(
-            client,
-            job,
-            &mut sequence,
-            format!("\n── {} ──\n", step.name),
-        )
-        .await?;
-        match execute_step(client, job, step, &workspace, &cache, &mut sequence).await? {
-            Outcome::Success => {}
-            outcome => {
-                upload_artifacts(client, job, &workspace).await?;
-                return Ok(outcome);
+    upload_text(
+        client,
+        job,
+        &mut sequence,
+        format!("container: {}\n", job.runtime.image),
+    )
+    .await?;
+    let sandbox = DockerSandbox::create(job, &workspace, &cache).await?;
+    let deadline = time::Instant::now() + Duration::from_secs(job.runtime.timeout_minutes * 60);
+    let execution = async {
+        let mut outcome = Outcome::Success;
+        for step in &job.steps {
+            upload_text(
+                client,
+                job,
+                &mut sequence,
+                format!("\n── {} ──\n", step.name),
+            )
+            .await?;
+            let remaining = deadline.saturating_duration_since(time::Instant::now());
+            match execute_step(client, job, step, &sandbox, remaining, &mut sequence).await? {
+                Outcome::Success => {}
+                Outcome::Failure(code) if step.continue_on_error => {
+                    upload_text(
+                        client,
+                        job,
+                        &mut sequence,
+                        format!("Step failed with exit code {code}; continuing.\n"),
+                    )
+                    .await?;
+                }
+                step_outcome => {
+                    outcome = step_outcome;
+                    break;
+                }
             }
         }
+        Ok::<Outcome, anyhow::Error>(outcome)
     }
+    .await;
+    sandbox.remove().await;
+    let outcome = execution?;
     upload_artifacts(client, job, &workspace).await?;
-    Ok(Outcome::Success)
+    Ok(outcome)
 }
 
 async fn execute_step(
     client: &RunnerClient,
     job: &JobLease,
     step: &JobStep,
-    workspace: &Path,
-    cache: &Path,
+    sandbox: &DockerSandbox,
+    job_remaining: Duration,
     sequence: &mut u64,
 ) -> Result<Outcome> {
-    let mut command = shell_command(step)?;
-    command
-        .current_dir(workspace)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    command
-        .envs(&job.environment)
-        .envs(&step.environment)
-        .env("CI", "true")
-        .env("STY", "true")
-        .env("STY_RUN_NUMBER", job.run.number.to_string())
-        .env("STY_COMMIT", &job.commit_id)
-        .env("STY_BRANCH", &job.branch)
-        .env("STY_CACHE_DIR", cache);
-    let mut child = command
-        .spawn()
-        .with_context(|| format!("could not start step {}", step.name))?;
-    let pid = child.id().context("step process has no process id")?;
+    let mut child = sandbox.step(job, step)?;
     let stdout = child.stdout.take().context("step stdout unavailable")?;
     let stderr = child.stderr.take().context("step stderr unavailable")?;
     let (sender, mut receiver) = mpsc::channel::<Vec<u8>>(32);
@@ -221,6 +230,13 @@ async fn execute_step(
     drop(sender);
     let mut renewal = time::interval(Duration::from_secs(15));
     renewal.tick().await;
+    let step_limit = step
+        .timeout_minutes
+        .map(|minutes| Duration::from_secs(minutes * 60))
+        .unwrap_or(job_remaining)
+        .min(job_remaining);
+    let timeout = time::sleep(step_limit);
+    tokio::pin!(timeout);
     let mut waiting = Box::pin(child.wait());
     let status = loop {
         tokio::select! {
@@ -228,8 +244,9 @@ async fn execute_step(
             chunk = receiver.recv() => if let Some(chunk) = chunk { client.log(job, *sequence, chunk).await?; *sequence += 1; },
             _ = renewal.tick() => {
                 let lease = client.renew(job).await?;
-                if lease.canceled { kill_tree(pid).await; let _ = waiting.await; while let Some(chunk) = receiver.recv().await { client.log(job, *sequence, chunk).await?; *sequence += 1; } return Ok(Outcome::Canceled); }
+                if lease.canceled { sandbox.kill().await; let _ = waiting.await; while let Some(chunk) = receiver.recv().await { client.log(job, *sequence, chunk).await?; *sequence += 1; } return Ok(Outcome::Canceled); }
             }
+            _ = &mut timeout => { sandbox.kill().await; let _ = waiting.await; upload_text(client, job, sequence, format!("Step timed out after {} seconds.\n", step_limit.as_secs())).await?; return Ok(Outcome::Failure(124)); }
         }
     };
     while let Some(chunk) = receiver.recv().await {
@@ -241,33 +258,6 @@ async fn execute_step(
     } else {
         Outcome::Failure(status.code().unwrap_or(1))
     })
-}
-
-fn shell_command(step: &JobStep) -> Result<Command> {
-    let shell = step
-        .shell
-        .as_deref()
-        .unwrap_or(if cfg!(windows) { "powershell" } else { "sh" });
-    let mut command = Command::new(shell);
-    match shell {
-        "powershell" | "pwsh" => {
-            command.args([
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                &step.run,
-            ]);
-        }
-        "cmd" => {
-            command.args(["/D", "/S", "/C", &step.run]);
-        }
-        "sh" | "bash" => {
-            command.args(["-e", "-c", &step.run]);
-        }
-        _ => bail!("unsupported shell {shell}"),
-    }
-    Ok(command)
 }
 
 async fn pump(mut reader: impl tokio::io::AsyncRead + Unpin, sender: mpsc::Sender<Vec<u8>>) {
@@ -309,12 +299,15 @@ async fn clean_workspace(root: &Path, workspace: &Path) -> Result<()> {
 
 async fn upload_artifacts(client: &RunnerClient, job: &JobLease, workspace: &Path) -> Result<()> {
     let canonical_workspace = tokio::fs::canonicalize(workspace).await?;
+    let mut uploaded = HashSet::new();
     for relative in &job.artifact_paths {
-        let path = workspace.join(relative);
-        if !path.starts_with(workspace) || !path.exists() {
-            continue;
-        }
-        let mut pending = vec![path];
+        let pattern = workspace
+            .join(relative)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let mut pending = glob::glob(&pattern)?
+            .filter_map(Result::ok)
+            .collect::<Vec<_>>();
         while let Some(current) = pending.pop() {
             let metadata = tokio::fs::symlink_metadata(&current).await?;
             if metadata.file_type().is_symlink() {
@@ -334,28 +327,11 @@ async fn upload_artifacts(client: &RunnerClient, job: &JobLease, workspace: &Pat
                     .strip_prefix(workspace)?
                     .to_string_lossy()
                     .replace('\\', "/");
-                client.artifact(job, &name, &current).await?;
+                if uploaded.insert(name.clone()) {
+                    client.artifact(job, &name, &current).await?;
+                }
             }
         }
     }
     Ok(())
-}
-
-#[cfg(windows)]
-async fn kill_tree(pid: u32) {
-    let _ = Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .status()
-        .await;
-}
-#[cfg(not(windows))]
-async fn kill_tree(pid: u32) {
-    let _ = Command::new("pkill")
-        .args(["-TERM", "-P", &pid.to_string()])
-        .status()
-        .await;
-    let _ = Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .status()
-        .await;
 }

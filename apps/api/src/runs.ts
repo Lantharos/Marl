@@ -4,7 +4,9 @@ import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 
 type Repository = { id: string; organizationId: string; owner: string; name: string };
-export type RunJob = { key: string; name: string; labels: string[]; steps: Array<{ name: string; run: string; shell?: string; environment?: Record<string, string> }>; environment: Record<string, string>; artifacts: string[] };
+export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
+export type RunService = { name: string; image: string; environment: Record<string, string> };
+export type RunJob = { key: string; name: string; labels: string[]; needs: string[]; steps: RunStep[]; environment: Record<string, string>; artifacts: string[]; runtime: { image: string; timeoutMinutes: number; services: RunService[] } };
 type QueueRun = { repositoryId: string; name: string; trigger: 'manual' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[] };
 export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
@@ -58,6 +60,12 @@ function artifactPath(value: string): boolean {
   return normalized.length > 0 && normalized.length <= 260 && !normalized.startsWith('/') && !normalized.includes(':') && normalized.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
 }
 
+function image(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized.length > 0 && normalized.length <= 240 && /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]+$/.test(normalized) ? normalized : null;
+}
+
 export function parseRunJobs(value: unknown): JobParseResult {
   if (!Array.isArray(value) || value.length < 1 || value.length > 32) return { error: { code: 'invalid_jobs', detail: 'One to 32 jobs are required.' } };
   const jobs: RunJob[] = [];
@@ -67,19 +75,41 @@ export function parseRunJobs(value: unknown): JobParseResult {
     const labels = Array.isArray(job.labels) ? [...new Set(job.labels.map(String).map((label) => label.trim().toLowerCase()))] : [];
     const steps = Array.isArray(job.steps) ? job.steps : [];
     const jobEnvironment = environment(job.environment);
-    if (typeof job.key !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(job.key) || typeof job.name !== 'string' || !job.name.trim() || job.name.length > 160 || labels.length > 32 || labels.some((label) => !/^[a-z0-9][a-z0-9._-]{0,39}$/.test(label)) || steps.length < 1 || steps.length > 64 || !jobEnvironment) return { error: { code: 'invalid_job', detail: 'Job keys, names, labels, environment, and steps are invalid.' } };
+    const runtimeValue = job.runtime && typeof job.runtime === 'object' ? job.runtime as Record<string, unknown> : {};
+    const runtimeImage = image(runtimeValue.image ?? job.container ?? 'ubuntu:24.04');
+    const timeoutMinutes = Number(runtimeValue.timeoutMinutes ?? job.timeoutMinutes ?? 360);
+    const needs = Array.isArray(job.needs) ? [...new Set(job.needs.map(String))] : typeof job.needs === 'string' ? [job.needs] : [];
+    const servicesValue = Array.isArray(runtimeValue.services) ? runtimeValue.services : [];
+    const services: RunService[] = [];
+    for (const value of servicesValue) {
+      const service = value && typeof value === 'object' ? value as Record<string, unknown> : null;
+      const serviceEnvironment = environment(service?.environment);
+      const serviceImage = image(service?.image);
+      if (!service || typeof service.name !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(service.name) || !serviceImage || !serviceEnvironment) return { error: { code: 'invalid_service', detail: 'Services need a valid name, container image, and environment.' } };
+      services.push({ name: service.name, image: serviceImage, environment: serviceEnvironment });
+    }
+    if (typeof job.key !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(job.key) || typeof job.name !== 'string' || !job.name.trim() || job.name.length > 160 || labels.length > 32 || labels.some((label) => !/^[a-z0-9][a-z0-9._-]{0,39}$/.test(label)) || needs.length > 31 || needs.some((need) => !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(need)) || steps.length < 1 || steps.length > 64 || !jobEnvironment || !runtimeImage || !Number.isInteger(timeoutMinutes) || timeoutMinutes < 1 || timeoutMinutes > 1440 || services.length > 8) return { error: { code: 'invalid_job', detail: 'Job keys, names, labels, dependencies, environment, runtime, and steps are invalid.' } };
     const parsedSteps: RunJob['steps'] = [];
     for (const rawStep of steps) {
       const step = rawStep as Record<string, unknown>;
       const stepEnvironment = environment(step?.environment);
-      if (!step || typeof step.name !== 'string' || !step.name.trim() || step.name.length > 160 || typeof step.run !== 'string' || !step.run.trim() || step.run.length > 50_000 || (step.shell !== undefined && (typeof step.shell !== 'string' || !['powershell', 'pwsh', 'cmd', 'sh', 'bash'].includes(step.shell))) || !stepEnvironment) return { error: { code: 'invalid_step', detail: 'Every step needs a valid name, command, shell, and environment.' } };
-      parsedSteps.push({ name: step.name, run: step.run, ...(typeof step.shell === 'string' ? { shell: step.shell } : {}), ...(Object.keys(stepEnvironment).length ? { environment: stepEnvironment } : {}) });
+      const stepTimeout = step.timeoutMinutes === undefined ? undefined : Number(step.timeoutMinutes);
+      const workingDirectory = step.workingDirectory === undefined ? undefined : String(step.workingDirectory);
+      if (!step || typeof step.name !== 'string' || !step.name.trim() || step.name.length > 160 || typeof step.run !== 'string' || !step.run.trim() || step.run.length > 50_000 || (step.shell !== undefined && (typeof step.shell !== 'string' || !['powershell', 'pwsh', 'cmd', 'sh', 'bash'].includes(step.shell))) || !stepEnvironment || (stepTimeout !== undefined && (!Number.isInteger(stepTimeout) || stepTimeout < 1 || stepTimeout > 1440)) || (workingDirectory !== undefined && !artifactPath(workingDirectory))) return { error: { code: 'invalid_step', detail: 'Every step needs a valid name, command, shell, environment, working directory, and timeout.' } };
+      parsedSteps.push({ name: step.name, run: step.run, ...(typeof step.shell === 'string' ? { shell: step.shell } : {}), ...(Object.keys(stepEnvironment).length ? { environment: stepEnvironment } : {}), ...(workingDirectory ? { workingDirectory } : {}), ...(stepTimeout ? { timeoutMinutes: stepTimeout } : {}), ...(step.continueOnError === true ? { continueOnError: true } : {}) });
     }
     const artifacts = Array.isArray(job.artifacts) ? job.artifacts.map(String) : [];
     if (artifacts.length > 32 || artifacts.some((path) => !artifactPath(path))) return { error: { code: 'invalid_artifacts', detail: 'Artifact paths must stay inside the job workspace.' } };
-    jobs.push({ key: job.key, name: job.name, labels, steps: parsedSteps, environment: jobEnvironment, artifacts });
+    jobs.push({ key: job.key, name: job.name, labels, needs, steps: parsedSteps, environment: jobEnvironment, artifacts, runtime: { image: runtimeImage, timeoutMinutes, services } });
   }
   if (new Set(jobs.map((job) => job.key)).size !== jobs.length) return { error: { code: 'duplicate_job', detail: 'Job keys must be unique.' } };
+  if (jobs.some((job) => job.needs.includes(job.key) || job.needs.some((need) => !jobs.some((candidate) => candidate.key === need)))) return { error: { code: 'invalid_dependency', detail: 'Every job dependency must refer to another job in this run.' } };
+  const resolved = new Set<string>();
+  while (resolved.size < jobs.length) {
+    const ready = jobs.filter((job) => !resolved.has(job.key) && job.needs.every((need) => resolved.has(need)));
+    if (!ready.length) return { error: { code: 'dependency_cycle', detail: 'Job dependencies cannot contain a cycle.' } };
+    for (const job of ready) resolved.add(job.key);
+  }
   return { jobs };
 }
 
@@ -88,7 +118,7 @@ export async function queueRun(env: Env, input: QueueRun): Promise<Record<string
   const statements = [env.DB.prepare(`INSERT INTO runs (id,repository_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM runs WHERE repository_id=?`).bind(runId, input.repositoryId, input.name, input.trigger, input.branch, input.commitId, input.actorId, input.repositoryId)];
   for (const job of input.jobs) {
     const checkName = `${input.name} / ${job.name}`.slice(0, 240);
-    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json) VALUES (?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), runId, job.key, job.name, checkName, JSON.stringify(job.labels), JSON.stringify(job.steps), JSON.stringify(job.environment), JSON.stringify(job.artifacts)));
+    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), runId, job.key, job.name, checkName, JSON.stringify(job.labels), JSON.stringify(job.steps), JSON.stringify(job.environment), JSON.stringify(job.artifacts), JSON.stringify(job.runtime), JSON.stringify(job.needs)));
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), input.repositoryId, input.commitId, checkName, 'queued'));
   }
   await env.DB.batch(statements);
@@ -126,11 +156,11 @@ export async function retryRun(env: Env, principal: Principal, owner: string, na
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const previous = await env.DB.prepare(`SELECT id,name,branch,commit_id AS commitId FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; name: string; branch: string; commitId: string }>();
   if (!previous) return problem(409, 'run_not_retryable', 'This run cannot be retried yet.');
-  const jobs = await env.DB.prepare(`SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson FROM jobs WHERE run_id=? ORDER BY created_at`).bind(previous.id).all<{ jobKey: string; name: string; checkName: string; labelsJson: string; stepsJson: string; environmentJson: string; artifactPathsJson: string }>();
+  const jobs = await env.DB.prepare(`SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson,runtime_json AS runtimeJson,needs_json AS needsJson FROM jobs WHERE run_id=? ORDER BY created_at`).bind(previous.id).all<{ jobKey: string; name: string; checkName: string; labelsJson: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; needsJson: string }>();
   const id = identifier('run');
   const statements = [env.DB.prepare(`INSERT INTO runs (id,repository_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,COALESCE(MAX(number),0)+1,?,'retry',?,?,? FROM runs WHERE repository_id=?`).bind(id, repo.id, previous.name, previous.branch, previous.commitId, principal.id, repo.id)];
   for (const job of jobs.results) {
-    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json) VALUES (?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), id, job.jobKey, job.name, job.checkName, job.labelsJson, job.stepsJson, job.environmentJson, job.artifactPathsJson));
+    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), id, job.jobKey, job.name, job.checkName, job.labelsJson, job.stepsJson, job.environmentJson, job.artifactPathsJson, job.runtimeJson, job.needsJson));
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), repo.id, previous.commitId, job.checkName, 'queued'));
   }
   await env.DB.batch(statements);

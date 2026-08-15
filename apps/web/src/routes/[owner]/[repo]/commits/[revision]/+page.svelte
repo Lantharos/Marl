@@ -19,7 +19,7 @@
 <section class="timeline">
   <h2>Today</h2>
   {#each items as commit}
-    <article><span class="node"><GitCommitHorizontal size={16} /></span><span class="avatar">KI</span><div class="main"><a href="{base}/commit/{commit.shortId}">{commit.title}</a><p><strong>{commit.author}</strong> committed {commit.authoredAt}</p></div>{#if commit.verified}<span class="verified"><BadgeCheck size={13} />Verified</span>{/if}<a class="sha" href="{base}/commit/{commit.shortId}">{commit.shortId}</a></article>
+    <article><span class="node"><GitCommitHorizontal size={16} /></span><span class="avatar">{commit.author.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span><div class="main"><a href="{base}/commit/{commit.id}">{commit.title}</a><p><strong>{commit.author}</strong> committed {commit.authoredAt}</p></div>{#if commit.verified}<span class="verified"><BadgeCheck size={13} />Verified</span>{/if}<a class="sha" href="{base}/commit/{commit.id}">{commit.shortId}</a></article>
   {/each}
 </section>
 {#if loadError}<p class="error" role="alert">Commit history could not be loaded. Refresh to try again.</p>{/if}
