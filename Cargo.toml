@@ -1,10 +1,11 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/sty-protocol",
-  "client",
+  "crates/sty-core",
+  "crates/sty-cli",
+  "crates/sty-git",
+  "crates/sty-runner",
 ]
-exclude = ["server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,14 +14,16 @@ license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
 anyhow = "1.0.102"
-axum = "0.8.9"
-base64 = "0.22.1"
 clap = { version = "4.6.1", features = ["derive"] }
-hex = "0.4.3"
-reqwest = { version = "0.13.2", default-features = false, features = ["blocking", "form", "json", "rustls"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-sha2 = "0.11.0"
 tempfile = "3.27.0"
+thiserror = "2.0.18"
+sty-core = { path = "crates/sty-core" }
+axum = "0.8.9"
+bytes = "1.11.1"
+futures-util = "0.3.34"
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "stream"] }
 tokio = { version = "1.52.1", features = ["full"] }
-sty-protocol = { path = "crates/sty-protocol" }
+tokio-util = { version = "0.7.18", features = ["io"] }
+sty-runner = { path = "crates/sty-runner" }
