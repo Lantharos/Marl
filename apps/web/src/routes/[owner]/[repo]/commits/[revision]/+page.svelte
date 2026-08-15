@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import { api } from '$lib/api';
@@ -10,11 +9,24 @@
   const revisionPath = $derived(encodeRevision(revision));
   let items = $state<Array<{id:string;shortId:string;title:string;author:string;authoredAt:string;verified:boolean}>>([]);
   let loadError = $state(false);
-  onMount(async () => {
-    try {
-      const result = await api<{ commits: Array<{ id:string;shortId:string;title:string;author:string;authoredAt:string;signatureStatus:string }> }>(`/repositories/${$page.params.owner}/${$page.params.repo}/commits?revision=${encodeURIComponent(revision)}&limit=100`);
-      items = result.commits.map((commit) => ({ ...commit, verified: commit.signatureStatus === 'verified' }));
-    } catch { loadError = true; }
+  let loadRequest = 0;
+
+  $effect(() => {
+    const request = ++loadRequest;
+    const owner = $page.params.owner;
+    const repository = $page.params.repo;
+    const selectedRevision = revision;
+    items = [];
+    loadError = false;
+    void (async () => {
+      try {
+        const result = await api<{ commits: Array<{ id:string;shortId:string;title:string;author:string;authoredAt:string;signatureStatus:string }> }>(`/repositories/${owner}/${repository}/commits?revision=${encodeURIComponent(selectedRevision)}&limit=100`);
+        if (request !== loadRequest) return;
+        items = result.commits.map((commit) => ({ ...commit, verified: commit.signatureStatus === 'verified' }));
+      } catch {
+        if (request === loadRequest) loadError = true;
+      }
+    })();
   });
 </script>
 <svelte:head><title>Commits · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
   import Copy from 'lucide-svelte/icons/copy';
   import Check from 'lucide-svelte/icons/check';
   import Download from 'lucide-svelte/icons/download';
@@ -16,6 +15,7 @@
   const base = $derived(`/${$page.params.owner}/${$page.params.repo}`);
   let loadError = $state(false);
   let copied = $state(false);
+  let loadRequest = 0;
   async function copyFile() { await navigator.clipboard.writeText(content); copied = true; setTimeout(() => (copied = false), 1400); }
   function downloadFile() {
     const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
@@ -23,9 +23,22 @@
     anchor.href = url; anchor.download = filePath.split('/').at(-1) ?? 'file'; anchor.click();
     URL.revokeObjectURL(url);
   }
-  onMount(async () => {
-    try { content = await apiText(`/repositories/${$page.params.owner}/${$page.params.repo}/blob/${revisionPath}/${encodeRepositoryPath(filePath)}`); }
-    catch { loadError = true; }
+  $effect(() => {
+    const request = ++loadRequest;
+    const owner = $page.params.owner;
+    const repository = $page.params.repo;
+    const selectedRevision = revisionPath;
+    const selectedPath = filePath;
+    content = '';
+    loadError = false;
+    void (async () => {
+      try {
+        const next = await apiText(`/repositories/${owner}/${repository}/blob/${selectedRevision}/${encodeRepositoryPath(selectedPath)}`);
+        if (request === loadRequest) content = next;
+      } catch {
+        if (request === loadRequest) loadError = true;
+      }
+    })();
   });
 </script>
 <svelte:head><title>{filePath} · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
