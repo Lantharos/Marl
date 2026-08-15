@@ -15,6 +15,7 @@ use tokio::fs;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let local_storage = std::env::var("STY_GIT_LOCAL").map_or(true, |value| value != "0");
     let repositories = PathBuf::from(
         std::env::var("STY_GIT_ROOT").unwrap_or_else(|_| ".sty-data/repositories".into()),
     );
@@ -28,8 +29,10 @@ async fn main() -> Result<()> {
         client: reqwest::Client::new(),
         gateway_token: std::env::var("STY_GIT_GATEWAY_TOKEN")
             .unwrap_or_else(|_| "sty-local".into()),
+        local_storage,
     });
     let app = Router::new()
+        .route("/health", axum::routing::get(|| async { "ok\n" }))
         .route(
             "/_sty/repositories/{owner}/{repository}/status",
             axum::routing::get(repository_storage::repository_status),

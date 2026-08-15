@@ -9,5 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=builder /build/target/release/sty-git /usr/local/bin/sty-git
 ENV STY_GIT_LISTEN=0.0.0.0:8788
 ENV STY_GIT_ROOT=/var/lib/sty/repositories
+ENV STY_GIT_LOCAL=0
 EXPOSE 8788
 ENTRYPOINT ["/usr/local/bin/sty-git"]

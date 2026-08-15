@@ -333,6 +333,7 @@ mod tests {
             control_plane: String::new(),
             client: reqwest::Client::new(),
             gateway_token: String::new(),
+            local_storage: false,
         };
         let commit = perform_commit(
             &state,

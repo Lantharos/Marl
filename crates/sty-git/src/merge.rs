@@ -1,4 +1,7 @@
-use crate::state::{AppState, git_output, is_object_id, repository_path, safe_ref, safe_segment};
+use crate::{
+    metadata::index_local_repository,
+    state::{AppState, git_output, is_object_id, repository_path, safe_ref, safe_segment},
+};
 use anyhow::{Context, Result};
 use axum::{
     Json,
@@ -157,6 +160,17 @@ async fn perform_merge(state: &AppState, request: MergeRequest) -> Result<MergeR
         .await?;
     if !update.status.success() {
         anyhow::bail!("stale branch head")
+    }
+    if state.local_storage
+        && let Err(error) = index_local_repository(
+            state,
+            request.repository_id,
+            request.owner,
+            request.repository,
+        )
+        .await
+    {
+        eprintln!("local merge indexing failed: {error:#}");
     }
     Ok(MergeResponse { commit_id })
 }

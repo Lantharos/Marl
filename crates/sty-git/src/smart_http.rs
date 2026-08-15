@@ -1,4 +1,7 @@
-use crate::state::{AppState, repository_path, safe_segment};
+use crate::{
+    metadata::index_local_repository,
+    state::{AppState, repository_path, safe_segment},
+};
 use anyhow::{Context, Result};
 use axum::{
     body::Body,
@@ -135,6 +138,17 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
                 "git http-backend exited {result}: {}",
                 String::from_utf8_lossy(&stderr)
             )
+        }
+        if state.local_storage
+            && let Err(error) = index_local_repository(
+                &state,
+                authorization.repository_id.clone(),
+                git_path.owner.clone(),
+                git_path.repository.clone(),
+            )
+            .await
+        {
+            eprintln!("local Git push indexing failed: {error:#}");
         }
         let mut response = Response::new(Body::from(response_body));
         *response.status_mut() = status;

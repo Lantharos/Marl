@@ -8,6 +8,7 @@ pub(crate) struct AppState {
     pub control_plane: String,
     pub client: reqwest::Client,
     pub gateway_token: String,
+    pub local_storage: bool,
 }
 
 pub(crate) fn safe_segment(value: &str) -> bool {

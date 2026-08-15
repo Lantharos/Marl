@@ -17,28 +17,27 @@ Install JavaScript dependencies once:
 bun install
 ```
 
-Start the web application and API together:
+Start the web application, API, and local Git gateway together:
 
 ```powershell
 bun dev
 ```
 
-Or run either surface independently:
+Or run a surface independently:
 
 ```powershell
 bun dev:web
 bun dev:api
-```
-
-The Smart HTTP gateway is a separate Rust process locally:
-
-```powershell
-cargo run -p sty-git
+bun dev:git
 ```
 
 Production Git hosting is packaged by `apps/git-edge` and `Dockerfile.git` as a Cloudflare
 Worker backed by immutable Git packs in R2, repository and organization Durable Objects,
 and short-lived Containers for Git compatibility, validation, indexing, and compaction.
+The local Rust gateway replaces those Containers during development, including on Windows.
+To exercise the complete Cloudflare Worker and Container topology, run
+`bun run --cwd apps/git-edge dev:cloudflare` from WSL or Linux; Wrangler does not support
+local Container development directly on Windows.
 
 The normal workspace build validates the Worker bundle without requiring Docker. Before a
 Git deployment, run `bun run --cwd apps/git-edge build:container` with Docker Engine running

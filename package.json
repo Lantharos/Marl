@@ -10,6 +10,7 @@
     "dev": "bun run --filter './apps/*' dev",
     "dev:web": "bun --cwd apps/web dev",
     "dev:api": "bun --cwd apps/api dev",
+    "dev:git": "cargo run -p sty-git",
     "check": "bun run --filter '*' check",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test && cargo test --workspace"

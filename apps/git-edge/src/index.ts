@@ -18,7 +18,8 @@ export class GitContainer extends Container<GitEdgeEnv> {
     STY_API_URL: this.env.STY_API_URL,
     STY_GIT_GATEWAY_TOKEN: this.env.STY_GIT_GATEWAY_TOKEN,
     STY_GIT_LISTEN: '0.0.0.0:8788',
-    STY_GIT_ROOT: '/var/lib/sty/repositories'
+    STY_GIT_ROOT: '/var/lib/sty/repositories',
+    STY_GIT_LOCAL: '0'
   };
 }
 

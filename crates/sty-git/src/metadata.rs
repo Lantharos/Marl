@@ -173,6 +173,23 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
     Ok(())
 }
 
+pub(crate) async fn index_local_repository(
+    state: &AppState,
+    repository_id: String,
+    owner: String,
+    repository: String,
+) -> Result<()> {
+    index_inner(
+        state,
+        IndexRequest {
+            repository_id,
+            owner,
+            repository,
+        },
+    )
+    .await
+}
+
 async fn index_tree(
     repository: &Path,
     commit_id: &str,
