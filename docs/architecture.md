@@ -135,8 +135,10 @@ refresh only the pull-request model so review actions never require a document n
 
 Repository routes use SvelteKit's Cloudflare adapter and load repository, pull-request, diff,
 and settings data through route loaders so the initial response is server-rendered. Client
-requests are reserved for mutations and live refreshes. The web application stays on one
-Svelte routing and rendering model instead of introducing a second React runtime for typed
+requests are reserved for mutations and live refreshes, keeping the current document mounted
+while those mutations run. Route loaders translate API failures into their original HTTP status
+so missing, forbidden, and unavailable resources render the correct error boundary. Sty keeps
+SvelteKit's routing and rendering model instead of introducing a second React runtime for typed
 routing or server functions.
 
 Production storage protections, recovery checks, and the acknowledgement contract are

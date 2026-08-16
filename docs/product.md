@@ -88,10 +88,11 @@ tombstones, reversible thread resolution, and an owner-controlled conversation l
 start line or range conversations directly from the changes view; those conversations also
 appear in the timeline with their exact file and line range, then collapse when resolved. Title,
 description, lifecycle, lock, assignment, label, merge, and thread-resolution changes are durable
-timeline events. The conversation composer keeps comment, review, merge, close, and reopen actions
-together without navigating away. Assignees and repository labels make ownership and triage
-visible without replacing review state. The commits, changes, checks, and conversation views all
-describe the same pinned head revision.
+timeline events. The conversation composer keeps comment, review, every allowed merge method,
+close, and reopen actions together without navigating away. Choosing an action makes it the
+composer's primary submit behavior and includes the written comment when present. Assignees and
+repository labels make ownership and triage visible without replacing review state. The commits,
+changes, checks, and conversation views all describe the same pinned head revision.
 
 Repository owners configure merge rules from the branches surface: required approvals,
 successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,

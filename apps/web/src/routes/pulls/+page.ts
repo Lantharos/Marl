@@ -1,5 +1,6 @@
 import type { PullRequestSummary } from '@sty/contracts';
 import { apiWith } from '$lib/api';
+import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch }) => apiWith<{ pullRequests: PullRequestSummary[] }>(fetch, '/pulls');
+export const load: PageLoad = async ({ fetch }) => routeLoad(apiWith<{ pullRequests: PullRequestSummary[] }>(fetch, '/pulls'));

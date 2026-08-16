@@ -1,4 +1,5 @@
 import { apiWith } from '$lib/api';
+import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
 export type CommitDetail = {
@@ -14,5 +15,5 @@ export type CommitDetail = {
 };
 
 export const load: PageLoad = async ({ fetch, params }) => ({
-  commit: await apiWith<CommitDetail>(fetch, `/repositories/${params.owner}/${params.repo}/commits/${params.sha}`)
+  commit: await routeLoad(apiWith<CommitDetail>(fetch, `/repositories/${params.owner}/${params.repo}/commits/${params.sha}`))
 });
