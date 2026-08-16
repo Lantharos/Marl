@@ -84,8 +84,11 @@ blocker without hunting across unrelated screens.
 
 A pull request moves from draft to ready and can be closed or reopened without losing its
 review record. Its conversation includes replies, editable comments, durable deletion
-tombstones, and reversible thread resolution. The commits, changes, checks, and conversation
-views all describe the same pinned head revision.
+tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
+start line or range conversations directly from the changes view; those conversations also
+appear in the timeline with their exact file and line range. Assignees and repository labels
+make ownership and triage visible without replacing review state. The commits, changes, checks,
+and conversation views all describe the same pinned head revision.
 
 Repository owners configure merge rules from the branches surface: required approvals,
 successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,

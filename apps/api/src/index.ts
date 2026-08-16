@@ -3,7 +3,7 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
-import { addPullComment, addThreadComment, compareBranches, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updateReviewComment } from './pulls';
+import { addPullComment, addThreadComment, compareBranches, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullMetadata, updateReviewComment } from './pulls';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
 import { cancelRun, createRun, downloadArtifact, getRun, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 
@@ -89,7 +89,7 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
-    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads|comments|ready|close|reopen))?)?$/);
+    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads|comments|metadata|ready|close|reopen))?)?$/);
     if (pullRoute) {
       const owner = decodeURIComponent(pullRoute[1]);
       const repository = decodeURIComponent(pullRoute[2]);
@@ -103,6 +103,7 @@ const worker = {
       if (number !== null && action === 'diff' && request.method === 'GET') return getPullDiff(_env, principal, owner, repository, number);
       if (number !== null && action === 'threads' && request.method === 'POST') return createThread(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'comments' && request.method === 'POST') return addPullComment(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'metadata' && request.method === 'PATCH') return updatePullMetadata(request, _env, principal, owner, repository, number);
       if (number !== null && ['ready', 'close', 'reopen'].includes(action ?? '') && request.method === 'POST') return transitionPull(_env, principal, owner, repository, number, action as 'ready' | 'close' | 'reopen');
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }

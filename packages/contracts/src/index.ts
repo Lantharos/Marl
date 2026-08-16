@@ -102,6 +102,25 @@ export interface PullRequestDetail extends PullRequestSummary {
   reviews: PullRequestReview[];
   checks: CheckSummary[];
   threads: ReviewThread[];
+  assignees: PullRequestPerson[];
+  labels: PullRequestLabel[];
+  availableAssignees: PullRequestPerson[];
+  availableLabels: PullRequestLabel[];
+  locked: boolean;
+  canManage: boolean;
+}
+
+export interface PullRequestPerson {
+  id: Identifier;
+  handle: string;
+  displayName: string;
+}
+
+export interface PullRequestLabel {
+  id: Identifier;
+  name: string;
+  color: string;
+  description: string;
 }
 
 export interface PullRequestComment {
@@ -129,6 +148,8 @@ export interface ReviewThread {
   path: string;
   side: 'old' | 'new';
   line: number;
+  startSide: 'old' | 'new';
+  startLine: number;
   commitId: string;
   createdAt: string;
   outdated: boolean;

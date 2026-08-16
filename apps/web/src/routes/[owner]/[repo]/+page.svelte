@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { tick } from 'svelte';
-  import { onDestroy, onMount } from 'svelte';
+  import { tick, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import BookOpen from 'lucide-svelte/icons/book-open';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -16,26 +16,30 @@
   import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
   import { dismissable } from '$lib/actions/dismissable';
   import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
+  import type { PageData } from './$types';
 
   type BranchItem = { name: string; commit: string; title: string; updatedAt: string; isDefault: boolean; ahead: number; behind: number };
   type FileItem = { path: string; name: string; kind: 'folder' | 'file'; size?: string; message: string; updatedAt: string };
   type CommitItem = { id: string; shortId: string; title: string; author: string; authoredAt: string; verified: boolean };
+  type BranchData = { name: string; commitId: string; title: string; updatedAt: string };
+  type TreeEntryData = { path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number };
 
+  let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner ?? 'lantharos');
   const repo = $derived($page.params.repo ?? 'sty');
   let branchOpen = $state(false);
   let fileFinderOpen = $state(false);
-  let selectedBranch = $state('main');
+  let selectedBranch = $state(untrack(() => data.defaultBranch));
   let branchQuery = $state('');
   let fileQuery = $state('');
   let finderInput = $state<HTMLInputElement>();
-  let branchItems = $state<BranchItem[]>([]);
-  let fileItems = $state<FileItem[]>([]);
+  let branchItems = $state<BranchItem[]>(untrack(() => data.branches.map((branch: BranchData) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), title: branch.title, updatedAt: branch.updatedAt, isDefault: branch.name === data.defaultBranch, ahead: 0, behind: 0 }))));
+  let fileItems = $state<FileItem[]>(untrack(() => data.tree.entries.map((entry: TreeEntryData) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' as const : 'file' as const, size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: data.tree.commit.title, updatedAt: data.tree.commit.authoredAt }))));
   let finderItems = $state<FileItem[]>([]);
   let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
   let fileSearchRequest = 0;
-  let latestCommit = $state<CommitItem | null>(null);
-  let readme = $state('');
+  let latestCommit = $state<CommitItem | null>(untrack(() => ({ ...data.tree.commit, verified: data.tree.commit.signatureStatus === 'verified' })));
+  let readme = $state(untrack(() => data.readme));
   let liveError = $state(false);
   const revisionPath = $derived(encodeRevision(selectedBranch));
   const matchingBranches = $derived(branchItems.filter((branch) => branch.name.toLowerCase().includes(branchQuery.toLowerCase())));
@@ -86,14 +90,6 @@
     fileFinderOpen = false;
   }
 
-  onMount(async () => {
-    try {
-      const branchData = await api<{ defaultBranch: string; branches: Array<{ name: string; commitId: string; title: string; updatedAt: string }> }>(`/repositories/${owner}/${repo}/branches`);
-      selectedBranch = branchData.defaultBranch;
-      branchItems = branchData.branches.map((branch) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), title: branch.title, updatedAt: branch.updatedAt, isDefault: branch.name === branchData.defaultBranch, ahead: 0, behind: 0 }));
-      await loadTree(selectedBranch);
-    } catch { liveError = true; }
-  });
   onDestroy(() => clearTimeout(fileSearchTimer));
 </script>
 

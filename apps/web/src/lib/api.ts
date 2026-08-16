@@ -23,7 +23,11 @@ export async function apiWith<T>(fetcher: typeof fetch, path: string, init: Requ
 }
 
 export async function apiText(path: string): Promise<string> {
-  const response = await fetch(`/api/v1${path}`, { headers: { accept: 'text/plain, application/octet-stream' } });
+  return apiTextWith(fetch, path);
+}
+
+export async function apiTextWith(fetcher: typeof fetch, path: string): Promise<string> {
+  const response = await fetcher(`/api/v1${path}`, { headers: { accept: 'text/plain, application/octet-stream' } });
   if (!response.ok) throw new StyApiError(response.status, 'request_failed', `Sty API request failed (${response.status}).`);
   return response.text();
 }

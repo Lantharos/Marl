@@ -125,6 +125,13 @@ export async function createRepository(request: Request, env: Env, principal: Pr
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
     throw error;
   }
+  const defaults = [
+    ['bug', '#e16f73', 'Something is not working'],
+    ['enhancement', '#8c7ad8', 'New or improved functionality'],
+    ['documentation', '#68a7b8', 'Documentation changes'],
+    ['needs review', '#d3a45f', 'Ready for reviewer attention']
+  ];
+  await env.DB.batch(defaults.map(([label, color, detail]) => env.DB.prepare('INSERT INTO repository_labels (id,repository_id,name,color,description) VALUES (?,?,?,?,?)').bind(identifier('label'), id, label, color, detail)));
   return json({ repository: { id, owner, name, description, visibility, updatedAt: new Date().toISOString() } }, { status: 201 });
 }
 
