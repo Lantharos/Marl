@@ -21,6 +21,7 @@ export type PackDescriptor = {
   id: string;
   packKey: string;
   indexKey: string;
+  objectIndexKey: string;
   compressedBytes: number;
   expandedBytes: number;
   objectCount: number;

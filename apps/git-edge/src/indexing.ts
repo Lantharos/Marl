@@ -1,39 +1,38 @@
 import { getContainer } from '@cloudflare/containers';
 import { DurableObject } from 'cloudflare:workers';
+import { beginOperation, completeOperation, operationResponse, readOperation, retryOperation, scheduleOperation } from './durable-operation';
 import type { GitEdgeEnv } from './env';
 import { hydrateRepository, indexHydratedRepository } from './hydration';
+import { parseStateBody, stateFailure } from './state-http';
+import { repositoryIndexTaskBody } from './state-schemas';
 
-type IndexTask = { owner: string; repository: string; repositoryId: string; generation: number; attempts: number };
+type IndexTask = { owner: string; repository: string; repositoryId: string; generation: number };
 
 export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
   async fetch(request: Request) {
     if (request.headers.get('x-sty-storage-token') !== this.env.STY_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
-    const task = await request.json<Omit<IndexTask, 'attempts'>>();
-    await this.ctx.storage.put('task', { ...task, attempts: 0 });
-    await this.ctx.storage.setAlarm(Date.now());
-    return new Response(null, { status: 202 });
+    if (request.method === 'GET' && new URL(request.url).pathname === '/status') return operationResponse(await readOperation(this.ctx.storage));
+    try {
+      const task = await parseStateBody(request, repositoryIndexTaskBody);
+      await scheduleOperation(this.ctx.storage, 'repository.index', String(task.generation), task);
+      return new Response(null, { status: 202 });
+    } catch (error) {
+      return stateFailure(error);
+    }
   }
 
   async alarm() {
-    const task = await this.ctx.storage.get<IndexTask>('task');
-    if (!task) return;
+    const operation = await beginOperation<IndexTask>(this.ctx.storage);
+    if (!operation) return;
+    const task = operation.payload;
     try {
       const container = getContainer(this.env.GIT_CONTAINERS, task.repositoryId);
       await hydrateRepository(container, this.env, task.owner, task.repository, task.repositoryId);
       await indexHydratedRepository(container, this.env, task.repositoryId, task.owner, task.repository);
-      const latest = await this.ctx.storage.get<IndexTask>('task');
-      if (latest?.generation === task.generation) await this.ctx.storage.delete('task');
-      else await this.ctx.storage.setAlarm(Date.now());
+      await completeOperation(this.ctx.storage, operation.id);
     } catch (error) {
-      const attempts = task.attempts + 1;
       console.error('repository indexing failed', error);
-      const latest = await this.ctx.storage.get<IndexTask>('task');
-      if (latest && latest.generation !== task.generation) {
-        await this.ctx.storage.setAlarm(Date.now());
-        return;
-      }
-      await this.ctx.storage.put('task', { ...task, attempts });
-      await this.ctx.storage.setAlarm(Date.now() + Math.min(60_000 * 2 ** Math.min(attempts - 1, 6), 60 * 60 * 1000));
+      await retryOperation(this.ctx.storage, operation.id, error, Math.min(60_000 * 2 ** Math.min(operation.attempts - 1, 6), 60 * 60 * 1000));
     }
   }
 }

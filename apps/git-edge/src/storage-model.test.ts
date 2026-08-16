@@ -3,7 +3,7 @@ import { STORAGE_LIMITS, StorageError, adjustStorage, beginPush, emptyOrganizati
 
 const now = 1_000_000;
 const reservation = { id: 'push_1', repository: 'lantharos/sty', maximumBytes: 1024, expiresAt: now + 60_000, state: 'reserved' as const };
-const pack = { id: 'a'.repeat(40), packKey: 'repositories/lantharos/sty/packs/a.pack', indexKey: 'repositories/lantharos/sty/packs/a.idx', compressedBytes: 700, expandedBytes: 900, objectCount: 12, largestBlobBytes: 200 };
+const pack = { id: 'a'.repeat(40), packKey: 'repositories/lantharos/sty/packs/a.pack', indexKey: 'repositories/lantharos/sty/packs/a.idx', objectIndexKey: 'repositories/lantharos/sty/packs/a.objects.json', compressedBytes: 700, expandedBytes: 900, objectCount: 12, largestBlobBytes: 200 };
 
 describe('repository publication', () => {
   test('publishes an immutable generation under the matching lease', () => {

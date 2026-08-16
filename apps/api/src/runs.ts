@@ -2,7 +2,9 @@ import type { Principal } from './auth';
 import { identifier, validBranchName } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
+import { createRunBody } from './request-schemas';
 import { notifyPullsForCommit } from './pull-realtime';
+import { authorizeRepository, authorizeRepositoryId, type RepositoryCapability } from './repository-access';
 
 type Repository = { id: string; organizationId: string; owner: string; name: string };
 export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
@@ -11,8 +13,8 @@ export type RunJob = { key: string; name: string; labels: string[]; needs: strin
 type QueueRun = { repositoryId: string; name: string; trigger: 'manual' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[] };
 export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
-async function repository(env: Env, principal: Principal, owner: string, name: string): Promise<Repository | null> {
-  return env.DB.prepare(`SELECT repositories.id, repositories.organization_id AS organizationId, organizations.slug AS owner, repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organizations.slug=? COLLATE NOCASE AND repositories.name=? COLLATE NOCASE AND organization_members.user_id=?`).bind(owner, name, principal.id).first<Repository>();
+async function repository(env: Env, principal: Principal, owner: string, name: string, capability: RepositoryCapability = 'read'): Promise<Repository | null> {
+  return authorizeRepository(env, principal, owner, name, capability);
 }
 
 function runSelect(where: string) {
@@ -36,9 +38,9 @@ export async function listRepositoryRuns(env: Env, principal: Principal, owner: 
 }
 
 export async function createRun(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const repo = await repository(env, principal, owner, name);
+  const repo = await repository(env, principal, owner, name, 'write');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const body = await readJson(request);
+  const body = await readJson(request, createRunBody);
   if (!body || typeof body.name !== 'string' || body.name.trim().length < 2 || body.name.length > 160 || !validBranchName(body.branch) || !Array.isArray(body.jobs) || body.jobs.length < 1 || body.jobs.length > 32) return problem(422, 'invalid_run', 'A name, branch, and one to 32 jobs are required.');
   const branch = await env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(repo.id, body.branch).first<{ commitId: string }>();
   if (!branch) return problem(404, 'branch_not_found', 'Run branch not found.');
@@ -153,7 +155,7 @@ export async function getRunState(env: Env, principal: Principal, owner: string,
 }
 
 export async function cancelRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
-  const repo = await repository(env, principal, owner, name);
+  const repo = await repository(env, principal, owner, name, 'write');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const run = await env.DB.prepare(`SELECT id,state,commit_id AS commitId FROM runs WHERE repository_id=? AND number=?`).bind(repo.id, number).first<{ id: string; state: string; commitId: string }>();
   if (!run || !['queued', 'running'].includes(run.state)) return problem(409, 'run_not_active', 'Only queued or running runs can be canceled.');
@@ -168,7 +170,7 @@ export async function cancelRun(env: Env, principal: Principal, owner: string, n
 }
 
 export async function retryRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
-  const repo = await repository(env, principal, owner, name);
+  const repo = await repository(env, principal, owner, name, 'write');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const previous = await env.DB.prepare(`SELECT id,name,branch,commit_id AS commitId FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; name: string; branch: string; commitId: string }>();
   if (!previous) return problem(409, 'run_not_retryable', 'This run cannot be retried yet.');
@@ -186,8 +188,8 @@ export async function retryRun(env: Env, principal: Principal, owner: string, na
 }
 
 export async function readJobLogs(env: Env, principal: Principal, jobId: string, url: URL): Promise<Response> {
-  const allowed = await env.DB.prepare(`SELECT jobs.id FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE jobs.id=? AND organization_members.user_id=?`).bind(jobId, principal.id).first();
-  if (!allowed) return problem(404, 'job_not_found', 'Job not found.');
+  const job = await env.DB.prepare(`SELECT jobs.id,runs.repository_id AS repositoryId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=?`).bind(jobId).first<{ id: string; repositoryId: string }>();
+  if (!job || !(await authorizeRepositoryId(env, principal, job.repositoryId, 'member'))) return problem(404, 'job_not_found', 'Job not found.');
   const after = Number(url.searchParams.get('after') ?? -1);
   if (!Number.isSafeInteger(after) || after < -1) return problem(422, 'invalid_log_cursor', 'Log cursor is invalid.');
   const chunks = await env.DB.prepare('SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence').bind(jobId, after).all<{ sequence: number; objectKey: string }>();
@@ -198,8 +200,8 @@ export async function readJobLogs(env: Env, principal: Principal, jobId: string,
 }
 
 export async function downloadArtifact(env: Env, principal: Principal, artifactId: string): Promise<Response> {
-  const artifact = await env.DB.prepare(`SELECT artifacts.name,artifacts.object_key AS objectKey,artifacts.content_type AS contentType FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE artifacts.id=? AND organization_members.user_id=?`).bind(artifactId, principal.id).first<{ name: string; objectKey: string; contentType: string }>();
-  if (!artifact) return problem(404, 'artifact_not_found', 'Artifact not found.');
+  const artifact = await env.DB.prepare(`SELECT artifacts.name,artifacts.object_key AS objectKey,artifacts.content_type AS contentType,runs.repository_id AS repositoryId FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id JOIN runs ON runs.id=jobs.run_id WHERE artifacts.id=?`).bind(artifactId).first<{ name: string; objectKey: string; contentType: string; repositoryId: string }>();
+  if (!artifact || !(await authorizeRepositoryId(env, principal, artifact.repositoryId, 'member'))) return problem(404, 'artifact_not_found', 'Artifact not found.');
   const object = await env.OBJECTS.get(artifact.objectKey);
   if (!object) return problem(502, 'artifact_missing', 'Artifact bytes are missing.');
   return new Response(object.body, { headers: { 'content-type': artifact.contentType, 'content-disposition': `attachment; filename="${artifact.name.replaceAll('"', '')}"`, 'content-length': String(object.size) } });

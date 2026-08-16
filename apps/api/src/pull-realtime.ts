@@ -23,7 +23,7 @@ export async function commitPullUpdate(
   const update = { id, pullId, version: Number(row.version), kind, payload, createdAt };
   try {
     const room = env.PULL_ROOMS.get(env.PULL_ROOMS.idFromName(pullId));
-    await room.fetch('https://pull-room.internal/publish', { method: 'POST', body: JSON.stringify(update) });
+    await room.fetch('https://pull-room.internal/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(update) });
   } catch {}
   return update;
 }

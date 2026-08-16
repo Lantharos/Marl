@@ -121,12 +121,19 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
     await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/refs`, env, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ refs: session.refs }) })));
     const packs: PackDescriptor[] = [];
     for (const [number, report] of reports.entries()) {
+      const metadataResponse = await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/${number}/objects`, env)));
+      if (!metadataResponse.body) throw new Error('Validator returned an empty object index.');
+      const metadataKey = `quarantine/${session.repository}/${session.pushId}/${number}.objects.json`;
+      await uploadSession(env, session.pushId).request('/track', { key: metadataKey });
+      await env.REPOSITORIES.put(metadataKey, metadataResponse.body, { httpMetadata: { contentType: 'application/json' } });
       const prefix = `repositories/${session.repository}/packs/${report.id}`;
       const packKey = `${prefix}.pack`;
       const indexKey = `${prefix}.idx`;
+      const objectIndexKey = `${prefix}.objects.json`;
       if (await promoteCanonicalObject(env.REPOSITORIES, session.packs[number].key, packKey, report.compressedBytes, 'application/x-git-packed-objects')) createdCanonicalKeys.push(packKey);
       if (await promoteCanonicalObject(env.REPOSITORIES, indexKeys[number], indexKey, null, 'application/x-git-packed-objects-toc')) createdCanonicalKeys.push(indexKey);
-      packs.push({ ...report, packKey, indexKey });
+      if (await promoteCanonicalObject(env.REPOSITORIES, metadataKey, objectIndexKey, null, 'application/json')) createdCanonicalKeys.push(objectIndexKey);
+      packs.push({ ...report, packKey, indexKey, objectIndexKey });
     }
     return { packs, createdCanonicalKeys };
   } catch (error) {

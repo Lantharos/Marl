@@ -1,83 +1,16 @@
 import type { Principal } from './auth';
-import { branchRuleFor, branchRulesFor, type BranchRule, type MergeMethod } from './branch-rules';
+import { auditStatement } from './audit';
+import { branchRuleFor, type MergeMethod } from './branch-rules';
 import { identifier, safeRepositoryPath, validBranchName } from './domain';
 import { pinPullRefs, requestGatewayWrite } from './git-writes';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
-import { mergeRequirements, type CheckCounts, type RequirementReview } from './pull-requirements';
+import { createPullEvent, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, preservePullRefs, repositoryMember as membership, reviewStatusFor, latestReviews, summarizePullRows as summarizeRows, type PullRow } from './pull-context';
+import { mergeRequirements } from './pull-requirements';
 import { allPullThreads, initialPullTimeline, olderPullTimeline } from './pull-timeline';
 import { commitPullUpdate, pullUpdatesAfter } from './pull-realtime';
-
-type Repo = { id: string; owner: string; name: string; visibility: 'public' | 'private'; organizationId: string };
-type PullRow = { id: string; repositoryId: string; number: number; title: string; body: string; authorId: string; author: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; state: 'draft' | 'open' | 'merged' | 'closed'; mergedCommitId?: string; mergeMethod?: MergeMethod; lockedAt?: string; realtimeVersion: number; createdAt: string; updatedAt: string; owner: string; repository: string };
-
-const pullSelect = `SELECT pull_requests.id, pull_requests.repository_id AS repositoryId, pull_requests.number, pull_requests.title, pull_requests.body, pull_requests.author_id AS authorId, users.handle AS author, pull_requests.source_branch AS sourceBranch, pull_requests.target_branch AS targetBranch, pull_requests.source_commit_id AS sourceCommitId, pull_requests.target_commit_id AS targetCommitId, pull_requests.state, pull_requests.merged_commit_id AS mergedCommitId, pull_requests.merge_method AS mergeMethod, pull_requests.locked_at AS lockedAt, pull_requests.realtime_version AS realtimeVersion, pull_requests.created_at AS createdAt, pull_requests.updated_at AS updatedAt, organizations.slug AS owner, repositories.name AS repository FROM pull_requests JOIN repositories ON repositories.id = pull_requests.repository_id JOIN organizations ON organizations.id = repositories.organization_id JOIN users ON users.id = pull_requests.author_id`;
-
-function createPullEvent(env: Env, pullId: string, actor: Principal, kind: string, details: Record<string, string> = {}) {
-  const id = identifier('event');
-  const createdAt = new Date().toISOString();
-  return {
-    statement: env.DB.prepare('INSERT INTO pull_request_events (id,pull_request_id,actor_id,kind,details,created_at) VALUES (?,?,?,?,?,?)').bind(id, pullId, actor.id, kind, JSON.stringify(details), createdAt),
-    value: { id, actor: actor.handle, kind, details, createdAt }
-  };
-}
-
-async function repo(env: Env, owner: string, name: string): Promise<Repo | null> {
-  return env.DB.prepare(`SELECT repositories.id, organizations.slug AS owner, repositories.name, repositories.visibility, repositories.organization_id AS organizationId FROM repositories JOIN organizations ON organizations.id = repositories.organization_id WHERE organizations.slug = ? COLLATE NOCASE AND repositories.name = ? COLLATE NOCASE`).bind(owner, name).first<Repo>();
-}
-
-async function membership(env: Env, principal: Principal, repository: Repo): Promise<boolean> {
-  return Boolean(await env.DB.prepare('SELECT 1 AS allowed FROM organization_members WHERE organization_id = ? AND user_id = ?').bind(repository.organizationId, principal.id).first());
-}
-
-type ReviewStatus = 'none' | 'requested' | 'approved' | 'changes_requested';
-
-function reviewStatusFor(pull: PullRow, rule: BranchRule, reviews: RequirementReview[]): ReviewStatus {
-  const latest = new Map<string, string>();
-  for (const review of reviews) if (!rule.dismissStaleReviews || review.commitId === pull.sourceCommitId) latest.set(review.authorId, review.state);
-  const states = [...latest.values()];
-  return states.includes('changes_requested') ? 'changes_requested' : states.includes('approved') ? 'approved' : pull.state === 'open' ? 'requested' : 'none';
-}
-
-function latestReviews(env: Env, pullId: string) {
-  return env.DB.prepare(`SELECT authorId,state,commitId FROM (SELECT author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt,ROW_NUMBER() OVER (PARTITION BY author_id,commit_id ORDER BY created_at DESC,id DESC) AS rank FROM pull_request_reviews WHERE pull_request_id=?) WHERE rank=1 ORDER BY createdAt`).bind(pullId).all<RequirementReview>();
-}
-
-function summary(row: PullRow, checks: CheckCounts = { total: 0, passed: 0, failed: 0, running: 0 }, reviewStatus: ReviewStatus = 'none', unresolved = 0) {
-  const blocked = checks.failed > 0 || reviewStatus === 'changes_requested' || unresolved > 0;
-  const state = row.state === 'open' ? (blocked ? 'blocked' : checks.running === 0 ? 'mergeable' : 'open') : row.state;
-  return { id: row.id, number: row.number, repository: { owner: row.owner, name: row.repository }, title: row.title, author: row.author, sourceBranch: row.sourceBranch, targetBranch: row.targetBranch, state, reviewStatus, checkSummary: checks, updatedAt: row.updatedAt };
-}
-
-async function summarizeRows(env: Env, rows: PullRow[]) {
-  if (rows.length === 0) return [];
-  const placeholders = rows.map(() => '?').join(',');
-  const ids = rows.map((row) => row.id);
-  const [checkRows, reviewRows, threadRows, rules] = await Promise.all([
-    env.DB.prepare(`SELECT pull_requests.id AS pullId, COUNT(checks.id) AS total, COALESCE(SUM(checks.state = 'success'), 0) AS passed, COALESCE(SUM(checks.state IN ('failure', 'canceled')), 0) AS failed, COALESCE(SUM(checks.state IN ('queued', 'running')), 0) AS running FROM pull_requests LEFT JOIN checks ON checks.repository_id = pull_requests.repository_id AND checks.commit_id = pull_requests.source_commit_id WHERE pull_requests.id IN (${placeholders}) GROUP BY pull_requests.id`).bind(...ids).all<{ pullId: string; total: number; passed: number; failed: number; running: number }>(),
-    env.DB.prepare(`SELECT pullId,authorId,state,commitId FROM (SELECT pull_request_id AS pullId,author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt,ROW_NUMBER() OVER (PARTITION BY pull_request_id,author_id,commit_id ORDER BY created_at DESC,id DESC) AS rank FROM pull_request_reviews WHERE pull_request_id IN (${placeholders})) WHERE rank=1 ORDER BY createdAt`).bind(...ids).all<{ pullId: string; authorId: string; state: 'commented' | 'approved' | 'changes_requested'; commitId: string }>(),
-    env.DB.prepare(`SELECT review_threads.pull_request_id AS pullId, COUNT(*) AS unresolved FROM review_threads JOIN pull_requests ON pull_requests.id = review_threads.pull_request_id AND pull_requests.source_commit_id = review_threads.commit_id WHERE review_threads.pull_request_id IN (${placeholders}) AND review_threads.resolved_at IS NULL GROUP BY review_threads.pull_request_id`).bind(...ids).all<{ pullId: string; unresolved: number }>(),
-    branchRulesFor(env, rows.map((row) => ({ repositoryId: row.repositoryId, branch: row.targetBranch })))
-  ]);
-  const checks = new Map(checkRows.results.map((item) => [item.pullId, { total: Number(item.total), passed: Number(item.passed), failed: Number(item.failed), running: Number(item.running) }]));
-  const reviews = new Map<string, Array<{ authorId: string; state: string; commitId: string }>>();
-  for (const review of reviewRows.results) {
-    const items = reviews.get(review.pullId) ?? [];
-    items.push(review);
-    reviews.set(review.pullId, items);
-  }
-  const threads = new Map(threadRows.results.map((item) => [item.pullId, Number(item.unresolved)]));
-  return rows.map((row) => {
-    const rule = rules.get(`${row.repositoryId}:${row.targetBranch}`) ?? { pattern: row.targetBranch, requiredApprovals: 0, requireChecks: false, requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge', 'squash', 'rebase'] as MergeMethod[] };
-    const rowReviews = reviews.get(row.id) ?? [];
-    const reviewStatus = reviewStatusFor(row, rule, rowReviews);
-    const counts = checks.get(row.id) ?? { total: 0, passed: 0, failed: 0, running: 0 };
-    const unresolved = threads.get(row.id) ?? 0;
-    const value = summary(row, counts, reviewStatus, unresolved);
-    const requirements = mergeRequirements(row, rule, counts, rowReviews, unresolved);
-    return row.state === 'open' ? { ...value, state: requirements.ready ? 'mergeable' : 'blocked' } : value;
-  });
-}
+import { commentBody, createPullBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
+import { authorizeRepositoryId } from './repository-access';
 
 export async function listAllPulls(env: Env, principal: Principal): Promise<Response> {
   const rows = await env.DB.prepare(`${pullSelect} JOIN organization_members ON organization_members.organization_id = repositories.organization_id WHERE organization_members.user_id = ? AND pull_requests.state IN ('draft','open') ORDER BY pull_requests.updated_at DESC LIMIT 100`).bind(principal.id).all<PullRow>();
@@ -94,7 +27,7 @@ export async function listPulls(env: Env, principal: Principal, owner: string, n
 export async function createPull(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const repository = await repo(env, owner, name);
   if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
-  const body = await readJson(request);
+  const body = await readJson(request, createPullBody);
   if (!body || typeof body.title !== 'string' || body.title.trim().length < 3 || body.title.length > 240 || !validBranchName(body.sourceBranch) || !validBranchName(body.targetBranch) || body.sourceBranch === body.targetBranch) return problem(422, 'invalid_pull_request', 'Title and two different valid branches are required.');
   const branches = await env.DB.prepare('SELECT name, commit_id AS commitId FROM branches WHERE repository_id = ? AND name IN (?, ?)').bind(repository.id, body.sourceBranch, body.targetBranch).all<{ name: string; commitId: string }>();
   const source = branches.results.find((branch) => branch.name === body.sourceBranch);
@@ -110,7 +43,10 @@ export async function createPull(request: Request, env: Env, principal: Principa
   }
   const id = identifier('pr');
   const state = body.draft === true ? 'draft' : 'open';
-  await env.DB.prepare(`INSERT INTO pull_requests (id, repository_id, number, title, body, author_id, source_branch, target_branch, source_commit_id, target_commit_id, state) SELECT ?, ?, COALESCE(MAX(number), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ? FROM pull_requests WHERE repository_id = ?`).bind(id, repository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id).run();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO pull_requests (id, repository_id, number, title, body, author_id, source_branch, target_branch, source_commit_id, target_commit_id, state) SELECT ?, ?, COALESCE(MAX(number), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ? FROM pull_requests WHERE repository_id = ?`).bind(id, repository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
+    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.created', subjectType: 'pull_request', subjectId: id, details: { sourceBranch: body.sourceBranch, targetBranch: body.targetBranch, state } })
+  ]);
   const created = await env.DB.prepare(`${pullSelect} WHERE pull_requests.id = ?`).bind(id).first<PullRow>();
   if (!created) return problem(500, 'pull_request_create_failed', 'Pull request creation did not persist.');
   const pinned = await preservePullRefs(env, repository, created);
@@ -202,7 +138,7 @@ export async function updatePullDetails(request: Request, env: Env, principal: P
   if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id,title,body FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; title: string; body: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const body = await readJson(request);
+  const body = await readJson(request, updatePullBody);
   if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
   const title = body.title === undefined ? pull.title : typeof body.title === 'string' ? body.title.trim() : '';
   const description = body.body === undefined ? pull.body : typeof body.body === 'string' ? body.body.trim() : '';
@@ -222,7 +158,7 @@ export async function updatePullMetadata(request: Request, env: Env, principal: 
   if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id,locked_at AS lockedAt FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; lockedAt?: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const body = await readJson(request);
+  const body = await readJson(request, pullMetadataBody);
   if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
   const [members, repositoryLabels, currentAssignees, currentLabels] = await Promise.all([
     env.DB.prepare(`SELECT users.id,users.handle FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=?`).bind(repository.organizationId).all<{ id: string; handle: string }>(),
@@ -286,7 +222,7 @@ export async function addPullComment(request: Request, env: Env, principal: Prin
   const pull = await env.DB.prepare(`SELECT id,locked_at AS lockedAt FROM pull_requests WHERE repository_id=? AND number=?`).bind(repository.id, number).first<{ id: string; lockedAt?: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   if (pull.lockedAt) return problem(423, 'conversation_locked', 'This conversation is locked.');
-  const body = await readJson(request);
+  const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 50_000) return problem(422, 'invalid_pull_comment', 'A comment is required.');
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
@@ -298,7 +234,7 @@ export async function addPullComment(request: Request, env: Env, principal: Prin
 }
 
 export async function updatePullComment(request: Request, env: Env, principal: Principal, commentId: string): Promise<Response> {
-  const body = await readJson(request);
+  const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 50_000) return problem(422, 'invalid_pull_comment', 'A comment is required.');
   const comment = await env.DB.prepare('SELECT id,pull_request_id AS pullId FROM pull_request_comments WHERE id=? AND author_id=? AND deleted_at IS NULL').bind(commentId, principal.id).first<{ id: string; pullId: string }>();
   if (!comment) return problem(404, 'pull_comment_not_found', 'Editable comment not found.');
@@ -353,7 +289,7 @@ export async function createThread(request: Request, env: Env, principal: Princi
   const pull = await env.DB.prepare(`SELECT id, source_commit_id AS sourceCommitId, locked_at AS lockedAt FROM pull_requests WHERE repository_id = ? AND number = ? AND state IN ('draft','open')`).bind(repository.id, number).first<{ id: string; sourceCommitId: string; lockedAt?: string }>();
   if (!pull) return problem(409, 'pull_request_not_open', 'Pull request is not open.');
   if (pull.lockedAt) return problem(423, 'conversation_locked', 'This conversation is locked.');
-  const body = await readJson(request);
+  const body = await readJson(request, reviewThreadBody);
   const startSide = body?.startSide ?? body?.side;
   const startLine = body?.startLine ?? body?.line;
   if (!body || typeof body.path !== 'string' || !safeRepositoryPath(body.path) || !['old', 'new'].includes(String(body.side)) || startSide !== body.side || !Number.isInteger(body.line) || !Number.isInteger(startLine) || Number(startLine) < 1 || Number(startLine) > Number(body.line) || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_thread', 'Path, line range, side, and comment are required.');
@@ -369,9 +305,9 @@ export async function createThread(request: Request, env: Env, principal: Princi
 }
 
 export async function resolveThread(request: Request, env: Env, principal: Principal, threadId: string): Promise<Response> {
-  const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,review_threads.path,COALESCE(review_threads.start_line,review_threads.line) AS startLine,review_threads.line,review_threads.resolved_at AS resolvedAt FROM review_threads JOIN pull_requests ON pull_requests.id = review_threads.pull_request_id JOIN repositories ON repositories.id = pull_requests.repository_id JOIN organization_members ON organization_members.organization_id = repositories.organization_id WHERE review_threads.id = ? AND organization_members.user_id = ?`).bind(threadId, principal.id).first<{ id: string; pullId: string; path: string; startLine: number; line: number; resolvedAt?: string }>();
-  if (!thread) return problem(404, 'review_thread_not_found', 'Review thread not found.');
-  const body = await readJson(request);
+  const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,pull_requests.repository_id AS repositoryId,review_threads.path,COALESCE(review_threads.start_line,review_threads.line) AS startLine,review_threads.line,review_threads.resolved_at AS resolvedAt FROM review_threads JOIN pull_requests ON pull_requests.id = review_threads.pull_request_id WHERE review_threads.id = ?`).bind(threadId).first<{ id: string; pullId: string; repositoryId: string; path: string; startLine: number; line: number; resolvedAt?: string }>();
+  if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'write'))) return problem(404, 'review_thread_not_found', 'Review thread not found.');
+  const body = await readJson(request, resolveThreadBody);
   const resolved = body?.resolved !== false;
   if (resolved === Boolean(thread.resolvedAt)) return json({ resolved });
   const event = createPullEvent(env, thread.pullId, principal, resolved ? 'thread_resolved' : 'thread_reopened', { path: thread.path, lines: thread.startLine === thread.line ? String(thread.line) : `${thread.startLine}–${thread.line}` });
@@ -385,9 +321,9 @@ export async function resolveThread(request: Request, env: Env, principal: Princ
 }
 
 export async function addThreadComment(request: Request, env: Env, principal: Principal, threadId: string): Promise<Response> {
-  const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId FROM review_threads JOIN pull_requests ON pull_requests.id=review_threads.pull_request_id JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE review_threads.id=? AND organization_members.user_id=? AND pull_requests.state IN ('draft','open') AND pull_requests.locked_at IS NULL`).bind(threadId, principal.id).first<{ id: string; pullId: string }>();
-  if (!thread) return problem(404, 'review_thread_not_found', 'Review conversation not found.');
-  const body = await readJson(request);
+  const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,pull_requests.repository_id AS repositoryId FROM review_threads JOIN pull_requests ON pull_requests.id=review_threads.pull_request_id WHERE review_threads.id=? AND pull_requests.state IN ('draft','open') AND pull_requests.locked_at IS NULL`).bind(threadId).first<{ id: string; pullId: string; repositoryId: string }>();
+  if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'write'))) return problem(404, 'review_thread_not_found', 'Review conversation not found.');
+  const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_comment', 'A review comment is required.');
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
@@ -399,7 +335,7 @@ export async function addThreadComment(request: Request, env: Env, principal: Pr
 }
 
 export async function updateReviewComment(request: Request, env: Env, principal: Principal, commentId: string): Promise<Response> {
-  const body = await readJson(request);
+  const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_comment', 'A review comment is required.');
   const comment = await env.DB.prepare(`SELECT review_comments.id,review_comments.thread_id AS threadId,review_threads.pull_request_id AS pullId FROM review_comments JOIN review_threads ON review_threads.id=review_comments.thread_id WHERE review_comments.id=? AND review_comments.author_id=? AND review_comments.deleted_at IS NULL`).bind(commentId, principal.id).first<{ id: string; threadId: string; pullId: string }>();
   if (!comment) return problem(404, 'review_comment_not_found', 'Editable review comment not found.');
@@ -459,7 +395,7 @@ export async function reviewPull(request: Request, env: Env, principal: Principa
   if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`SELECT id, source_commit_id AS sourceCommitId, state FROM pull_requests WHERE repository_id = ? AND number = ?`).bind(repository.id, number).first<{ id: string; sourceCommitId: string; state: string }>();
   if (!pull || !['open', 'draft'].includes(pull.state)) return problem(409, 'pull_request_not_open', 'Pull request is not open.');
-  const body = await readJson(request);
+  const body = await readJson(request, reviewBody);
   if (!body || !['commented', 'approved', 'changes_requested'].includes(String(body.state))) return problem(422, 'invalid_review', 'Review state is invalid.');
   const id = identifier('review');
   const createdAt = new Date().toISOString();
@@ -477,7 +413,7 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   if (pull.state === 'merged' && pull.mergedCommitId) return json({ merged: true, commitId: pull.mergedCommitId });
   if (pull.state !== 'open') return problem(409, 'pull_request_not_open', 'Pull request is not open.');
-  const body = await readJson(request);
+  const body = await readJson(request, mergeBody);
   const method = body?.method ?? 'merge';
   if (!['merge', 'squash', 'rebase'].includes(String(method))) return problem(422, 'invalid_merge_method', 'Choose merge, squash, or rebase.');
   const [source, target, checks, reviews, unresolvedThreads] = await Promise.all([
@@ -502,18 +438,8 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   const update = await commitPullUpdate(env, pull.id, 'pull.merged', { pull: pullPatch, timeline: [{ kind: 'event', value: event.value, createdAt: event.value.createdAt }], refreshState: true }, [
     env.DB.prepare(`UPDATE pull_requests SET state='merged', target_commit_id=?, merged_commit_id=?,merge_method=?, merged_by=?, merged_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND state='open'`).bind(pull.targetCommitId, result.commitId, method, principal.id, pull.id),
     env.DB.prepare('UPDATE branches SET commit_id=?, updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND name=? AND commit_id IN (?, ?)').bind(targetHeadId, repository.id, pull.targetBranch, pull.targetCommitId, result.commitId),
-    event.statement
+    event.statement,
+    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.merged', subjectType: 'pull_request', subjectId: pull.id, details: { number, method, commitId: result.commitId, targetBranch: pull.targetBranch } })
   ]);
   return json({ merged: true, commitId: result.commitId, update });
-}
-
-async function preservePullRefs(env: Env, repository: Repo, pull: PullRow): Promise<Response | null> {
-  const gateway = await pinPullRefs(env, { owner: repository.owner, repository: repository.name, number: pull.number, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId });
-  if (gateway.ok) return null;
-  const result = await gateway.json().catch(() => null) as { error?: string } | null;
-  return problem(gateway.status === 409 ? 409 : 502, gateway.status === 409 ? 'pull_ref_conflict' : 'pull_ref_gateway_failed', result?.error ?? 'Git gateway could not preserve the pull request commits.');
-}
-
-async function pullCommits(env: Env, repositoryId: string, sourceCommitId: string, targetCommitId: string) {
-  return env.DB.prepare(`WITH RECURSIVE source_history(id) AS (SELECT ? UNION SELECT json_each.value FROM source_history JOIN commits ON commits.repository_id=? AND commits.id=source_history.id JOIN json_each(commits.parent_ids)),target_history(id) AS (SELECT ? UNION SELECT json_each.value FROM target_history JOIN commits ON commits.repository_id=? AND commits.id=target_history.id JOIN json_each(commits.parent_ids)) SELECT commits.id,substr(commits.id,1,7) AS shortId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt FROM commits JOIN source_history ON source_history.id=commits.id LEFT JOIN target_history ON target_history.id=commits.id WHERE commits.repository_id=? AND target_history.id IS NULL ORDER BY commits.authored_at`).bind(sourceCommitId, repositoryId, targetCommitId, repositoryId, repositoryId).all();
 }

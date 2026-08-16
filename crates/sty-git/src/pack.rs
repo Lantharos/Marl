@@ -183,12 +183,17 @@ async fn graph_inner(
     let directory = session_path(&state, &push)?.join(&pack);
     let report: PackReport =
         serde_json::from_slice(&fs::read(directory.join("report.json")).await?)?;
-    let objects: Vec<PackObject> =
+    let mut objects: Vec<PackObject> =
         serde_json::from_slice(&fs::read(directory.join("objects.json")).await?)?;
     let mut known = known_objects(session_path(&state, &push)?.join("known")).await?;
     known.extend(objects.iter().map(|object| object.id.clone()));
     validate_ref_targets(&proposed, &known)?;
-    validate_object_graph(&directory, &report.id, &objects, &known).await?;
+    validate_object_graph(&directory, &report.id, &mut objects, &known).await?;
+    fs::write(
+        directory.join("objects.json"),
+        serde_json::to_vec(&objects)?,
+    )
+    .await?;
     Ok(axum::Json(report).into_response())
 }
 
@@ -229,6 +234,7 @@ async fn read_pack_file_inner(
             directory.join(format!("pack-{}.idx", report.id)),
             "application/x-git-packed-objects-toc",
         ),
+        "objects" => (directory.join("objects.json"), "application/json"),
         _ => bail!("unknown pack file"),
     };
     let file = fs::File::open(&path).await?;
@@ -256,13 +262,17 @@ pub(crate) async fn remove_session(
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct PackObject {
-    id: String,
-    kind: String,
-    size: u64,
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PackObject {
+    pub(crate) id: String,
+    pub(crate) kind: String,
+    pub(crate) size: u64,
+    pub(crate) packed_bytes: u64,
+    pub(crate) offset: u64,
+    pub(crate) references: Vec<String>,
 }
 
-async fn inspect_pack(index: &std::path::Path) -> Result<(Vec<PackObject>, u64, u64)> {
+pub(crate) async fn inspect_pack(index: &std::path::Path) -> Result<(Vec<PackObject>, u64, u64)> {
     let output = Command::new("git")
         .args(["verify-pack", "-v"])
         .arg(index)
@@ -293,14 +303,12 @@ async fn inspect_pack(index: &std::path::Path) -> Result<(Vec<PackObject>, u64, 
             id: fields[0].into(),
             kind: fields[1].into(),
             size,
+            packed_bytes: fields[3].parse::<u64>()?,
+            offset: fields[4].parse::<u64>()?,
+            references: Vec::new(),
         });
     }
     Ok((objects, expanded, largest_blob))
-}
-
-pub(crate) async fn inspect_pack_summary(index: &std::path::Path) -> Result<(usize, u64, u64)> {
-    let (objects, expanded, largest_blob) = inspect_pack(index).await?;
-    Ok((objects.len(), expanded, largest_blob))
 }
 
 async fn known_objects(directory: PathBuf) -> Result<HashSet<String>> {
@@ -336,7 +344,7 @@ async fn known_objects(directory: PathBuf) -> Result<HashSet<String>> {
 async fn validate_object_graph(
     directory: &std::path::Path,
     pack_id: &str,
-    objects: &[PackObject],
+    objects: &mut [PackObject],
     known: &HashSet<String>,
 ) -> Result<()> {
     let repository = directory.join("repository.git");
@@ -352,8 +360,29 @@ async fn validate_object_graph(
         repository.join(format!("objects/pack/pack-{pack_id}.idx")),
     )
     .await?;
+    populate_object_references(&repository, objects).await?;
+    let structural = objects.iter().filter(|object| object.kind != "blob");
+    for object in structural {
+        for reference in &object.references {
+            if !known.contains(reference) {
+                bail!(
+                    "{} {} references missing object {}",
+                    object.kind,
+                    object.id,
+                    reference
+                )
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn populate_object_references(
+    repository: &std::path::Path,
+    objects: &mut [PackObject],
+) -> Result<()> {
     let structural = objects
-        .iter()
+        .iter_mut()
         .filter(|object| object.kind != "blob")
         .collect::<Vec<_>>();
     let mut child = Command::new("git")
@@ -371,7 +400,10 @@ async fn validate_object_graph(
     }
     drop(stdin);
     let mut stdout = BufReader::new(child.stdout.take().context("open git cat-file stdout")?);
-    let hash_bytes = pack_id.len() / 2;
+    let hash_bytes = structural
+        .first()
+        .map(|object| object.id.len() / 2)
+        .unwrap_or(20);
     for expected in structural {
         let mut header = String::new();
         stdout.read_line(&mut header).await?;
@@ -384,16 +416,7 @@ async fn validate_object_graph(
         stdout.read_exact(&mut content).await?;
         let mut newline = [0];
         stdout.read_exact(&mut newline).await?;
-        for reference in object_references(&expected.kind, &content, hash_bytes)? {
-            if !known.contains(&reference) {
-                bail!(
-                    "{} {} references missing object {}",
-                    expected.kind,
-                    expected.id,
-                    reference
-                )
-            }
-        }
+        expected.references = object_references(&expected.kind, &content, hash_bytes)?;
     }
     if !child.wait().await?.success() {
         bail!("git cat-file failed while validating the object graph")

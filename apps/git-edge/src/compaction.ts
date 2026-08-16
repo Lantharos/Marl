@@ -1,44 +1,50 @@
 import { getContainer } from '@cloudflare/containers';
 import { DurableObject } from 'cloudflare:workers';
 import { promoteCanonicalObject } from './canonical';
+import { beginOperation, completeOperation, operationResponse, readOperation, retryOperation, scheduleOperation } from './durable-operation';
 import type { GitEdgeEnv } from './env';
 import { expectContainer, hydrateRepository, internalRequest } from './hydration';
 import { acknowledgeCommittedPush, committedPush, publishWithReconciliation } from './reconciliation';
 import { organizationQuota, repositoryState, type RepositorySnapshotResponse } from './state-client';
 import type { PackDescriptor } from './storage-model';
+import { parseStateBody, stateFailure } from './state-http';
+import { compactionTaskBody } from './state-schemas';
 
 const COMPACTION_THRESHOLD = 12;
-type CompactionTask = { owner: string; repository: string; repositoryId: string; organizationId: string; force: boolean; attempts: number };
+type CompactionTask = { owner: string; repository: string; repositoryId: string; organizationId: string; generation: number; force: boolean };
 
 export class CompactionObject extends DurableObject<GitEdgeEnv> {
   async fetch(request: Request) {
     if (request.headers.get('x-sty-storage-token') !== this.env.STY_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
-    const task = await request.json<Omit<CompactionTask, 'attempts'>>();
-    await this.ctx.storage.put('task', { ...task, attempts: 0 });
-    await this.ctx.storage.setAlarm(Date.now());
-    return new Response(null, { status: 202 });
+    if (request.method === 'GET' && new URL(request.url).pathname === '/status') return operationResponse(await readOperation(this.ctx.storage));
+    try {
+      const task = await parseStateBody(request, compactionTaskBody);
+      await scheduleOperation(this.ctx.storage, 'repository.compaction', String(task.generation), { ...task, force: task.force ?? false });
+      return new Response(null, { status: 202 });
+    } catch (error) {
+      return stateFailure(error);
+    }
   }
 
   async alarm() {
-    const task = await this.ctx.storage.get<CompactionTask>('task');
-    if (!task) return;
+    const operation = await beginOperation<CompactionTask>(this.ctx.storage);
+    if (!operation) return;
+    const task = operation.payload;
     try {
       await maybeCompactRepository(this.env, task.owner, task.repository, task.repositoryId, task.organizationId, task.force);
-      await this.ctx.storage.delete('task');
+      await completeOperation(this.ctx.storage, operation.id);
     } catch (error) {
-      const attempts = task.attempts + 1;
       console.error('repository compaction failed', error);
-      await this.ctx.storage.put('task', { ...task, attempts });
-      await this.ctx.storage.setAlarm(Date.now() + Math.min(5 * 60 * 1000 * 2 ** Math.min(attempts - 1, 4), 60 * 60 * 1000));
+      await retryOperation(this.ctx.storage, operation.id, error, Math.min(5 * 60 * 1000 * 2 ** Math.min(operation.attempts - 1, 4), 60 * 60 * 1000));
     }
   }
 }
 
-export async function scheduleCompaction(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, organizationId: string, force = false) {
+export async function scheduleCompaction(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, organizationId: string, generation: number, force = false) {
   const stub = env.COMPACTIONS.get(env.COMPACTIONS.idFromName(repositoryId));
   const response = await stub.fetch('http://compaction/schedule', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-storage-token': env.STY_GIT_GATEWAY_TOKEN },
-    body: JSON.stringify({ owner, repository, repositoryId, organizationId, force })
+    body: JSON.stringify({ owner, repository, repositoryId, organizationId, generation, force })
   });
   if (!response.ok) throw new Error(`Compaction scheduling failed with ${response.status}.`);
 }
@@ -65,7 +71,8 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
       await acknowledgeCommittedPush(repo, priorId);
       await Promise.allSettled([
         env.REPOSITORIES.delete(`quarantine/${repository}/${priorId}/canonical.pack`),
-        env.REPOSITORIES.delete(`quarantine/${repository}/${priorId}/canonical.idx`)
+        env.REPOSITORIES.delete(`quarantine/${repository}/${priorId}/canonical.idx`),
+        env.REPOSITORIES.delete(`quarantine/${repository}/${priorId}/canonical.objects.json`)
       ]);
       return;
     }
@@ -86,25 +93,30 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
     if (!capture.hasPack && Object.keys(capture.refs).length) throw new Error('Compaction did not produce a canonical pack.');
     const packs: PackDescriptor[] = [];
     if (capture.hasPack && capture.packId) {
-      const [pack, index] = await Promise.all([
+      const [pack, index, objects] = await Promise.all([
         expectContainer(container.fetch(internalRequest(`${base}/pack`, env))),
-        expectContainer(container.fetch(internalRequest(`${base}/idx`, env)))
+        expectContainer(container.fetch(internalRequest(`${base}/idx`, env))),
+        expectContainer(container.fetch(internalRequest(`${base}/objects`, env)))
       ]);
-      if (!pack.body || !index.body) throw new Error('Compaction returned an incomplete pack.');
+      if (!pack.body || !index.body || !objects.body) throw new Error('Compaction returned an incomplete pack index.');
       const quarantinePrefix = `quarantine/${repository}/${pushId}/canonical`;
       const quarantinePackKey = `${quarantinePrefix}.pack`;
       const quarantineIndexKey = `${quarantinePrefix}.idx`;
-      createdKeys.push(quarantinePackKey, quarantineIndexKey);
+      const quarantineObjectIndexKey = `${quarantinePrefix}.objects.json`;
+      createdKeys.push(quarantinePackKey, quarantineIndexKey, quarantineObjectIndexKey);
       await Promise.all([
         env.REPOSITORIES.put(quarantinePackKey, pack.body, { httpMetadata: { contentType: 'application/x-git-packed-objects' } }),
-        env.REPOSITORIES.put(quarantineIndexKey, index.body, { httpMetadata: { contentType: 'application/x-git-packed-objects-toc' } })
+        env.REPOSITORIES.put(quarantineIndexKey, index.body, { httpMetadata: { contentType: 'application/x-git-packed-objects-toc' } }),
+        env.REPOSITORIES.put(quarantineObjectIndexKey, objects.body, { httpMetadata: { contentType: 'application/json' } })
       ]);
       const prefix = `repositories/${repository}/packs/${capture.packId}`;
       const packKey = `${prefix}.pack`;
       const indexKey = `${prefix}.idx`;
+      const objectIndexKey = `${prefix}.objects.json`;
       if (await promoteCanonicalObject(env.REPOSITORIES, quarantinePackKey, packKey, capture.packBytes, 'application/x-git-packed-objects')) createdKeys.push(packKey);
       if (await promoteCanonicalObject(env.REPOSITORIES, quarantineIndexKey, indexKey, null, 'application/x-git-packed-objects-toc')) createdKeys.push(indexKey);
-      packs.push({ id: capture.packId, packKey, indexKey, compressedBytes: capture.packBytes, expandedBytes: capture.expandedBytes, objectCount: capture.objectCount, largestBlobBytes: capture.largestBlobBytes });
+      if (await promoteCanonicalObject(env.REPOSITORIES, quarantineObjectIndexKey, objectIndexKey, null, 'application/json')) createdKeys.push(objectIndexKey);
+      packs.push({ id: capture.packId, packKey, indexKey, objectIndexKey, compressedBytes: capture.packBytes, expandedBytes: capture.expandedBytes, objectCount: capture.objectCount, largestBlobBytes: capture.largestBlobBytes });
     }
     const generation = current.state.generation + 1;
     const manifest = JSON.stringify({ generation, refsVersion: current.state.refsVersion, refs: current.state.refs, packs });
@@ -129,7 +141,8 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
     await acknowledgeCommittedPush(repo, pushId);
     await Promise.allSettled([
       env.REPOSITORIES.delete(`quarantine/${repository}/${pushId}/canonical.pack`),
-      env.REPOSITORIES.delete(`quarantine/${repository}/${pushId}/canonical.idx`)
+      env.REPOSITORIES.delete(`quarantine/${repository}/${pushId}/canonical.idx`),
+      env.REPOSITORIES.delete(`quarantine/${repository}/${pushId}/canonical.objects.json`)
     ]);
   } catch (error) {
     if (!publicationStarted) {

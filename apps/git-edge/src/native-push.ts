@@ -5,8 +5,10 @@ import { scheduleRepositoryIndex } from './indexing';
 import { finalizeUploadedPush } from './publication';
 import { StateRequestError, organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state-client';
 import { STORAGE_LIMITS } from './storage-model';
+import { nativePushBody, repositoryManifest } from './state-schemas';
+import { safeParse } from 'valibot';
 
-type PushRoute = { owner: string; repository: string; pushId?: string; pack?: number; part?: number; generation?: number; packId?: string; kind?: 'pack' | 'idx'; action: 'create' | 'part' | 'complete' | 'snapshot' | 'download' };
+type PushRoute = { owner: string; repository: string; pushId?: string; pack?: number; part?: number; generation?: number; packId?: string; kind?: 'pack' | 'idx' | 'objects'; action: 'create' | 'part' | 'complete' | 'snapshot' | 'download' };
 type PackPlan = { bytes: number; parts: number; key: string };
 type ReadyPack = PackPlan & { number: number; multipartUploadId: string; uploadedParts: R2UploadedPart[] };
 
@@ -20,8 +22,8 @@ export function nativePushRoute(request: Request): PushRoute | null {
   if (part && request.method === 'PUT') return route(part[1], part[2], { pushId: part[3], pack: Number(part[4]), part: Number(part[5]), action: 'part' });
   const complete = path.match(/^\/v1\/repositories\/([^/]+)\/([^/]+)\/pushes\/(push_[a-z0-9]+)\/complete$/);
   if (complete && request.method === 'POST') return route(complete[1], complete[2], { pushId: complete[3], action: 'complete' });
-  const download = path.match(/^\/v1\/repositories\/([^/]+)\/([^/]+)\/generations\/(\d+)\/packs\/([0-9a-f]{40,64})\/(pack|idx)$/);
-  if (download && request.method === 'GET') return route(download[1], download[2], { generation: Number(download[3]), packId: download[4], kind: download[5] as 'pack' | 'idx', action: 'download' });
+  const download = path.match(/^\/v1\/repositories\/([^/]+)\/([^/]+)\/generations\/(\d+)\/packs\/([0-9a-f]{40,64})\/(pack|idx|objects)$/);
+  if (download && request.method === 'GET') return route(download[1], download[2], { generation: Number(download[3]), packId: download[4], kind: download[5] as 'pack' | 'idx' | 'objects', action: 'download' });
   return null;
 }
 
@@ -57,13 +59,16 @@ async function downloadPack(env: GitEdgeEnv, repository: string, route: PushRout
   if (!object) return failure(404, 'generation_not_found', 'Repository generation not found.');
   const source = await new Response(object.body).text();
   if (await sha256(source) !== generation.generation.manifestHash) return failure(502, 'manifest_corrupt', 'Repository generation manifest failed its integrity check.');
-  const manifest = JSON.parse(source) as { packs: Array<{ id: string; packKey: string; indexKey: string }> };
+  const parsedManifest = safeParse(repositoryManifest, JSON.parse(source) as unknown);
+  if (!parsedManifest.success) return failure(502, 'manifest_corrupt', 'Repository generation manifest has an invalid structure.');
+  const manifest = parsedManifest.output;
   const pack = manifest.packs.find((value) => value.id === route.packId);
   if (!pack) return failure(404, 'pack_not_found', 'Pack not found in this repository generation.');
-  const stored = await env.REPOSITORIES.get(route.kind === 'pack' ? pack.packKey : pack.indexKey);
+  const key = route.kind === 'pack' ? pack.packKey : route.kind === 'idx' ? pack.indexKey : pack.objectIndexKey;
+  const stored = await env.REPOSITORIES.get(key);
   if (!stored) return failure(410, 'pack_retired', 'This repository generation has retired. Fetch the current generation.');
   return new Response(stored.body, { headers: {
-    'content-type': route.kind === 'pack' ? 'application/x-git-packed-objects' : 'application/x-git-packed-objects-toc',
+    'content-type': route.kind === 'pack' ? 'application/x-git-packed-objects' : route.kind === 'idx' ? 'application/x-git-packed-objects-toc' : 'application/json',
     'content-length': String(stored.size), etag: stored.httpEtag,
     'cache-control': 'private, max-age=3600, immutable'
   } });
@@ -74,10 +79,10 @@ async function sha256(value: string) {
 }
 
 async function createPush(request: Request, env: GitEdgeEnv, repository: string, organizationId: string) {
-  const body = await request.json<Record<string, unknown>>().catch(() => null);
-  if (!body || !Array.isArray(body.packs) || body.packs.length > 4 || !object(body.refs) || !object(body.expectedRefs)) return failure(422, 'invalid_push', 'Expected refs, proposed refs, and up to four packs are required.');
-  const sizes = body.packs.map((value) => object(value) ? Number(value.bytes) : Number.NaN);
-  if (sizes.some((bytes) => !Number.isSafeInteger(bytes) || bytes < 1)) return failure(422, 'invalid_push', 'Every pack needs a positive byte size.');
+  const parsed = await parseNativePushRequest(request);
+  if (!parsed.success) return failure(422, 'invalid_push', 'Expected refs, proposed refs, and up to four packs are required.');
+  const body = parsed.output;
+  const sizes = body.packs.map((value) => value.bytes);
   const maximumBytes = sizes.reduce((total, bytes) => total + bytes, 0);
   if (maximumBytes > STORAGE_LIMITS.pushBytes) return failure(413, 'push_too_large', 'Pushes are limited to 256 MiB of compressed pack data.');
   const pushId = `push_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -101,6 +106,18 @@ async function createPush(request: Request, env: GitEdgeEnv, repository: string,
     await Promise.allSettled(created.map((upload) => upload.abort()));
     await Promise.allSettled([repo.request('/abort', { pushId }), quota.request('/release', { id: pushId }), uploads.request('/aborted', {})]);
     throw error;
+  }
+}
+
+async function parseNativePushRequest(request: Request) {
+  const declaredSize = Number(request.headers.get('content-length') ?? 0);
+  if (Number.isFinite(declaredSize) && declaredSize > 1024 * 1024) return safeParse(nativePushBody, null);
+  try {
+    const text = await request.text();
+    if (text.length > 1024 * 1024) return safeParse(nativePushBody, null);
+    return safeParse(nativePushBody, JSON.parse(text) as unknown);
+  } catch {
+    return safeParse(nativePushBody, null);
   }
 }
 
@@ -139,7 +156,7 @@ async function completePush(env: GitEdgeEnv, owner: string, name: string, organi
   const published = await finalizeUploadedPush(env, repository, organizationId, uploaded.session);
   await scheduleRepositoryIndex(env, owner, name, repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
   const forceCompaction = uploaded.session.packs.length === 0 && published.storedBytes > 0;
-  if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, repositoryId, organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
+  if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, repositoryId, organizationId, published.generation, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
   return Response.json({ repository: { generation: published.generation, refsVersion: published.refsVersion, refs: published.refs, manifest: published.manifestKey } });
 }
 
@@ -162,13 +179,9 @@ async function storageSnapshot(env: GitEdgeEnv, owner: string, name: string, sto
     refs: snapshot.state.refs,
     packs: snapshot.state.packs.map((pack) => ({
       id: pack.id, compressedBytes: pack.compressedBytes, expandedBytes: pack.expandedBytes,
-      objectCount: pack.objectCount, packUrl: `${base}/${pack.id}/pack`, indexUrl: `${base}/${pack.id}/idx`
+      objectCount: pack.objectCount, packUrl: `${base}/${pack.id}/pack`, indexUrl: `${base}/${pack.id}/idx`, objectIndexUrl: `${base}/${pack.id}/objects`
     }))
   } });
-}
-
-function object(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function safeSegment(value: string) {

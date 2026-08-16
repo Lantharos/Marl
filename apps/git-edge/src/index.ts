@@ -4,7 +4,9 @@ import { handleCompatibilityPush } from './compatibility';
 import type { GitEdgeEnv } from './env';
 import { hydrateRepository } from './hydration';
 import { handleNativePush, nativePushRoute } from './native-push';
-export { OrganizationQuotaObject, RepositoryStateObject, UploadSessionObject } from './state-objects';
+export { OrganizationQuotaObject } from './organization-quota-object';
+export { RepositoryStateObject } from './repository-state-object';
+export { UploadSessionObject } from './upload-session-object';
 export { CompactionObject } from './compaction';
 export { RepositoryIndexObject } from './indexing';
 

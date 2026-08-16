@@ -3,6 +3,7 @@ import { sha256 } from './auth';
 import { identifier, validSlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
+import { completeJobBody, runnerEnrollmentBody, runnerRegistrationBody } from './request-schemas';
 import { notifyPullsForCommit } from './pull-realtime';
 
 type Runner = { id: string; organizationId: string; name: string; labelsJson: string; concurrency: number; platform: string; architecture: string; version: string };
@@ -26,7 +27,7 @@ export async function authenticateRunner(request: Request, env: Env): Promise<Ru
 }
 
 export async function createEnrollment(request: Request, env: Env, principal: Principal): Promise<Response> {
-  const body = await readJson(request);
+  const body = await readJson(request, runnerEnrollmentBody);
   if (!body || typeof body.organization !== 'string') return problem(422, 'organization_required', 'Choose an organization for this runner.');
   const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role = 'owner'`).bind(body.organization, principal.id).first<{ id: string }>();
   if (!organization) return problem(403, 'owner_required', 'Only organization owners can connect runners.');
@@ -38,7 +39,7 @@ export async function createEnrollment(request: Request, env: Env, principal: Pr
 }
 
 export async function registerRunner(request: Request, env: Env): Promise<Response> {
-  const body = await readJson(request);
+  const body = await readJson(request, runnerRegistrationBody);
   const labels = cleanLabels(body?.labels);
   if (!body || typeof body.enrollmentToken !== 'string' || !validSlug(body.name) || !labels || typeof body.platform !== 'string' || typeof body.architecture !== 'string' || typeof body.version !== 'string') return problem(422, 'invalid_runner', 'Runner name, platform, architecture, version, and valid labels are required.');
   const enrollment = await env.DB.prepare(`SELECT id, organization_id AS organizationId FROM runner_enrollment_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP`).bind(await sha256(body.enrollmentToken)).first<{ id: string; organizationId: string }>();
@@ -138,7 +139,7 @@ export async function uploadArtifact(request: Request, env: Env, runner: Runner,
 
 export async function completeJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
   const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
-  const body = await readJson(request);
+  const body = await readJson(request, completeJobBody);
   if (!job || !body || !['success', 'failure', 'canceled'].includes(String(body.state)) || !Number.isInteger(body.exitCode)) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const state = job.cancelRequested || job.runState === 'canceled' ? 'canceled' : String(body.state);
   const summary = state === 'canceled' ? 'Canceled by a developer.' : typeof body.summary === 'string' ? body.summary.slice(0, 1000) : '';

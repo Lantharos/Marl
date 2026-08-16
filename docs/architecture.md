@@ -84,7 +84,10 @@ A native push follows this flow:
    submitted packs and only the active pack indexes.
    `git index-pack --strict` verifies pack and object integrity, followed by object-count,
    expanded-size, blob-size, graph-completeness, and proposed-ref checks.
-4. Validated packs and indexes are promoted to content-addressed canonical keys. The
+4. Validated packs, Git indexes, and compact object-graph indexes are promoted to
+   content-addressed canonical keys. Each object record identifies its pack offset, packed
+   and expanded sizes, type, and structural references without storing object contents in a
+   database row. The
    repository Durable Object atomically publishes a new immutable manifest generation and
    its refs. Quota settlement is idempotent and may reconcile after publication. A separate
    alarm-backed job derives branch, commit, tree, and workflow state without holding the push
@@ -104,7 +107,10 @@ runs Git Smart HTTP, captures only newly reachable objects, and publishes throug
 validation and manifest path as a native push. Containers never own durable repository state
 and Git never operates on an R2 FUSE mount.
 
-Generations compact in an alarm-backed maintenance job when they reach twelve packs. The
+Generations compact in an alarm-backed maintenance job when they reach twelve packs. Indexing
+and compaction share a persisted operation model with queued, running, retrying, and completed
+states, attempt counts, last errors, bounded backoff, and an operator-readable status endpoint.
+Newer generations safely supersede older queued work. The
 maintenance Container creates and strictly indexes one self-contained pack, publishes it as
 a replacement generation, reconciles the storage delta, and retires superseded packs after
 the grace window. Compatibility and validator Containers use the 1 GiB/4 GB `basic` shape.
@@ -128,6 +134,12 @@ Branch merge rules live in D1 and are evaluated by the API at merge time against
 head's reviews, checks, and conversations. Git ref publication still provides the final
 compare-and-swap boundary, preventing a target update that raced with policy evaluation from
 being overwritten.
+
+HTTP request bodies and internal Worker-to-Durable-Object messages are size-bounded and
+runtime-validated before domain logic sees them. Repository access is decided by one capability
+model for public reads, organization membership, writable repositories, and owner administration.
+Sensitive repository, branch-rule, pull-request, merge, and ref-index mutations append immutable
+audit events, with state and audit writes sharing a D1 batch whenever they share a transaction.
 
 Pull-request mutations write their state change, timeline event, and monotonic realtime cursor in
 the same D1 batch. Events preserve the actor and structured before-and-after details. A hibernating

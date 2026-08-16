@@ -1,5 +1,5 @@
 use crate::{
-    pack::inspect_pack_summary,
+    pack::{inspect_pack, populate_object_references},
     state::{AppState, is_object_id, repository_path, safe_ref, safe_segment},
 };
 use anyhow::{Context, Result, bail};
@@ -244,8 +244,15 @@ async fn capture_inner(
         if !is_object_id(&id) {
             bail!("captured pack has an invalid identifier")
         }
-        let (objects, expanded, largest_blob) = inspect_pack_summary(&index_path).await?;
-        (Some(id), expanded, objects, largest_blob)
+        let (mut objects, expanded, largest_blob) = inspect_pack(&index_path).await?;
+        populate_object_references(&repository_path, &mut objects).await?;
+        fs::write(
+            directory.join("capture.objects"),
+            serde_json::to_vec(&objects)?,
+        )
+        .await?;
+        let object_count = objects.len();
+        (Some(id), expanded, object_count, largest_blob)
     } else {
         (None, 0, 0, 0)
     };
@@ -292,7 +299,7 @@ async fn read_capture_inner(
     headers: HeaderMap,
 ) -> Result<Response> {
     authorize(&state, &headers)?;
-    if !matches!(kind.as_str(), "pack" | "idx") {
+    if !matches!(kind.as_str(), "pack" | "idx" | "objects") {
         bail!("invalid capture file")
     }
     let file = fs::File::open(capture_path(&state, &push)?.join(format!("capture.{kind}"))).await?;
@@ -300,10 +307,10 @@ async fn read_capture_inner(
     Ok(Response::builder()
         .header(
             "content-type",
-            if kind == "pack" {
-                "application/x-git-packed-objects"
-            } else {
-                "application/x-git-packed-objects-toc"
+            match kind.as_str() {
+                "pack" => "application/x-git-packed-objects",
+                "idx" => "application/x-git-packed-objects-toc",
+                _ => "application/json",
             },
         )
         .header("content-length", bytes)

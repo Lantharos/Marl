@@ -10,9 +10,10 @@ acknowledged Git generation disappear.
 - Uploads are untrusted quarantine objects. Only packs accepted by `git index-pack --strict`,
   graph validation, size limits, and ref validation are promoted to content-addressed
   canonical keys.
-- Canonical pack and index objects are written and checked before an immutable manifest is
-  written. The repository Durable Object then performs the single authoritative generation
-  and ref transition.
+- Canonical pack, Git index, and object-graph index objects are written and checked before an
+  immutable manifest is written. The object-graph index records location and reachability
+  metadata but never duplicates blob contents. The repository Durable Object then performs
+  the single authoritative generation and ref transition.
 - Every transition leaves a durable commit record. A missing HTTP response is an unknown
   result, never permission to delete data. The publisher and upload-session alarm reconcile
   the commit record before cleanup.
@@ -21,8 +22,13 @@ acknowledged Git generation disappear.
 - Compaction uses the same publication protocol. Old generations are retired only after a
   grace period, and failed or retention-locked deletions remain scheduled until they succeed.
 - A repository alarm verifies the active manifest hash and contents plus the presence and
-  stored size of every active pack and index each day. Failures retry indefinitely with
+  stored size of every active pack and both indexes each day. Failures retry indefinitely with
   bounded backoff and remain visible in Worker logs.
+
+The deterministic failure harness interrupts publication after every durable boundary: pack,
+Git index, object index, manifest, ref publication, quota settlement, and acknowledgement. It
+asserts that pre-publication objects remain safely discardable and that every post-publication
+interruption converges to the committed generation without deleting canonical data.
 
 ## Pull requests
 

@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { PullRealtimeUpdate } from '@sty/contracts';
 import type { Env } from './platform';
+import { readJson } from './http';
+import { pullRealtimeUpdateBody } from './request-schemas';
 
 export class PullRoom extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
@@ -12,7 +13,8 @@ export class PullRoom extends DurableObject<Env> {
     }
 
     if (request.method !== 'POST') return new Response(null, { status: 405 });
-    const update = await request.json<PullRealtimeUpdate>();
+    const update = await readJson(request, pullRealtimeUpdateBody);
+    if (!update) return Response.json({ error: 'invalid_update' }, { status: 422 });
     const message = JSON.stringify({ type: 'update', update });
     for (const socket of this.ctx.getWebSockets()) {
       if (socket.readyState === WebSocket.OPEN) socket.send(message);

@@ -16,6 +16,7 @@
     "wrangler": "^4.85.0"
   },
   "dependencies": {
+    "valibot": "^1.4.2",
     "yaml": "^2.9.0"
   }
 }

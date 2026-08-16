@@ -58,7 +58,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     const published = await finalizeUploadedPush(env, repository, authorization.organizationId, session.session);
     await scheduleRepositoryIndex(env, owner, name, authorization.repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
     const forceCompaction = session.session.packs.length === 0 && published.storedBytes > 0;
-    if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.repositoryId, authorization.organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
+    if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.repositoryId, authorization.organizationId, published.generation, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
     return new Response(body, response);
   } catch (error) {
     if (!publicationStarted) await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
