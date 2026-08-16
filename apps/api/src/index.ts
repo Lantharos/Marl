@@ -3,7 +3,7 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
-import { addPullComment, addThreadComment, compareBranches, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullMetadata, updateReviewComment } from './pulls';
+import { addPullComment, addThreadComment, compareBranches, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
 import { cancelRun, createRun, downloadArtifact, getRun, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 
@@ -98,6 +98,7 @@ const worker = {
       if (number === null && request.method === 'GET') return listPulls(_env, principal, owner, repository);
       if (number === null && request.method === 'POST') return createPull(request, _env, principal, owner, repository);
       if (number !== null && !action && request.method === 'GET') return getPull(_env, principal, owner, repository, number);
+      if (number !== null && !action && request.method === 'PATCH') return updatePullDetails(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'reviews' && request.method === 'POST') return reviewPull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'merge' && request.method === 'POST') return mergePull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'diff' && request.method === 'GET') return getPullDiff(_env, principal, owner, repository, number);

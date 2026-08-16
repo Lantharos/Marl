@@ -41,7 +41,7 @@ The TypeScript API begins with a new database schema. It owns:
 
 - identities, organizations, repositories, and membership;
 - derived branch, commit, and tree metadata;
-- pull requests, reviews, threads, checks, and merge state;
+- pull requests, reviews, threads, checks, immutable timeline events, and merge state;
 - runs, jobs, runner registrations, leases, logs, and artifacts.
 
 Canonical Git packs, log chunks, and artifacts live in object storage. Repository file
@@ -128,6 +128,10 @@ Branch merge rules live in D1 and are evaluated by the API at merge time against
 head's reviews, checks, and conversations. Git ref publication still provides the final
 compare-and-swap boundary, preventing a target update that raced with policy evaluation from
 being overwritten.
+
+Pull-request mutations write their state change and corresponding timeline event in the same D1
+batch. Events preserve the actor and structured before-and-after details, while client mutations
+refresh only the pull-request model so review actions never require a document navigation.
 
 Repository routes use SvelteKit's Cloudflare adapter and load repository, pull-request, diff,
 and settings data through route loaders so the initial response is server-rendered. Client

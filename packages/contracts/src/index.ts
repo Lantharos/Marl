@@ -102,12 +102,37 @@ export interface PullRequestDetail extends PullRequestSummary {
   reviews: PullRequestReview[];
   checks: CheckSummary[];
   threads: ReviewThread[];
+  events: PullRequestEvent[];
   assignees: PullRequestPerson[];
   labels: PullRequestLabel[];
   availableAssignees: PullRequestPerson[];
   availableLabels: PullRequestLabel[];
   locked: boolean;
   canManage: boolean;
+}
+
+export type PullRequestEventKind =
+  | 'title_changed'
+  | 'description_changed'
+  | 'locked'
+  | 'unlocked'
+  | 'assigned'
+  | 'unassigned'
+  | 'label_added'
+  | 'label_removed'
+  | 'ready'
+  | 'closed'
+  | 'reopened'
+  | 'merged'
+  | 'thread_resolved'
+  | 'thread_reopened';
+
+export interface PullRequestEvent {
+  id: Identifier;
+  actor: string;
+  kind: PullRequestEventKind;
+  details: Record<string, string>;
+  createdAt: string;
 }
 
 export interface PullRequestPerson {

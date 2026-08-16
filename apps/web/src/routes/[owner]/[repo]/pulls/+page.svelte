@@ -7,6 +7,7 @@
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import GitMerge from 'lucide-svelte/icons/git-merge';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
+  import GitPullRequestClosed from 'lucide-svelte/icons/git-pull-request-closed';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import type { PageData } from './$types';
 
@@ -27,7 +28,7 @@
 <section class="list">
   {#each filteredItems as pull}
     <a class="row" href="/{owner}/{repo}/pulls/{pull.number}">
-      <span class:blocked={pull.state === 'blocked'} class:merged={pull.state === 'merged'} class="icon">{#if pull.state === 'merged'}<GitMerge size={17} />{:else}<GitPullRequest size={17} />{/if}</span>
+      <span class:blocked={pull.state === 'blocked'} class:merged={pull.state === 'merged'} class:closed={pull.state === 'closed'} class="icon">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}</span>
       <span class="main"><strong>{pull.title}</strong><small>#{pull.number} opened by {pull.author} · {pull.updatedAt}</small><code>{pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
       <span class:failed={pull.checkSummary.failed > 0} class:quiet={pull.checkSummary.total === 0} class="checks">{#if pull.checkSummary.failed}<CircleAlert size={14} />{pull.checkSummary.failed} failed{:else if pull.checkSummary.total === 0}<CircleDot size={14} />No checks{:else}<CircleCheck size={14} />{pull.checkSummary.passed} passed{/if}</span>
     </a>
@@ -39,7 +40,7 @@
 <style>
   .heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; } h1 { margin: 0; color: var(--text-strong); font-size: 22px; letter-spacing: -.025em; } p { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; } .heading > a { display: inline-flex; height: 34px; align-items: center; padding: 0 12px; border-radius: 7px; background: var(--brand); color: white; font-size: 11px; font-weight: 640; text-decoration: none; }
   .row { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 11px; min-height: 72px; padding: 10px 4px; border-bottom: 1px solid var(--border-subtle); color: inherit; text-decoration: none; } .row:hover { background: var(--surface-hover); }
-  .icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 7px; background: var(--success-soft); color: var(--success); } .icon.blocked { background: var(--danger-soft); color: var(--danger); }.icon.merged{background:#241d33;color:#a98ae8}.main { min-width: 0; } .main strong, .main small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .main strong { color: var(--text-strong); font-size: 12px; } .main small { margin-top: 4px; color: var(--text-muted); font-size: 10px; } .main code { display:flex;align-items:center;gap:3px;margin-top:4px;color:var(--text-faint);font-size:9px; }
+  .icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 7px; background: var(--success-soft); color: var(--success); } .icon.blocked,.icon.closed { background: var(--danger-soft); color: var(--danger); }.icon.merged{background:#241d33;color:#a98ae8}.main { min-width: 0; } .main strong, .main small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .main strong { color: var(--text-strong); font-size: 12px; } .main small { margin-top: 4px; color: var(--text-muted); font-size: 10px; } .main code { display:flex;align-items:center;gap:3px;margin-top:4px;color:var(--text-faint);font-size:9px; }
   .checks { display: inline-flex; align-items: center; gap: 4px; color: var(--success); font-size: 10px; font-weight: 600; } .checks.failed { color: var(--danger); }.checks.quiet{color:var(--text-faint)}.empty { padding: 48px 20px; color: var(--text-faint); text-align: center; } .empty strong { display: block; margin-top: 10px; color: var(--text-strong); font-size: 13px; } .empty p { margin-top: 5px; }
   @media (max-width: 600px) { .heading > a, .checks { display: none; } .row { grid-template-columns: 32px minmax(0,1fr); } }
 </style>

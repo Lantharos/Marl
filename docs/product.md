@@ -86,9 +86,12 @@ A pull request moves from draft to ready and can be closed or reopened without l
 review record. Its conversation includes replies, editable comments, durable deletion
 tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
 start line or range conversations directly from the changes view; those conversations also
-appear in the timeline with their exact file and line range. Assignees and repository labels
-make ownership and triage visible without replacing review state. The commits, changes, checks,
-and conversation views all describe the same pinned head revision.
+appear in the timeline with their exact file and line range, then collapse when resolved. Title,
+description, lifecycle, lock, assignment, label, merge, and thread-resolution changes are durable
+timeline events. The conversation composer keeps comment, review, merge, close, and reopen actions
+together without navigating away. Assignees and repository labels make ownership and triage
+visible without replacing review state. The commits, changes, checks, and conversation views all
+describe the same pinned head revision.
 
 Repository owners configure merge rules from the branches surface: required approvals,
 successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,
