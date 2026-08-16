@@ -44,8 +44,7 @@ const children = selected.map((name) => ({
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
-    detached: true,
-    windowsHide: true
+    detached: process.platform !== 'win32'
   })
 }));
 
