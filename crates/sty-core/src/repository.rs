@@ -117,15 +117,15 @@ impl Repository {
 
     pub fn tree(&self, revision: &str, path: Option<&str>) -> Result<Vec<TreeEntry>> {
         let clean_path = path.map(validate_repo_path).transpose()?;
-        let mut args = vec![
+        let treeish = clean_path
+            .as_deref()
+            .map_or_else(|| revision.to_owned(), |path| format!("{revision}:{path}"));
+        let args = vec![
             OsString::from("ls-tree"),
             OsString::from("-z"),
             OsString::from("--long"),
-            OsString::from(revision),
+            OsString::from(treeish),
         ];
-        if let Some(path) = clean_path.as_deref() {
-            args.extend([OsString::from("--"), OsString::from(path)]);
-        }
         let output = self.git_os("read repository tree", args)?;
         let mut entries = Vec::new();
         for record in output
@@ -143,7 +143,11 @@ impl Repository {
                     )
                 })?;
             let metadata = utf8(&record[..tab], "read repository tree")?;
-            let file_path = utf8(&record[tab + 1..], "read repository tree")?.to_owned();
+            let child_path = utf8(&record[tab + 1..], "read repository tree")?;
+            let file_path = clean_path.as_deref().map_or_else(
+                || child_path.to_owned(),
+                |path| format!("{path}/{child_path}"),
+            );
             let parts: Vec<_> = metadata.split_whitespace().collect();
             if parts.len() != 4 {
                 return Err(RepoError::Malformed(
@@ -437,6 +441,10 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|entry| entry.name == "README.md")
+        );
+        assert_eq!(
+            repo.tree("HEAD", Some("src")).unwrap()[0].path,
+            "src/lib.rs"
         );
     }
 
