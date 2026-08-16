@@ -23,6 +23,7 @@ type IndexedWorkflow = {
 };
 
 const knownTriggers = new Set<WorkflowTrigger>(['push', 'workflow_dispatch', 'pull_request', 'schedule']);
+const executableTriggers = new Set<WorkflowTrigger>(['push', 'workflow_dispatch']);
 
 function declaredTriggers(value: unknown): WorkflowTrigger[] {
   const names = typeof value === 'string'
@@ -188,7 +189,12 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
       const value = parse(await object.text(), { maxAliasCount: 10 }) as ObjectValue | null;
       const triggers = declaredTriggers(value?.on);
       const parsed = value ? parseWorkflow(value, entry.path) : { error: 'Workflow YAML must contain an object.' };
-      const error = !triggers.length ? 'Workflow must declare at least one supported trigger.' : parsed.error ?? null;
+      const unsupported = triggers.filter((trigger) => !executableTriggers.has(trigger));
+      const error = !triggers.length
+        ? 'Workflow must declare push or workflow_dispatch.'
+        : unsupported.length
+          ? `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported yet.`
+          : parsed.error ?? null;
       if (error) warnings.push({ path: entry.path, error });
       indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch) });
     } catch (error) {
