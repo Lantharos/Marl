@@ -9,11 +9,11 @@ type ServiceName = keyof typeof ports;
 const services: Record<ServiceName, { label: string; command: string[] }> = {
   web: {
     label: `web       http://127.0.0.1:${ports.web}`,
-    command: ['bun', '--cwd', 'apps/web', 'run', 'dev']
+    command: ['bun', 'run', '--cwd', 'apps/web', 'dev']
   },
   api: {
     label: `api       http://127.0.0.1:${ports.api}`,
-    command: ['bun', '--cwd', 'apps/api', 'run', 'dev']
+    command: ['bun', 'run', '--cwd', 'apps/api', 'dev']
   },
   git: {
     label: `git       http://127.0.0.1:${ports.git}`,
