@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
     let state = Arc::new(AppState {
         repositories,
         control_plane: std::env::var("STY_API_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:8787".into()),
+            .unwrap_or_else(|_| "http://127.0.0.1:42618".into()),
         client: reqwest::Client::new(),
         gateway_token: std::env::var("STY_GIT_GATEWAY_TOKEN")
             .unwrap_or_else(|_| "sty-local".into()),
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
         .route("/_sty/commit", axum::routing::post(compare::commit_request))
         .route("/{*path}", any(smart_http::git_request))
         .with_state(state);
-    let address = std::env::var("STY_GIT_LISTEN").unwrap_or_else(|_| "127.0.0.1:8788".into());
+    let address = std::env::var("STY_GIT_LISTEN").unwrap_or_else(|_| "127.0.0.1:42619".into());
     let listener = tokio::net::TcpListener::bind(&address)
         .await
         .with_context(|| format!("bind {address}"))?;

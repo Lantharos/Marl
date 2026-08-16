@@ -7,10 +7,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter './apps/*' dev",
-    "dev:web": "bun --cwd apps/web dev",
-    "dev:api": "bun --cwd apps/api dev",
-    "dev:git": "cargo run -p sty-git",
+    "dev": "bun scripts/dev.ts",
+    "dev:plan": "bun scripts/dev.ts --plan",
+    "dev:web": "bun scripts/dev.ts web",
+    "dev:api": "bun scripts/dev.ts api",
+    "dev:git": "bun scripts/dev.ts git",
     "check": "bun run --filter '*' check",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test && cargo test --workspace"

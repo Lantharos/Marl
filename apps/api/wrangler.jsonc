@@ -6,8 +6,8 @@
   "workers_dev": true,
   "vars": {
     "ENVIRONMENT": "development",
-    "GIT_GATEWAY_URL": "http://127.0.0.1:8788",
-    "GIT_PUBLIC_URL": "http://127.0.0.1:8788"
+    "GIT_GATEWAY_URL": "http://127.0.0.1:42619",
+    "GIT_PUBLIC_URL": "http://127.0.0.1:42619"
   },
   "d1_databases": [
     {

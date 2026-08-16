@@ -25,6 +25,17 @@ Start the web application, API, and local Git gateway together:
 bun dev
 ```
 
+Sty uses a dedicated local port range so it can run alongside other projects:
+
+- web: `http://127.0.0.1:42617`
+- API: `http://127.0.0.1:42618`
+- Git: `http://127.0.0.1:42619`
+- Worker inspector: `42620`
+
+The development supervisor owns every service process tree. Pressing Ctrl+C stops Vite,
+Wrangler, the Rust Git gateway, and their descendants together. If one service fails, the
+others are stopped as well so a partial Sty stack is not left running.
+
 Or run a surface independently:
 
 ```powershell
