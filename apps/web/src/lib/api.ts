@@ -31,3 +31,13 @@ export async function apiTextWith(fetcher: typeof fetch, path: string): Promise<
   if (!response.ok) throw new StyApiError(response.status, 'request_failed', `Sty API request failed (${response.status}).`);
   return response.text();
 }
+
+export async function apiTextCursor(path: string, after = -1): Promise<{ text: string; cursor: number }> {
+  return apiTextCursorWith(fetch, path, after);
+}
+
+export async function apiTextCursorWith(fetcher: typeof fetch, path: string, after = -1): Promise<{ text: string; cursor: number }> {
+  const response = await fetcher(`/api/v1${path}?after=${after}`, { headers: { accept: 'text/plain' } });
+  if (!response.ok) throw new StyApiError(response.status, 'request_failed', `Sty API request failed (${response.status}).`);
+  return { text: await response.text(), cursor: Number(response.headers.get('x-sty-log-cursor') ?? after) };
+}

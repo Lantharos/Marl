@@ -9,6 +9,7 @@
     "build": "wrangler deploy --dry-run --outdir dist"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260816.1",
     "@sty/contracts": "workspace:*",
     "@types/bun": "^1.3.10",
     "typescript": "^6.0.2",

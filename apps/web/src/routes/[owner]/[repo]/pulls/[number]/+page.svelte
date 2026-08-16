@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import type { MergeMethod, PullRequestDetail, PullRequestDiff, PullRequestEvent, PullRequestReview, PullRequestComment, ReviewThread as ReviewThreadType } from '@sty/contracts';
+  import { onMount, untrack } from 'svelte';
+  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullTimelineItem, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@sty/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
@@ -34,9 +35,9 @@
   const owner = $derived($page.params.owner);
   const repo = $derived($page.params.repo);
   const number = $derived(Number($page.params.number));
-  let refreshedPull = $state<PullRequestDetail | null>(null);
-  const pull: PullRequestDetail = $derived(refreshedPull ?? data.pull);
-  const diff: PullRequestDiff = $derived(data.diff);
+  let pull = $state<PullRequestDetail>(untrack(() => data.pull));
+  let diff = $state<PullRequestDiff | null>(null);
+  let diffLoading = $state(false);
   let tab = $state<Tab>('conversation');
   let error = $state('');
   let reviewState = $state<'commented' | 'approved' | 'changes_requested'>('commented');
@@ -52,96 +53,206 @@
   let editedTitle = $state('');
   let editedBody = $state('');
 
-  type TimelineItem = { kind: 'review'; createdAt: string; value: PullRequestReview } | { kind: 'comment'; createdAt: string; value: PullRequestComment } | { kind: 'thread'; createdAt: string; value: ReviewThreadType } | { kind: 'event'; createdAt: string; value: PullRequestEvent };
-
-  function timelineItems(): TimelineItem[] {
-    if (!pull) return [];
-    return [
-      ...pull.reviews.map((value) => ({ kind: 'review' as const, createdAt: value.createdAt, value })),
-      ...pull.comments.map((value) => ({ kind: 'comment' as const, createdAt: value.createdAt, value })),
-      ...pull.threads.map((value) => ({ kind: 'thread' as const, createdAt: value.createdAt, value })),
-      ...pull.events.map((value) => ({ kind: 'event' as const, createdAt: value.createdAt, value }))
-    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  function syncTimeline(window: PullTimelineWindow) {
+    const items = [...window.items].sort((a, b) => a.sequence - b.sequence);
+    pull = {
+      ...pull,
+      timeline: { ...window, items },
+      comments: items.filter((item) => item.kind === 'comment').map((item) => item.value),
+      reviews: items.filter((item) => item.kind === 'review').map((item) => item.value),
+      threads: items.filter((item) => item.kind === 'thread').map((item) => item.value),
+      events: items.filter((item) => item.kind === 'event').map((item) => item.value)
+    };
   }
 
-  async function refreshPull() {
-    error = '';
+  function patchTimeline(kind: PullTimelineItem['kind'], id: string, patch: Record<string, unknown>) {
+    syncTimeline({ ...pull.timeline, items: pull.timeline.items.map((item) => item.kind === kind && item.value.id === id ? { ...item, value: { ...item.value, ...patch } } as PullTimelineItem : item) });
+  }
+
+  function appendTimeline(entries: unknown[]) {
+    if (!entries.length) return;
+    let sequence = (pull.timeline.newestLoadedSequence ?? 0) + 1;
+    const additions = entries.flatMap((entry) => {
+      const item = entry as { kind?: PullTimelineItem['kind']; value?: { id?: string }; createdAt?: string };
+      if (!item.kind || !item.value?.id || !item.createdAt || pull.timeline.items.some((existing) => existing.kind === item.kind && existing.value.id === item.value?.id)) return [];
+      return [{ sequence: sequence++, kind: item.kind, value: item.value, createdAt: item.createdAt } as PullTimelineItem];
+    });
+    if (!additions.length) return;
+    syncTimeline({ ...pull.timeline, items: [...pull.timeline.items, ...additions], total: pull.timeline.total + additions.length, newestLoadedSequence: sequence - 1 });
+  }
+
+  let stateRefreshQueued = false;
+  function scheduleStateRefresh() {
+    if (stateRefreshQueued) return;
+    stateRefreshQueued = true;
+    queueMicrotask(async () => {
+      try {
+        const result = await api<{ state: Partial<PullRequestDetail> }>(`/repositories/${owner}/${repo}/pulls/${number}/state`);
+        const version = Number(result.state.realtimeVersion ?? 0);
+        if (version >= pull.realtimeVersion) pull = { ...pull, ...result.state, realtimeVersion: pull.realtimeVersion };
+      } catch {}
+      stateRefreshQueued = false;
+    });
+  }
+
+  function applyUpdate(update?: PullRealtimeUpdate) {
+    if (!update || update.version <= pull.realtimeVersion) return;
+    if (update.version !== pull.realtimeVersion + 1) { void catchUp(); return; }
+    const payload = update.payload;
+    if (payload.details) pull = { ...pull, ...(payload.details as Partial<PullRequestDetail>) };
+    if (payload.pull) pull = { ...pull, ...(payload.pull as Partial<PullRequestDetail>) };
+    if (payload.metadata) {
+      const metadata = payload.metadata as { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean };
+      pull = {
+        ...pull,
+        assignees: metadata.assigneeIds ? pull.availableAssignees.filter((person) => metadata.assigneeIds?.includes(person.id)) : pull.assignees,
+        labels: metadata.labelIds ? pull.availableLabels.filter((label) => metadata.labelIds?.includes(label.id)) : pull.labels,
+        locked: metadata.locked ?? pull.locked
+      };
+    }
+    if (payload.comment) patchTimeline('comment', String((payload.comment as { id: string }).id), payload.comment as Record<string, unknown>);
+    if (payload.thread) patchTimeline('thread', String((payload.thread as { id: string }).id), payload.thread as Record<string, unknown>);
+    if (payload.threadComment) {
+      const change = payload.threadComment as { threadId: string; comment: { id: string } & Record<string, unknown> };
+      const thread = pull.timeline.items.find((item) => item.kind === 'thread' && item.value.id === change.threadId)?.value as ReviewThreadType | undefined;
+      if (thread) {
+        const exists = thread.comments.some((comment) => comment.id === change.comment.id);
+        patchTimeline('thread', change.threadId, { comments: exists ? thread.comments.map((comment) => comment.id === change.comment.id ? { ...comment, ...change.comment } : comment) : [...thread.comments, change.comment] });
+      }
+    }
+    if (Array.isArray(payload.timeline)) appendTimeline(payload.timeline);
+    pull = { ...pull, realtimeVersion: update.version };
+    if (payload.refreshState) scheduleStateRefresh();
+  }
+
+  let catchUpRequest: Promise<void> | null = null;
+  function catchUp() {
+    if (catchUpRequest) return catchUpRequest;
+    catchUpRequest = runCatchUp().finally(() => (catchUpRequest = null));
+    return catchUpRequest;
+  }
+
+  async function runCatchUp() {
+    let hasMore = true;
+    while (hasMore) {
+      const result = await api<{ updates: PullRealtimeUpdate[]; hasMore: boolean; version: number }>(`/repositories/${owner}/${repo}/pulls/${number}/updates?after=${pull.realtimeVersion}`);
+      for (const update of result.updates) applyUpdate(update);
+      hasMore = result.hasMore;
+      if (!result.updates.length) pull = { ...pull, realtimeVersion: Math.max(pull.realtimeVersion, result.version) };
+    }
+  }
+
+  onMount(() => {
+    let stopped = false;
+    let socket: WebSocket | null = null;
+    let reconnect: ReturnType<typeof setTimeout> | null = null;
+    let delay = 500;
+    const connect = () => {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket = new WebSocket(`${protocol}//${location.host}/api/v1/repositories/${encodeURIComponent(owner ?? '')}/${encodeURIComponent(repo ?? '')}/pulls/${number}/live`);
+      socket.onopen = () => { delay = 500; void catchUp(); };
+      socket.onmessage = (message) => {
+        try { const value = JSON.parse(String(message.data)) as { type: string; update?: PullRealtimeUpdate }; if (value.type === 'update') applyUpdate(value.update); } catch {}
+      };
+      socket.onclose = () => { if (!stopped) { reconnect = setTimeout(connect, delay); delay = Math.min(delay * 2, 10_000); } };
+    };
+    const visible = () => { if (document.visibilityState === 'visible') void catchUp(); };
+    connect();
+    document.addEventListener('visibilitychange', visible);
+    return () => { stopped = true; if (reconnect) clearTimeout(reconnect); socket?.close(); document.removeEventListener('visibilitychange', visible); };
+  });
+
+  async function loadOlderTimeline() {
+    const before = pull.timeline.loadBeforeSequence;
+    const after = pull.timeline.firstBoundarySequence;
+    if (!before || !after || busy) return;
+    busy = true;
     try {
-      const detail = await api<{ pullRequest: PullRequestDetail }>(`/repositories/${owner}/${repo}/pulls/${number}`);
-      refreshedPull = detail.pullRequest;
-      if (!pull.allowedMergeMethods.includes(mergeMethod)) mergeMethod = pull.allowedMergeMethods[0] ?? 'merge';
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'This pull request could not be loaded.'; }
+      const result = await api<{ timeline: PullTimelineWindow }>(`/repositories/${owner}/${repo}/pulls/${number}/timeline?before=${before}&after=${after}`);
+      const items = [...pull.timeline.items, ...result.timeline.items];
+      syncTimeline({ ...pull.timeline, items: [...new Map(items.map((item) => [`${item.kind}:${item.value.id}`, item])).values()], hidden: result.timeline.hidden, loadBeforeSequence: result.timeline.loadBeforeSequence });
+    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Older conversation could not be loaded.'; }
+    finally { busy = false; }
+  }
+
+  async function selectTab(next: Tab) {
+    tab = next;
+    if (next !== 'changes' || diff || diffLoading) return;
+    diffLoading = true;
+    try { diff = await api<PullRequestDiff>(`/repositories/${owner}/${repo}/pulls/${number}/diff`); }
+    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Changes could not be loaded.'; }
+    finally { diffLoading = false; }
   }
 
   async function submitReview() {
     if (!pull || busy) return; busy = true; error = '';
-    try { await api(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: reviewState, body: reviewBody }) }); reviewBody = ''; reviewOpen = false; await refreshPull(); tab = 'conversation'; }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: reviewState, body: reviewBody }) }); applyUpdate(result.update); reviewBody = ''; reviewOpen = false; tab = 'conversation'; }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Review could not be submitted.'; }
     finally { busy = false; }
   }
 
   async function reply(threadId: string, body: string) {
     if (!body.trim() || busy) return; busy = true;
-    try { await api(`/review-threads/${threadId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }); await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/review-threads/${threadId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }); applyUpdate(result.update); }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Reply could not be added.'; }
     finally { busy = false; }
   }
 
   async function saveComment(commentId: string, body: string) {
     if (!body.trim() || busy) return; busy = true;
-    try { await api(`/review-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body }) }); await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/review-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body }) }); applyUpdate(result.update); }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be updated.'; }
     finally { busy = false; }
   }
 
   async function deleteComment(commentId: string) {
     if (busy) return; busy = true;
-    try { await api(`/review-comments/${commentId}`, { method: 'DELETE' }); await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/review-comments/${commentId}`, { method: 'DELETE' }); applyUpdate(result.update); }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be deleted.'; }
     finally { busy = false; }
   }
 
   async function addPullComment() {
     if (!commentBody.trim() || busy) return; busy = true; error = '';
-    try { await api(`/repositories/${owner}/${repo}/pulls/${number}/comments`, { method: 'POST', body: JSON.stringify({ body: commentBody }) }); commentBody = ''; await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/comments`, { method: 'POST', body: JSON.stringify({ body: commentBody }) }); applyUpdate(result.update); commentBody = ''; }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be added.'; }
     finally { busy = false; }
   }
 
   async function savePullComment(commentId: string) {
     if (!editingPullBody.trim() || busy) return; busy = true;
-    try { await api(`/pull-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body: editingPullBody }) }); editingPullComment = null; editingPullBody = ''; await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/pull-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body: editingPullBody }) }); applyUpdate(result.update); editingPullComment = null; editingPullBody = ''; }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be updated.'; }
     finally { busy = false; }
   }
 
   async function deletePullComment(commentId: string) {
     if (busy) return; busy = true;
-    try { await api(`/pull-comments/${commentId}`, { method: 'DELETE' }); confirmingPullDelete = null; await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/pull-comments/${commentId}`, { method: 'DELETE' }); applyUpdate(result.update); confirmingPullDelete = null; }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be deleted.'; }
     finally { busy = false; }
   }
 
   async function createLineComment(draft: { path: string; side: 'old' | 'new'; startLine: number; line: number }, body: string) {
     if (!body.trim() || busy) return; busy = true;
-    try { await api(`/repositories/${owner}/${repo}/pulls/${number}/threads`, { method: 'POST', body: JSON.stringify({ ...draft, startSide: draft.side, body }) }); await refreshPull(); }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/threads`, { method: 'POST', body: JSON.stringify({ ...draft, startSide: draft.side, body }) }); applyUpdate(result.update); }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be added.'; }
     finally { busy = false; }
   }
 
   async function updateMetadata(body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) {
     if (busy) return; busy = true; error = '';
-    try { await api(`/repositories/${owner}/${repo}/pulls/${number}/metadata`, { method: 'PATCH', body: JSON.stringify(body) }); await refreshPull(); }
+    try { const result = await api<{ update?: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/metadata`, { method: 'PATCH', body: JSON.stringify(body) }); applyUpdate(result.update); }
     catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request metadata could not be updated.'; }
     finally { busy = false; }
   }
 
   async function setThreadResolved(threadId: string, resolved: boolean) {
     if (busy) return; busy = true; error = '';
-    const before = pull;
-    refreshedPull = { ...pull, threads: pull.threads.map((thread) => thread.id === threadId ? { ...thread, resolved } : thread) };
-    try { await api(`/review-threads/${threadId}/resolve`, { method: 'POST', body: JSON.stringify({ resolved }) }); await refreshPull(); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Conversation could not be updated.'; refreshedPull = before; }
+    const before = pull.timeline;
+    patchTimeline('thread', threadId, { resolved });
+    try { const result = await api<{ update?: PullRealtimeUpdate }>(`/review-threads/${threadId}/resolve`, { method: 'POST', body: JSON.stringify({ resolved }) }); applyUpdate(result.update); }
+    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Conversation could not be updated.'; syncTimeline(before); }
     finally { busy = false; }
   }
 
@@ -150,14 +261,15 @@
     busy = true; error = '';
     try {
       if (action === 'approve' || action === 'request_changes') {
-        await api(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: action === 'approve' ? 'approved' : 'changes_requested', body: commentBody }) });
+        const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: action === 'approve' ? 'approved' : 'changes_requested', body: commentBody }) }); applyUpdate(result.update);
       } else {
-        if (commentBody.trim() && !pull.locked) await api(`/repositories/${owner}/${repo}/pulls/${number}/comments`, { method: 'POST', body: JSON.stringify({ body: commentBody }) });
-        if (action === 'merge') await api(`/repositories/${owner}/${repo}/pulls/${number}/merge`, { method: 'POST', body: JSON.stringify({ method: mergeMethod }) });
-        else await api(`/repositories/${owner}/${repo}/pulls/${number}/${action}`, { method: 'POST', body: '{}' });
+        if (commentBody.trim() && !pull.locked) { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/comments`, { method: 'POST', body: JSON.stringify({ body: commentBody }) }); applyUpdate(result.update); }
+        const result = action === 'merge'
+          ? await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/merge`, { method: 'POST', body: JSON.stringify({ method: mergeMethod }) })
+          : await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/${action}`, { method: 'POST', body: '{}' });
+        applyUpdate(result.update);
       }
       commentBody = '';
-      await refreshPull();
     } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request action could not be completed.'; }
     finally { busy = false; }
   }
@@ -172,15 +284,15 @@
     if (busy || !editedTitle.trim()) return;
     busy = true; error = '';
     try {
-      await api(`/repositories/${owner}/${repo}/pulls/${number}`, { method: 'PATCH', body: JSON.stringify({ title: editedTitle, body: editedBody }) });
+      const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}`, { method: 'PATCH', body: JSON.stringify({ title: editedTitle, body: editedBody }) });
+      applyUpdate(result.update);
       editingDetails = false;
-      await refreshPull();
     } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request details could not be updated.'; }
     finally { busy = false; }
   }
 
   function openCurrentThreads() {
-    return pull?.threads.filter((thread) => !thread.outdated && !thread.resolved) ?? [];
+    return pull.mergeRequirements.unresolvedConversations;
   }
 
 </script>
@@ -193,14 +305,14 @@
   <header class="pr-header">
     <div class="title-row"><span class="state {pull.state}">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}{pull.state}</span><h1>{pull.title} <small>#{pull.number}</small></h1>{#if pull.canManage}<div class="lifecycle"><button disabled={busy} onclick={openDetailsEditor}><Pencil size={13} />Edit</button></div>{/if}</div>
     <p><strong>{pull.author}</strong> wants to merge <b>{pull.sourceBranch}</b> into <b>{pull.targetBranch}</b></p>
-    <div class="head-meta"><code>{pull.sourceCommitId.slice(0,7)}</code><ArrowRight size={12} /><code>{pull.targetCommitId.slice(0,7)}</code><span>·</span><span>{diff?.files.length ?? 0} changed files</span></div>
+    <div class="head-meta"><code>{pull.sourceCommitId.slice(0,7)}</code><ArrowRight size={12} /><code>{pull.targetCommitId.slice(0,7)}</code>{#if diff}<span>·</span><span>{diff.files.length} changed files</span>{/if}</div>
   </header>
 
   <nav class="tabs" aria-label="Pull request sections">
-    <button class:active={tab === 'conversation'} onclick={() => (tab = 'conversation')}><MessageSquare size={15} />Conversation <span>{pull.comments.length + pull.reviews.length + pull.threads.length + pull.events.length}</span></button>
-    <button class:active={tab === 'commits'} onclick={() => (tab = 'commits')}><GitCommitHorizontal size={15} />Commits <span>{pull.commits.length}</span></button>
-    <button class:active={tab === 'changes'} onclick={() => (tab = 'changes')}><FileDiff size={15} />Changes <span>{diff?.files.length ?? 0}</span></button>
-    <button class:active={tab === 'checks'} onclick={() => (tab = 'checks')}><CircleCheck size={15} />Checks <span>{pull.checks.length}</span></button>
+    <button class:active={tab === 'conversation'} onclick={() => selectTab('conversation')}><MessageSquare size={15} />Conversation <span>{pull.timeline.total}</span></button>
+    <button class:active={tab === 'commits'} onclick={() => selectTab('commits')}><GitCommitHorizontal size={15} />Commits <span>{pull.commits.length}</span></button>
+    <button class:active={tab === 'changes'} onclick={() => selectTab('changes')}><FileDiff size={15} />Changes {#if diff}<span>{diff.files.length}</span>{/if}</button>
+    <button class:active={tab === 'checks'} onclick={() => selectTab('checks')}><CircleCheck size={15} />Checks <span>{pull.checks.length}</span></button>
   </nav>
   {#if error}<div class="action-error" role="alert"><CircleAlert size={15} /><span>{error}</span><button aria-label="Dismiss error" onclick={() => (error = '')}><X size={13} /></button></div>{/if}
 
@@ -208,7 +320,8 @@
     <div class="conversation-layout">
       <main class="timeline">
         <article class="comment"><header><span class="avatar">{pull.author.slice(0,2).toUpperCase()}</span><strong>{pull.author}</strong><span>opened this pull request</span><time>{pull.createdAt}</time></header><div><MarkdownBody source={pull.body || 'No description was provided.'} /></div></article>
-        {#each timelineItems() as item}
+        {#each pull.timeline.items as item, index (`${item.kind}:${item.value.id}`)}
+          {#if pull.timeline.hidden > 0 && index === 2}<button class="timeline-gap" disabled={busy} onclick={loadOlderTimeline}>{pull.timeline.hidden} comments and events hidden <span>Load earlier activity</span></button>{/if}
           {#if item.kind === 'event'}
             <PullTimelineEvent event={item.value} />
           {:else if item.kind === 'review'}
@@ -224,7 +337,7 @@
       <aside class="sidebar"><section class="merge-panel">
         <header>{#if pull.state === 'merged'}<span class="merge-icon merged"><GitMerge size={18} /></span><div><strong>Merged</strong><p>Commit <code>{pull.mergedCommitId?.slice(0,7)}</code> is on {pull.targetBranch}.</p></div>{:else}<span class="merge-icon"><GitMerge size={18} /></span><div><strong>{pull.state === 'mergeable' ? 'Ready to merge' : 'Merge requirements'}</strong><p>Review the current head before merging.</p></div>{/if}</header>
         {#if pull.state !== 'merged'}
-          <ul><li class:passed={pull.mergeRequirements.checksPass}><Check size={13} />{pull.checkSummary.total ? `${pull.checkSummary.passed} of ${pull.checkSummary.total} checks passed` : 'No checks reported'}</li><li class:passed={pull.mergeRequirements.approvals >= pull.mergeRequirements.requiredApprovals}><Check size={13} />{pull.mergeRequirements.approvals} of {pull.mergeRequirements.requiredApprovals} required approvals</li><li class:passed={pull.mergeRequirements.conversationsPass}><Check size={13} />{openCurrentThreads().length} unresolved current conversations</li></ul>
+          <ul><li class:passed={pull.mergeRequirements.checksPass}><Check size={13} />{pull.checkSummary.total ? `${pull.checkSummary.passed} of ${pull.checkSummary.total} checks passed` : 'No checks reported'}</li><li class:passed={pull.mergeRequirements.approvals >= pull.mergeRequirements.requiredApprovals}><Check size={13} />{pull.mergeRequirements.approvals} of {pull.mergeRequirements.requiredApprovals} required approvals</li><li class:passed={pull.mergeRequirements.conversationsPass}><Check size={13} />{openCurrentThreads()} unresolved current conversations</li></ul>
           {#if pull.mergeRequirements.reasons.length}<div class="requirement-reasons">{#each pull.mergeRequirements.reasons as reason}<p><CircleAlert size={12} />{reason}</p>{/each}</div>{/if}
         {/if}
       </section><PullMetadata {pull} {busy} onUpdate={updateMetadata} /></aside>
@@ -233,7 +346,7 @@
     <section class="commit-list">{#each pull.commits as commit}<a href="/{owner}/{repo}/commit/{commit.id}"><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><strong>{commit.title}</strong><small>{commit.author} · {commit.authoredAt}</small></span><code>{commit.shortId}</code></a>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull request head.</p></div>{/each}</section>
   {:else if tab === 'changes'}
     <section class="changes-head"><div><strong>Changes from {pull.sourceBranch}</strong><span>Review the current head <code>{pull.sourceCommitId.slice(0,7)}</code></span></div>{#if pull.state !== 'merged' && pull.state !== 'closed'}<div class="review-anchor" use:dismissable={() => (reviewOpen = false)}><button class="review-trigger" onclick={() => (reviewOpen = !reviewOpen)}><BadgeCheck size={14} />Review changes</button>{#if reviewOpen}<div class="review-popover"><header><strong>Finish your review</strong><button aria-label="Close review" onclick={() => (reviewOpen = false)}><X size={14} /></button></header><MarkdownComposer bind:value={reviewBody} placeholder="Leave a review summary (optional)" minHeight={100} /><div class="review-decisions"><button class:active={reviewState === 'commented'} onclick={() => (reviewState = 'commented')}><span></span><div><strong>Comment</strong><small>Submit feedback without approval.</small></div></button><button class:active={reviewState === 'approved'} onclick={() => (reviewState = 'approved')}><span></span><div><strong>Approve</strong><small>Approve the changes in this head.</small></div></button><button class:active={reviewState === 'changes_requested'} onclick={() => (reviewState = 'changes_requested')}><span></span><div><strong>Request changes</strong><small>Block merging until concerns are addressed.</small></div></button></div><footer><button onclick={() => (reviewOpen = false)}>Cancel</button><button class="primary" disabled={busy} onclick={submitReview}>{busy ? 'Submitting…' : 'Submit review'}</button></footer></div>{/if}</div>{/if}</section>
-    <DiffViewer files={diff?.files ?? []} threads={pull.threads} {busy} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
+    {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff}<DiffViewer files={diff.files} threads={diff.threads ?? []} {busy} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
   {:else}
     <section class="checks-page"><header><h2>Checks for <code>{pull.sourceCommitId.slice(0,7)}</code></h2><p>Required checks must pass on the latest commit.</p></header>{#each pull.checks as check}<article><span class="check-icon {check.state}">{#if check.state === 'success'}<CircleCheck size={17} />{:else if check.state === 'failure'}<CircleAlert size={17} />{:else}<CircleDot size={17} />{/if}</span><div><strong>{check.name}</strong><p>{check.summary}</p></div><span>{check.state}</span></article>{:else}<div class="empty-checks"><CircleDot size={22} /><strong>No checks reported</strong><p>Push a workflow or attach a self-hosted runner to report checks.</p></div>{/each}</section>
   {/if}
@@ -245,6 +358,8 @@
 {/if}
 
 <style>
+  .timeline>.comment,.timeline>.event{content-visibility:auto;contain-intrinsic-size:auto 120px}
+  .timeline-gap{display:flex;width:100%;align-items:center;justify-content:center;gap:7px;padding:9px;border:0;border-radius:6px;background:var(--surface-muted);color:var(--text-muted);cursor:pointer;font-size:9px}.timeline-gap span{color:var(--brand);font-weight:650}.timeline-gap:hover{background:var(--surface-hover);color:var(--text-strong)}.timeline-gap:disabled{cursor:wait;opacity:.6}.changes-loading{height:260px;border-radius:8px;background:var(--surface-muted);animation:changes-loading 1.2s ease-in-out infinite alternate}@keyframes changes-loading{to{opacity:.48}}
   .fatal{padding:70px 20px;text-align:center;color:var(--text-faint)}.fatal strong{display:block;margin-top:10px;color:var(--text-strong)}.fatal p{font-size:11px}.fatal a{color:var(--brand);font-size:11px}.pr-header{padding:4px 0 23px}.title-row{display:flex;align-items:flex-start;gap:10px}.title-row h1{margin:0;color:var(--text-strong);font-size:23px;font-weight:660;letter-spacing:-.025em}.title-row h1 small{color:var(--text-faint);font-weight:500}.state{display:inline-flex;align-items:center;gap:5px;margin-top:1px;padding:5px 8px;border-radius:99px;background:var(--success-soft);color:var(--success);font-size:10px;font-weight:650;text-transform:capitalize}.state.merged{background:#eee7ff;color:#7145b8}.state.blocked,.state.closed{background:var(--danger-soft);color:var(--danger)}.pr-header>p{margin:10px 0 0;color:var(--text-muted);font-size:11px}.pr-header b{padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text-strong);font-family:monospace;font-weight:500}.head-meta{display:flex;align-items:center;gap:6px;margin-top:9px;color:var(--text-faint);font-size:9px}.head-meta code{color:var(--text-muted)}
   .tabs{display:flex;height:42px;margin-bottom:20px;border-bottom:1px solid var(--border);gap:3px}.tabs button{position:relative;display:flex;align-items:center;gap:6px;padding:0 11px;border:0;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:580}.tabs button::after{position:absolute;inset:auto 7px -1px;height:2px;background:transparent;content:''}.tabs button.active{color:var(--text-strong)}.tabs button.active::after{background:var(--brand)}.tabs span{padding:1px 5px;border-radius:99px;background:var(--surface-muted);color:var(--text-faint);font-size:9px}.action-error{display:grid;grid-template-columns:18px minmax(0,1fr) 26px;align-items:center;gap:6px;margin:-8px 0 14px;padding:8px 8px 8px 11px;border-left:2px solid var(--danger);border-radius:0 6px 6px 0;background:var(--danger-soft);color:var(--danger);font-size:10px}.action-error button{display:grid;width:26px;height:26px;padding:0;border:0;border-radius:5px;background:transparent;color:inherit;cursor:pointer;place-items:center}.action-error button:hover{background:color-mix(in srgb,var(--danger) 12%,transparent)}
   .conversation-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;align-items:start;gap:20px}.timeline{display:grid;gap:13px}.comment{overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface)}.comment>header{display:flex;align-items:center;gap:6px;min-height:45px;padding:0 12px;border-bottom:1px solid var(--border-subtle);background:var(--surface-muted);color:var(--text-muted);font-size:10px}.comment header strong{color:var(--text-strong)}.comment time,.event time{margin-left:auto;color:var(--text-faint);font-size:9px}.avatar{display:grid;width:25px;height:25px;flex:0 0 auto;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-size:8px;font-weight:740}.comment>div{padding:18px}.event{display:grid;grid-template-columns:29px 1fr;align-items:start;gap:9px;padding:3px 6px}.event-icon{display:grid;width:27px;height:27px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}.event-icon.approved{background:var(--success-soft);color:var(--success)}.event-icon.changes_requested{background:var(--danger-soft);color:var(--danger)}.event p{display:flex;gap:3px;margin:6px 0 0;color:var(--text-muted);font-size:10px}.event strong{color:var(--text-strong)}.event-body{margin-top:9px;padding:11px 13px;border:1px solid var(--border);border-radius:7px;background:var(--surface)}.comment-actions{display:flex;gap:3px;margin-left:8px}.comment-actions button,.comment-edit-actions button{height:27px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text-muted);cursor:pointer;font-size:9px}.comment-actions button.danger{border-color:var(--danger);color:var(--danger)}.comment-edit-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}.deleted{margin:0;color:var(--text-faint);font-size:10px;font-style:italic}.primary{border-color:var(--brand)!important;background:var(--brand)!important;color:white!important}.primary:disabled{opacity:.5;cursor:not-allowed}

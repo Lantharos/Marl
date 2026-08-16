@@ -1,9 +1,10 @@
 <script lang="ts">
   import { renderMarkdown } from '$lib/markdown';
   let { source, muted = false } = $props<{ source: string; muted?: boolean }>();
+  const rendered = $derived(renderMarkdown(source));
 </script>
 
-<div class="markdown" class:muted>{@html renderMarkdown(source)}</div>
+<div class="markdown" class:muted>{@html rendered}</div>
 
 <style>
   .markdown{color:var(--text);font-size:12px;line-height:1.65;overflow-wrap:anywhere}.markdown.muted{color:var(--text-muted)}

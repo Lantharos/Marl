@@ -3,8 +3,10 @@ import { sha256 } from './auth';
 import { identifier, validSlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
+import { notifyPullsForCommit } from './pull-realtime';
 
 type Runner = { id: string; organizationId: string; name: string; labelsJson: string; concurrency: number; platform: string; architecture: string; version: string };
+const runnerSelect = `SELECT runners.id,runners.name,runners.labels_json AS labelsJson,runners.active_jobs AS activeJobs,runners.concurrency,runners.platform,runners.architecture,runners.version,runners.last_seen_at AS lastSeenAt,CASE WHEN runners.disabled_at IS NOT NULL OR runners.last_seen_at < datetime('now','-90 seconds') THEN 'offline' WHEN runners.active_jobs > 0 THEN 'busy' ELSE 'idle' END AS state FROM runners JOIN organization_members ON organization_members.organization_id=runners.organization_id`;
 
 function bearer(request: Request): string | null {
   const value = request.headers.get('authorization');
@@ -58,8 +60,15 @@ export async function registerRunner(request: Request, env: Env): Promise<Respon
 }
 
 export async function listRunners(env: Env, principal: Principal): Promise<Response> {
-  const rows = await env.DB.prepare(`SELECT runners.id, runners.name, runners.labels_json AS labelsJson, runners.active_jobs AS activeJobs, runners.concurrency, runners.platform, runners.architecture, runners.version, runners.last_seen_at AS lastSeenAt, CASE WHEN runners.disabled_at IS NOT NULL OR runners.last_seen_at < datetime('now','-90 seconds') THEN 'offline' WHEN runners.active_jobs > 0 THEN 'busy' ELSE 'idle' END AS state FROM runners JOIN organization_members ON organization_members.organization_id = runners.organization_id WHERE organization_members.user_id = ? ORDER BY state, runners.name`).bind(principal.id).all<{ id: string; name: string; labelsJson: string; activeJobs: number; concurrency: number; platform: string; architecture: string; version: string; lastSeenAt: string; state: string }>();
+  const rows = await env.DB.prepare(`${runnerSelect} WHERE organization_members.user_id=? ORDER BY state,runners.name`).bind(principal.id).all<{ id: string; name: string; labelsJson: string; activeJobs: number; concurrency: number; platform: string; architecture: string; version: string; lastSeenAt: string; state: string }>();
   return json({ runners: rows.results.map(({ labelsJson, ...runner }) => ({ ...runner, labels: JSON.parse(labelsJson) })) });
+}
+
+export async function getRunner(env: Env, principal: Principal, id: string): Promise<Response> {
+  const row = await env.DB.prepare(`${runnerSelect} WHERE organization_members.user_id=? AND runners.id=?`).bind(principal.id, id).first<{ id: string; name: string; labelsJson: string; activeJobs: number; concurrency: number; platform: string; architecture: string; version: string; lastSeenAt: string; state: string }>();
+  if (!row) return problem(404, 'runner_not_found', 'Runner not found.');
+  const { labelsJson, ...runner } = row;
+  return json({ runner: { ...runner, labels: JSON.parse(labelsJson) } });
 }
 
 export async function heartbeatRunner(env: Env, runner: Runner): Promise<Response> {
@@ -76,19 +85,20 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
   if (!candidate) return new Response(null, { status: 204 });
   const leaseToken = `sty_lease_${crypto.randomUUID().replaceAll('-', '')}`;
   await env.DB.prepare(`UPDATE jobs SET state='running', runner_id=?, lease_token_hash=?, lease_expires_at=datetime('now','+45 seconds'), attempt=attempt+1, started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued'`).bind(runner.id, await sha256(leaseToken), candidate.id).run();
-  const job = await env.DB.prepare(`SELECT jobs.id, jobs.steps_json AS stepsJson, jobs.environment_json AS environmentJson, jobs.artifact_paths_json AS artifactPathsJson, jobs.runtime_json AS runtimeJson, jobs.lease_expires_at AS leaseExpiresAt, runs.id AS runId, runs.number AS runNumber, runs.name AS runName, runs.branch, runs.commit_id AS commitId, organizations.slug AS owner, repositories.name AS repository FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=?`).bind(candidate.id, runner.id, await sha256(leaseToken)).first<{ id: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; leaseExpiresAt: string; runId: string; runNumber: number; runName: string; branch: string; commitId: string; owner: string; repository: string }>();
+  const job = await env.DB.prepare(`SELECT jobs.id, jobs.steps_json AS stepsJson, jobs.environment_json AS environmentJson, jobs.artifact_paths_json AS artifactPathsJson, jobs.runtime_json AS runtimeJson, jobs.lease_expires_at AS leaseExpiresAt, runs.id AS runId, runs.number AS runNumber, runs.name AS runName, runs.branch, runs.commit_id AS commitId, runs.repository_id AS repositoryId, organizations.slug AS owner, repositories.name AS repository FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=?`).bind(candidate.id, runner.id, await sha256(leaseToken)).first<{ id: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; leaseExpiresAt: string; runId: string; runNumber: number; runName: string; branch: string; commitId: string; repositoryId: string; owner: string; repository: string }>();
   if (!job) return new Response(null, { status: 409 });
   await env.DB.batch([
     env.DB.prepare(`UPDATE runners SET active_jobs=active_jobs+1,last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
     env.DB.prepare(`UPDATE runs SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued'`).bind(job.runId),
     env.DB.prepare(`UPDATE checks SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE repository_id=(SELECT repository_id FROM runs WHERE id=?) AND commit_id=? AND name=(SELECT check_name FROM jobs WHERE id=?)`).bind(job.runId, job.commitId, job.id)
   ]);
+  await notifyPullsForCommit(env, job.repositoryId, job.commitId);
   return json({ job: { id: job.id, leaseToken, run: { id: job.runId, number: job.runNumber, name: job.runName }, repository: { owner: job.owner, name: job.repository, cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${job.owner}/${job.repository}.git` }, branch: job.branch, commitId: job.commitId, steps: JSON.parse(job.stepsJson), environment: JSON.parse(job.environmentJson), artifactPaths: JSON.parse(job.artifactPathsJson), runtime: JSON.parse(job.runtimeJson), leaseExpiresAt: job.leaseExpiresAt } });
 }
 
 async function ownsLease(env: Env, runner: Runner, jobId: string, leaseToken: string | null) {
   if (!leaseToken) return null;
-  return env.DB.prepare(`SELECT jobs.id, jobs.run_id AS runId, jobs.cancel_requested AS cancelRequested, runs.state AS runState FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=? AND jobs.state='running' AND jobs.lease_expires_at > CURRENT_TIMESTAMP`).bind(jobId, runner.id, await sha256(leaseToken)).first<{ id: string; runId: string; cancelRequested: number; runState: string }>();
+  return env.DB.prepare(`SELECT jobs.id, jobs.run_id AS runId, jobs.cancel_requested AS cancelRequested, runs.state AS runState, runs.repository_id AS repositoryId, runs.commit_id AS commitId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=? AND jobs.state='running' AND jobs.lease_expires_at > CURRENT_TIMESTAMP`).bind(jobId, runner.id, await sha256(leaseToken)).first<{ id: string; runId: string; cancelRequested: number; runState: string; repositoryId: string; commitId: string }>();
 }
 
 export async function renewJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
@@ -146,6 +156,7 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
   const states = new Set(remaining.results.map((row) => row.state));
   const runState = states.has('failure') ? 'failure' : states.has('canceled') ? 'canceled' : states.has('running') ? 'running' : states.has('queued') ? 'queued' : 'success';
   await env.DB.prepare(`UPDATE runs SET state=?,completed_at=CASE WHEN ? IN ('success','failure','canceled') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=?`).bind(runState, runState, job.runId).run();
+  await notifyPullsForCommit(env, job.repositoryId, job.commitId);
   return json({ completed: true, runState });
 }
 

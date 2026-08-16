@@ -1,16 +1,18 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import BackLink from '$lib/components/BackLink.svelte';
   import Select from '$lib/components/Select.svelte';
   import { api, StyApiError } from '$lib/api';
+  import type { PageData } from './$types';
 
   type Branch = { name: string; commitId: string };
+  let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner);
   const repo = $derived($page.params.repo);
-  let branches = $state<Branch[]>([]);
-  let branch = $state('');
+  let branches = $state<Branch[]>(untrack(() => data.branches));
+  let branch = $state(untrack(() => data.defaultBranch));
   let name = $state('Verify changes');
   let jobName = $state('Checks');
   let image = $state('ubuntu:24.04');
@@ -22,14 +24,6 @@
   let busy = $state(false);
   let error = $state('');
   const branchOptions = $derived(branches.map((item) => ({ value: item.name, label: item.name, description: item.commitId.slice(0, 7) })));
-
-  onMount(async () => {
-    try {
-      const result = await api<{ defaultBranch: string; branches: Branch[] }>(`/repositories/${owner}/${repo}/branches`);
-      branches = result.branches;
-      branch = result.defaultBranch;
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Branches could not be loaded.'; }
-  });
 
   async function create() {
     if (!name.trim() || !jobName.trim() || !command.trim() || !image.trim() || busy) return;

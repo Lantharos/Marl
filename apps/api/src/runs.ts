@@ -2,6 +2,7 @@ import type { Principal } from './auth';
 import { identifier, validBranchName } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
+import { notifyPullsForCommit } from './pull-realtime';
 
 type Repository = { id: string; organizationId: string; owner: string; name: string };
 export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
@@ -122,6 +123,7 @@ export async function queueRun(env: Env, input: QueueRun): Promise<Record<string
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), input.repositoryId, input.commitId, checkName, 'queued'));
   }
   await env.DB.batch(statements);
+  await notifyPullsForCommit(env, input.repositoryId, input.commitId);
   return env.DB.prepare(runSelect('WHERE runs.id=?')).bind(runId).first<Record<string, unknown>>();
 }
 
@@ -137,10 +139,23 @@ export async function getRun(env: Env, principal: Principal, owner: string, name
   return json({ run: { ...summary(run), jobsDetail: jobs.results.map(({ labelsJson, runnerId, runnerName, ...job }) => ({ ...job, requiredLabels: JSON.parse(labelsJson), ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}), artifacts: artifacts.results.filter((artifact) => artifact.jobId === job.id).map(({ jobId: _, ...artifact }) => artifact) })) } });
 }
 
+export async function getRunState(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
+  const repo = await repository(env, principal, owner, name);
+  if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
+  const run = await env.DB.prepare(runSelect('WHERE runs.repository_id=? AND runs.number=?')).bind(repo.id, number).first<Record<string, unknown>>();
+  if (!run) return problem(404, 'run_not_found', 'Run not found.');
+  const runSummary = summary(run);
+  const jobs = await env.DB.prepare(`SELECT jobs.id,jobs.state,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`).bind(run.id).all<{ id: string; state: string; runnerId?: string; runnerName?: string }>();
+  const artifacts = ['queued', 'running'].includes(String(runSummary.state))
+    ? { results: [] as Array<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }> }
+    : await env.DB.prepare(`SELECT artifacts.id,artifacts.job_id AS jobId,artifacts.name,artifacts.byte_size AS byteSize,artifacts.content_type AS contentType FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id WHERE jobs.run_id=? ORDER BY artifacts.created_at`).bind(run.id).all<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }>();
+  return json({ run: runSummary, jobs: jobs.results.map(({ runnerId, runnerName, ...job }) => ({ ...job, ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}), ...(!['queued', 'running'].includes(String(runSummary.state)) ? { artifacts: artifacts.results.filter((artifact) => artifact.jobId === job.id).map(({ jobId: _, ...artifact }) => artifact) } : {}) })) });
+}
+
 export async function cancelRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   const repo = await repository(env, principal, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const run = await env.DB.prepare(`SELECT id,state FROM runs WHERE repository_id=? AND number=?`).bind(repo.id, number).first<{ id: string; state: string }>();
+  const run = await env.DB.prepare(`SELECT id,state,commit_id AS commitId FROM runs WHERE repository_id=? AND number=?`).bind(repo.id, number).first<{ id: string; state: string; commitId: string }>();
   if (!run || !['queued', 'running'].includes(run.state)) return problem(409, 'run_not_active', 'Only queued or running runs can be canceled.');
   await env.DB.batch([
     env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE run_id=? AND state='queued'`).bind(run.id),
@@ -148,7 +163,8 @@ export async function cancelRun(env: Env, principal: Principal, owner: string, n
     env.DB.prepare(`UPDATE checks SET state='canceled',summary='Canceled by a developer.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND commit_id=(SELECT commit_id FROM runs WHERE id=?) AND name IN (SELECT check_name FROM jobs WHERE run_id=?)`).bind(repo.id, run.id, run.id),
     env.DB.prepare(`UPDATE runs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE id=?`).bind(run.id)
   ]);
-  return json({ canceled: true });
+  await notifyPullsForCommit(env, repo.id, run.commitId);
+  return json({ canceled: true, state: 'canceled' });
 }
 
 export async function retryRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
@@ -164,17 +180,21 @@ export async function retryRun(env: Env, principal: Principal, owner: string, na
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), repo.id, previous.commitId, job.checkName, 'queued'));
   }
   await env.DB.batch(statements);
+  await notifyPullsForCommit(env, repo.id, previous.commitId);
   const created = await env.DB.prepare(runSelect('WHERE runs.id=?')).bind(id).first();
   return json({ run: created ? summary(created) : null }, { status: 201 });
 }
 
-export async function readJobLogs(env: Env, principal: Principal, jobId: string): Promise<Response> {
+export async function readJobLogs(env: Env, principal: Principal, jobId: string, url: URL): Promise<Response> {
   const allowed = await env.DB.prepare(`SELECT jobs.id FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE jobs.id=? AND organization_members.user_id=?`).bind(jobId, principal.id).first();
   if (!allowed) return problem(404, 'job_not_found', 'Job not found.');
-  const chunks = await env.DB.prepare('SELECT object_key AS objectKey FROM job_log_chunks WHERE job_id=? ORDER BY sequence').bind(jobId).all<{ objectKey: string }>();
+  const after = Number(url.searchParams.get('after') ?? -1);
+  if (!Number.isSafeInteger(after) || after < -1) return problem(422, 'invalid_log_cursor', 'Log cursor is invalid.');
+  const chunks = await env.DB.prepare('SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence').bind(jobId, after).all<{ sequence: number; objectKey: string }>();
   const streams = [];
   for (const chunk of chunks.results) { const object = await env.OBJECTS.get(chunk.objectKey); if (object) streams.push(await new Response(object.body).text()); }
-  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+  const cursor = chunks.results.at(-1)?.sequence ?? after;
+  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-sty-log-cursor': String(cursor) } });
 }
 
 export async function downloadArtifact(env: Env, principal: Principal, artifactId: string): Promise<Response> {

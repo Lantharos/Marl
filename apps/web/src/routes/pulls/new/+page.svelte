@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import type { PullRequestDiff, RepositorySummary } from '@sty/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
@@ -10,18 +9,19 @@
   import FormShell from '$lib/components/FormShell.svelte';
   import Select from '$lib/components/Select.svelte';
   import { api, StyApiError } from '$lib/api';
+  import type { PageData } from './$types';
 
   type Branch = { name: string; commitId: string };
-  let repositories = $state<RepositorySummary[]>([]);
-  let branches = $state<Branch[]>([]);
-  let repository = $state('');
-  let base = $state('');
-  let compare = $state('');
+  let { data } = $props<{ data: PageData }>();
+  let repositories = $state<RepositorySummary[]>(untrack(() => data.repositories));
+  let branches = $state<Branch[]>(untrack(() => data.branches));
+  let repository = $state(untrack(() => data.repository));
+  let base = $state(untrack(() => data.base));
+  let compare = $state(untrack(() => data.compare));
   let title = $state('');
   let body = $state('');
   let draft = $state(false);
-  let comparison = $state<PullRequestDiff | null>(null);
-  let loading = $state(true);
+  let comparison = $state<PullRequestDiff | null>(untrack(() => data.comparison));
   let comparing = $state(false);
   let creating = $state(false);
   let error = $state('');
@@ -67,25 +67,13 @@
     } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request could not be created.'; creating = false; }
   }
 
-  onMount(async () => {
-    try {
-      const result = await api<{ repositories: RepositorySummary[] }>('/repositories');
-      repositories = result.repositories;
-      const requested = $page.url.searchParams.get('repository');
-      repository = requested && repositories.some((repo) => `${repo.owner}/${repo.name}` === requested) ? requested : repositories[0] ? `${repositories[0].owner}/${repositories[0].name}` : '';
-      await loadBranches();
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Repositories could not be loaded.'; }
-    finally { loading = false; }
-  });
 </script>
 
 <svelte:head><title>New pull request · Sty</title></svelte:head>
 
 <FormShell title="Open a pull request" description="Compare live Git branches, describe the change, then open it for review.">
   {#if error}<div class="error" role="alert"><CircleAlert size={15} />{error}</div>{/if}
-  {#if loading}
-    <div class="loading" aria-busy="true"><i></i><i></i><i></i></div>
-  {:else if repositories.length === 0}
+  {#if repositories.length === 0}
     <div class="empty"><strong>No repositories yet</strong><p>Create a repository and push branches before opening a pull request.</p><a href="/repositories/new">Create repository</a></div>
   {:else}
     <form class="form-grid" onsubmit={(event) => { event.preventDefault(); createPull(); }}>
@@ -108,6 +96,6 @@
 </FormShell>
 
 <style>
-  .compare{display:grid;grid-template-columns:1fr 18px 1fr;align-items:center;gap:10px}.compare>:global(svg){margin-top:18px;color:var(--text-faint)}.comparison{display:flex;min-height:42px;align-items:center;gap:8px;padding:0 12px;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:10px}.comparison.busy{opacity:.65}.comparison small{display:flex;gap:6px;margin-left:auto}.comparison b{color:var(--success)}.comparison i{color:var(--danger);font-style:normal}.field textarea{min-height:130px;resize:vertical}.error{display:flex;align-items:center;gap:7px;padding:10px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:10px}.loading{display:grid;gap:9px}.loading i{height:44px;border-radius:5px;background:var(--surface-muted)}.empty{padding:48px 20px;text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{color:var(--text-faint);font-size:10px}.empty a{color:var(--brand);font-size:10px}
+  .compare{display:grid;grid-template-columns:1fr 18px 1fr;align-items:center;gap:10px}.compare>:global(svg){margin-top:18px;color:var(--text-faint)}.comparison{display:flex;min-height:42px;align-items:center;gap:8px;padding:0 12px;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:10px}.comparison.busy{opacity:.65}.comparison small{display:flex;gap:6px;margin-left:auto}.comparison b{color:var(--success)}.comparison i{color:var(--danger);font-style:normal}.field textarea{min-height:130px;resize:vertical}.error{display:flex;align-items:center;gap:7px;padding:10px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:10px}.empty{padding:48px 20px;text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{color:var(--text-faint);font-size:10px}.empty a{color:var(--brand);font-size:10px}
   @media(max-width:600px){.compare{grid-template-columns:1fr}.compare>:global(svg){display:none}.comparison{flex-wrap:wrap;padding-block:10px}}
 </style>

@@ -22,5 +22,19 @@
       "binding": "OBJECTS",
       "bucket_name": "sty-objects"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PULL_ROOMS",
+        "class_name": "PullRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "pull-rooms-v1",
+      "new_sqlite_classes": ["PullRoom"]
+    }
   ]
 }

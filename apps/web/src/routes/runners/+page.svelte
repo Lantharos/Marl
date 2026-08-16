@@ -1,26 +1,18 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import type { RunnerSummary } from '@sty/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import Cpu from 'lucide-svelte/icons/cpu';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
-  import { api } from '$lib/api';
-
-  let runners = $state<RunnerSummary[]>([]);
-  let loading = $state(true);
-  let error = $state(false);
+  import type { PageData } from './$types';
+  let { data } = $props<{ data: PageData }>();
+  const runners = $derived(data.runners as RunnerSummary[]);
   let query = $state('');
   let activeFilter = $state('All');
   const active = $derived(runners.reduce((sum, runner) => sum + runner.activeJobs, 0));
   const offline = $derived(runners.filter((runner) => runner.state === 'offline').length);
   const filteredRunners = $derived(runners.filter((runner) => (activeFilter === 'All' || runner.state === activeFilter.toLowerCase()) && `${runner.name} ${runner.platform} ${runner.architecture} ${runner.labels.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())));
 
-  onMount(async () => {
-    try { runners = (await api<{ runners: RunnerSummary[] }>('/runners')).runners; }
-    catch { error = true; }
-    finally { loading = false; }
-  });
 </script>
 
 <svelte:head><title>Runners · Sty</title></svelte:head>
@@ -28,11 +20,10 @@
   <PageHeader title="Runners" description="Your machines. Every job isolated in Docker." actionHref="/runners/new" actionLabel="Connect runner" />
   <div class="summary"><span><strong>{runners.length}</strong> connected</span><span><strong>{active}</strong> active {active === 1 ? 'job' : 'jobs'}</span>{#if offline}<span class="warn"><CircleAlert size={12} /><strong>{offline}</strong> offline</span>{/if}</div>
   <FilterBar placeholder="Find a runner" tabs={['All', 'Idle', 'Busy', 'Offline']} bind:active={activeFilter} bind:query />
-  {#if error}<p class="notice" role="alert">Runners could not be loaded. Refresh to try again.</p>{/if}
   <section class="list">
     {#each filteredRunners as runner}
       <a class="row" href="/runners/{runner.id}"><span class="machine"><Cpu size={17} /></span><span class="identity"><strong>{runner.name}</strong><small>{runner.platform} {runner.architecture} · v{runner.version}</small></span><span class="labels">{#each runner.labels as label}<code>{label}</code>{/each}</span><span class="capacity"><b>{runner.activeJobs}/{runner.concurrency}</b><i><span style:width={`${runner.activeJobs / runner.concurrency * 100}%`}></span></i></span><span class="status {runner.state}"><i></i>{runner.state}</span></a>
-    {:else}{#if !loading}<div class="empty"><Cpu size={20} /><strong>No matching runners</strong><p>Try another status, name, or label.</p></div>{/if}{/each}
+    {:else}<div class="empty"><Cpu size={20} /><strong>No matching runners</strong><p>Try another status, name, or label.</p></div>{/each}
   </section>
 </main>
 

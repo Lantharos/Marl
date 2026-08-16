@@ -15,14 +15,13 @@
   import Server from 'lucide-svelte/icons/server';
   import Sun from 'lucide-svelte/icons/sun';
   import X from 'lucide-svelte/icons/x';
-  import { api } from '$lib/api';
   import { dismissable } from '$lib/actions/dismissable';
   import BrandMark from './BrandMark.svelte';
 
   type CommandKind = 'home' | 'repository' | 'pull' | 'run' | 'runner' | 'create';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
-  let { children } = $props();
+  let { repositories, children } = $props<{ repositories: RepositorySummary[]; children: import('svelte').Snippet }>();
   let theme = $state<'light' | 'dark'>('dark');
   let searchOpen = $state(false);
   let mobileOpen = $state(false);
@@ -32,11 +31,10 @@
   let commandList = $state<HTMLElement>();
   let query = $state('');
   let selectedIndex = $state(0);
-  let repositories = $state<RepositorySummary[]>([]);
   const currentPath = $derived($page.url.pathname);
   const commands = $derived<Command[]>([
     { label: 'Home', detail: 'Your work across Sty', href: '/', keywords: 'dashboard overview', kind: 'home' },
-    ...repositories.map((repository) => ({
+    ...repositories.map((repository: RepositorySummary) => ({
       label: `${repository.owner}/${repository.name}`,
       detail: repository.description || 'Repository',
       href: `/${repository.owner}/${repository.name}`,
@@ -63,7 +61,6 @@
   onMount(() => {
     theme = localStorage.getItem('sty-theme') === 'light' ? 'light' : 'dark';
     applyTheme();
-    void api<{ repositories: RepositorySummary[] }>('/repositories').then((result) => (repositories = result.repositories)).catch(() => {});
     const onKeydown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();

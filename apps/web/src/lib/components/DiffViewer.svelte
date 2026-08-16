@@ -33,7 +33,7 @@
   let draft = $state<Draft | null>(null);
   let body = $state('');
 
-  function lines(patch: string): PatchLine[] {
+  function parseLines(patch: string): PatchLine[] {
     let oldLine = 0;
     let newLine = 0;
     const output: PatchLine[] = [];
@@ -57,6 +57,17 @@
     }
     return output;
   }
+
+  const parsedFiles = $derived(files.map((file: PullRequestDiff['files'][number]) => ({ ...file, lines: parseLines(file.patch) })));
+  const threadIndex = $derived.by(() => {
+    const index = new Map<string, ReviewThreadType[]>();
+    for (const thread of threads) {
+      if (thread.outdated) continue;
+      const key = `${thread.path}:${thread.side}:${thread.line}`;
+      index.set(key, [...(index.get(key) ?? []), thread]);
+    }
+    return index;
+  });
 
   function beginRange(event: PointerEvent, path: string, line: PatchLine) {
     if (!line.side || line.line === null) return;
@@ -90,7 +101,7 @@
   }
 
   function threadsAt(path: string, line: PatchLine) {
-    return threads.filter((thread: ReviewThreadType) => thread.path === path && thread.side === line.side && thread.line === line.line && !thread.outdated);
+    return threadIndex.get(`${path}:${line.side}:${line.line}`) ?? [];
   }
 
   function draftAt(path: string, line: PatchLine): Draft | null {
@@ -109,14 +120,14 @@
 
 <div class="diff-layout">
   <aside class="file-index">
-    {#each files as file}<a href="#file-{file.path.replaceAll('/','-')}"><span>{file.path}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small></a>{/each}
+    {#each parsedFiles as file}<a href="#file-{file.path.replaceAll('/','-')}"><span>{file.path}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small></a>{/each}
   </aside>
   <main class="diffs">
-    {#each files as file}
+    {#each parsedFiles as file (file.path)}
       <section class="diff" id="file-{file.path.replaceAll('/','-')}">
         <header><strong>{file.path}</strong><span>{file.status}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small></header>
         <div class="patch">
-          {#each lines(file.patch) as line}
+          {#each file.lines as line}
             <div class="line {line.kind}" class:selected={selected(file.path, line)} role="group" onpointerenter={() => extendRange(file.path, line)}>
               <div class="gutter">
                 {#if line.line !== null}<span>{line.line}</span>{#if reviewable}<button aria-label="Comment on line {line.line}; drag to select a range" onpointerdown={(event) => beginRange(event, file.path, line)} onclick={() => openSingle(file.path, line)}><MessageSquarePlus size={14} /></button>{/if}{/if}
@@ -136,6 +147,7 @@
 </div>
 
 <style>
+  .diff{content-visibility:auto;contain-intrinsic-size:auto 520px}
   .diff-layout{display:grid;grid-template-columns:220px minmax(0,1fr);align-items:start;gap:18px}.file-index{position:sticky;top:76px;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface)}.file-index a{display:flex;min-height:39px;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-top:1px solid var(--border-subtle);color:var(--text-muted);font-size:10px;text-decoration:none}.file-index a:first-child{border-top:0}.file-index a:hover{background:var(--surface-hover);color:var(--text-strong)}.file-index a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-index small{display:flex;gap:4px;font-size:8px}.file-index b{color:var(--success)}.file-index i{color:var(--danger);font-style:normal}.diffs{display:grid;min-width:0;gap:16px}.diff{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.diff>header{display:flex;min-height:43px;align-items:center;gap:8px;padding:0 12px;background:var(--surface-muted)}.diff>header strong{color:var(--text-strong);font:600 10px ui-monospace,SFMono-Regular,Consolas,monospace}.diff>header>span{padding:3px 6px;border-radius:4px;background:var(--canvas);color:var(--text-faint);font-size:8px;text-transform:capitalize}.diff>header small{display:flex;gap:6px;margin-left:auto;font-size:10px}.diff>header b{color:var(--success)}.diff>header i{color:var(--danger);font-style:normal}.patch{overflow:auto;border-top:1px solid var(--border-subtle)}.line{display:grid;grid-template-columns:54px minmax(max-content,1fr);min-height:22px}.gutter{position:relative;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;background:var(--surface-muted);color:var(--text-faint);font:9px ui-monospace,SFMono-Regular,Consolas,monospace;user-select:none}.gutter button{position:absolute;left:4px;display:none;width:24px;height:20px;align-items:center;justify-content:center;padding:0;border:0;border-radius:4px;background:var(--brand);color:white;cursor:crosshair}.line:hover .gutter button,.gutter button:focus-visible{display:flex}.line pre{margin:0;padding:0 10px;color:var(--text);font:10px/22px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}.line.added .gutter,.line.added pre{background:var(--success-soft)}.line.added pre{color:var(--success)}.line.removed .gutter,.line.removed pre{background:var(--danger-soft)}.line.removed pre{color:var(--danger)}.line.hunk .gutter,.line.hunk pre{background:var(--brand-soft);color:var(--brand)}.line.selected .gutter{box-shadow:inset 3px 0 var(--brand)}.line.selected pre{background:color-mix(in srgb,var(--brand-soft) 68%,var(--surface))}.draft{padding:11px 12px 12px 66px;border-block:1px solid var(--border);background:var(--surface-raised)}.range-label{margin-bottom:7px;color:var(--text-faint);font-size:9px}
   @media(max-width:900px){.diff-layout{grid-template-columns:1fr}.file-index{position:static;display:flex;overflow-x:auto}.file-index a{min-width:180px;border-top:0;border-left:1px solid var(--border-subtle)}}
 </style>

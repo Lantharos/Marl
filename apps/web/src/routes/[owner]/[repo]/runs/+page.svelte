@@ -1,19 +1,17 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
   import type { RunSummary } from '@sty/contracts';
+  import { page } from '$app/stores';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import FilterBar from '$lib/components/FilterBar.svelte';
-  import { api } from '$lib/api';
+  import type { PageData } from './$types';
 
+  let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner);
   const repo = $derived($page.params.repo);
-  let runs = $state<RunSummary[]>([]);
-  let loading = $state(true);
-  let error = $state(false);
+  const runs = $derived(data.runs as RunSummary[]);
   let query = $state('');
   let activeFilter = $state('All');
   const filteredRuns = $derived(runs.filter((run) => {
@@ -21,21 +19,15 @@
     return stateMatches && `${run.name} ${run.branch} ${run.commit}`.toLowerCase().includes(query.trim().toLowerCase());
   }));
 
-  onMount(async () => {
-    try { runs = (await api<{ runs: RunSummary[] }>(`/repositories/${owner}/${repo}/runs`)).runs; }
-    catch { error = true; }
-    finally { loading = false; }
-  });
 </script>
 
 <svelte:head><title>Runs · {owner}/{repo} · Sty</title></svelte:head>
 <header class="heading"><div><h1>Runs</h1><p>Workflow activity on every branch in this repository.</p></div><a href="/{owner}/{repo}/runs/new">New run</a></header>
 <FilterBar placeholder="Search workflow runs" tabs={['All', 'Active', 'Success', 'Failure', 'Canceled']} bind:active={activeFilter} bind:query />
-{#if error}<p class="notice" role="alert">Runs could not be loaded. Refresh to try again.</p>{/if}
 <section class="list">
   {#each filteredRuns as run}
     <a class="row" href="/{owner}/{repo}/runs/{run.number}"><span class="state {run.state}">{#if run.state === 'running' || run.state === 'queued'}<CircleDot size={16} />{:else if run.state === 'failure'}<CircleAlert size={16} />{:else}<CircleCheck size={16} />{/if}</span><span class="main"><strong>{run.name}</strong><small>Run #{run.number} · {run.queuedAt}</small><code><GitBranch size={10} />{run.branch}<i>{run.commit.slice(0,7)}</i></code></span><span class="jobs">{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</span><span class="status">{run.state}</span></a>
-  {:else}{#if !loading}<div class="empty"><strong>No matching runs</strong><p>Try another status or search.</p></div>{/if}{/each}
+  {:else}<div class="empty"><strong>No matching runs</strong><p>Try another status or search.</p></div>{/each}
 </section>
 
 <style>

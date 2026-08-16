@@ -15,5 +15,5 @@ export function mergeRequirements(pull: RequirementPull, rule: BranchRule, check
   if (changesRequested) reasons.push('Requested changes must be resolved on the current head.');
   if (approvals < rule.requiredApprovals) reasons.push(`${rule.requiredApprovals - approvals} more approval${rule.requiredApprovals - approvals === 1 ? '' : 's'} required.`);
   if (rule.requireConversations && unresolved > 0) reasons.push(`${unresolved} review conversation${unresolved === 1 ? '' : 's'} must be resolved.`);
-  return { ready: pull.state === 'open' && reasons.length === 0, reasons, approvals, requiredApprovals: rule.requiredApprovals, checksPass, conversationsPass: !rule.requireConversations || unresolved === 0 };
+  return { ready: pull.state === 'open' && reasons.length === 0, reasons, approvals, requiredApprovals: rule.requiredApprovals, checksPass, conversationsPass: !rule.requireConversations || unresolved === 0, unresolvedConversations: unresolved };
 }

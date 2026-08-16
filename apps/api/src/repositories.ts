@@ -4,6 +4,7 @@ import { identifier, safeRepositoryPath, validBranchName, validSlug, validVisibi
 import { pinPullRefs } from './git-writes';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
+import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
 
 type RepositoryRow = RepositorySummary & { organizationId: string; defaultBranch: string; archivedAt: string | null; deletionScheduledAt: string | null };
@@ -62,10 +63,11 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     statements.push(env.DB.prepare(`INSERT INTO repository_entries (repository_id, tree_id, path, parent_path, name, kind, object_id, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, tree_id, path) DO UPDATE SET kind=excluded.kind, object_id=excluded.object_id, byte_size=excluded.byte_size`).bind(body.repositoryId, entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId, typeof entry.byteSize === 'number' ? entry.byteSize : null));
   }
   const changedBranches = indexedBranches.filter((branch) => previousHeads.get(branch.name) !== branch.commitId);
+  const pullHeadUpdates: Array<{ id: string; sourceCommitId: string; targetCommitId: string }> = [];
   if (changedBranches.length) {
     const changedNames = changedBranches.map((branch) => branch.name);
     const placeholders = changedNames.map(() => '?').join(',');
-    const pulls = await env.DB.prepare(`SELECT pull_requests.number,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE pull_requests.repository_id=? AND pull_requests.state IN ('draft','open') AND (pull_requests.source_branch IN (${placeholders}) OR pull_requests.target_branch IN (${placeholders}))`).bind(body.repositoryId, ...changedNames, ...changedNames).all<{ number: number; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string }>();
+    const pulls = await env.DB.prepare(`SELECT pull_requests.id,pull_requests.number,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE pull_requests.repository_id=? AND pull_requests.state IN ('draft','open') AND (pull_requests.source_branch IN (${placeholders}) OR pull_requests.target_branch IN (${placeholders}))`).bind(body.repositoryId, ...changedNames, ...changedNames).all<{ id: string; number: number; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string }>();
     const heads = new Map(indexedBranches.map((branch) => [branch.name, branch.commitId]));
     for (const pull of pulls.results) {
       const sourceCommitId = heads.get(pull.sourceBranch) ?? pull.sourceCommitId;
@@ -81,10 +83,12 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
         expectedTargetCommitId: pull.targetCommitId
       });
       if (!pinned.ok) return problem(502, 'pull_ref_sync_failed', `Pull request #${pull.number} could not preserve its updated commits.`);
+      pullHeadUpdates.push({ id: pull.id, sourceCommitId, targetCommitId });
     }
   }
   if (typeof body.defaultBranch === 'string') statements.push(env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(body.defaultBranch, body.repositoryId));
   for (let offset = 0; offset < statements.length; offset += 100) await env.DB.batch(statements.slice(offset, offset + 100));
+  await Promise.all(pullHeadUpdates.map((pull) => commitPullUpdate(env, pull.id, 'pull.synchronized', { pull: { sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId }, refreshState: true }, [])));
   if (indexedBranches.length) {
     const placeholders = indexedBranches.map(() => '?').join(',');
     await env.DB.prepare(`DELETE FROM branches WHERE repository_id=? AND name NOT IN (${placeholders})`).bind(body.repositoryId, ...indexedBranches.map((branch) => branch.name)).run();

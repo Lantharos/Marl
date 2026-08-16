@@ -47,9 +47,9 @@ The TypeScript API begins with a new database schema. It owns:
 Canonical Git packs, log chunks, and artifacts live in object storage. Repository file
 contents are read from canonical packs instead of being copied into one object-storage entry
 per blob. Relational state is derived from published repository generations and lives in the
-database. Runners claim label-compatible jobs through authenticated leases, and the web
-application polls the API while an active run is open. A future realtime transport may reduce
-latency without changing the persisted run model.
+database. Runners claim label-compatible jobs through authenticated leases. While an active run
+is open, the web application polls a narrow state endpoint and requests only log chunks after its
+last sequence cursor. Completed artifacts are loaded once, after the run reaches a terminal state.
 
 ## Git and the local core
 
@@ -129,14 +129,25 @@ head's reviews, checks, and conversations. Git ref publication still provides th
 compare-and-swap boundary, preventing a target update that raced with policy evaluation from
 being overwritten.
 
-Pull-request mutations write their state change and corresponding timeline event in the same D1
-batch. Events preserve the actor and structured before-and-after details, while client mutations
-refresh only the pull-request model so review actions never require a document navigation.
+Pull-request mutations write their state change, timeline event, and monotonic realtime cursor in
+the same D1 batch. Events preserve the actor and structured before-and-after details. A hibernating
+Durable Object room per pull request fans those persisted deltas out to connected reviewers; it
+does not own or duplicate pull-request state. Reconnecting clients catch up from D1 by cursor, so
+lost WebSocket delivery cannot lose a review action. Check transitions and synchronized branch
+heads publish through the same delta stream.
 
-Repository routes use SvelteKit's Cloudflare adapter and load repository, pull-request, diff,
-and settings data through route loaders so the initial response is server-rendered. Client
-requests are reserved for mutations and live refreshes, keeping the current document mounted
-while those mutations run. Route loaders translate API failures into their original HTTP status
+Pull-request detail initially includes the first two and latest thirty timeline entries. The
+middle is represented by an exact hidden count and loaded backward by sequence cursor on demand.
+Diffs and their review threads load only when the Changes tab is opened. Local mutations patch the
+returned entities directly and request the small merge-state projection only when an action can
+change merge eligibility.
+
+Repository routes use SvelteKit's Cloudflare adapter and load repository, pull-request, run,
+runner, and settings data through route loaders so the initial response is server-rendered. The
+root loader supplies the repository list to both the shell and child routes without a second
+browser fetch. Client requests are reserved for user-driven changes, cursor pagination, and narrow
+live updates, keeping the current document mounted while mutations run. Route loaders translate
+API failures into their original HTTP status
 so missing, forbidden, and unavailable resources render the correct error boundary. Sty keeps
 SvelteKit's routing and rendering model instead of introducing a second React runtime for typed
 routing or server functions.

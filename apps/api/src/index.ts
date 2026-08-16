@@ -3,9 +3,9 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
-import { addPullComment, addThreadComment, compareBranches, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
-import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
-import { cancelRun, createRun, downloadArtifact, getRun, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
+import { addPullComment, addThreadComment, compareBranches, connectPullRealtime, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
+import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
+import { cancelRun, createRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 
 const worker = {
   async fetch(request: Request, _env: Env): Promise<Response> {
@@ -45,22 +45,25 @@ const worker = {
 
     if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal);
     if (request.method === 'GET' && url.pathname === '/api/v1/runners') return listRunners(_env, principal);
+    const runnerDetail = url.pathname.match(/^\/api\/v1\/runners\/(runner_[a-z0-9]+)$/);
+    if (request.method === 'GET' && runnerDetail) return getRunner(_env, principal, runnerDetail[1]);
     if (request.method === 'POST' && url.pathname === '/api/v1/runner-enrollments') return createEnrollment(request, _env, principal);
     if (request.method === 'GET' && url.pathname === '/api/v1/runs') return listRuns(_env, principal);
     const jobLogs = url.pathname.match(/^\/api\/v1\/jobs\/(job_[a-z0-9]+)\/logs$/);
-    if (request.method === 'GET' && jobLogs) return readJobLogs(_env, principal, jobLogs[1]);
+    if (request.method === 'GET' && jobLogs) return readJobLogs(_env, principal, jobLogs[1], url);
     const artifact = url.pathname.match(/^\/api\/v1\/artifacts\/(artifact_[a-z0-9]+)$/);
     if (request.method === 'GET' && artifact) return downloadArtifact(_env, principal, artifact[1]);
 
     const compareRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/compare$/);
     if (compareRoute && request.method === 'GET') return compareBranches(_env, principal, decodeURIComponent(compareRoute[1]), decodeURIComponent(compareRoute[2]), url);
 
-    const runRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/runs(?:\/(\d+)(?:\/(cancel|retry))?)?$/);
+    const runRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/runs(?:\/(\d+)(?:\/(cancel|retry|state))?)?$/);
     if (runRoute) {
       const owner = decodeURIComponent(runRoute[1]); const repository = decodeURIComponent(runRoute[2]);
       if (!runRoute[3] && request.method === 'GET') return listRepositoryRuns(_env, principal, owner, repository);
       if (!runRoute[3] && request.method === 'POST') return createRun(request, _env, principal, owner, repository);
       if (runRoute[3] && !runRoute[4] && request.method === 'GET') return getRun(_env, principal, owner, repository, Number(runRoute[3]));
+      if (runRoute[3] && runRoute[4] === 'state' && request.method === 'GET') return getRunState(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'cancel' && request.method === 'POST') return cancelRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'retry' && request.method === 'POST') return retryRun(_env, principal, owner, repository, Number(runRoute[3]));
     }
@@ -89,7 +92,7 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
-    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads|comments|metadata|ready|close|reopen))?)?$/);
+    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads|comments|metadata|ready|close|reopen|timeline|updates|live|state))?)?$/);
     if (pullRoute) {
       const owner = decodeURIComponent(pullRoute[1]);
       const repository = decodeURIComponent(pullRoute[2]);
@@ -102,6 +105,10 @@ const worker = {
       if (number !== null && action === 'reviews' && request.method === 'POST') return reviewPull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'merge' && request.method === 'POST') return mergePull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'diff' && request.method === 'GET') return getPullDiff(_env, principal, owner, repository, number);
+      if (number !== null && action === 'timeline' && request.method === 'GET') return getPullTimeline(_env, principal, owner, repository, number, url);
+      if (number !== null && action === 'updates' && request.method === 'GET') return getPullUpdates(_env, principal, owner, repository, number, url);
+      if (number !== null && action === 'live' && request.method === 'GET') return connectPullRealtime(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'state' && request.method === 'GET') return getPullState(_env, principal, owner, repository, number);
       if (number !== null && action === 'threads' && request.method === 'POST') return createThread(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'comments' && request.method === 'POST') return addPullComment(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'metadata' && request.method === 'PATCH') return updatePullMetadata(request, _env, principal, owner, repository, number);
@@ -138,3 +145,4 @@ const worker = {
 };
 
 export default worker;
+export { PullRoom } from './pull-room';

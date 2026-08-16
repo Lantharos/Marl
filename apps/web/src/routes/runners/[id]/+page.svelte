@@ -1,32 +1,16 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
-  import type { RunnerSummary } from '@sty/contracts';
   import Cpu from 'lucide-svelte/icons/cpu';
   import BackLink from '$lib/components/BackLink.svelte';
-  import { api } from '$lib/api';
-
-  let runner = $state<RunnerSummary | null>(null);
-  let loading = $state(true);
-  let error = $state('');
-
-  onMount(async () => {
-    try {
-      const result = await api<{ runners: RunnerSummary[] }>('/runners');
-      runner = result.runners.find((item) => item.id === $page.params.id) ?? null;
-      if (!runner) error = 'This runner does not exist.';
-    } catch { error = 'Runner details could not be loaded.'; }
-    finally { loading = false; }
-  });
+  import type { PageData } from './$types';
+  let { data } = $props<{ data: PageData }>();
+  const runner = $derived(data.runner);
 </script>
 
 <svelte:head><title>{runner?.name ?? 'Runner'} · Sty</title></svelte:head>
 <main class="page">
   <BackLink href="/runners" label="Runners" />
-  {#if runner}
-    <header><span class="machine"><Cpu size={21} /></span><div><h1>{runner.name}</h1><p>{runner.platform} {runner.architecture} · runner {runner.version}</p></div><span class="status {runner.state}"><i></i>{runner.state}</span></header>
-    <dl><div><dt>Capacity</dt><dd>{runner.activeJobs} of {runner.concurrency} jobs active</dd></div><div><dt>Last seen</dt><dd>{runner.lastSeenAt}</dd></div><div><dt>Labels</dt><dd class="labels">{#each runner.labels as label}<code>{label}</code>{/each}</dd></div><div><dt>Runner ID</dt><dd><code>{runner.id}</code></dd></div></dl>
-  {:else if !loading}<p class="error" role="alert">{error}</p>{/if}
+  <header><span class="machine"><Cpu size={21} /></span><div><h1>{runner.name}</h1><p>{runner.platform} {runner.architecture} · runner {runner.version}</p></div><span class="status {runner.state}"><i></i>{runner.state}</span></header>
+  <dl><div><dt>Capacity</dt><dd>{runner.activeJobs} of {runner.concurrency} jobs active</dd></div><div><dt>Last seen</dt><dd>{runner.lastSeenAt}</dd></div><div><dt>Labels</dt><dd class="labels">{#each runner.labels as label}<code>{label}</code>{/each}</dd></div><div><dt>Runner ID</dt><dd><code>{runner.id}</code></dd></div></dl>
 </main>
 
 <style>

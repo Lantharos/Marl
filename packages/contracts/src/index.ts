@@ -96,6 +96,7 @@ export interface PullRequestDetail extends PullRequestSummary {
     requiredApprovals: number;
     checksPass: boolean;
     conversationsPass: boolean;
+    unresolvedConversations: number;
   };
   commits: Array<{ id: string; shortId: string; title: string; author: string; authoredAt: string }>;
   comments: PullRequestComment[];
@@ -109,6 +110,32 @@ export interface PullRequestDetail extends PullRequestSummary {
   availableLabels: PullRequestLabel[];
   locked: boolean;
   canManage: boolean;
+  realtimeVersion: number;
+  timeline: PullTimelineWindow;
+}
+
+export type PullTimelineItem =
+  | { sequence: number; kind: 'comment'; createdAt: string; value: PullRequestComment }
+  | { sequence: number; kind: 'review'; createdAt: string; value: PullRequestReview }
+  | { sequence: number; kind: 'thread'; createdAt: string; value: ReviewThread }
+  | { sequence: number; kind: 'event'; createdAt: string; value: PullRequestEvent };
+
+export interface PullTimelineWindow {
+  items: PullTimelineItem[];
+  total: number;
+  hidden: number;
+  loadBeforeSequence?: number;
+  firstBoundarySequence?: number;
+  newestLoadedSequence?: number;
+}
+
+export interface PullRealtimeUpdate {
+  id: Identifier;
+  pullId: Identifier;
+  version: number;
+  kind: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
 }
 
 export type PullRequestEventKind =
@@ -196,6 +223,7 @@ export interface PullRequestDiff {
   head: string;
   mergeBase: string;
   files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string }>;
+  threads?: ReviewThread[];
 }
 
 export interface RunSummary {

@@ -35,4 +35,5 @@ export interface Env {
   GIT_GATEWAY_URL: string;
   GIT_PUBLIC_URL?: string;
   GIT_GATEWAY_TOKEN?: string;
+  PULL_ROOMS: DurableObjectNamespace;
 }
