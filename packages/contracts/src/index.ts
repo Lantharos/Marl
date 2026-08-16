@@ -232,6 +232,8 @@ export interface RunSummary {
   repository: Pick<RepositorySummary, 'owner' | 'name'>;
   name: string;
   trigger: string;
+  workflowId?: Identifier;
+  workflowPath?: string;
   actor?: string;
   branch: string;
   commit: string;
@@ -239,6 +241,30 @@ export interface RunSummary {
   jobs: number;
   duration?: string;
   queuedAt: string;
+}
+
+export type WorkflowTrigger = 'push' | 'workflow_dispatch' | 'pull_request' | 'schedule';
+export type WorkflowStatus = 'valid' | 'invalid';
+
+export interface WorkflowSummary {
+  id: Identifier;
+  name: string;
+  path: string;
+  source: 'sty' | 'github';
+  branch: string;
+  commit: string;
+  triggers: WorkflowTrigger[];
+  status: WorkflowStatus;
+  active: boolean;
+  error?: string;
+  jobs: number;
+  runCount: number;
+  lastRun?: RunSummary;
+  updatedAt: string;
+}
+
+export interface WorkflowDetail extends WorkflowSummary {
+  runs: RunSummary[];
 }
 
 export interface RunJob {

@@ -34,5 +34,4 @@ export const mergeBody = strictObject({ method: optional(mergeMethod) });
 export const runnerEnrollmentBody = strictObject({ organization: identifier, expiresMinutes: optional(pipe(number(), integer(), minValue(5), maxValue(60))) });
 export const runnerRegistrationBody = strictObject({ enrollmentToken: identifier, name: identifier, labels: optional(pipe(array(shortString), maxLength(64))), platform: shortString, architecture: shortString, version: shortString, concurrency: optional(pipe(number(), integer(), minValue(1), maxValue(32))) });
 export const completeJobBody = strictObject({ state: picklist(['success', 'failure', 'canceled']), exitCode: pipe(number(), integer()), summary: optional(shortString) });
-export const createRunBody = strictObject({ name: pipe(string(), minLength(1), maxLength(160)), branch, jobs: pipe(array(unknown()), minLength(1), maxLength(32)) });
 export const pullRealtimeUpdateBody = strictObject({ id: identifier, pullId: identifier, version: pipe(number(), integer(), minValue(1)), kind: identifier, payload: record(string(), unknown()), createdAt: identifier });

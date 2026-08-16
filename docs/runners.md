@@ -45,6 +45,7 @@ name: Verify
 on:
   push:
     branches: [main, release/*]
+  workflow_dispatch:
 
 jobs:
   check:
@@ -72,6 +73,10 @@ jobs:
 Native workflows support job dependencies, per-job Docker images, service containers,
 job and step timeouts, step working directories, continue-on-error, environment values,
 artifacts, runner labels, and push branch filters.
+
+The repository Runs tab lists workflow definitions from the default branch and keeps each
+workflow's run history together. A **Run workflow** action is available only when the file
+declares `workflow_dispatch`; Sty does not accept arbitrary commands from the Runs UI.
 
 The GitHub workflow reader supports `runs-on`, `needs`, simple strategy matrices with
 `include` and `exclude`, `container`, service images and environments, job and step

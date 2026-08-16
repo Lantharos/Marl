@@ -96,10 +96,11 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const trees = new Map(body.commits.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === 'object')).map((commit) => [commit.id, commit.treeId]));
   let workflowsQueued = 0;
   const workflowWarnings = [];
-  for (const branch of changedBranches) {
+  const changedBranchNames = new Set(changedBranches.map((branch) => branch.name));
+  for (const branch of indexedBranches) {
     const treeId = trees.get(branch.commitId);
     if (typeof treeId !== 'string') continue;
-    const result = await queuePushWorkflows(env, body.repositoryId, branch.name, branch.commitId, treeId, actorId);
+    const result = await queuePushWorkflows(env, body.repositoryId, branch.name, branch.commitId, treeId, actorId, changedBranchNames.has(branch.name));
     workflowsQueued += result.queued;
     workflowWarnings.push(...result.warnings);
   }

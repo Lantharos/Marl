@@ -5,7 +5,8 @@ import type { Env } from './platform';
 import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
 import { addPullComment, addThreadComment, compareBranches, connectPullRealtime, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
-import { cancelRun, createRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
+import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
+import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
 
 const worker = {
   async fetch(request: Request, _env: Env): Promise<Response> {
@@ -61,11 +62,19 @@ const worker = {
     if (runRoute) {
       const owner = decodeURIComponent(runRoute[1]); const repository = decodeURIComponent(runRoute[2]);
       if (!runRoute[3] && request.method === 'GET') return listRepositoryRuns(_env, principal, owner, repository);
-      if (!runRoute[3] && request.method === 'POST') return createRun(request, _env, principal, owner, repository);
       if (runRoute[3] && !runRoute[4] && request.method === 'GET') return getRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'state' && request.method === 'GET') return getRunState(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'cancel' && request.method === 'POST') return cancelRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'retry' && request.method === 'POST') return retryRun(_env, principal, owner, repository, Number(runRoute[3]));
+    }
+
+    const workflowRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/workflows(?:\/(workflow_[a-z0-9]+)(?:\/(dispatch))?)?$/);
+    if (workflowRoute) {
+      const owner = decodeURIComponent(workflowRoute[1]); const repository = decodeURIComponent(workflowRoute[2]); const workflowId = workflowRoute[3]; const action = workflowRoute[4];
+      if (!workflowId && request.method === 'GET') return listWorkflows(_env, principal, owner, repository);
+      if (workflowId && !action && request.method === 'GET') return getWorkflow(_env, principal, owner, repository, workflowId);
+      if (workflowId && action === 'dispatch' && request.method === 'POST') return dispatchWorkflow(_env, principal, owner, repository, workflowId);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
     if (url.pathname === '/api/v1/repositories') {
