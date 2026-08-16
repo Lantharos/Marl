@@ -116,12 +116,24 @@ Initial defensive limits are 2 GiB per repository, 10 GiB per organization, 1 Gi
 per push, 100 MiB per blob, 50,000 objects per push, and 32 changed refs per push. These are
 implementation and abuse ceilings unless they describe a user-facing storage or upload limit.
 
-Open pull requests pin their reviewed base and head commits under `refs/sty/pulls`. These refs
-are included in pack capture and compaction, so force-pushing a branch cannot silently garbage
-collect the commits used by an active review. Merge operations carry the stable pull-request
-ID into the Git commit and are idempotent across gateway retries. The relational pull-request
-row and branch index reconcile after Git publication; they are not the source of truth for
-whether the target Git ref advanced.
+Open pull requests pin their current base and head plus immutable reviewed revisions under
+`refs/sty/pulls`. These refs are included in pack capture and compaction, so force-pushing a
+branch cannot silently garbage collect commits used by an active or historical review. Merge,
+squash, and rebase operations carry the stable pull-request ID into their published result and
+are idempotent across gateway retries. The relational pull-request row and branch index
+reconcile after Git publication; they are not the source of truth for whether the target Git
+ref advanced.
+
+Branch merge rules live in D1 and are evaluated by the API at merge time against the current
+head's reviews, checks, and conversations. Git ref publication still provides the final
+compare-and-swap boundary, preventing a target update that raced with policy evaluation from
+being overwritten.
+
+Repository routes use SvelteKit's Cloudflare adapter and load repository, pull-request, diff,
+and settings data through route loaders so the initial response is server-rendered. Client
+requests are reserved for mutations and live refreshes. The web application stays on one
+Svelte routing and rendering model instead of introducing a second React runtime for typed
+routing or server functions.
 
 Production storage protections, recovery checks, and the acknowledgement contract are
 documented in [`repository-reliability.md`](repository-reliability.md).

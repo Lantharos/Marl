@@ -82,6 +82,15 @@ Pull requests are Sty's flagship surface. A developer must be able to understand
 proposal, review every file, follow conversations, inspect checks, and identify every merge
 blocker without hunting across unrelated screens.
 
+A pull request moves from draft to ready and can be closed or reopened without losing its
+review record. Its conversation includes replies, editable comments, durable deletion
+tombstones, and reversible thread resolution. The commits, changes, checks, and conversation
+views all describe the same pinned head revision.
+
+Repository owners configure merge rules from the branches surface: required approvals,
+successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,
+squash, or rebase methods. These rules are enforcement policy, not UI suggestions.
+
 ## Runs and runners
 
 Runs expose queue time, execution time, job dependencies, live logs, runner identity,

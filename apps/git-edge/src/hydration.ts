@@ -5,8 +5,8 @@ import { repositoryState, type RepositorySnapshotResponse } from './state-client
 export type ContainerStub = DurableObjectStub<Container<GitEdgeEnv>>;
 type ContainerStatus = { generation: number | null; cachedPacks: string[] };
 
-export async function hydrateRepository(container: ContainerStub, env: GitEdgeEnv, owner: string, repository: string) {
-  const snapshot = await repositoryState(env, `${owner}/${repository}`).request<RepositorySnapshotResponse>('/snapshot');
+export async function hydrateRepository(container: ContainerStub, env: GitEdgeEnv, owner: string, repository: string, storageKey: string) {
+  const snapshot = await repositoryState(env, storageKey).request<RepositorySnapshotResponse>('/snapshot');
   const base = `http://container/_sty/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
   const status = await expectContainer(container.fetch(internalRequest(`${base}/status`, env))).then((response) => response.json<ContainerStatus>());
   if (status.generation === snapshot.state.generation) return snapshot.state;

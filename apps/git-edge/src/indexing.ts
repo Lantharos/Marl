@@ -18,8 +18,8 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
     const task = await this.ctx.storage.get<IndexTask>('task');
     if (!task) return;
     try {
-      const container = getContainer(this.env.GIT_CONTAINERS, `${task.owner}/${task.repository}`);
-      await hydrateRepository(container, this.env, task.owner, task.repository);
+      const container = getContainer(this.env.GIT_CONTAINERS, task.repositoryId);
+      await hydrateRepository(container, this.env, task.owner, task.repository, task.repositoryId);
       await indexHydratedRepository(container, this.env, task.repositoryId, task.owner, task.repository);
       const latest = await this.ctx.storage.get<IndexTask>('task');
       if (latest?.generation === task.generation) await this.ctx.storage.delete('task');
@@ -39,7 +39,7 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
 }
 
 export async function scheduleRepositoryIndex(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, generation: number) {
-  const stub = env.INDEXING.get(env.INDEXING.idFromName(`${owner}/${repository}`));
+  const stub = env.INDEXING.get(env.INDEXING.idFromName(repositoryId));
   const response = await stub.fetch('http://indexing/schedule', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-storage-token': env.STY_GIT_GATEWAY_TOKEN },
     body: JSON.stringify({ owner, repository, repositoryId, generation })

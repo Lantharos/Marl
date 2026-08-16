@@ -31,14 +31,17 @@ export { ContainerProxy };
 export default {
   async fetch(request: Request, env: GitEdgeEnv): Promise<Response> {
     try {
+      if (new URL(request.url).pathname === '/_sty/repositories/relocate' && request.method === 'POST') {
+        return new Response(null, { status: request.headers.get('x-sty-gateway-token') === env.STY_GIT_GATEWAY_TOKEN ? 204 : 404 });
+      }
       const nativeRoute = nativePushRoute(request);
       if (nativeRoute) return handleNativePush(request, env, nativeRoute);
       const route = await repositoryRoute(request);
       if (!route) return new Response('Repository not found\n', { status: 404 });
-      const container = getContainer(env.GIT_CONTAINERS, `${route.owner}/${route.repository}`);
+      const authorization = await authorizeGit(request, env, route.owner, route.repository, route.writes ? 'git-receive-pack' : 'git-upload-pack');
+      const container = getContainer(env.GIT_CONTAINERS, authorization.storageKey);
       if (route.writes) return handleCompatibilityPush(request, container, env, route.owner, route.repository);
-      await authorizeGit(request, env, route.owner, route.repository, 'git-upload-pack');
-      await hydrateRepository(container, env, route.owner, route.repository);
+      await hydrateRepository(container, env, route.owner, route.repository, authorization.storageKey);
       return container.fetch(request);
     } catch (error) {
       if (error instanceof AuthorizationError) {

@@ -1,6 +1,6 @@
 import type { GitEdgeEnv } from './env';
 
-export type GitAuthorization = { repositoryId: string; organizationId: string; read: boolean; write: boolean };
+export type GitAuthorization = { repositoryId: string; storageKey: string; organizationId: string; read: boolean; write: boolean };
 
 export async function authorizeGit(request: Request, env: GitEdgeEnv, owner: string, repository: string, service: 'git-upload-pack' | 'git-receive-pack') {
   const headers = new Headers();

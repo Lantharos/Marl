@@ -26,6 +26,17 @@ pub(crate) struct MergeRequest {
     title: String,
     author: String,
     operation_id: String,
+    #[serde(default)]
+    method: MergeMethod,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum MergeMethod {
+    #[default]
+    Merge,
+    Squash,
+    Rebase,
 }
 
 #[derive(Debug, Serialize)]
@@ -131,69 +142,34 @@ async fn perform_repository_merge(
     if source != request.source_commit_id || target != request.target_commit_id {
         anyhow::bail!("stale branch head")
     }
-    let ancestor = Command::new("git")
-        .args(["-C"])
-        .arg(repository)
-        .args(["merge-base", "--is-ancestor", &target, &source])
-        .status()
-        .await?;
-    let commit_id = if ancestor.success() {
-        source.clone()
-    } else {
-        let merge_tree = Command::new("git")
-            .args(["-C"])
-            .arg(repository)
-            .args(["merge-tree", "--write-tree", &target, &source])
-            .output()
-            .await?;
-        if !merge_tree.status.success() {
-            anyhow::bail!(
-                "merge conflict: {}",
-                String::from_utf8_lossy(&merge_tree.stdout)
-            );
-        }
-        let tree = String::from_utf8(merge_tree.stdout)?
-            .lines()
-            .next()
-            .context("merge-tree did not return a tree")?
-            .trim()
-            .to_owned();
-        let message = format!(
-            "{}\n\nSty-Merge-Operation: {}",
-            request.title, request.operation_id
-        );
-        let output = Command::new("git")
-            .args(["-C"])
-            .arg(repository)
-            .args([
-                "commit-tree",
+    let commit_id = match request.method {
+        MergeMethod::Merge => {
+            let tree = merge_tree(repository, &target, &source, None).await?;
+            create_commit(
+                repository,
+                request,
                 &tree,
-                "-p",
-                &target,
-                "-p",
-                &source,
-                "-m",
-                &message,
-            ])
-            .env("GIT_AUTHOR_NAME", &request.author)
-            .env(
-                "GIT_AUTHOR_EMAIL",
-                format!("{}@users.sty.sh", request.author),
+                &[&target, &source],
+                &request.title,
+                None,
+                true,
             )
-            .env("GIT_COMMITTER_NAME", &request.author)
-            .env(
-                "GIT_COMMITTER_EMAIL",
-                format!("{}@users.sty.sh", request.author),
-            )
-            .output()
-            .await?;
-        if !output.status.success() {
-            anyhow::bail!(
-                "commit-tree failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            .await?
         }
-        String::from_utf8(output.stdout)?.trim().to_owned()
+        MergeMethod::Squash => {
+            let tree = merge_tree(repository, &target, &source, None).await?;
+            create_commit(
+                repository,
+                request,
+                &tree,
+                &[&target],
+                &request.title,
+                None,
+                true,
+            )
+            .await?
+        }
+        MergeMethod::Rebase => rebase_commits(repository, request, &target, &source).await?,
     };
     let update = Command::new("git")
         .args(["-C"])
@@ -210,21 +186,147 @@ async fn perform_repository_merge(
     })
 }
 
+async fn merge_tree(
+    repository: &Path,
+    left: &str,
+    right: &str,
+    merge_base: Option<&str>,
+) -> Result<String> {
+    let mut command = Command::new("git");
+    command
+        .args(["-C"])
+        .arg(repository)
+        .args(["merge-tree", "--write-tree"]);
+    if let Some(base) = merge_base {
+        command.arg(format!("--merge-base={base}"));
+    }
+    let output = command.args([left, right]).output().await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "merge conflict: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+    Ok(String::from_utf8(output.stdout)?
+        .lines()
+        .next()
+        .context("merge-tree did not return a tree")?
+        .trim()
+        .to_owned())
+}
+
+async fn create_commit(
+    repository: &Path,
+    request: &MergeRequest,
+    tree: &str,
+    parents: &[&str],
+    title: &str,
+    author: Option<(&str, &str, &str)>,
+    mark_operation: bool,
+) -> Result<String> {
+    let message = if mark_operation {
+        format!("{title}\n\nSty-Merge-Operation: {}", request.operation_id)
+    } else {
+        title.to_owned()
+    };
+    let mut command = Command::new("git");
+    command
+        .args(["-C"])
+        .arg(repository)
+        .args(["commit-tree", tree]);
+    for parent in parents {
+        command.args(["-p", parent]);
+    }
+    command.args(["-m", &message]);
+    if let Some((name, email, date)) = author {
+        command
+            .env("GIT_AUTHOR_NAME", name)
+            .env("GIT_AUTHOR_EMAIL", email)
+            .env("GIT_AUTHOR_DATE", date);
+    } else {
+        command.env("GIT_AUTHOR_NAME", &request.author).env(
+            "GIT_AUTHOR_EMAIL",
+            format!("{}@users.sty.sh", request.author),
+        );
+    }
+    let output = command
+        .env("GIT_COMMITTER_NAME", &request.author)
+        .env(
+            "GIT_COMMITTER_EMAIL",
+            format!("{}@users.sty.sh", request.author),
+        )
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "commit-tree failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+}
+
+async fn rebase_commits(
+    repository: &Path,
+    request: &MergeRequest,
+    target: &str,
+    source: &str,
+) -> Result<String> {
+    let merge_base = git_output(repository, &["merge-base", target, source]).await?;
+    let revision = format!("{}..{source}", merge_base.trim());
+    let commits = git_output(
+        repository,
+        &[
+            "rev-list",
+            "--reverse",
+            "--topo-order",
+            "--no-merges",
+            &revision,
+        ],
+    )
+    .await?;
+    let values = commits.lines().collect::<Vec<_>>();
+    if values.is_empty() {
+        return Ok(target.to_owned());
+    }
+    let mut current = target.to_owned();
+    for (index, original) in values.iter().enumerate() {
+        let parent = git_output(repository, &["rev-parse", &format!("{original}^")]).await?;
+        let tree = merge_tree(repository, &current, original, Some(parent.trim())).await?;
+        let metadata = git_output(
+            repository,
+            &["show", "-s", "--format=%an%x00%ae%x00%aI%x00%B", original],
+        )
+        .await?;
+        let mut fields = metadata.splitn(4, '\0');
+        let name = fields.next().context("commit author name missing")?;
+        let email = fields.next().context("commit author email missing")?;
+        let date = fields.next().context("commit author date missing")?;
+        let title = fields.next().context("commit message missing")?.trim_end();
+        let message = if index + 1 == values.len() {
+            format!("{title}\n\nSty-Rebased-From: {original}")
+        } else {
+            title.to_owned()
+        };
+        current = create_commit(
+            repository,
+            request,
+            &tree,
+            &[&current],
+            &message,
+            Some((name, email, date)),
+            index + 1 == values.len(),
+        )
+        .await?;
+    }
+    Ok(current)
+}
+
 async fn completed_operation(
     repository: &Path,
     request: &MergeRequest,
     target: &str,
 ) -> Result<Option<String>> {
-    if is_ancestor(
-        repository,
-        &request.target_commit_id,
-        &request.source_commit_id,
-    )
-    .await?
-        && is_ancestor(repository, &request.source_commit_id, target).await?
-    {
-        return Ok(Some(request.source_commit_id.clone()));
-    }
     let candidates = git_output(
         repository,
         &[
@@ -245,27 +347,22 @@ async fn completed_operation(
             .unwrap_or_default()
             .split_whitespace()
             .collect::<Vec<_>>();
-        if parents
-            == [
+        if !lines.any(|line| line.trim() == trailer) {
+            continue;
+        }
+        let expected_parents = match request.method {
+            MergeMethod::Merge => vec![
                 request.target_commit_id.as_str(),
                 request.source_commit_id.as_str(),
-            ]
-            && lines.any(|line| line.trim() == trailer)
-        {
+            ],
+            MergeMethod::Squash => vec![request.target_commit_id.as_str()],
+            MergeMethod::Rebase => parents.clone(),
+        };
+        if parents == expected_parents {
             return Ok(Some(commit.to_owned()));
         }
     }
     Ok(None)
-}
-
-async fn is_ancestor(repository: &Path, ancestor: &str, descendant: &str) -> Result<bool> {
-    let status = Command::new("git")
-        .args(["-C"])
-        .arg(repository)
-        .args(["merge-base", "--is-ancestor", ancestor, descendant])
-        .status()
-        .await?;
-    Ok(status.success())
 }
 
 #[cfg(test)]
@@ -321,7 +418,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retry_returns_the_same_fast_forward() {
+    async fn retry_returns_the_same_merge_commit() {
         let repository = TestRepository::new();
         let base = repository.oid("main");
         git(&repository.0, &["checkout", "-b", "feature"]);
@@ -337,7 +434,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(first.commit_id, source);
+        assert_ne!(first.commit_id, source);
         assert_eq!(second.commit_id, first.commit_id);
         assert_eq!(second.target_head_id, first.target_head_id);
     }
@@ -372,6 +469,84 @@ mod tests {
         assert_eq!(recovered.target_head_id, advanced);
     }
 
+    #[tokio::test]
+    async fn squash_creates_one_commit_and_retries_idempotently() {
+        let repository = TestRepository::new();
+        let base = repository.oid("main");
+        git(&repository.0, &["checkout", "-b", "feature"]);
+        fs::write(repository.0.join("squash.txt"), "squashed\n").unwrap();
+        git(&repository.0, &["add", "squash.txt"]);
+        git(&repository.0, &["commit", "-m", "squash source"]);
+        let source = repository.oid("feature");
+        let mut request = merge_request_for(&source, &base, "pr_squash");
+        request.method = MergeMethod::Squash;
+
+        let first = perform_repository_merge(&repository.0, &request)
+            .await
+            .unwrap();
+        let retry = perform_repository_merge(&repository.0, &request)
+            .await
+            .unwrap();
+
+        assert_eq!(retry.commit_id, first.commit_id);
+        assert_eq!(
+            git_output_sync(
+                &repository.0,
+                &["rev-parse", &format!("{}^", first.commit_id)]
+            ),
+            base
+        );
+        assert_eq!(
+            git_output_sync(
+                &repository.0,
+                &["rev-parse", &format!("{}^{{tree}}", first.commit_id)]
+            ),
+            git_output_sync(&repository.0, &["rev-parse", &format!("{source}^{{tree}}")])
+        );
+    }
+
+    #[tokio::test]
+    async fn rebase_replays_commits_and_retries_idempotently() {
+        let repository = TestRepository::new();
+        let base = repository.oid("main");
+        git(&repository.0, &["checkout", "-b", "feature"]);
+        fs::write(repository.0.join("rebase.txt"), "one\n").unwrap();
+        git(&repository.0, &["add", "rebase.txt"]);
+        git(&repository.0, &["commit", "-m", "rebase one"]);
+        fs::write(repository.0.join("rebase.txt"), "one\ntwo\n").unwrap();
+        git(&repository.0, &["commit", "-am", "rebase two"]);
+        let source = repository.oid("feature");
+        let mut request = merge_request_for(&source, &base, "pr_rebase");
+        request.method = MergeMethod::Rebase;
+
+        let first = perform_repository_merge(&repository.0, &request)
+            .await
+            .unwrap();
+        let retry = perform_repository_merge(&repository.0, &request)
+            .await
+            .unwrap();
+
+        assert_eq!(retry.commit_id, first.commit_id);
+        assert_eq!(
+            git_output_sync(
+                &repository.0,
+                &[
+                    "rev-list",
+                    "--count",
+                    &format!("{base}..{}", first.commit_id)
+                ]
+            ),
+            "2"
+        );
+        assert_eq!(
+            git_output_sync(
+                &repository.0,
+                &["rev-parse", &format!("{}^{{tree}}", first.commit_id)]
+            ),
+            git_output_sync(&repository.0, &["rev-parse", &format!("{source}^{{tree}}")])
+        );
+    }
+
     fn merge_request_for(source: &str, target: &str, operation_id: &str) -> MergeRequest {
         MergeRequest {
             repository_id: "repo_test".into(),
@@ -384,6 +559,7 @@ mod tests {
             title: "Merge test".into(),
             author: "tester".into(),
             operation_id: operation_id.into(),
+            method: MergeMethod::Merge,
         }
     }
 

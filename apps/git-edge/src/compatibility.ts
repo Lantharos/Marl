@@ -11,7 +11,7 @@ type Capture = { refs: Record<string, string>; packBytes: number; hasPack: boole
 
 export async function handleCompatibilityPush(request: Request, container: ContainerStub, env: GitEdgeEnv, owner: string, name: string) {
   const authorization = await authorizeGit(request, env, owner, name, 'git-receive-pack');
-  const repository = `${owner}/${name}`;
+  const repository = authorization.storageKey;
   const repo = repositoryState(env, repository);
   const quota = organizationQuota(env, authorization.organizationId);
   const pushId = `push_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -25,7 +25,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     await quota.request('/reserve', { id: pushId, repository, maximumBytes, expiresAt });
     await repo.request('/begin', { pushId, reservationId: pushId, expiresAt, expectedRefs: {}, proposedRefs: current.state.refs });
     await uploads.request('/initialize', { pushId, repository, organizationId: authorization.organizationId, expiresAt, expectedGeneration: current.state.generation, refs: current.state.refs, packs: [] });
-    await hydrateRepository(container, env, owner, name);
+    await hydrateRepository(container, env, owner, name, repository);
     const response = await container.fetch(request);
     const body = await response.arrayBuffer();
     if (!response.ok) {
@@ -58,7 +58,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     const published = await finalizeUploadedPush(env, repository, authorization.organizationId, session.session);
     await scheduleRepositoryIndex(env, owner, name, authorization.repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
     const forceCompaction = session.session.packs.length === 0 && published.storedBytes > 0;
-    if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
+    if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.repositoryId, authorization.organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
     return new Response(body, response);
   } catch (error) {
     if (!publicationStarted) await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);

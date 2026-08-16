@@ -1,8 +1,9 @@
 import { authenticate } from './auth';
+import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, getCommit, getRepository, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob } from './repositories';
-import { compareBranches, createPull, createThread, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull } from './pulls';
+import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
+import { addPullComment, addThreadComment, compareBranches, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updateReviewComment } from './pulls';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
 import { cancelRun, createRun, downloadArtifact, getRun, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 
@@ -70,7 +71,25 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.', { allow: ['GET', 'POST'] });
     }
 
-    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads))?)?$/);
+    const branchRulesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/branch-rules$/);
+    if (branchRulesRoute) {
+      const owner = decodeURIComponent(branchRulesRoute[1]); const repository = decodeURIComponent(branchRulesRoute[2]);
+      if (request.method === 'GET') return listBranchRules(_env, principal, owner, repository);
+      if (request.method === 'PUT') return putBranchRule(request, _env, principal, owner, repository);
+    }
+
+    const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|delete))?$/);
+    if (settingsRoute) {
+      const owner = decodeURIComponent(settingsRoute[1]); const repository = decodeURIComponent(settingsRoute[2]); const action = settingsRoute[3];
+      if (!action && request.method === 'GET') return getRepositorySettings(_env, principal, owner, repository);
+      if (!action && request.method === 'PATCH') return updateRepositorySettings(request, _env, principal, owner, repository);
+      if (action === 'rename' && request.method === 'POST') return renameRepository(request, _env, principal, owner, repository);
+      if (action === 'transfer' && request.method === 'POST') return transferRepository(request, _env, principal, owner, repository);
+      if (action === 'delete' && request.method === 'POST') return scheduleRepositoryDeletion(request, _env, principal, owner, repository);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
+
+    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads|comments|ready|close|reopen))?)?$/);
     if (pullRoute) {
       const owner = decodeURIComponent(pullRoute[1]);
       const repository = decodeURIComponent(pullRoute[2]);
@@ -80,13 +99,22 @@ const worker = {
       if (number === null && request.method === 'POST') return createPull(request, _env, principal, owner, repository);
       if (number !== null && !action && request.method === 'GET') return getPull(_env, principal, owner, repository, number);
       if (number !== null && action === 'reviews' && request.method === 'POST') return reviewPull(request, _env, principal, owner, repository, number);
-      if (number !== null && action === 'merge' && request.method === 'POST') return mergePull(_env, principal, owner, repository, number);
+      if (number !== null && action === 'merge' && request.method === 'POST') return mergePull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'diff' && request.method === 'GET') return getPullDiff(_env, principal, owner, repository, number);
       if (number !== null && action === 'threads' && request.method === 'POST') return createThread(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'comments' && request.method === 'POST') return addPullComment(request, _env, principal, owner, repository, number);
+      if (number !== null && ['ready', 'close', 'reopen'].includes(action ?? '') && request.method === 'POST') return transitionPull(_env, principal, owner, repository, number, action as 'ready' | 'close' | 'reopen');
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
-    const threadRoute = url.pathname.match(/^\/api\/v1\/review-threads\/(thread_[a-z0-9]+)\/resolve$/);
-    if (threadRoute && request.method === 'POST') return resolveThread(_env, principal, threadRoute[1]);
+    const threadRoute = url.pathname.match(/^\/api\/v1\/review-threads\/(thread_[a-z0-9]+)\/(resolve|comments)$/);
+    if (threadRoute && request.method === 'POST' && threadRoute[2] === 'resolve') return resolveThread(request, _env, principal, threadRoute[1]);
+    if (threadRoute && request.method === 'POST' && threadRoute[2] === 'comments') return addThreadComment(request, _env, principal, threadRoute[1]);
+    const commentRoute = url.pathname.match(/^\/api\/v1\/review-comments\/(comment_[a-z0-9]+)$/);
+    if (commentRoute && request.method === 'PATCH') return updateReviewComment(request, _env, principal, commentRoute[1]);
+    if (commentRoute && request.method === 'DELETE') return deleteReviewComment(_env, principal, commentRoute[1]);
+    const pullCommentRoute = url.pathname.match(/^\/api\/v1\/pull-comments\/(comment_[a-z0-9]+)$/);
+    if (pullCommentRoute && request.method === 'PATCH') return updatePullComment(request, _env, principal, pullCommentRoute[1]);
+    if (pullCommentRoute && request.method === 'DELETE') return deletePullComment(_env, principal, pullCommentRoute[1]);
 
     const match = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob)(?:\/(.*))?)?$/);
     if (match) {

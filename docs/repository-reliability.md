@@ -26,14 +26,23 @@ acknowledged Git generation disappear.
 
 ## Pull requests
 
-Creating a pull request pins its base and head commits as hidden Git refs. If the pin response
-is lost, retrying creation repairs the same refs and returns the existing pull request. This
-keeps review inputs reachable through branch force-pushes and pack compaction.
+Creating a pull request pins its base and head commits as hidden Git refs. Every later source
+branch push moves the current review head with compare-and-swap while retaining immutable refs
+for each reviewed base and head revision. If a pin response is lost, retrying repairs the same
+refs before the relational pull-request head advances. This keeps every review input reachable
+through branch force-pushes and pack compaction.
 
-Merges use the pull-request ID as their operation identity. A retry recognizes either the
-same fast-forward or the merge commit carrying that identity, even if the target branch has
-advanced again. D1 is updated after Git and never moves its derived branch row behind the
-target head reported by Git.
+Merge, squash, and rebase operations use the pull-request ID as their operation identity. A
+retry recognizes the already-published result for that method even if the HTTP response was
+lost or the target branch later advanced. The target ref changes with compare-and-swap only
+after the complete result exists. D1 is updated after Git and never moves its derived branch
+row behind the target head reported by Git.
+
+Merge rules are evaluated on the server against the current source commit immediately before
+publication. Required approvals exclude the pull-request author, stale approvals can be
+dismissed when the head changes, required checks must be complete and successful, and current
+review conversations must be resolved. The UI presents the same authoritative reasons but
+cannot bypass them.
 
 ## Required production configuration
 
@@ -50,6 +59,7 @@ upload sessions that require alarm recovery.
 
 Before a storage release, exercise the complete Worker, R2, Durable Object, and Container
 topology from Linux or WSL. The release gate must cover clone, fetch, ordinary push,
-force-with-lease rejection, fast-forward and merge-commit PR merges, retry after a deliberately
-lost publication response, compaction, and `git fsck --strict` on a fresh clone. Unit tests and
-the Windows local Rust gateway do not replace this staging test.
+force-with-lease rejection, merge/squash/rebase PR publication, retry after a deliberately
+lost publication response, branch-head synchronization, compaction, and `git fsck --strict`
+on a fresh clone. Unit tests and the Windows local Rust gateway do not replace this staging
+test.

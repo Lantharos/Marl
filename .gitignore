@@ -10,4 +10,5 @@
 /.dev-api.err.log
 /.dev-git.log
 /.dev-git.err.log
+/.codex-*.log
 .sty-data

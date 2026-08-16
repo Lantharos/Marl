@@ -14,6 +14,7 @@ export interface HealthResponse {
 }
 
 export type PullRequestState = 'draft' | 'open' | 'blocked' | 'mergeable' | 'merged' | 'closed';
+export type MergeMethod = 'merge' | 'squash' | 'rebase';
 export type RunState = 'queued' | 'running' | 'success' | 'failure' | 'canceled';
 export type RunnerState = 'idle' | 'busy' | 'offline';
 
@@ -24,6 +25,9 @@ export interface RepositorySummary {
   description: string;
   visibility: 'public' | 'private';
   updatedAt: string;
+  defaultBranch?: string;
+  archivedAt?: string;
+  deletionScheduledAt?: string;
   language?: string;
 }
 
@@ -83,9 +87,32 @@ export interface PullRequestDetail extends PullRequestSummary {
   authorId: Identifier;
   createdAt: string;
   mergedCommitId?: string;
+  mergeMethod?: MergeMethod;
+  allowedMergeMethods: MergeMethod[];
+  mergeRequirements: {
+    ready: boolean;
+    reasons: string[];
+    approvals: number;
+    requiredApprovals: number;
+    checksPass: boolean;
+    conversationsPass: boolean;
+  };
+  commits: Array<{ id: string; shortId: string; title: string; author: string; authoredAt: string }>;
+  comments: PullRequestComment[];
   reviews: PullRequestReview[];
   checks: CheckSummary[];
   threads: ReviewThread[];
+}
+
+export interface PullRequestComment {
+  id: Identifier;
+  authorId: Identifier;
+  author: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+  canEdit: boolean;
 }
 
 export interface PullRequestReview {
@@ -103,9 +130,10 @@ export interface ReviewThread {
   side: 'old' | 'new';
   line: number;
   commitId: string;
+  createdAt: string;
   outdated: boolean;
   resolved: boolean;
-  comments: Array<{ id: Identifier; author: string; body: string; createdAt: string }>;
+  comments: Array<{ id: Identifier; authorId: Identifier; author: string; body: string; createdAt: string; updatedAt: string; deleted: boolean; canEdit: boolean }>;
 }
 
 export interface CheckSummary {

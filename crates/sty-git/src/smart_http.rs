@@ -200,15 +200,12 @@ async fn authorize(
         .send()
         .await
         .context("authorize Git request")?;
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Ok(Err(StatusCode::UNAUTHORIZED));
-    }
-    if response.status() == reqwest::StatusCode::FORBIDDEN {
-        return Ok(Err(StatusCode::FORBIDDEN));
+    if !response.status().is_success() {
+        return Ok(Err(
+            StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY)
+        ));
     }
     Ok(Ok(response
-        .error_for_status()
-        .context("control plane rejected Git request")?
         .json::<Authorization>()
         .await
         .context("decode Git authorization")?))

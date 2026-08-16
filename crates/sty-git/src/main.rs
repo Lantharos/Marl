@@ -4,6 +4,7 @@ mod merge;
 mod metadata;
 mod pack;
 mod refs;
+mod relocate;
 mod repository_storage;
 mod smart_http;
 mod state;
@@ -88,6 +89,10 @@ async fn main() -> Result<()> {
         )
         .route("/_sty/merge", axum::routing::post(merge::merge_request))
         .route("/_sty/pulls/pin", axum::routing::post(refs::pin_pull))
+        .route(
+            "/_sty/repositories/relocate",
+            axum::routing::post(relocate::relocate_repository),
+        )
         .route("/_sty/blob", axum::routing::post(blob::read_blob))
         .route(
             "/_sty/index",

@@ -8,7 +8,7 @@ import { organizationQuota, repositoryState, type RepositorySnapshotResponse } f
 import type { PackDescriptor } from './storage-model';
 
 const COMPACTION_THRESHOLD = 12;
-type CompactionTask = { owner: string; repository: string; organizationId: string; force: boolean; attempts: number };
+type CompactionTask = { owner: string; repository: string; repositoryId: string; organizationId: string; force: boolean; attempts: number };
 
 export class CompactionObject extends DurableObject<GitEdgeEnv> {
   async fetch(request: Request) {
@@ -23,7 +23,7 @@ export class CompactionObject extends DurableObject<GitEdgeEnv> {
     const task = await this.ctx.storage.get<CompactionTask>('task');
     if (!task) return;
     try {
-      await maybeCompactRepository(this.env, task.owner, task.repository, task.organizationId, task.force);
+      await maybeCompactRepository(this.env, task.owner, task.repository, task.repositoryId, task.organizationId, task.force);
       await this.ctx.storage.delete('task');
     } catch (error) {
       const attempts = task.attempts + 1;
@@ -34,12 +34,11 @@ export class CompactionObject extends DurableObject<GitEdgeEnv> {
   }
 }
 
-export async function scheduleCompaction(env: GitEdgeEnv, owner: string, repository: string, organizationId: string, force = false) {
-  const name = `${owner}/${repository}`;
-  const stub = env.COMPACTIONS.get(env.COMPACTIONS.idFromName(name));
+export async function scheduleCompaction(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, organizationId: string, force = false) {
+  const stub = env.COMPACTIONS.get(env.COMPACTIONS.idFromName(repositoryId));
   const response = await stub.fetch('http://compaction/schedule', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-storage-token': env.STY_GIT_GATEWAY_TOKEN },
-    body: JSON.stringify({ owner, repository, organizationId, force })
+    body: JSON.stringify({ owner, repository, repositoryId, organizationId, force })
   });
   if (!response.ok) throw new Error(`Compaction scheduling failed with ${response.status}.`);
 }
@@ -54,8 +53,8 @@ type Capture = {
   largestBlobBytes: number;
 };
 
-export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, name: string, organizationId: string, force = false) {
-  const repository = `${owner}/${name}`;
+export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, name: string, repositoryId: string, organizationId: string, force = false) {
+  const repository = repositoryId;
   const repo = repositoryState(env, repository);
   const current = await repo.request<RepositorySnapshotResponse>('/snapshot');
   if (current.state.generation > 0) {
@@ -80,7 +79,7 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
   let publicationStarted = false;
   try {
     await repo.request('/begin', { pushId, reservationId: pushId, expiresAt, expectedRefs: {}, proposedRefs: current.state.refs });
-    await hydrateRepository(container, env, owner, name);
+    await hydrateRepository(container, env, owner, name, repositoryId);
     const capture = await expectContainer(container.fetch(internalRequest(base, env, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ knownRefs: {}, full: true })
     }))).then((response) => response.json<Capture>());

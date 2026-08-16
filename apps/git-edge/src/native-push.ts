@@ -35,9 +35,9 @@ function route(ownerValue: string, repositoryValue: string, rest: Omit<PushRoute
 export async function handleNativePush(request: Request, env: GitEdgeEnv, route: PushRoute): Promise<Response> {
   try {
     const authorization = await authorizeGit(request, env, route.owner, route.repository, ['snapshot', 'download'].includes(route.action) ? 'git-upload-pack' : 'git-receive-pack');
-    const repository = `${route.owner}/${route.repository}`;
+    const repository = authorization.storageKey;
     if (route.action === 'create') return createPush(request, env, repository, authorization.organizationId);
-    if (route.action === 'snapshot') return storageSnapshot(env, route.owner, route.repository);
+    if (route.action === 'snapshot') return storageSnapshot(env, route.owner, route.repository, repository);
     if (route.action === 'download') return downloadPack(env, repository, route);
     const session = await uploadSession(env, route.pushId!).request<UploadSnapshotResponse>('/snapshot');
     if (session.session.repository !== repository) return failure(404, 'push_not_found', 'Push not found.');
@@ -123,7 +123,7 @@ async function uploadPart(request: Request, env: GitEdgeEnv, route: PushRoute, s
 }
 
 async function completePush(env: GitEdgeEnv, owner: string, name: string, organizationId: string, repositoryId: string, session: UploadSnapshotResponse['session']) {
-  const repository = `${owner}/${name}`;
+  const repository = repositoryId;
   const uploads = uploadSession(env, session.pushId);
   try {
     const ready = await uploads.request<{ packs: ReadyPack[] }>('/ready', {});
@@ -139,7 +139,7 @@ async function completePush(env: GitEdgeEnv, owner: string, name: string, organi
   const published = await finalizeUploadedPush(env, repository, organizationId, uploaded.session);
   await scheduleRepositoryIndex(env, owner, name, repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
   const forceCompaction = uploaded.session.packs.length === 0 && published.storedBytes > 0;
-  if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
+  if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, repositoryId, organizationId, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
   return Response.json({ repository: { generation: published.generation, refsVersion: published.refsVersion, refs: published.refs, manifest: published.manifestKey } });
 }
 
@@ -153,8 +153,8 @@ async function abortStoredPush(env: GitEdgeEnv, repository: string, organization
   ]);
 }
 
-async function storageSnapshot(env: GitEdgeEnv, owner: string, name: string) {
-  const snapshot = await repositoryState(env, `${owner}/${name}`).request<RepositorySnapshotResponse>('/snapshot');
+async function storageSnapshot(env: GitEdgeEnv, owner: string, name: string, storageKey: string) {
+  const snapshot = await repositoryState(env, storageKey).request<RepositorySnapshotResponse>('/snapshot');
   const base = `/v1/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/generations/${snapshot.state.generation}/packs`;
   return Response.json({ repository: {
     generation: snapshot.state.generation,

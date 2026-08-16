@@ -21,12 +21,12 @@
       "name": "@sty/git-edge",
       "version": "0.0.0",
       "dependencies": {
-        "@cloudflare/containers": "latest",
+        "@cloudflare/containers": "^0.3.7",
       },
       "devDependencies": {
-        "@cloudflare/workers-types": "latest",
+        "@cloudflare/workers-types": "^5.20260815.1",
         "typescript": "^6.0.2",
-        "wrangler": "latest",
+        "wrangler": "^4.123.0",
       },
     },
     "apps/web": {
@@ -35,6 +35,7 @@
       "dependencies": {
         "@sty/contracts": "workspace:*",
         "lucide-svelte": "^1.0.1",
+        "marked": "^18.0.9",
       },
       "devDependencies": {
         "@sveltejs/adapter-cloudflare": "^7.2.8",
@@ -333,6 +334,8 @@
     "lucide-svelte": ["lucide-svelte@1.0.1", "", { "peerDependencies": { "svelte": "^3 || ^4 || ^5.0.0-next.42" } }, "sha512-WvzZgk0pqzgda+AErLvgWxHkfg/+GgUwqKMRHvzt0IqyMdmyEDzDCk3Z+Wo/3y753oIgx8u9Q4eUbWkghFa8Jg=="],
 
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
+
+    "marked": ["marked@18.0.9", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-/Sa4qiiHZxf0/FQdBBowr9q4r10krCwMvpK48FUBdXdUXScDxiQGR9zCPrFgRVR5LU3iySOiIjy09ZQvADir1w=="],
 
     "miniflare": ["miniflare@5.20260811.1-alpha", "", { "dependencies": { "@cspotcode/source-map-support": "0.8.1", "sharp": "0.35.2", "undici": "7.29.0", "workerd": "1.20260811.1", "ws": "8.21.0", "youch": "4.1.0-beta.10" } }, "sha512-DtOG0BeanIxs2sH0smFvExZD89cBQwGckbHiFkRJrrNAUu3NGClZkUxqu+zy7HYfKBAgq935EMY49vIPm3JVdA=="],
 

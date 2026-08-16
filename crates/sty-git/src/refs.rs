@@ -18,6 +18,8 @@ pub(crate) struct PinPullRequest {
     number: u64,
     source_commit_id: String,
     target_commit_id: String,
+    expected_source_commit_id: Option<String>,
+    expected_target_commit_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -59,6 +61,14 @@ async fn pin_pull_inner(state: &AppState, request: PinPullRequest) -> Result<Pin
         || request.number == 0
         || !is_object_id(&request.source_commit_id)
         || !is_object_id(&request.target_commit_id)
+        || request
+            .expected_source_commit_id
+            .as_deref()
+            .is_some_and(|value| !is_object_id(value))
+        || request
+            .expected_target_commit_id
+            .as_deref()
+            .is_some_and(|value| !is_object_id(value))
     {
         anyhow::bail!("invalid pull ref request")
     }
@@ -68,8 +78,34 @@ async fn pin_pull_inner(state: &AppState, request: PinPullRequest) -> Result<Pin
     let prefix = format!("refs/sty/pulls/{}", request.number);
     let head_ref = format!("{prefix}/head");
     let base_ref = format!("{prefix}/base");
-    ensure_ref(&repository, &head_ref, &request.source_commit_id).await?;
-    ensure_ref(&repository, &base_ref, &request.target_commit_id).await?;
+    ensure_ref(
+        &repository,
+        &head_ref,
+        &request.source_commit_id,
+        request.expected_source_commit_id.as_deref(),
+    )
+    .await?;
+    ensure_ref(
+        &repository,
+        &base_ref,
+        &request.target_commit_id,
+        request.expected_target_commit_id.as_deref(),
+    )
+    .await?;
+    ensure_ref(
+        &repository,
+        &format!("{prefix}/heads/{}", request.source_commit_id),
+        &request.source_commit_id,
+        None,
+    )
+    .await?;
+    ensure_ref(
+        &repository,
+        &format!("{prefix}/bases/{}", request.target_commit_id),
+        &request.target_commit_id,
+        None,
+    )
+    .await?;
     Ok(PinPullResponse { head_ref, base_ref })
 }
 
@@ -82,17 +118,26 @@ async fn verify_commit(repository: &Path, object_id: &str) -> Result<()> {
     Ok(())
 }
 
-async fn ensure_ref(repository: &Path, name: &str, object_id: &str) -> Result<()> {
+async fn ensure_ref(
+    repository: &Path,
+    name: &str,
+    object_id: &str,
+    expected_object_id: Option<&str>,
+) -> Result<()> {
     let existing = git_output(repository, &["rev-parse", "--verify", "--quiet", name]).await;
     match existing {
         Ok(value) if value.trim() == object_id => return Ok(()),
+        Ok(value) if expected_object_id.is_some_and(|expected| value.trim() == expected) => {}
         Ok(_) => anyhow::bail!("pull ref conflict"),
         Err(_) => {}
     }
+    let expected = expected_object_id
+        .map(str::to_owned)
+        .unwrap_or_else(|| "0".repeat(object_id.len()));
     let output = Command::new("git")
         .args(["-C"])
         .arg(repository)
-        .args(["update-ref", name, object_id, &"0".repeat(object_id.len())])
+        .args(["update-ref", name, object_id, &expected])
         .output()
         .await?;
     if !output.status.success() {
