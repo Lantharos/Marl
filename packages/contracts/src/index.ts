@@ -46,6 +46,7 @@ export interface CommitSummary {
   shortId: string;
   title: string;
   author: string;
+  authorAvatarUrl?: string | null;
   authoredAt: string;
   verified: boolean;
 }
@@ -166,6 +167,7 @@ export interface PullRequestPerson {
   id: Identifier;
   handle: string;
   displayName: string;
+  avatarUrl?: string | null;
 }
 
 export interface PullRequestLabel {
@@ -179,6 +181,7 @@ export interface PullRequestComment {
   id: Identifier;
   authorId: Identifier;
   author: string;
+  authorAvatarUrl?: string | null;
   body: string;
   createdAt: string;
   updatedAt: string;
@@ -189,6 +192,7 @@ export interface PullRequestComment {
 export interface PullRequestReview {
   id: Identifier;
   author: string;
+  authorAvatarUrl?: string | null;
   state: 'commented' | 'approved' | 'changes_requested';
   body: string;
   commitId: string;
@@ -206,7 +210,7 @@ export interface ReviewThread {
   createdAt: string;
   outdated: boolean;
   resolved: boolean;
-  comments: Array<{ id: Identifier; authorId: Identifier; author: string; body: string; createdAt: string; updatedAt: string; deleted: boolean; canEdit: boolean }>;
+  comments: Array<{ id: Identifier; authorId: Identifier; author: string; authorAvatarUrl?: string | null; body: string; createdAt: string; updatedAt: string; deleted: boolean; canEdit: boolean }>;
 }
 
 export interface CheckSummary {

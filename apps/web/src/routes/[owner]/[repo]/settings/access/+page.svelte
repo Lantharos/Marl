@@ -4,10 +4,11 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { api, StyApiError } from '$lib/api';
   import type { PageData } from './$types';
 
-  type Person = { id: string; handle: string; displayName: string; role?: string };
+  type Person = { id: string; handle: string; displayName: string; avatarUrl?: string | null; role?: string };
   type Team = { id: string; name: string; slug: string; role?: string; members?: number };
   const roles = ['read', 'triage', 'write', 'maintain', 'admin'].map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
   let { data } = $props<{ data: PageData }>();
@@ -28,7 +29,7 @@
       if (dialog === 'person') {
         const result = await api<{ collaborator: Person }>(`${base}/collaborators`, { method: 'PUT', body: JSON.stringify({ userId: selectedPerson, role }) });
         const source = (data.availableMembers as Person[]).find((person) => person.id === selectedPerson);
-        collaborators = [...collaborators, { ...result.collaborator, displayName: source?.displayName ?? result.collaborator.handle }];
+        collaborators = [...collaborators, { ...result.collaborator, displayName: source?.displayName ?? result.collaborator.handle, avatarUrl: source?.avatarUrl }];
       } else if (dialog === 'team') {
         const result = await api<{ team: Team }>(`${base}/teams`, { method: 'PUT', body: JSON.stringify({ teamId: selectedTeam, role }) });
         const source = (data.availableTeams as Team[]).find((team) => team.id === selectedTeam);
@@ -54,7 +55,7 @@
 <svelte:head><title>Access · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
 <header class="page-head"><h2>Access</h2><p>People and teams with explicit access to this repository.</p></header>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
-<section><header><div><h3>Collaborators</h3><p>Direct repository access, independent of team membership.</p></div><button onclick={() => { selectedPerson = peopleOptions[0]?.value ?? ''; role = 'read'; dialog = 'person'; }}>Add collaborator</button></header><div class="access-list">{#each collaborators as person}<article><span class="avatar">{person.displayName.slice(0,1).toUpperCase()}</span><div><strong>{person.displayName}</strong><small>@{person.handle}</small></div><div class="role-select"><Select value={person.role ?? 'read'} options={roles} ariaLabel={`Role for ${person.handle}`} onchange={(value) => updateRole('collaborators', person.id, value)} /></div><button aria-label={`Remove ${person.handle}`} onclick={() => remove('collaborators', person.id)}><Trash2 size={14} /></button></article>{:else}<p class="empty">No direct collaborators.</p>{/each}</div></section>
+<section><header><div><h3>Collaborators</h3><p>Direct repository access, independent of team membership.</p></div><button onclick={() => { selectedPerson = peopleOptions[0]?.value ?? ''; role = 'read'; dialog = 'person'; }}>Add collaborator</button></header><div class="access-list">{#each collaborators as person}<article><UserAvatar name={person.displayName} src={person.avatarUrl} size={28} /><div><strong>{person.displayName}</strong><small>@{person.handle}</small></div><div class="role-select"><Select value={person.role ?? 'read'} options={roles} ariaLabel={`Role for ${person.handle}`} onchange={(value) => updateRole('collaborators', person.id, value)} /></div><button aria-label={`Remove ${person.handle}`} onclick={() => remove('collaborators', person.id)}><Trash2 size={14} /></button></article>{:else}<p class="empty">No direct collaborators.</p>{/each}</div></section>
 <section><header><div><h3>Teams</h3><p>Access inherited by everyone currently in a team.</p></div><button onclick={() => { selectedTeam = teamOptions[0]?.value ?? ''; role = 'read'; dialog = 'team'; }}>Add team</button></header><div class="access-list">{#each teams as team}<article><span class="team-avatar">{team.name.slice(0,2).toUpperCase()}</span><div><strong>{team.name}</strong><small>{team.members ?? 0} members</small></div><div class="role-select"><Select value={team.role ?? 'read'} options={roles} ariaLabel={`Role for ${team.name}`} onchange={(value) => updateRole('teams', team.id, value)} /></div><button aria-label={`Remove ${team.name}`} onclick={() => remove('teams', team.id)}><Trash2 size={14} /></button></article>{:else}<p class="empty">No teams have explicit access.</p>{/each}</div></section>
 
 {#snippet accessActions()}<button onclick={() => (dialog = null)}>Cancel</button><button class="primary" disabled={dialog === 'person' ? !selectedPerson : !selectedTeam} onclick={save}>Grant access</button>{/snippet}

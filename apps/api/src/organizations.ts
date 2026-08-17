@@ -45,7 +45,7 @@ export async function getOrganizationAccess(env: Env, principal: Principal, slug
   ]);
   const invitations = viewerRole === 'member'
     ? []
-    : (await env.DB.prepare(`SELECT organization_invitations.id,organization_invitations.email,organization_invitations.role,users.handle AS invitedBy,organization_invitations.expires_at AS expiresAt,organization_invitations.created_at AS createdAt FROM organization_invitations JOIN users ON users.id=organization_invitations.invited_by WHERE organization_invitations.organization_id=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>CURRENT_TIMESTAMP ORDER BY created_at DESC`).bind(organization.id).all()).results;
+    : (await env.DB.prepare(`SELECT organization_invitations.id,organization_invitations.email,organization_invitations.role,users.handle AS invitedBy,organization_invitations.expires_at AS expiresAt,organization_invitations.created_at AS createdAt FROM organization_invitations JOIN users ON users.id=organization_invitations.invited_by WHERE organization_invitations.organization_id=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>CURRENT_TIMESTAMP ORDER BY organization_invitations.created_at DESC`).bind(organization.id).all()).results;
   return json({ organization, viewerRole, members: members.results, teams: teams.results, teamMembers: teamMembers.results, invitations });
 }
 

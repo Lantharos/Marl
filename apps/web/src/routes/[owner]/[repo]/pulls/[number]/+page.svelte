@@ -26,6 +26,7 @@
   import PullTimelineEvent from '$lib/components/PullTimelineEvent.svelte';
   import ReviewThread from '$lib/components/ReviewThread.svelte';
   import Time from '$lib/components/Time.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
   import { connectPullLive } from '$lib/pulls/pull-live';
   import { dismissable } from '$lib/actions/dismissable';
@@ -290,7 +291,7 @@
   {#if tab === 'conversation'}
     <div class="conversation-layout">
       <main class="timeline">
-        <article class="comment"><header><span class="avatar">{pull.author.slice(0,2).toUpperCase()}</span><strong>{pull.author}</strong><span>opened this pull request</span><Time class="end" value={pull.createdAt} /></header><div><MarkdownBody source={pull.body || 'No description was provided.'} /></div></article>
+        <article class="comment"><header><UserAvatar name={pull.author} src={pull.authorAvatar} size={25} /><strong>{pull.author}</strong><span>opened this pull request</span><Time class="end" value={pull.createdAt} /></header><div><MarkdownBody source={pull.body || 'No description was provided.'} /></div></article>
         {#each timeline.order as key, index (key)}
           {@const item = timeline.items.get(key)}
           {#if item}
@@ -302,11 +303,11 @@
           {:else if item.kind === 'thread'}
             <ReviewThread thread={item.value} {busy} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
           {:else}
-            <article class="comment"><header><span class="avatar">{item.value.author.slice(0,2).toUpperCase()}</span><strong>{item.value.author}</strong><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<button class="danger" onclick={() => deletePullComment(item.value.id)}>Delete</button><button onclick={() => (confirmingPullDelete = null)}>Cancel</button>{:else}<button onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</button><button onclick={() => (confirmingPullDelete = item.value.id)}>Delete</button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} minHeight={90} /><footer class="comment-edit-actions"><button onclick={() => (editingPullComment = null)}>Cancel</button><button class="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</button></footer>{:else}<MarkdownBody source={item.value.body} />{/if}</div></article>
+            <article class="comment"><header><UserAvatar name={item.value.author} src={item.value.authorAvatarUrl} size={25} /><strong>{item.value.author}</strong><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<button class="danger" onclick={() => deletePullComment(item.value.id)}>Delete</button><button onclick={() => (confirmingPullDelete = null)}>Cancel</button>{:else}<button onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</button><button onclick={() => (confirmingPullDelete = item.value.id)}>Delete</button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} minHeight={90} /><footer class="comment-edit-actions"><button onclick={() => (editingPullComment = null)}>Cancel</button><button class="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</button></footer>{:else}<MarkdownBody source={item.value.body} />{/if}</div></article>
           {/if}
           {/if}
         {/each}
-        <PullActionComposer bind:value={commentBody} bind:mergeMethod pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} allowedMergeMethods={pull.allowedMergeMethods} onComment={addPullComment} onAction={composerAction} />
+        <PullActionComposer bind:value={commentBody} bind:mergeMethod pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser?.displayName ?? pull.author} avatarUrl={data.shellUser?.avatarUrl} onComment={addPullComment} onAction={composerAction} />
       </main>
       <aside class="sidebar"><section class="merge-panel">
         <header>{#if pull.state === 'merged'}<span class="merge-icon merged"><GitMerge size={18} /></span><div><strong>Merged</strong><p>Commit <code>{pull.mergedCommitId?.slice(0,7)}</code> is on {pull.targetBranch}.</p></div>{:else}<span class="merge-icon"><GitMerge size={18} /></span><div><strong>{pull.state === 'mergeable' ? 'Ready to merge' : 'Merge requirements'}</strong><p>Review the current head before merging.</p></div>{/if}</header>

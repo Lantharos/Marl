@@ -49,6 +49,7 @@ struct IndexedCommit {
     id: String,
     title: String,
     author: String,
+    author_email: String,
     authored_at: String,
     tree_id: String,
     parents: Vec<String>,
@@ -263,7 +264,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             "--all",
             "--topo-order",
             "--date=iso-strict",
-            "--format=%H%x1f%s%x1f%an%x1f%aI%x1f%T%x1f%P%x1f%ct%x1e",
+            "--format=%H%x1f%s%x1f%an%x1f%ae%x1f%aI%x1f%T%x1f%P%x1f%ct%x1e",
             "--ignore-missing",
         ]);
         for commit in request
@@ -282,16 +283,17 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
         }
         String::from_utf8(output.stdout)?
     };
-    let commits = parse_records(&history, 7)
+    let commits = parse_records(&history, 8)
         .into_iter()
         .map(|fields| IndexedCommit {
             id: fields[0].clone(),
             title: fields[1].clone(),
             author: fields[2].clone(),
-            authored_at: fields[3].clone(),
-            tree_id: fields[4].clone(),
-            parents: fields[5].split_whitespace().map(str::to_owned).collect(),
-            position: fields[6].parse().unwrap_or(0),
+            author_email: fields[3].clone(),
+            authored_at: fields[4].clone(),
+            tree_id: fields[5].clone(),
+            parents: fields[6].split_whitespace().map(str::to_owned).collect(),
+            position: fields[7].parse().unwrap_or(0),
         })
         .collect::<Vec<_>>();
     let changes = index_changes(&repository, &commits, &request.exclude_commits).await?;
@@ -622,6 +624,7 @@ mod tests {
             id: id.into(),
             title: String::new(),
             author: String::new(),
+            author_email: String::new(),
             authored_at: String::new(),
             tree_id: String::new(),
             parents: parents.iter().map(|parent| (*parent).to_owned()).collect(),

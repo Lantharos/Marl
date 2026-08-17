@@ -4,6 +4,7 @@
   import Camera from 'lucide-svelte/icons/camera';
   import Check from 'lucide-svelte/icons/check';
   import { api, StyApiError } from '$lib/api';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -16,7 +17,6 @@
   let busy = $state('');
   let notice = $state('');
   let error = $state('');
-  const initial = $derived((displayName || username).slice(0, 1).toUpperCase());
 
   async function save() {
     busy = 'profile'; error = ''; notice = '';
@@ -46,7 +46,7 @@
 <header class="page-head"><h2>Profile</h2><p>Your identity across repositories, reviews, and organizations.</p></header>
 {#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}{#if error}<p class="error" role="alert">{error}</p>{/if}
 <form onsubmit={(event) => { event.preventDefault(); void save(); }}>
-  <section class="avatar-section"><div class="avatar">{#if avatarUrl}<img src={avatarUrl} alt="" />{:else}{initial}{/if}</div><div><strong>Profile picture</strong><p>PNG, JPEG, or WebP. Up to 2 MB.</p><input bind:this={avatarInput} class="avatar-input" type="file" accept="image/png,image/jpeg,image/webp" onchange={chooseAvatar} /><button type="button" disabled={busy === 'avatar'} onclick={() => avatarInput?.click()}><Camera size={14} />{busy === 'avatar' ? 'Uploading…' : 'Change avatar'}</button></div></section>
+  <section class="avatar-section"><UserAvatar name={displayName || username} src={avatarUrl} size={72} /><div><strong>Profile picture</strong><p>PNG, JPEG, or WebP. Up to 2 MB.</p><input bind:this={avatarInput} class="avatar-input" type="file" accept="image/png,image/jpeg,image/webp" onchange={chooseAvatar} /><button type="button" disabled={busy === 'avatar'} onclick={() => avatarInput?.click()}><Camera size={14} />{busy === 'avatar' ? 'Uploading…' : 'Change avatar'}</button></div></section>
   <div class="fields"><label><span>Name</span><input bind:value={displayName} maxlength="80" autocomplete="name" required /></label><label><span>Username</span><div class="username"><span>@</span><input bind:value={username} minlength="2" maxlength="39" pattern="[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?" oninput={() => (username = username.toLowerCase())} autocomplete="username" required /></div></label><label><span>Bio</span><textarea bind:value={bio} maxlength="280" rows="4" placeholder="A little about you"></textarea><small>{bio.length}/280</small></label><label><span>Website</span><input bind:value={website} type="url" maxlength="200" placeholder="https://example.com" autocomplete="url" /></label></div>
   <footer><button class="primary" disabled={busy === 'profile'}>{busy === 'profile' ? 'Saving…' : 'Save profile'}</button></footer>
 </form>

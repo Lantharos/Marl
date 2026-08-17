@@ -8,6 +8,7 @@
   import { api } from '$lib/api';
   import DiffViewer from '$lib/components/DiffViewer.svelte';
   import Time from '$lib/components/Time.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { encodeRevision } from '$lib/repository-path';
   import type { CommitDetail } from './+page';
   import type { PageData } from './$types';
@@ -34,7 +35,7 @@
 
 <header class="commit-head">
   <div class="heading"><GitCommitHorizontal size={20} /><div><h1>{commit.title}</h1>{#if commit.body}<p>{commit.body}</p>{/if}</div></div>
-  <div class="meta"><span class="avatar">{commit.author.slice(0, 2).toUpperCase()}</span><strong>{commit.author}</strong><span>&lt;{commit.authorEmail}&gt;</span><Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={13} />Verified</i>{/if}</div>
+  <div class="meta"><UserAvatar name={commit.author} src={commit.authorAvatarUrl} size={24} /><strong>{commit.author}</strong><span>&lt;{commit.authorEmail}&gt;</span><Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={13} />Verified</i>{/if}</div>
   <div class="identity"><code>{commit.id}</code><button aria-label="Copy commit hash" onclick={copy}>{#if copied}<Check size={13} />{:else}<Copy size={13} />{/if}</button></div>
   <div class="parents">{#each commit.parents as parent}<a href="{base}/commit/{parent}">Parent {parent.slice(0, 7)}</a>{/each}<a href="{base}/tree/{encodeRevision(commit.id)}">Browse files</a></div>
 </header>

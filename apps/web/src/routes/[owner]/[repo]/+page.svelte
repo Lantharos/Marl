@@ -15,15 +15,18 @@
   import { api, apiText } from '$lib/api';
   import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
   import Time from '$lib/components/Time.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { dismissable } from '$lib/actions/dismissable';
   import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
+  import type { RepositoryDocument } from './+page';
   import type { PageData } from './$types';
 
   type BranchItem = { name: string; commit: string; title: string; updatedAt: string; isDefault: boolean; ahead: number; behind: number };
   type FileItem = { path: string; name: string; kind: 'folder' | 'file'; size?: string; message: string; updatedAt: string };
-  type CommitItem = { id: string; shortId: string; title: string; author: string; authoredAt: string; verified: boolean };
+  type CommitItem = { id: string; shortId: string; title: string; author: string; authorAvatarUrl?: string | null; authoredAt: string; verified: boolean };
   type BranchData = { name: string; commitId: string; title: string; updatedAt: string };
   type TreeEntryData = { path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number; message?: string; updatedAt?: string };
+  const documentPatterns = [[/^readme(?:\.(?:md|markdown|txt))?$/i, 'README'], [/^(?:license|copying)(?:\.(?:md|markdown|txt))?$/i, 'License'], [/^contributing(?:\.(?:md|markdown|txt))?$/i, 'Contributing'], [/^code[_-]of[_-]conduct(?:\.(?:md|markdown|txt))?$/i, 'Code of conduct'], [/^security(?:\.(?:md|markdown|txt))?$/i, 'Security'], [/^support(?:\.(?:md|markdown|txt))?$/i, 'Support']] as const;
 
   let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner ?? 'lantharos');
@@ -40,11 +43,30 @@
   let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
   let fileSearchRequest = 0;
   let latestCommit = $state<CommitItem | null>(untrack(() => ({ ...data.tree.commit, verified: data.tree.commit.signatureStatus === 'verified' })));
-  let readme = $state(untrack(() => data.readme));
+  let documents = $state<RepositoryDocument[]>(untrack(() => [...data.documents]));
+  let activeDocument = $state<RepositoryDocument | null>(untrack(() => data.activeDocument));
+  let documentContent = $state(untrack(() => data.documentContent));
+  let documentCache = $state<Record<string, string>>(untrack(() => data.activeDocument ? { [data.activeDocument.path]: data.documentContent } : {}));
   let liveError = $state(false);
   const revisionPath = $derived(encodeRevision(selectedBranch));
   const matchingBranches = $derived(branchItems.filter((branch) => branch.name.toLowerCase().includes(branchQuery.toLowerCase())));
-  const authorInitials = $derived(latestCommit?.author.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || '?');
+
+  function documentsFrom(entries: TreeEntryData[]) {
+    return documentPatterns.flatMap(([pattern, label]) => {
+      const entry = entries.find((candidate) => candidate.kind === 'blob' && pattern.test(candidate.name));
+      return entry ? [{ path: entry.path, label }] : [];
+    });
+  }
+
+  async function selectDocument(document: RepositoryDocument) {
+    activeDocument = document;
+    if (documentCache[document.path] !== undefined) { documentContent = documentCache[document.path]; return; }
+    try {
+      const content = await apiText(`/repositories/${owner}/${repo}/blob/${encodeURIComponent(selectedBranch)}/${encodeRepositoryPath(document.path)}`);
+      documentCache = { ...documentCache, [document.path]: content };
+      documentContent = content;
+    } catch { documentContent = ''; liveError = true; }
+  }
 
   async function openFileFinder() {
     fileQuery = '';
@@ -74,10 +96,14 @@
   }
 
   async function loadTree(branch: string) {
-    const result = await api<{ commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: TreeEntryData[] }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
+    const result = await api<{ commit: { id: string; shortId: string; title: string; author: string; authorAvatarUrl?: string | null; authoredAt: string; signatureStatus: string }; entries: TreeEntryData[] }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
     latestCommit = { ...result.commit, verified: result.commit.signatureStatus === 'verified' };
     fileItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? '', updatedAt: entry.updatedAt ?? '' }));
-    try { readme = await apiText(`/repositories/${owner}/${repo}/blob/${encodeURIComponent(branch)}/README.md`); } catch { readme = ''; }
+    documents = documentsFrom(result.entries);
+    activeDocument = documents[0] ?? null;
+    documentCache = {};
+    documentContent = '';
+    if (activeDocument) await selectDocument(activeDocument);
   }
 
   async function chooseBranch(name: string) {
@@ -117,7 +143,7 @@
   <div class="code-main">
     <section class="file-browser" aria-label="Repository files">
       {#if latestCommit}<header class="latest-commit">
-        <span class="commit-avatar">{authorInitials}</span>
+        <UserAvatar name={latestCommit.author} src={latestCommit.authorAvatarUrl} size={25} />
           <span class="commit-copy"><strong>{latestCommit.author}</strong><span>{latestCommit.title}</span></span>
           <a class="commit-id" href="/{owner}/{repo}/commit/{latestCommit.id}">{latestCommit.shortId}</a>
         <a class="history" href="/{owner}/{repo}/commits/{revisionPath}"><History size={14} />History</a>
@@ -137,9 +163,9 @@
     </section>
 
     <article class="readme">
-      <header><span><BookOpen size={16} />README.md</span>{#if readme}<a href="/{owner}/{repo}/blob/{revisionPath}/README.md"><FileText size={14} />View file</a>{/if}</header>
+      <header><div class="document-tabs">{#each documents as document}<button class:active={activeDocument?.path === document.path} onclick={() => void selectDocument(document)}><BookOpen size={14} />{document.label}</button>{/each}</div>{#if activeDocument}<a href="/{owner}/{repo}/blob/{revisionPath}/{encodeRepositoryPath(activeDocument.path)}"><FileText size={14} />View file</a>{/if}</header>
       <div class="readme-content">
-        {#if readme}<MarkdownPreview source={readme} />{:else}<p class="no-readme">This repository does not have a README on {selectedBranch}.</p>{/if}
+        {#if activeDocument && documentContent}<MarkdownPreview source={documentContent} />{:else}<p class="no-readme">This repository does not have a README, license, or community document on {selectedBranch}.</p>{/if}
       </div>
     </article>
   </div>
@@ -190,7 +216,7 @@
   .empty-tree { padding: 30px 12px; color: var(--text-faint); font-size: 10px; text-align: center; }
   .readme { margin-top: 18px; }
   .readme > header { display: flex; min-height: 43px; align-items: center; justify-content: space-between; padding: 0 11px 0 14px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
-  .readme > header span { display: inline-flex; align-items: center; gap: 7px; color: var(--text-strong); font-size: 11px; font-weight: 630; }
+  .document-tabs{display:flex;align-self:stretch;gap:2px}.document-tabs button{position:relative;height:auto;padding:0 8px;border:0;border-radius:0;background:transparent;color:var(--text-muted);font-size:10px}.document-tabs button.active{color:var(--text-strong)}.document-tabs button.active::after{position:absolute;inset:auto 7px -1px;height:2px;background:var(--brand);content:''}
   .readme > header a { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: 9px; text-decoration: none; }
   .readme > header a:hover { color: var(--brand); }
   .readme-content { padding: 26px 30px 34px; }

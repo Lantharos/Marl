@@ -11,6 +11,7 @@
   import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
   import MarkdownComposer from './MarkdownComposer.svelte';
+  import UserAvatar from './UserAvatar.svelte';
 
   export type PullComposerAction = 'approve' | 'request_changes' | 'close' | 'reopen' | 'ready' | 'merge';
   type Selection = {
@@ -23,7 +24,7 @@
   };
 
   let {
-    value = $bindable(''), pullState, ready, locked, busy, allowedMergeMethods,
+    value = $bindable(''), pullState, ready, locked, busy, allowedMergeMethods, avatarName, avatarUrl,
     mergeMethod = $bindable<MergeMethod>('merge'), onComment, onAction
   } = $props<{
     value?: string;
@@ -32,6 +33,8 @@
     locked: boolean;
     busy: boolean;
     allowedMergeMethods: MergeMethod[];
+    avatarName: string;
+    avatarUrl?: string | null;
     mergeMethod?: MergeMethod;
     onComment: () => Promise<void>;
     onAction: (action: PullComposerAction) => Promise<void>;
@@ -97,7 +100,7 @@
 </script>
 
 <div class="composer-shell">
-  <span class="avatar">K</span>
+  <UserAvatar name={avatarName} src={avatarUrl} size={30} />
   <div class="composer">
     <MarkdownComposer bind:value placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={108} />
     <footer>

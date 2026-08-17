@@ -7,6 +7,7 @@
   import UserRound from 'lucide-svelte/icons/user-round';
   import Unlock from 'lucide-svelte/icons/unlock';
   import { dismissable } from '$lib/actions/dismissable';
+  import UserAvatar from './UserAvatar.svelte';
 
   let { pull, busy, onUpdate } = $props<{ pull: PullRequestDetail; busy: boolean; onUpdate: (body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) => Promise<void> }>();
   let assigneesOpen = $state(false);
@@ -26,8 +27,8 @@
 <section class="metadata">
   <div class="field" use:dismissable={() => (assigneesOpen = false)}>
     <button class="field-title" onclick={() => (assigneesOpen = !assigneesOpen)}><span><UserRound size={13} />Assignees</span><ChevronDown size={12} /></button>
-    <div class="values">{#each pull.assignees as person}<span class="person"><i>{person.handle.slice(0,2).toUpperCase()}</i>{person.handle}</span>{:else}<span class="empty">No one assigned</span>{/each}</div>
-    {#if assigneesOpen}<div class="menu"><header>Assign people</header>{#each pull.availableAssignees as person}<button disabled={busy} onclick={() => toggleAssignee(person.id)}><span><i>{person.handle.slice(0,2).toUpperCase()}</i><span><strong>{person.handle}</strong><small>{person.displayName}</small></span></span>{#if pull.assignees.some((item: PullRequestPerson) => item.id === person.id)}<Check size={14} />{/if}</button>{/each}</div>{/if}
+    <div class="values">{#each pull.assignees as person}<span class="person"><UserAvatar name={person.displayName || person.handle} src={person.avatarUrl} size={21} />{person.handle}</span>{:else}<span class="empty">No one assigned</span>{/each}</div>
+    {#if assigneesOpen}<div class="menu"><header>Assign people</header>{#each pull.availableAssignees as person}<button disabled={busy} onclick={() => toggleAssignee(person.id)}><span><UserAvatar name={person.displayName || person.handle} src={person.avatarUrl} size={21} /><span><strong>{person.handle}</strong><small>{person.displayName}</small></span></span>{#if pull.assignees.some((item: PullRequestPerson) => item.id === person.id)}<Check size={14} />{/if}</button>{/each}</div>{/if}
   </div>
   <div class="field" use:dismissable={() => (labelsOpen = false)}>
     <button class="field-title" onclick={() => (labelsOpen = !labelsOpen)}><span><Tag size={13} />Labels</span><ChevronDown size={12} /></button>

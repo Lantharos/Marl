@@ -46,7 +46,8 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     if (!value || typeof value !== 'object') continue;
     const commit = value as Record<string, unknown>;
     if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string') || !Array.isArray(commit.parents) || !commit.parents.every((parent) => typeof parent === 'string' && /^[0-9a-f]{40,64}$/.test(parent))) continue;
-    statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id, parent_ids) VALUES (?, ?, ?, ?, '', ?, ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name, authored_at=excluded.authored_at, tree_id=excluded.tree_id, parent_ids=excluded.parent_ids`).bind(body.repositoryId, commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents)));
+    const authorEmail = typeof commit.authorEmail === 'string' && commit.authorEmail.length <= 320 ? commit.authorEmail : '';
+    statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id, parent_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name,author_email=excluded.author_email,authored_at=excluded.authored_at,tree_id=excluded.tree_id,parent_ids=excluded.parent_ids`).bind(body.repositoryId, commit.id, commit.title, commit.author, authorEmail, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents)));
   }
   let indexedPaths = 0;
   for (const value of body.changes) {
@@ -268,7 +269,7 @@ export async function listCommits(env: Env, principal: Principal, owner: string,
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
   const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
   const values = cursor ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [resolved.id, repo.id, repo.id, limit + 1];
-  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ordered AS (SELECT commits.id,substr(commits.id,1,7) AS shortId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt,commits.signature_status AS signatureStatus,COUNT(*) OVER () AS total FROM commits JOIN history ON history.id=commits.id WHERE commits.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`).bind(...values).all<{ id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string; total: number }>();
+  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ordered AS (SELECT commits.id,substr(commits.id,1,7) AS shortId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt,commits.signature_status AS signatureStatus,(SELECT users.avatar_url FROM users WHERE (commits.author_email!='' AND users.email=commits.author_email COLLATE NOCASE) OR users.handle=commits.author_name COLLATE NOCASE OR users.display_name=commits.author_name COLLATE NOCASE ORDER BY CASE WHEN commits.author_email!='' AND users.email=commits.author_email COLLATE NOCASE THEN 0 ELSE 1 END LIMIT 1) AS authorAvatarUrl,COUNT(*) OVER () AS total FROM commits JOIN history ON history.id=commits.id WHERE commits.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`).bind(...values).all<{ id: string; shortId: string; title: string; author: string; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string; total: number }>();
   const total = result.results[0]?.total ?? 0;
   const page = pageResult(result.results, limit, (commit) => ({ value: commit.authoredAt, id: commit.id }));
   return json({ commits: page.items.map(({ total: _, ...commit }) => commit), total, nextCursor: page.nextCursor });
@@ -282,7 +283,10 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
   const response = await requestGitGateway(env, '/_sty/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
-  return new Response(response.body, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+  const commit = await response.json().catch(() => null) as { author?: string; authorEmail?: string } | null;
+  if (!commit || typeof commit.author !== 'string') return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
+  const user = await env.DB.prepare(`SELECT avatar_url AS avatarUrl FROM users WHERE (? != '' AND email=? COLLATE NOCASE) OR handle=? COLLATE NOCASE OR display_name=? COLLATE NOCASE ORDER BY CASE WHEN ? != '' AND email=? COLLATE NOCASE THEN 0 ELSE 1 END LIMIT 1`).bind(commit.authorEmail ?? '', commit.authorEmail ?? '', commit.author, commit.author, commit.authorEmail ?? '', commit.authorEmail ?? '').first<{ avatarUrl: string | null }>();
+  return json({ ...commit, authorAvatarUrl: user?.avatarUrl ?? null });
 }
 
 export async function readCommitPatch(env: Env, principal: Principal, owner: string, name: string, commitId: string, url: URL): Promise<Response> {
@@ -325,7 +329,7 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
     ? await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`).bind(resolved.id, repo.id, JSON.stringify(paths), repo.id).all<{ path: string; commitId: string; message: string; author: string; updatedAt: string }>()
     : { results: [] };
   const metadata = new Map(lastChanges.results.map((change) => [change.path, change]));
-  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: entries.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) })) });
+  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authorAvatarUrl: resolved.authorAvatarUrl, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: entries.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) })) });
 }
 
 export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string, ctx: ExecutionContext): Promise<Response> {
@@ -377,8 +381,8 @@ function contentType(path: string) {
   return 'application/octet-stream';
 }
 
-async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authoredAt: string; signatureStatus: string } | null> {
-  return env.DB.prepare(`SELECT id, tree_id AS treeId, title, author_name AS author, authored_at AS authoredAt, signature_status AS signatureStatus FROM commits WHERE repository_id=? AND id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authoredAt: string; signatureStatus: string }>();
+async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string } | null> {
+  return env.DB.prepare(`SELECT commits.id,commits.tree_id AS treeId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt,commits.signature_status AS signatureStatus,(SELECT users.avatar_url FROM users WHERE (commits.author_email!='' AND users.email=commits.author_email COLLATE NOCASE) OR users.handle=commits.author_name COLLATE NOCASE OR users.display_name=commits.author_name COLLATE NOCASE ORDER BY CASE WHEN commits.author_email!='' AND users.email=commits.author_email COLLATE NOCASE THEN 0 ELSE 1 END LIMIT 1) AS authorAvatarUrl FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string }>();
 }
 
 function placeholders(values: readonly unknown[]) {

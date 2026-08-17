@@ -17,6 +17,14 @@ export async function getProfile(env: Env, principal: Principal) {
   return profile ? json({ profile }) : problem(404, 'profile_not_found', 'Profile not found.');
 }
 
+export async function listSessions(env: Env, principal: Principal) {
+  if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Sessions can only be managed from a browser session.');
+  const user = await env.DB.prepare('SELECT auth_user_id AS authUserId FROM users WHERE id=?').bind(principal.id).first<{ authUserId: string | null }>();
+  if (!user?.authUserId) return json({ sessions: [] });
+  const sessions = await env.DB.prepare('SELECT id,token,ip_address AS ipAddress,user_agent AS userAgent,created_at AS createdAt,updated_at AS updatedAt,expires_at AS expiresAt FROM auth_session WHERE user_id=? AND expires_at>? ORDER BY updated_at DESC').bind(user.authUserId, Date.now()).all();
+  return json({ sessions: sessions.results });
+}
+
 export async function updateProfile(request: Request, env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Profiles can only be managed from a browser session.');
   if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before changing your profile.');

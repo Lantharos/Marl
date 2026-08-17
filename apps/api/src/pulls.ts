@@ -135,7 +135,7 @@ export async function addPullComment(request: Request, env: Env, principal: Prin
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 50_000) return problem(422, 'invalid_pull_comment', 'A comment is required.');
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
-  const comment = { id, authorId: principal.id, author: principal.handle, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
+  const comment = { id, authorId: principal.id, author: principal.handle, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const update = await commitPullUpdate(env, pull.id, 'comment.created', { timeline: [{ kind: 'comment', value: comment, createdAt }] }, [
     env.DB.prepare(`INSERT INTO pull_request_comments (id,pull_request_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)`).bind(id, pull.id, principal.id, comment.body, createdAt, createdAt)
   ]);
@@ -179,7 +179,7 @@ export async function createThread(request: Request, env: Env, principal: Princi
   if (!body || typeof body.path !== 'string' || !safeRepositoryPath(body.path) || !['old', 'new'].includes(String(body.side)) || startSide !== body.side || !Number.isInteger(body.line) || !Number.isInteger(startLine) || Number(startLine) < 1 || Number(startLine) > Number(body.line) || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_thread', 'Path, line range, side, and comment are required.');
   const threadId = identifier('thread'); const commentId = identifier('comment');
   const createdAt = new Date().toISOString();
-  const comment = { id: commentId, authorId: principal.id, author: principal.handle, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
+  const comment = { id: commentId, authorId: principal.id, author: principal.handle, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const thread = { id: threadId, path: body.path, side: body.side, line: body.line, startSide, startLine, commitId: pull.sourceCommitId, createdAt, outdated: false, resolved: false, comments: [comment] };
   const update = await commitPullUpdate(env, pull.id, 'thread.created', { timeline: [{ kind: 'thread', value: thread, createdAt }], refreshState: true }, [
     env.DB.prepare('INSERT INTO review_threads (id, pull_request_id, path, side, line, start_side, start_line, commit_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(threadId, pull.id, body.path, body.side, body.line, startSide, startLine, pull.sourceCommitId, createdAt),
@@ -211,7 +211,7 @@ export async function addThreadComment(request: Request, env: Env, principal: Pr
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_comment', 'A review comment is required.');
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
-  const comment = { id, authorId: principal.id, author: principal.handle, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
+  const comment = { id, authorId: principal.id, author: principal.handle, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const update = await commitPullUpdate(env, thread.pullId, 'thread.comment.created', { threadComment: { threadId, comment } }, [
     env.DB.prepare('INSERT INTO review_comments (id,thread_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, threadId, principal.id, comment.body, createdAt, createdAt)
   ]);
@@ -283,7 +283,7 @@ export async function reviewPull(request: Request, env: Env, principal: Principa
   if (!body || !['commented', 'approved', 'changes_requested'].includes(String(body.state))) return problem(422, 'invalid_review', 'Review state is invalid.');
   const id = identifier('review');
   const createdAt = new Date().toISOString();
-  const review = { id, authorId: principal.id, author: principal.handle, state: body.state, body: typeof body.body === 'string' ? body.body.slice(0, 20_000) : '', commitId: pull.sourceCommitId, createdAt };
+  const review = { id, authorId: principal.id, author: principal.handle, authorAvatarUrl: principal.avatarUrl, state: body.state, body: typeof body.body === 'string' ? body.body.slice(0, 20_000) : '', commitId: pull.sourceCommitId, createdAt };
   const update = await commitPullUpdate(env, pull.id, 'review.created', { timeline: [{ kind: 'review', value: review, createdAt }], refreshState: true }, [
     env.DB.prepare('INSERT INTO pull_request_reviews (id,pull_request_id,author_id,state,body,commit_id,created_at) VALUES (?,?,?,?,?,?,?)').bind(id, pull.id, principal.id, review.state, review.body, pull.sourceCommitId, createdAt)
   ]);

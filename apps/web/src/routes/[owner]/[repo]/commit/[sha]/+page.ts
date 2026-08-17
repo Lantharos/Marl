@@ -9,6 +9,7 @@ export type CommitDetail = {
   body: string;
   author: string;
   authorEmail: string;
+  authorAvatarUrl?: string | null;
   authoredAt: string;
   signatureStatus: string;
   files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string; patchOmitted?: 'deleted' | 'large' | 'lazy' }>;

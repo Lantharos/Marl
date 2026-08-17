@@ -4,6 +4,7 @@
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import { api } from '$lib/api';
   import Time from '$lib/components/Time.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { encodeRevision } from '$lib/repository-path';
   import { timestampGroup } from '$lib/time';
   import type { CommitSummary } from './+page';
@@ -26,10 +27,6 @@
     }
     return [...grouped];
   });
-
-  function initials(author: string) {
-    return author.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-  }
 
   async function loadMore() {
     if (!nextCursor || loading) return;
@@ -67,7 +64,7 @@
         {#each commits as commit (commit.id)}
           <article>
             <span class="mark"><GitCommitHorizontal size={15} /></span>
-            <span class="avatar">{initials(commit.author)}</span>
+            <UserAvatar name={commit.author} src={commit.authorAvatarUrl} size={28} />
             <div class="commit-copy">
               <a href="{base}/commit/{commit.id}">{commit.title}</a>
               <p><strong>{commit.author}</strong> committed <Time value={commit.authoredAt} /></p>
