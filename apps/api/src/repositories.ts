@@ -6,7 +6,7 @@ import { pageResult, pageSize, readCursor } from './cursor';
 import { pinPullRefs } from './git-writes';
 import { requestGitGateway } from './git-gateway';
 import { json, problem, readJson } from './http';
-import type { Env } from './platform';
+import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
@@ -39,10 +39,8 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const owned = gatewayTrusted || (principal && await authorizeRepositoryId(env, principal, body.repositoryId, 'write'));
   if (!owned) return problem(403, 'git_access_denied', 'You cannot index this repository.');
   const changeIds = body.changes.flatMap((value) => value && typeof value === 'object' && typeof (value as Record<string, unknown>).commitId === 'string' ? [(value as Record<string, unknown>).commitId as string] : []);
-  const storedChanges = changeIds.length
-    ? await env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${changeIds.map(() => '?').join(',')})`).bind(body.repositoryId, ...changeIds).all<{ commitId: string }>()
-    : { results: [] };
-  const indexedChanges = new Set(storedChanges.results.map((commit) => commit.commitId));
+  const storedChanges = await queryInChunks(changeIds, 90, (chunk) => env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ commitId: string }>());
+  const indexedChanges = new Set(storedChanges.map((commit) => commit.commitId));
   const statements = [];
   for (const value of body.commits) {
     if (!value || typeof value !== 'object') continue;
@@ -82,18 +80,16 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     if (![entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId].every((field) => typeof field === 'string')) continue;
     statements.push(env.DB.prepare(`INSERT INTO repository_entries (repository_id, tree_id, path, parent_path, name, kind, object_id, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, tree_id, path) DO UPDATE SET kind=excluded.kind, object_id=excluded.object_id, byte_size=excluded.byte_size`).bind(body.repositoryId, entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId, typeof entry.byteSize === 'number' ? entry.byteSize : null));
   }
-  const previous = indexedBranches.length
-    ? await env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (${indexedBranches.map(() => '?').join(',')})`).bind(body.repositoryId, ...indexedBranches.map((branch) => branch.name)).all<{ name: string; commitId: string }>()
-    : { results: [] };
-  const previousHeads = new Map(previous.results.map((branch) => [branch.name, branch.commitId]));
+  const previous = await queryInChunks(indexedBranches.map((branch) => branch.name), 90, (chunk) => env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ name: string; commitId: string }>());
+  const previousHeads = new Map(previous.map((branch) => [branch.name, branch.commitId]));
   const changedBranches = indexedBranches.filter((branch) => previousHeads.get(branch.name) !== branch.commitId);
   const pullHeadUpdates: Array<{ id: string; sourceCommitId: string; targetCommitId: string }> = [];
   if (changedBranches.length) {
     const changedNames = changedBranches.map((branch) => branch.name);
-    const placeholders = changedNames.map(() => '?').join(',');
-    const pulls = await env.DB.prepare(`SELECT pull_requests.id,pull_requests.number,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE pull_requests.repository_id=? AND pull_requests.state IN ('draft','open') AND (pull_requests.source_branch IN (${placeholders}) OR pull_requests.target_branch IN (${placeholders}))`).bind(body.repositoryId, ...changedNames, ...changedNames).all<{ id: string; number: number; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string }>();
+    const pullRows = await queryInChunks(changedNames, 45, (chunk) => env.DB.prepare(`SELECT pull_requests.id,pull_requests.number,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE pull_requests.repository_id=? AND pull_requests.state IN ('draft','open') AND (pull_requests.source_branch IN (${placeholders(chunk)}) OR pull_requests.target_branch IN (${placeholders(chunk)}))`).bind(body.repositoryId, ...chunk, ...chunk).all<{ id: string; number: number; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string }>());
+    const pulls = [...new Map(pullRows.map((pull) => [pull.id, pull])).values()];
     const heads = new Map(indexedBranches.map((branch) => [branch.name, branch.commitId]));
-    for (const pull of pulls.results) {
+    for (const pull of pulls) {
       const sourceCommitId = heads.get(pull.sourceBranch) ?? pull.sourceCommitId;
       const targetCommitId = heads.get(pull.targetBranch) ?? pull.targetCommitId;
       if (sourceCommitId === pull.sourceCommitId && targetCommitId === pull.targetCommitId) continue;
@@ -119,10 +115,8 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     const auditRepository = await env.DB.prepare('SELECT organization_id AS organizationId FROM repositories WHERE id=?').bind(body.repositoryId).first<{ organizationId: string }>();
     if (auditRepository) await auditStatement(env, { organizationId: auditRepository.organizationId, repositoryId: body.repositoryId, actor: principal, action: 'repository.refs.indexed', subjectType: 'repository', subjectId: body.repositoryId, details: { refs: changedBranches.map((branch) => ({ name: branch.name, commitId: branch.commitId })) } }).run();
   }
-  const branchCommits = indexedBranches.length
-    ? await env.DB.prepare(`SELECT id,tree_id AS treeId FROM commits WHERE repository_id=? AND id IN (${indexedBranches.map(() => '?').join(',')})`).bind(body.repositoryId, ...indexedBranches.map((branch) => branch.commitId)).all<{ id: string; treeId: string }>()
-    : { results: [] };
-  const trees = new Map(branchCommits.results.map((commit) => [commit.id, commit.treeId]));
+  const branchCommits = await queryInChunks([...new Set(indexedBranches.map((branch) => branch.commitId))], 90, (chunk) => env.DB.prepare(`SELECT id,tree_id AS treeId FROM commits WHERE repository_id=? AND id IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ id: string; treeId: string }>());
+  const trees = new Map(branchCommits.map((commit) => [commit.id, commit.treeId]));
   let workflowsQueued = 0;
   const workflowWarnings = [];
   const changedBranchNames = new Set(changedBranches.map((branch) => branch.name));
@@ -349,8 +343,10 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     const cached = await publicCache.match(cacheKey);
     if (cached) return cached;
   }
-  const response = await requestGitGateway(env, '/_sty/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 }).catch(() => null);
-  if (!response?.ok || !response.body || response.headers.get('x-sty-git-object-type') !== 'blob') return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
+  const response = await (env.ENVIRONMENT === 'development'
+    ? requestGitGateway(env, '/_sty/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 })
+    : requestGitGateway(env, '/_sty/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 })).catch(() => null);
+  if (!response?.ok || !response.body || (env.ENVIRONMENT !== 'development' && response.headers.get('x-sty-git-object-type') !== 'blob')) return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
   const result = new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
   if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
   return result;
@@ -378,4 +374,14 @@ function contentType(path: string) {
 
 async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authoredAt: string; signatureStatus: string } | null> {
   return env.DB.prepare(`SELECT id, tree_id AS treeId, title, author_name AS author, authored_at AS authoredAt, signature_status AS signatureStatus FROM commits WHERE repository_id=? AND id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authoredAt: string; signatureStatus: string }>();
+}
+
+function placeholders(values: readonly unknown[]) {
+  return values.map(() => '?').join(',');
+}
+
+async function queryInChunks<T>(values: string[], size: number, query: (chunk: string[]) => Promise<D1Result<T>>) {
+  const rows: T[] = [];
+  for (let offset = 0; offset < values.length; offset += size) rows.push(...(await query(values.slice(offset, offset + size))).results);
+  return rows;
 }

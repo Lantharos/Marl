@@ -35,6 +35,7 @@ struct GitIndexPage<'a> {
     repository_id: &'a str,
     index_id: &'a str,
     complete: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     default_branch: Option<&'a str>,
     commits: &'a [IndexedCommit],
     branches: &'a [IndexedBranch],
@@ -243,9 +244,13 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             commit_id: fields[1].clone(),
         })
         .collect::<Vec<_>>();
+    let head = git_output(&repository, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .await
+        .unwrap_or_default();
     let default_branch = branches
         .iter()
-        .find(|branch| branch.name == "main")
+        .find(|branch| branch.name == head.trim())
+        .or_else(|| branches.iter().find(|branch| branch.name == "main"))
         .or_else(|| branches.first())
         .map(|branch| branch.name.clone())
         .unwrap_or_else(|| "main".into());

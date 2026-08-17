@@ -1,5 +1,6 @@
 use crate::{
     metadata::index_local_repository,
+    repository_files::{ensure_bare_repository, repair_head},
     state::{AppState, repository_path, safe_segment},
 };
 use anyhow::{Context, Result};
@@ -12,7 +13,7 @@ use axum::{
 use bytes::{Bytes, BytesMut};
 use futures_util::{StreamExt, TryStreamExt};
 use serde::Deserialize;
-use std::{path::Path, process::Stdio, sync::Arc};
+use std::{process::Stdio, sync::Arc};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
@@ -139,6 +140,7 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
                 String::from_utf8_lossy(&stderr)
             )
         }
+        repair_head(&repository).await?;
         if state.local_storage
             && let Err(error) = index_local_repository(
                 &state,
@@ -245,36 +247,6 @@ fn parse_git_path(path: &str, query: Option<&str>) -> Option<GitPath> {
         path_info: format!("/{owner}/{repository}.git/{suffix}"),
         service: service.into(),
     })
-}
-
-async fn ensure_bare_repository(path: &Path) -> Result<()> {
-    if fs::try_exists(path.join("HEAD")).await? {
-        return Ok(());
-    }
-    let parent = path.parent().context("repository parent")?;
-    fs::create_dir_all(parent).await?;
-    let output = Command::new("git")
-        .args(["init", "--bare", "--initial-branch=main"])
-        .arg(path)
-        .output()
-        .await
-        .context("initialize bare repository")?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "git init failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    let output = Command::new("git")
-        .args(["-C"])
-        .arg(path)
-        .args(["config", "http.receivepack", "true"])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!("enable receive-pack failed")
-    }
-    Ok(())
 }
 
 async fn read_cgi_headers(

@@ -58,7 +58,7 @@ pub(crate) async fn replace_refs(repository: &Path, refs: &BTreeMap<String, Stri
         transaction.push_str(&format!("update {name} {object_id}\n"));
     }
     if transaction.is_empty() {
-        return Ok(());
+        return repair_head(repository).await;
     }
     let mut child = Command::new("git")
         .args(["-C"])
@@ -74,6 +74,68 @@ pub(crate) async fn replace_refs(repository: &Path, refs: &BTreeMap<String, Stri
         .await?;
     if !child.wait().await?.success() {
         bail!("replace repository refs failed")
+    }
+    repair_head(repository).await?;
+    Ok(())
+}
+
+pub(crate) async fn repair_head(repository: &Path) -> Result<()> {
+    let current = Command::new("git")
+        .args(["-C"])
+        .arg(repository)
+        .args(["symbolic-ref", "--quiet", "HEAD"])
+        .output()
+        .await?;
+    if current.status.success() {
+        let name = String::from_utf8(current.stdout)?;
+        let exists = Command::new("git")
+            .args(["-C"])
+            .arg(repository)
+            .args(["show-ref", "--verify", "--quiet", name.trim()])
+            .status()
+            .await?;
+        if exists.success() {
+            return Ok(());
+        }
+    }
+    let output = Command::new("git")
+        .args(["-C"])
+        .arg(repository)
+        .args([
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname)",
+            "refs/heads",
+        ])
+        .output()
+        .await?;
+    if !output.status.success() {
+        bail!("list repository branches failed")
+    }
+    let branches = String::from_utf8(output.stdout)?
+        .lines()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let Some(branch) = branches
+        .iter()
+        .find(|branch| branch.as_str() == "refs/heads/main")
+        .or_else(|| {
+            branches
+                .iter()
+                .find(|branch| branch.as_str() == "refs/heads/master")
+        })
+        .or_else(|| branches.first())
+    else {
+        return Ok(());
+    };
+    let status = Command::new("git")
+        .args(["-C"])
+        .arg(repository)
+        .args(["symbolic-ref", "HEAD", branch])
+        .status()
+        .await?;
+    if !status.success() {
+        bail!("set repository default branch failed")
     }
     Ok(())
 }

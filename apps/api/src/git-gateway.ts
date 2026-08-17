@@ -27,12 +27,13 @@ function gatewayToken(env: Env) {
 
 export async function requestGitGateway<Path extends GitGatewayPath>(env: Env, path: Path, body: GitGatewayRequestMap[Path], options: GatewayRequestOptions = {}) {
   const attempts = options.attempts ?? 1;
-  return retryGatewayRequest(() => env.GIT_EDGE.fetch(new Request(`http://git-edge.internal${path}`, {
+  const request = () => new Request(env.ENVIRONMENT === 'development' ? `${env.GIT_GATEWAY_URL}${path}` : `http://git-edge.internal${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-sty-gateway-token': gatewayToken(env) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(options.timeoutMs ?? 15_000)
-  })), attempts);
+  });
+  return retryGatewayRequest(() => env.ENVIRONMENT === 'development' ? fetch(request()) : env.GIT_EDGE.fetch(request()), attempts);
 }
 
 export async function retryGatewayRequest(send: () => Promise<Response>, attempts = 2) {
