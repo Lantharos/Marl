@@ -5,6 +5,7 @@
   import { onMount, tick } from 'svelte';
   import type { RepositorySummary } from '@sty/contracts';
   import BookOpen from 'lucide-svelte/icons/book-open';
+  import Building2 from 'lucide-svelte/icons/building-2';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
@@ -20,7 +21,7 @@
   import BrandMark from './BrandMark.svelte';
   import { authClient } from '$lib/auth-client';
 
-  type CommandKind = 'home' | 'repository' | 'pull' | 'run' | 'runner' | 'create';
+  type CommandKind = 'home' | 'repository' | 'organization' | 'pull' | 'run' | 'runner' | 'create';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
   type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
@@ -50,6 +51,7 @@
     { label: 'Repositories', detail: 'Browse every project', href: '/repositories', keywords: 'code projects', kind: 'repository' },
     { label: 'Runners', detail: 'Connected self-hosted machines', href: '/runners', keywords: 'machines agents docker', kind: 'runner' },
     { label: 'New repository', detail: 'Create or import code', href: '/repositories/new', keywords: 'create import', kind: 'create' },
+    { label: 'New organization', detail: 'Create a shared home for projects', href: '/organizations?new=1', keywords: 'create team workspace', kind: 'organization' },
     { label: 'New pull request', detail: 'Put a branch up for review', href: '/pulls/new', keywords: 'create review', kind: 'create' },
     { label: 'Connect runner', detail: 'Add a self-hosted machine', href: '/runners/new', keywords: 'create machine agent', kind: 'create' }
   ]);
@@ -138,7 +140,7 @@
     <div class="actions">
       <div class="menu-anchor" use:dismissable={() => (createOpen = false)}>
         <button class="new" aria-expanded={createOpen} onclick={() => { createOpen = !createOpen; profileOpen = false; }}><Plus size={15} /><span>New</span><ChevronDown size={12} /></button>
-        {#if createOpen}<div class="popover create-menu"><a href="/repositories/new" onclick={() => (createOpen = false)}><BookOpen size={15} /><span><strong>Repository</strong><small>Start or import code</small></span></a><a href="/pulls/new" onclick={() => (createOpen = false)}><GitPullRequest size={15} /><span><strong>Pull request</strong><small>Put a branch up for review</small></span></a></div>{/if}
+        {#if createOpen}<div class="popover create-menu"><a href="/repositories/new" onclick={() => (createOpen = false)}><BookOpen size={15} /><span><strong>Repository</strong><small>Start or import code</small></span></a><a href="/organizations?new=1" onclick={() => (createOpen = false)}><Building2 size={15} /><span><strong>Organization</strong><small>Create a home for a team</small></span></a><a href="/pulls/new" onclick={() => (createOpen = false)}><GitPullRequest size={15} /><span><strong>Pull request</strong><small>Put a branch up for review</small></span></a></div>{/if}
       </div>
       <div class="menu-anchor" use:dismissable={() => (profileOpen = false)}>
         <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}>{initial}</button>
@@ -158,7 +160,7 @@
         <p>{query ? `${results.length} results` : 'Jump to'}</p>
         {#each results as command, index}
           <button data-command={index} class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={15} />{:else if command.kind === 'repository'}<BookOpen size={15} />{:else if command.kind === 'pull'}<GitPullRequest size={15} />{:else if command.kind === 'run'}<CircleDot size={15} />{:else if command.kind === 'runner'}<Server size={15} />{:else}<Plus size={15} />{/if}
+            {#if command.kind === 'home'}<Home size={15} />{:else if command.kind === 'repository'}<BookOpen size={15} />{:else if command.kind === 'organization'}<Building2 size={15} />{:else if command.kind === 'pull'}<GitPullRequest size={15} />{:else if command.kind === 'run'}<CircleDot size={15} />{:else if command.kind === 'runner'}<Server size={15} />{:else}<Plus size={15} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>
           </button>
         {:else}<div class="no-results"><strong>Nothing found</strong><span>Try a repository name or an action.</span></div>{/each}
