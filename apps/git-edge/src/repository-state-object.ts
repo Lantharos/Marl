@@ -1,78 +1,63 @@
 import { DurableObject } from 'cloudflare:workers';
-import { abortPush, beginPush, emptyRepositoryState, proposePushRefs, publish, type RepositoryState } from './storage-model';
+import { RepositoryStateStore } from './repository-state-store';
+import { abortPush, beginPush, proposePushRefs, publish, type RepositoryState } from './storage-model';
 import { parseStateBody, stateFailure, stateResponse, trusted, type StateEnv } from './state-http';
 import { beginPushBody, proposePushBody, publishBody, pushIdBody } from './state-schemas';
 
-type IntegritySchedule = { generation: number; attempts: number; nextVerifyAt: number };
-type RetirementSchedule = { deleteAfter: number; beforeGeneration: number; keys: string[]; attempts?: number };
-
 export class RepositoryStateObject extends DurableObject<StateEnv> {
+  private store: RepositoryStateStore;
+
+  constructor(ctx: DurableObjectState, env: StateEnv) {
+    super(ctx, env);
+    this.store = new RepositoryStateStore(ctx.storage);
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (!trusted(request, this.env)) return stateResponse({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
-      const state = await this.ctx.storage.get<RepositoryState>('state') ?? emptyRepositoryState();
+      const state = this.store.read();
       if (request.method === 'GET' && path === '/snapshot') return stateResponse({ state });
       const generation = path.match(/^\/generations\/(\d+)$/);
       if (request.method === 'GET' && generation) {
-        const value = await this.ctx.storage.get(`generation:${generation[1]}`);
+        const value = this.store.generation(Number(generation[1]));
         return value ? stateResponse({ generation: value }) : stateResponse({ error: 'generation_not_found' }, 404);
       }
       if (request.method === 'POST' && path === '/begin') {
         const body = await parseStateBody(request, beginPushBody);
-        const next = beginPush(state, {
-          id: body.pushId,
-          reservationId: body.reservationId,
-          expiresAt: body.expiresAt,
-          proposedRefs: body.proposedRefs
-        }, body.expectedRefs, Date.now());
-        await this.ctx.storage.put('state', next);
+        const next = beginPush(state, { id: body.pushId, reservationId: body.reservationId, expiresAt: body.expiresAt, proposedRefs: body.proposedRefs }, body.expectedRefs, Date.now());
+        this.store.write(state, next);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/publish') {
         const body = await parseStateBody(request, publishBody);
-        const next = publish(state, body, Date.now());
-        const previousIds = new Set(state.packs.map((pack) => pack.id));
-        const actualBytes = next.packs.filter((pack) => !previousIds.has(pack.id)).reduce((total, pack) => total + pack.compressedBytes, 0);
+        const now = Date.now();
+        const next = publish(state, body, now);
         const removed = state.packs.filter((pack) => !next.packs.some((active) => active.id === pack.id));
-        const values: Record<string, unknown> = {
-          state: next,
-          [`committed:${body.pushId}`]: {
-            generation: next.generation,
-            actualBytes,
-            accountingDelta: next.storedBytes - state.storedBytes,
-            manifestKey: next.manifestKey,
-            manifestHash: next.manifestHash,
-            committedAt: Date.now()
-          },
-          [`generation:${next.generation}`]: { manifestKey: next.manifestKey, manifestHash: next.manifestHash },
-          integrity: { generation: next.generation, attempts: 0, nextVerifyAt: Date.now() }
-        };
-        if (removed.length) values[`retired:${next.generation}`] = { deleteAfter: Date.now() + 60 * 60 * 1000, beforeGeneration: next.generation, keys: removed.flatMap((pack) => [pack.packKey, pack.indexKey, pack.objectIndexKey]) };
-        await this.ctx.storage.put(values);
-        await this.ctx.storage.setAlarm(Date.now());
+        await this.ctx.storage.setAlarm(now);
+        this.store.publish(state, next, body.pushId, removed, now);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/propose') {
         const body = await parseStateBody(request, proposePushBody);
         const next = proposePushRefs(state, body.pushId, body.refs, Date.now());
-        await this.ctx.storage.put('state', next);
+        this.store.write(state, next);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/abort') {
         const body = await parseStateBody(request, pushIdBody);
         const next = abortPush(state, body.pushId);
-        await this.ctx.storage.put('state', next);
+        this.store.write(state, next);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/committed') {
         const body = await parseStateBody(request, pushIdBody);
-        const committed = await this.ctx.storage.get(`committed:${body.pushId}`);
+        const committed = this.store.committed(body.pushId);
         return committed ? stateResponse({ committed }) : stateResponse({ error: 'push_not_committed' }, 404);
       }
       if (request.method === 'POST' && path === '/acknowledge') {
         const body = await parseStateBody(request, pushIdBody);
-        await this.ctx.storage.delete(`committed:${body.pushId}`);
+        this.store.acknowledge(body.pushId);
         return new Response(null, { status: 204 });
       }
       return stateResponse({ error: 'not_found' }, 404);
@@ -82,70 +67,58 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
   }
 
   async alarm(): Promise<void> {
-    const integrity = await this.ctx.storage.get<IntegritySchedule>('integrity');
-    let nextAlarm: number | null = null;
-    if (integrity && integrity.nextVerifyAt <= Date.now()) {
-      const state = await this.ctx.storage.get<RepositoryState>('state') ?? emptyRepositoryState();
-      try {
-        await verifyRepositoryIntegrity(this.env.REPOSITORIES, state);
-        const latest = await this.ctx.storage.get<IntegritySchedule>('integrity');
-        if (latest?.generation === integrity.generation) {
-          const nextVerifyAt = Date.now() + 24 * 60 * 60 * 1000;
-          await this.ctx.storage.put({ integrity: { generation: integrity.generation, attempts: 0, nextVerifyAt }, 'integrity:last': { generation: integrity.generation, verifiedAt: Date.now() } });
-          nextAlarm = nextVerifyAt;
-        }
-      } catch (error) {
-        const attempts = integrity.attempts + 1;
-        const nextVerifyAt = Date.now() + Math.min(5 * 60 * 1000 * 2 ** Math.min(attempts - 1, 4), 60 * 60 * 1000);
-        const latest = await this.ctx.storage.get<IntegritySchedule>('integrity');
-        if (latest?.generation === integrity.generation) await this.ctx.storage.put('integrity', { generation: integrity.generation, attempts, nextVerifyAt });
-        nextAlarm = nextVerifyAt;
-        console.error('repository integrity verification failed', error);
-      }
-    } else if (integrity) {
-      nextAlarm = integrity.nextVerifyAt;
-    }
-    const retired = await this.ctx.storage.list<RetirementSchedule>({ prefix: 'retired:' });
-    for (const [key, value] of retired) {
-      if (value.deleteAfter > Date.now()) {
-        nextAlarm = nextAlarm === null ? value.deleteAfter : Math.min(nextAlarm, value.deleteAfter);
+    let nextAlarm = await this.verifyIntegrity();
+    const state = this.store.read();
+    const activeKeys = new Set(state.packs.flatMap((pack) => [pack.packKey, pack.indexKey, pack.objectIndexKey]));
+    for (const retirement of this.store.retirements()) {
+      if (retirement.deleteAfter > Date.now()) {
+        nextAlarm = earlier(nextAlarm, retirement.deleteAfter);
         continue;
       }
-      const currentState = await this.ctx.storage.get<RepositoryState>('state') ?? emptyRepositoryState();
-      const activeKeys = new Set(currentState.packs.flatMap((pack) => [pack.packKey, pack.indexKey, pack.objectIndexKey]));
       const remainingKeys: string[] = [];
-      for (const objectKey of value.keys) {
+      for (const objectKey of this.store.retirementKeys(retirement.generation)) {
         if (activeKeys.has(objectKey)) continue;
-        try {
-          await this.env.REPOSITORIES.delete(objectKey);
-        } catch (error) {
-          remainingKeys.push(objectKey);
-          console.error('canonical object retirement deferred', error);
-        }
+        try { await this.env.REPOSITORIES.delete(objectKey); }
+        catch (error) { remainingKeys.push(objectKey); console.error('canonical object retirement deferred', error); }
       }
       let manifestRetirementDeferred = false;
-      const generations = await this.ctx.storage.list<{ manifestKey: string }>({ prefix: 'generation:' });
-      for (const [generationKey, generation] of generations) {
-        if (Number(generationKey.slice('generation:'.length)) >= value.beforeGeneration) continue;
-        try {
-          await this.env.REPOSITORIES.delete(generation.manifestKey);
-          await this.ctx.storage.delete(generationKey);
-        } catch (error) {
-          manifestRetirementDeferred = true;
-          console.error('repository generation retirement deferred', error);
-        }
+      for (const generation of this.store.generationsBefore(retirement.beforeGeneration)) {
+        try { await this.env.REPOSITORIES.delete(generation.manifestKey); this.store.deleteGeneration(generation.generation); }
+        catch (error) { manifestRetirementDeferred = true; console.error('repository generation retirement deferred', error); }
       }
       if (remainingKeys.length || manifestRetirementDeferred) {
-        const attempts = (value.attempts ?? 0) + 1;
+        const attempts = retirement.attempts + 1;
         const deleteAfter = Date.now() + Math.min(60 * 60 * 1000 * 2 ** Math.min(attempts - 1, 5), 24 * 60 * 60 * 1000);
-        await this.ctx.storage.put(key, { ...value, keys: remainingKeys, attempts, deleteAfter });
-        nextAlarm = nextAlarm === null ? deleteAfter : Math.min(nextAlarm, deleteAfter);
-        continue;
+        this.store.replaceRetirementKeys(retirement.generation, remainingKeys, attempts, deleteAfter);
+        nextAlarm = earlier(nextAlarm, deleteAfter);
+      } else {
+        this.store.deleteRetirement(retirement.generation);
       }
-      await this.ctx.storage.delete(key);
     }
     if (nextAlarm !== null) await this.ctx.storage.setAlarm(nextAlarm);
   }
+
+  private async verifyIntegrity() {
+    const integrity = this.store.integrity();
+    if (!integrity) return null;
+    if (integrity.nextVerifyAt > Date.now()) return integrity.nextVerifyAt;
+    try {
+      await verifyRepositoryIntegrity(this.env.REPOSITORIES, this.store.read());
+      const nextVerifyAt = Date.now() + 24 * 60 * 60 * 1000;
+      this.store.updateIntegrity(integrity.generation, 0, nextVerifyAt, Date.now());
+      return nextVerifyAt;
+    } catch (error) {
+      const attempts = integrity.attempts + 1;
+      const nextVerifyAt = Date.now() + Math.min(5 * 60 * 1000 * 2 ** Math.min(attempts - 1, 4), 60 * 60 * 1000);
+      this.store.updateIntegrity(integrity.generation, attempts, nextVerifyAt);
+      console.error('repository integrity verification failed', error);
+      return nextVerifyAt;
+    }
+  }
+}
+
+function earlier(current: number | null, candidate: number) {
+  return current === null ? candidate : Math.min(current, candidate);
 }
 
 async function verifyRepositoryIntegrity(bucket: R2Bucket, state: RepositoryState) {

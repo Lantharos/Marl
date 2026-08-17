@@ -3,8 +3,9 @@ use crate::models::{
 };
 use anyhow::{Context, Result, bail};
 use reqwest::{Client, StatusCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 
 #[derive(Clone)]
@@ -98,26 +99,88 @@ impl RunnerClient {
     }
 
     pub async fn artifact(&self, job: &JobLease, name: &str, path: &Path) -> Result<()> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct BeginArtifact<'a> {
+            name: &'a str,
+            byte_size: u64,
+            content_type: &'a str,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Upload {
+            id: String,
+            part_bytes: u64,
+            part_count: u32,
+        }
+        #[derive(Deserialize)]
+        struct BeginResponse {
+            completed: bool,
+            upload: Option<Upload>,
+        }
         let file = tokio::fs::File::open(path).await?;
         let size = file.metadata().await?.len();
+        drop(file);
         let response = self
             .lease(
-                self.http.put(format!(
-                    "{}/api/v1/runner/jobs/{}/artifacts/{}",
-                    self.base,
-                    job.id,
-                    percent_encode(name)
+                self.http.post(format!(
+                    "{}/api/v1/runner/jobs/{}/artifacts",
+                    self.base, job.id
                 )),
                 job,
             )
-            .header(reqwest::header::CONTENT_LENGTH, size)
-            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
-            .body(reqwest::Body::wrap_stream(ReaderStream::new(file)))
+            .json(&BeginArtifact {
+                name,
+                byte_size: size,
+                content_type: "application/octet-stream",
+            })
             .send()
             .await?;
-        response
+        let begun =
+            response_json::<BeginResponse>(response, "artifact upload initialization").await?;
+        if begun.completed {
+            return Ok(());
+        }
+        let upload = begun.upload.context("artifact upload layout unavailable")?;
+        for part_number in 1..=upload.part_count {
+            if self.renew(job).await?.canceled {
+                bail!("job canceled while uploading artifacts")
+            }
+            let offset = u64::from(part_number - 1) * upload.part_bytes;
+            let length = (size - offset).min(upload.part_bytes);
+            let mut part = tokio::fs::File::open(path).await?;
+            part.seek(std::io::SeekFrom::Start(offset)).await?;
+            self.lease(
+                self.http.put(format!(
+                    "{}/api/v1/runner/jobs/{}/artifacts/{}/parts/{part_number}",
+                    self.base, job.id, upload.id
+                )),
+                job,
+            )
+            .header(reqwest::header::CONTENT_LENGTH, length)
+            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+            .body(reqwest::Body::wrap_stream(ReaderStream::new(
+                part.take(length),
+            )))
+            .send()
+            .await?
             .error_for_status()
-            .context("artifact upload failed")?;
+            .context("artifact part upload failed")?;
+        }
+        if self.renew(job).await?.canceled {
+            bail!("job canceled while completing artifacts")
+        }
+        self.lease(
+            self.http.post(format!(
+                "{}/api/v1/runner/jobs/{}/artifacts/{}/complete",
+                self.base, job.id, upload.id
+            )),
+            job,
+        )
+        .send()
+        .await?
+        .error_for_status()
+        .context("artifact completion failed")?;
         Ok(())
     }
 
@@ -179,17 +242,4 @@ async fn response_json<T: serde::de::DeserializeOwned>(
         .json()
         .await
         .with_context(|| format!("{operation} returned an invalid response"))
-}
-
-fn percent_encode(value: &str) -> String {
-    value
-        .bytes()
-        .map(|byte| {
-            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.') {
-                (byte as char).to_string()
-            } else {
-                format!("%{byte:02X}")
-            }
-        })
-        .collect()
 }

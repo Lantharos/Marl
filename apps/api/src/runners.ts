@@ -3,11 +3,13 @@ import { sha256 } from './auth';
 import { identifier, validSlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
-import { completeJobBody, runnerEnrollmentBody, runnerRegistrationBody } from './request-schemas';
+import { artifactUploadBody, completeJobBody, runnerEnrollmentBody, runnerRegistrationBody } from './request-schemas';
 import { notifyPullsForCommit } from './pull-realtime';
+import { publishRunLog } from './run-realtime';
 
 type Runner = { id: string; organizationId: string; name: string; labelsJson: string; concurrency: number; platform: string; architecture: string; version: string };
 const runnerSelect = `SELECT runners.id,runners.name,runners.labels_json AS labelsJson,runners.active_jobs AS activeJobs,runners.concurrency,runners.platform,runners.architecture,runners.version,runners.last_seen_at AS lastSeenAt,CASE WHEN runners.disabled_at IS NOT NULL OR runners.last_seen_at < datetime('now','-90 seconds') THEN 'offline' WHEN runners.active_jobs > 0 THEN 'busy' ELSE 'idle' END AS state FROM runners JOIN organization_members ON organization_members.organization_id=runners.organization_id`;
+const artifactPartBytes = 16 * 1024 * 1024;
 
 function bearer(request: Request): string | null {
   const value = request.headers.get('authorization');
@@ -79,15 +81,23 @@ export async function heartbeatRunner(env: Env, runner: Runner): Promise<Respons
 }
 
 export async function claimJob(env: Env, runner: Runner): Promise<Response> {
-  await env.DB.prepare(`UPDATE jobs SET state=CASE WHEN (SELECT state FROM runs WHERE runs.id=jobs.run_id)='canceled' THEN 'canceled' ELSE 'queued' END,runner_id=NULL,lease_token_hash=NULL,lease_expires_at=NULL,completed_at=CASE WHEN (SELECT state FROM runs WHERE runs.id=jobs.run_id)='canceled' THEN CURRENT_TIMESTAMP ELSE completed_at END WHERE state='running' AND lease_expires_at < CURRENT_TIMESTAMP`).run();
+  await env.DB.prepare(`UPDATE jobs SET state=CASE WHEN (SELECT state FROM runs WHERE runs.id=jobs.run_id)='canceled' THEN 'canceled' ELSE 'queued' END,runner_id=NULL,lease_token_hash=NULL,lease_expires_at=NULL,completed_at=CASE WHEN (SELECT state FROM runs WHERE runs.id=jobs.run_id)='canceled' THEN CURRENT_TIMESTAMP ELSE completed_at END WHERE state='running' AND lease_expires_at<CURRENT_TIMESTAMP AND EXISTS (SELECT 1 FROM runs JOIN repositories ON repositories.id=runs.repository_id WHERE runs.id=jobs.run_id AND repositories.organization_id=?)`).bind(runner.organizationId).run();
   const labels = new Set<string>(JSON.parse(runner.labelsJson));
   const candidates = await env.DB.prepare(`SELECT jobs.id, jobs.required_labels_json AS labelsJson FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id WHERE jobs.state='queued' AND runs.state IN ('queued','running') AND repositories.organization_id=? AND NOT EXISTS (SELECT 1 FROM json_each(jobs.needs_json) AS need LEFT JOIN jobs AS dependency ON dependency.run_id=jobs.run_id AND dependency.job_key=need.value WHERE dependency.id IS NULL OR dependency.state!='success') ORDER BY jobs.created_at LIMIT 50`).bind(runner.organizationId).all<{ id: string; labelsJson: string }>();
-  const candidate = candidates.results.find((job) => (JSON.parse(job.labelsJson) as string[]).every((label) => labels.has(label)));
-  if (!candidate) return new Response(null, { status: 204 });
-  const leaseToken = `sty_lease_${crypto.randomUUID().replaceAll('-', '')}`;
-  await env.DB.prepare(`UPDATE jobs SET state='running', runner_id=?, lease_token_hash=?, lease_expires_at=datetime('now','+45 seconds'), attempt=attempt+1, started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued'`).bind(runner.id, await sha256(leaseToken), candidate.id).run();
-  const job = await env.DB.prepare(`SELECT jobs.id, jobs.steps_json AS stepsJson, jobs.environment_json AS environmentJson, jobs.artifact_paths_json AS artifactPathsJson, jobs.runtime_json AS runtimeJson, jobs.lease_expires_at AS leaseExpiresAt, runs.id AS runId, runs.number AS runNumber, runs.name AS runName, runs.branch, runs.commit_id AS commitId, runs.repository_id AS repositoryId, organizations.slug AS owner, repositories.name AS repository FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=?`).bind(candidate.id, runner.id, await sha256(leaseToken)).first<{ id: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; leaseExpiresAt: string; runId: string; runNumber: number; runName: string; branch: string; commitId: string; repositoryId: string; owner: string; repository: string }>();
-  if (!job) return new Response(null, { status: 409 });
+  type ClaimedJob = { id: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; leaseExpiresAt: string; runId: string; runNumber: number; runName: string; branch: string; commitId: string; repositoryId: string; owner: string; repository: string };
+  let leaseToken = '';
+  let job: ClaimedJob | null = null;
+  for (const candidate of candidates.results) {
+    if (!(JSON.parse(candidate.labelsJson) as string[]).every((label) => labels.has(label))) continue;
+    const token = `sty_lease_${crypto.randomUUID().replaceAll('-', '')}`;
+    const tokenHash = await sha256(token);
+    const claimed = await env.DB.prepare(`UPDATE jobs SET state='running',runner_id=?,lease_token_hash=?,lease_expires_at=datetime('now','+45 seconds'),attempt=attempt+1,started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued' RETURNING id`).bind(runner.id, tokenHash, candidate.id).first<{ id: string }>();
+    if (!claimed) continue;
+    job = await env.DB.prepare(`SELECT jobs.id, jobs.steps_json AS stepsJson, jobs.environment_json AS environmentJson, jobs.artifact_paths_json AS artifactPathsJson, jobs.runtime_json AS runtimeJson, jobs.lease_expires_at AS leaseExpiresAt, runs.id AS runId, runs.number AS runNumber, runs.name AS runName, runs.branch, runs.commit_id AS commitId, runs.repository_id AS repositoryId, organizations.slug AS owner, repositories.name AS repository FROM jobs JOIN runs ON runs.id=jobs.run_id JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=?`).bind(candidate.id, runner.id, tokenHash).first<ClaimedJob>();
+    leaseToken = token;
+    break;
+  }
+  if (!job) return new Response(null, { status: 204 });
   await env.DB.batch([
     env.DB.prepare(`UPDATE runners SET active_jobs=active_jobs+1,last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
     env.DB.prepare(`UPDATE runs SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued'`).bind(job.runId),
@@ -119,22 +129,107 @@ export async function uploadLog(request: Request, env: Env, runner: Runner, jobI
   const size = Number(request.headers.get('content-length'));
   if (!Number.isFinite(size) || size < 0 || size > 1024 * 1024 || !Number.isSafeInteger(sequence) || sequence < 0) return problem(413, 'log_chunk_too_large', 'Log chunks are limited to 1 MiB and require a valid sequence.');
   const key = `logs/${jobId}/${String(sequence).padStart(10, '0')}`;
-  await env.OBJECTS.put(key, request.body, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } });
+  const [stored, live] = request.body.tee();
+  await Promise.all([
+    env.OBJECTS.put(key, stored, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } }),
+    publishRunLog(env, jobId, sequence, live).catch(() => undefined)
+  ]);
   await env.DB.prepare(`INSERT INTO job_log_chunks (id,job_id,sequence,object_key,byte_size) VALUES (?,?,?,?,?) ON CONFLICT(job_id,sequence) DO NOTHING`).bind(identifier('log'), jobId, sequence, key, size).run();
   return new Response(null, { status: 204 });
 }
 
-export async function uploadArtifact(request: Request, env: Env, runner: Runner, jobId: string, name: string): Promise<Response> {
+export async function beginArtifactUpload(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
   const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
-  if (!job || !request.body || !name || name.length > 160) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
-  const size = Number(request.headers.get('content-length'));
-  if (!Number.isFinite(size) || size < 0 || size > 2 * 1024 * 1024 * 1024) return problem(413, 'artifact_too_large', 'Artifacts are limited to 2 GiB.');
+  if (!job) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
+  const body = await readJson(request, artifactUploadBody);
+  if (!body || !validArtifactName(body.name)) return problem(422, 'invalid_artifact', 'Artifact names must be relative workspace paths.');
+  const existing = await env.DB.prepare('SELECT id,name,byte_size AS byteSize,content_type AS contentType FROM artifacts WHERE job_id=? AND name=?').bind(jobId, body.name).first<{ id: string; name: string; byteSize: number; contentType: string }>();
+  if (existing) return json({ artifact: existing, completed: true });
+  await discardExpiredArtifactUploads(env);
   const id = identifier('artifact');
   const key = `artifacts/${jobId}/${id}`;
-  const contentType = request.headers.get('content-type') ?? 'application/octet-stream';
-  await env.OBJECTS.put(key, request.body, { httpMetadata: { contentType } });
-  await env.DB.prepare(`INSERT INTO artifacts (id,job_id,name,object_key,byte_size,content_type) VALUES (?,?,?,?,?,?)`).bind(id, jobId, name, key, size, contentType).run();
-  return json({ artifact: { id, name, byteSize: size, contentType } }, { status: 201 });
+  const contentType = body.contentType ?? 'application/octet-stream';
+  if (body.byteSize === 0) {
+    await env.OBJECTS.put(key, new Uint8Array(), { httpMetadata: { contentType } });
+    await env.DB.prepare('INSERT INTO artifacts (id,job_id,name,object_key,byte_size,content_type) VALUES (?,?,?,?,?,?)').bind(id, jobId, body.name, key, 0, contentType).run();
+    return json({ artifact: { id, name: body.name, byteSize: 0, contentType }, completed: true }, { status: 201 });
+  }
+  const multipart = await env.OBJECTS.createMultipartUpload(key, { httpMetadata: { contentType } });
+  try {
+    await env.DB.prepare(`INSERT INTO artifact_uploads (id,job_id,name,object_key,multipart_upload_id,expected_size,content_type,expires_at) VALUES (?,?,?,?,?,?,?,datetime('now','+1 hour'))`).bind(id, jobId, body.name, key, multipart.uploadId, body.byteSize, contentType).run();
+  } catch (error) {
+    await multipart.abort();
+    throw error;
+  }
+  return json({ upload: { id, partBytes: artifactPartBytes, partCount: Math.ceil(body.byteSize / artifactPartBytes) }, completed: false }, { status: 201 });
+}
+
+export async function uploadArtifactPart(request: Request, env: Env, runner: Runner, jobId: string, uploadId: string, partNumber: number): Promise<Response> {
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  if (!job || !request.body) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
+  const upload = await artifactUpload(env, jobId, uploadId);
+  if (!upload || upload.state !== 'uploading') return problem(404, 'artifact_upload_not_found', 'Artifact upload not found.');
+  const partCount = Math.ceil(upload.expectedSize / artifactPartBytes);
+  const expectedSize = partNumber === partCount ? upload.expectedSize - artifactPartBytes * (partCount - 1) : artifactPartBytes;
+  const size = Number(request.headers.get('content-length'));
+  if (!Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > partCount || size !== expectedSize) return problem(422, 'invalid_artifact_part', 'Artifact parts must match the negotiated upload layout.');
+  const multipart = env.OBJECTS.resumeMultipartUpload(upload.objectKey, upload.multipartUploadId);
+  const part = await multipart.uploadPart(partNumber, request.body);
+  await env.DB.prepare('INSERT INTO artifact_upload_parts (upload_id,part_number,etag,byte_size) VALUES (?,?,?,?) ON CONFLICT(upload_id,part_number) DO UPDATE SET etag=excluded.etag,byte_size=excluded.byte_size').bind(uploadId, partNumber, part.etag, size).run();
+  return json({ part });
+}
+
+export async function completeArtifactUpload(request: Request, env: Env, runner: Runner, jobId: string, uploadId: string): Promise<Response> {
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  if (!job) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
+  const upload = await artifactUpload(env, jobId, uploadId);
+  if (!upload) {
+    const artifact = await env.DB.prepare('SELECT id,name,byte_size AS byteSize,content_type AS contentType FROM artifacts WHERE id=? AND job_id=?').bind(uploadId, jobId).first();
+    return artifact ? json({ artifact, completed: true }) : problem(404, 'artifact_upload_not_found', 'Artifact upload not found.');
+  }
+  if (upload.state === 'completed') {
+    const artifact = await env.DB.prepare('SELECT id,name,byte_size AS byteSize,content_type AS contentType FROM artifacts WHERE id=?').bind(uploadId).first();
+    return json({ artifact, completed: true });
+  }
+  const parts = await env.DB.prepare('SELECT part_number AS partNumber,etag,byte_size AS byteSize FROM artifact_upload_parts WHERE upload_id=? ORDER BY part_number').bind(uploadId).all<{ partNumber: number; etag: string; byteSize: number }>();
+  const expectedCount = Math.ceil(upload.expectedSize / artifactPartBytes);
+  if (parts.results.length !== expectedCount || parts.results.some((part, index) => part.partNumber !== index + 1) || parts.results.reduce((total, part) => total + part.byteSize, 0) !== upload.expectedSize) return problem(409, 'artifact_upload_incomplete', 'Upload every artifact part before completing it.');
+  const multipart = env.OBJECTS.resumeMultipartUpload(upload.objectKey, upload.multipartUploadId);
+  try {
+    await multipart.complete(parts.results.map(({ partNumber, etag }) => ({ partNumber, etag })));
+  } catch (error) {
+    const recovered = await env.OBJECTS.head(upload.objectKey);
+    if (!recovered || recovered.size !== upload.expectedSize) throw error;
+  }
+  const object = await env.OBJECTS.head(upload.objectKey);
+  if (!object || object.size !== upload.expectedSize) return problem(502, 'artifact_storage_mismatch', 'The completed artifact does not match its declared size.');
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO artifacts (id,job_id,name,object_key,byte_size,content_type) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').bind(uploadId, jobId, upload.name, upload.objectKey, upload.expectedSize, upload.contentType),
+    env.DB.prepare("UPDATE artifact_uploads SET state='completed',completed_at=CURRENT_TIMESTAMP WHERE id=?").bind(uploadId)
+  ]);
+  return json({ artifact: { id: uploadId, name: upload.name, byteSize: upload.expectedSize, contentType: upload.contentType }, completed: true }, { status: 201 });
+}
+
+type ArtifactUpload = { name: string; objectKey: string; multipartUploadId: string; expectedSize: number; contentType: string; state: 'uploading' | 'completed' };
+
+function artifactUpload(env: Env, jobId: string, uploadId: string) {
+  return env.DB.prepare(`SELECT name,object_key AS objectKey,multipart_upload_id AS multipartUploadId,expected_size AS expectedSize,content_type AS contentType,state FROM artifact_uploads WHERE id=? AND job_id=? AND (state='completed' OR expires_at>CURRENT_TIMESTAMP)`).bind(uploadId, jobId).first<ArtifactUpload>();
+}
+
+function validArtifactName(name: string) {
+  return !name.startsWith('/') && !name.startsWith('\\') && !name.includes('\0') && !name.split(/[\\/]/).some((part) => part === '..' || part === '');
+}
+
+async function discardExpiredArtifactUploads(env: Env) {
+  const expired = await env.DB.prepare("SELECT id,object_key AS objectKey,multipart_upload_id AS multipartUploadId FROM artifact_uploads WHERE state='uploading' AND expires_at<=CURRENT_TIMESTAMP LIMIT 4").all<{ id: string; objectKey: string; multipartUploadId: string }>();
+  for (const upload of expired.results) {
+    try {
+      await env.OBJECTS.resumeMultipartUpload(upload.objectKey, upload.multipartUploadId).abort();
+      await env.DB.prepare('DELETE FROM artifact_uploads WHERE id=?').bind(upload.id).run();
+    } catch (error) {
+      console.error('expired artifact upload cleanup deferred', error);
+    }
+  }
 }
 
 export async function completeJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {

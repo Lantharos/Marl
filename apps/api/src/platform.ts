@@ -23,9 +23,24 @@ export interface R2ObjectBody {
   httpMetadata?: { contentType?: string };
 }
 
+export interface R2UploadedPart {
+  partNumber: number;
+  etag: string;
+}
+
+export interface R2MultipartUpload {
+  uploadId: string;
+  uploadPart(partNumber: number, value: ReadableStream | ArrayBuffer | Uint8Array): Promise<R2UploadedPart>;
+  complete(parts: R2UploadedPart[]): Promise<unknown>;
+  abort(): Promise<void>;
+}
+
 export interface R2Bucket {
   get(key: string): Promise<R2ObjectBody | null>;
+  head(key: string): Promise<Omit<R2ObjectBody, 'body'> | null>;
   put(key: string, value: ReadableStream | ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+  createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }): Promise<R2MultipartUpload>;
+  resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload;
 }
 
 export interface Env {
@@ -36,4 +51,5 @@ export interface Env {
   GIT_PUBLIC_URL?: string;
   GIT_GATEWAY_TOKEN?: string;
   PULL_ROOMS: DurableObjectNamespace;
+  RUN_ROOMS: DurableObjectNamespace;
 }

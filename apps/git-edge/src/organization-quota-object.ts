@@ -1,39 +1,40 @@
 import { DurableObject } from 'cloudflare:workers';
-import { adjustStorage, emptyOrganizationQuota, releaseReservation, reserveStorage, settleStorage, type OrganizationQuotaState, type StorageReservation } from './storage-model';
+import { OrganizationQuotaStore } from './organization-quota-store';
 import { parseStateBody, stateFailure, stateResponse, trusted, type StateEnv } from './state-http';
 import { adjustStorageBody, releaseStorageBody, reserveStorageBody, settleStorageBody } from './state-schemas';
 
 export class OrganizationQuotaObject extends DurableObject<StateEnv> {
+  private store: OrganizationQuotaStore;
+
+  constructor(ctx: DurableObjectState, env: StateEnv) {
+    super(ctx, env);
+    this.store = new OrganizationQuotaStore(ctx.storage);
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (!trusted(request, this.env)) return stateResponse({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
-      const state = await this.ctx.storage.get<OrganizationQuotaState>('state') ?? emptyOrganizationQuota();
-      if (request.method === 'GET' && path === '/snapshot') return stateResponse({ state });
+      const now = Date.now();
+      if (request.method === 'GET' && path === '/snapshot') return stateResponse({ state: this.store.snapshot(now) });
       if (request.method === 'POST' && path === '/reserve') {
         const body = await parseStateBody(request, reserveStorageBody);
-        const reservation: StorageReservation = { ...body, state: 'reserved' };
-        const next = reserveStorage(state, reservation, Date.now());
-        await this.ctx.storage.put('state', next);
-        return stateResponse({ reservation: next.reservations[reservation.id] }, 201);
+        return stateResponse({ reservation: this.store.reserve({ ...body, state: 'reserved' }, now) }, 201);
       }
       if (request.method === 'POST' && path === '/settle') {
         const body = await parseStateBody(request, settleStorageBody);
-        const next = settleStorage(state, body.id, body.actualBytes, Date.now());
-        await this.ctx.storage.put('state', next);
-        return stateResponse({ state: next });
+        this.store.settle(body.id, body.actualBytes, now);
+        return stateResponse({ settled: true });
       }
       if (request.method === 'POST' && path === '/release') {
         const body = await parseStateBody(request, releaseStorageBody);
-        const next = releaseReservation(state, body.id, Date.now());
-        await this.ctx.storage.put('state', next);
-        return stateResponse({ state: next });
+        this.store.release(body.id, now);
+        return stateResponse({ released: true });
       }
       if (request.method === 'POST' && path === '/adjust') {
         const body = await parseStateBody(request, adjustStorageBody);
-        const next = adjustStorage(state, body.id, body.deltaBytes);
-        await this.ctx.storage.put('state', next);
-        return stateResponse({ state: next });
+        this.store.adjust(body.id, body.deltaBytes, now);
+        return stateResponse({ adjusted: true });
       }
       return stateResponse({ error: 'not_found' }, 404);
     } catch (error) {

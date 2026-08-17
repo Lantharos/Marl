@@ -28,6 +28,10 @@
       {
         "name": "PULL_ROOMS",
         "class_name": "PullRoom"
+      },
+      {
+        "name": "RUN_ROOMS",
+        "class_name": "RunRoom"
       }
     ]
   },
@@ -35,6 +39,10 @@
     {
       "tag": "pull-rooms-v1",
       "new_sqlite_classes": ["PullRoom"]
+    },
+    {
+      "tag": "run-rooms-v1",
+      "new_sqlite_classes": ["RunRoom"]
     }
   ]
 }

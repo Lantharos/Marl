@@ -6,8 +6,9 @@ import type { Env } from './platform';
 import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
 import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
-import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
+import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
 import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
+import { connectRunRealtime } from './run-realtime';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
 
 const worker = {
@@ -29,12 +30,17 @@ const worker = {
     if (request.method === 'POST' && url.pathname === '/api/v1/runner/register') return registerRunner(request, _env);
     if (runner && request.method === 'POST' && url.pathname === '/api/v1/runner/heartbeat') return heartbeatRunner(_env, runner);
     if (runner && request.method === 'POST' && url.pathname === '/api/v1/runner/claim') return claimJob(_env, runner);
-    const runnerJob = url.pathname.match(/^\/api\/v1\/runner\/jobs\/(job_[a-z0-9]+)\/(renew|complete|logs\/(\d+)|artifacts\/(.+))$/);
+    const runnerJob = url.pathname.match(/^\/api\/v1\/runner\/jobs\/(job_[a-z0-9]+)\/(renew|complete|logs\/(\d+))$/);
     if (runner && runnerJob) {
       if (request.method === 'POST' && runnerJob[2] === 'renew') return renewJob(request, _env, runner, runnerJob[1]);
       if (request.method === 'POST' && runnerJob[2] === 'complete') return completeJob(request, _env, runner, runnerJob[1]);
       if (request.method === 'PUT' && runnerJob[3]) return uploadLog(request, _env, runner, runnerJob[1], Number(runnerJob[3]));
-      if (request.method === 'PUT' && runnerJob[4]) return uploadArtifact(request, _env, runner, runnerJob[1], decodeURIComponent(runnerJob[4]));
+    }
+    const artifactUpload = url.pathname.match(/^\/api\/v1\/runner\/jobs\/(job_[a-z0-9]+)\/artifacts(?:\/(artifact_[a-z0-9]+)(?:\/parts\/(\d+)|\/complete)?)?$/);
+    if (runner && artifactUpload) {
+      if (request.method === 'POST' && !artifactUpload[2]) return beginArtifactUpload(request, _env, runner, artifactUpload[1]);
+      if (request.method === 'PUT' && artifactUpload[2] && artifactUpload[3]) return uploadArtifactPart(request, _env, runner, artifactUpload[1], artifactUpload[2], Number(artifactUpload[3]));
+      if (request.method === 'POST' && artifactUpload[2] && url.pathname.endsWith('/complete')) return completeArtifactUpload(request, _env, runner, artifactUpload[1], artifactUpload[2]);
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/authorize') {
       const owner = url.searchParams.get('owner');
@@ -59,6 +65,8 @@ const worker = {
     if (request.method === 'GET' && url.pathname === '/api/v1/runs') return listRuns(_env, principal, url);
     const jobLogs = url.pathname.match(/^\/api\/v1\/jobs\/(job_[a-z0-9]+)\/logs$/);
     if (request.method === 'GET' && jobLogs) return readJobLogs(_env, principal, jobLogs[1], url);
+    const jobLive = url.pathname.match(/^\/api\/v1\/jobs\/(job_[a-z0-9]+)\/live$/);
+    if (request.method === 'GET' && jobLive) return connectRunRealtime(request, _env, principal, jobLive[1]);
     const artifact = url.pathname.match(/^\/api\/v1\/artifacts\/(artifact_[a-z0-9]+)$/);
     if (request.method === 'GET' && artifact) return downloadArtifact(_env, principal, artifact[1]);
 
@@ -167,3 +175,4 @@ const worker = {
 
 export default worker;
 export { PullRoom } from './pull-room';
+export { RunRoom } from './run-room';

@@ -189,11 +189,14 @@ export async function readJobLogs(env: Env, principal: Principal, jobId: string,
   if (!job || !(await authorizeRepositoryId(env, principal, job.repositoryId, 'member'))) return problem(404, 'job_not_found', 'Job not found.');
   const after = Number(url.searchParams.get('after') ?? -1);
   if (!Number.isSafeInteger(after) || after < -1) return problem(422, 'invalid_log_cursor', 'Log cursor is invalid.');
-  const chunks = await env.DB.prepare('SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence').bind(jobId, after).all<{ sequence: number; objectKey: string }>();
-  const streams = [];
-  for (const chunk of chunks.results) { const object = await env.OBJECTS.get(chunk.objectKey); if (object) streams.push(await new Response(object.body).text()); }
-  const cursor = chunks.results.at(-1)?.sequence ?? after;
-  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-sty-log-cursor': String(cursor) } });
+  const chunks = await env.DB.prepare('SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT 5').bind(jobId, after).all<{ sequence: number; objectKey: string }>();
+  const visible = chunks.results.slice(0, 4);
+  const streams = await Promise.all(visible.map(async (chunk) => {
+    const object = await env.OBJECTS.get(chunk.objectKey);
+    return object ? new Response(object.body).text() : '';
+  }));
+  const cursor = visible.at(-1)?.sequence ?? after;
+  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-sty-log-cursor': String(cursor), 'x-sty-log-more': String(chunks.results.length > visible.length) } });
 }
 
 export async function downloadArtifact(env: Env, principal: Principal, artifactId: string): Promise<Response> {

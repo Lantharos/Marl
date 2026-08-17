@@ -19,6 +19,9 @@ use tokio::{
     time,
 };
 
+const LOG_CHUNK_BYTES: usize = 512 * 1024;
+const LOG_FLUSH_INTERVAL: Duration = Duration::from_millis(500);
+
 pub async fn run(config: RunnerConfig, once: bool) -> Result<()> {
     let client = RunnerClient::new(&config)?;
     let capacity = Arc::new(Semaphore::new(config.concurrency));
@@ -230,6 +233,10 @@ async fn execute_step(
     drop(sender);
     let mut renewal = time::interval(Duration::from_secs(15));
     renewal.tick().await;
+    let mut flush = time::interval(LOG_FLUSH_INTERVAL);
+    flush.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+    flush.tick().await;
+    let mut pending = Vec::with_capacity(LOG_CHUNK_BYTES);
     let step_limit = step
         .timeout_minutes
         .map(|minutes| Duration::from_secs(minutes * 60))
@@ -241,23 +248,55 @@ async fn execute_step(
     let status = loop {
         tokio::select! {
             status = &mut waiting => break status?,
-            chunk = receiver.recv() => if let Some(chunk) = chunk { client.log(job, *sequence, chunk).await?; *sequence += 1; },
+            chunk = receiver.recv() => if let Some(chunk) = chunk {
+                pending.extend_from_slice(&chunk);
+                if pending.len() >= LOG_CHUNK_BYTES { upload_pending(client, job, sequence, &mut pending).await?; }
+            },
+            _ = flush.tick() => upload_pending(client, job, sequence, &mut pending).await?,
             _ = renewal.tick() => {
                 let lease = client.renew(job).await?;
-                if lease.canceled { sandbox.kill().await; let _ = waiting.await; while let Some(chunk) = receiver.recv().await { client.log(job, *sequence, chunk).await?; *sequence += 1; } return Ok(Outcome::Canceled); }
+                if lease.canceled {
+                    sandbox.kill().await;
+                    let _ = waiting.await;
+                    while let Some(chunk) = receiver.recv().await { pending.extend_from_slice(&chunk); }
+                    upload_pending(client, job, sequence, &mut pending).await?;
+                    return Ok(Outcome::Canceled);
+                }
             }
-            _ = &mut timeout => { sandbox.kill().await; let _ = waiting.await; upload_text(client, job, sequence, format!("Step timed out after {} seconds.\n", step_limit.as_secs())).await?; return Ok(Outcome::Failure(124)); }
+            _ = &mut timeout => {
+                sandbox.kill().await;
+                let _ = waiting.await;
+                while let Some(chunk) = receiver.recv().await { pending.extend_from_slice(&chunk); }
+                upload_pending(client, job, sequence, &mut pending).await?;
+                upload_text(client, job, sequence, format!("Step timed out after {} seconds.\n", step_limit.as_secs())).await?;
+                return Ok(Outcome::Failure(124));
+            }
         }
     };
     while let Some(chunk) = receiver.recv().await {
-        client.log(job, *sequence, chunk).await?;
-        *sequence += 1;
+        pending.extend_from_slice(&chunk);
     }
+    upload_pending(client, job, sequence, &mut pending).await?;
     Ok(if status.success() {
         Outcome::Success
     } else {
         Outcome::Failure(status.code().unwrap_or(1))
     })
+}
+
+async fn upload_pending(
+    client: &RunnerClient,
+    job: &JobLease,
+    sequence: &mut u64,
+    pending: &mut Vec<u8>,
+) -> Result<()> {
+    if pending.is_empty() {
+        return Ok(());
+    }
+    client.log(job, *sequence, std::mem::take(pending)).await?;
+    *sequence += 1;
+    pending.reserve(LOG_CHUNK_BYTES);
+    Ok(())
 }
 
 async fn pump(mut reader: impl tokio::io::AsyncRead + Unpin, sender: mpsc::Sender<Vec<u8>>) {
