@@ -100,6 +100,7 @@ async fn main() -> Result<()> {
             axum::routing::post(relocate::relocate_repository),
         )
         .route("/_sty/blob", axum::routing::post(blob::read_blob))
+        .route("/_sty/tree", axum::routing::post(metadata::read_tree))
         .route(
             "/_sty/index",
             axum::routing::post(metadata::index_repository),

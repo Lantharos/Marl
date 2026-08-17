@@ -264,12 +264,17 @@ export async function listBranches(env: Env, principal: Principal, owner: string
 export async function listCommits(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 50) || 50, 1), 100);
+  const limit = pageSize(url, 50, 100);
+  const cursor = readCursor(url);
   const revision = url.searchParams.get('revision') ?? repo.defaultBranch;
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id = ? AND commits.id = history.id JOIN json_each(commits.parent_ids)) SELECT commits.id, substr(commits.id, 1, 7) AS shortId, commits.title, commits.author_name AS author, commits.authored_at AS authoredAt, commits.signature_status AS signatureStatus FROM commits JOIN history ON history.id = commits.id WHERE commits.repository_id = ? ORDER BY commits.authored_at DESC LIMIT ?`).bind(resolved.id, repo.id, repo.id, limit).all();
-  return json({ commits: result.results });
+  const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
+  const values = cursor ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [resolved.id, repo.id, repo.id, limit + 1];
+  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ordered AS (SELECT commits.id,substr(commits.id,1,7) AS shortId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt,commits.signature_status AS signatureStatus,COUNT(*) OVER () AS total FROM commits JOIN history ON history.id=commits.id WHERE commits.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`).bind(...values).all<{ id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string; total: number }>();
+  const total = result.results[0]?.total ?? 0;
+  const page = pageResult(result.results, limit, (commit) => ({ value: commit.authoredAt, id: commit.id }));
+  return json({ commits: page.items.map(({ total: _, ...commit }) => commit), total, nextCursor: page.nextCursor });
 }
 
 export async function getCommit(env: Env, principal: Principal, owner: string, name: string, commitId: string): Promise<Response> {
@@ -293,16 +298,21 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
   if (query.length > 120) return problem(422, 'invalid_query', 'File search is too long.');
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const result = query
+  const indexed = query
     ? await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND instr(lower(path), lower(?)) > 0 ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, path COLLATE NOCASE LIMIT 100').bind(repo.id, resolved.treeId, query).all()
     : await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND parent_path = ? ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, name COLLATE NOCASE').bind(repo.id, resolved.treeId, parentPath).all();
-  const paths = result.results.map((entry) => entry.path).filter((path): path is string => typeof path === 'string');
+  let entries = indexed.results;
+  if (!query && entries.length === 0) {
+    const historical = await readGatewayTree(env, owner, name, resolved.id, parentPath);
+    if (!historical) return problem(502, 'tree_gateway_failed', 'Git gateway could not read this repository tree.');
+    entries = historical;
+  }
+  const paths = entries.map((entry) => entry.path).filter((path): path is string => typeof path === 'string');
   const lastChanges = paths.length
     ? await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`).bind(resolved.id, repo.id, JSON.stringify(paths), repo.id).all<{ path: string; commitId: string; message: string; author: string; updatedAt: string }>()
     : { results: [] };
   const metadata = new Map(lastChanges.results.map((change) => [change.path, change]));
-  const entries = result.results.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) }));
-  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries });
+  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: entries.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) })) });
 }
 
 export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string): Promise<Response> {
@@ -311,11 +321,27 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const entry = await env.DB.prepare(`SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`).bind(repo.id, resolved.treeId, path).first<{ objectId: string }>();
+  let entry = await env.DB.prepare(`SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`).bind(repo.id, resolved.treeId, path).first<{ objectId: string }>();
+  if (!entry?.objectId) {
+    const parentPath = path.split('/').slice(0, -1).join('/');
+    const historical = await readGatewayTree(env, owner, name, resolved.id, parentPath);
+    if (!historical) return problem(502, 'tree_gateway_failed', 'Git gateway could not resolve this historical file.');
+    entry = historical.find((candidate) => candidate.path === path && candidate.kind === 'blob') ?? null;
+  }
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
   const response = await requestGitGateway(env, '/_sty/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 }).catch(() => null);
   if (!response?.ok || !response.body) return problem(502, 'blob_gateway_failed', 'Git gateway could not read this file.');
   return new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+}
+
+type TreeEntry = { path: string; name: string; kind: string; objectId: string; byteSize?: number };
+
+async function readGatewayTree(env: Env, owner: string, repository: string, commitId: string, path: string): Promise<TreeEntry[] | null> {
+  const response = await requestGitGateway(env, '/_sty/tree', { owner, repository, commitId, path }, { attempts: 2 }).catch(() => null);
+  if (!response?.ok) return null;
+  const body = await response.json().catch(() => null) as { entries?: TreeEntry[] } | null;
+  if (!Array.isArray(body?.entries)) return null;
+  return body.entries.filter((entry) => entry && typeof entry.path === 'string' && safeRepositoryPath(entry.path) && typeof entry.name === 'string' && ['tree', 'blob'].includes(entry.kind) && typeof entry.objectId === 'string' && /^[0-9a-f]{40,64}$/.test(entry.objectId));
 }
 
 function contentType(path: string) {

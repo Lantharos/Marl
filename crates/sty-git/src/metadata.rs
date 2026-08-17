@@ -1,4 +1,6 @@
-use crate::state::{AppState, git_output, repository_path, safe_segment};
+use crate::state::{
+    AppState, git_output, is_object_id, repository_path, safe_repository_path, safe_segment,
+};
 use anyhow::{Context, Result};
 use axum::{
     Json,
@@ -73,6 +75,20 @@ struct IndexedChange {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TreeRequest {
+    owner: String,
+    repository: String,
+    commit_id: String,
+    path: String,
+}
+
+#[derive(Serialize)]
+struct TreeResponse {
+    entries: Vec<IndexedEntry>,
+}
+
+#[derive(Deserialize)]
 struct PendingIndexes {
     repositories: Vec<IndexRequest>,
 }
@@ -134,6 +150,65 @@ pub(crate) async fn index_repository(
             (StatusCode::BAD_GATEWAY, "Repository indexing failed.\n").into_response()
         }
     }
+}
+
+pub(crate) async fn read_tree(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<TreeRequest>,
+) -> Response {
+    if headers
+        .get("x-sty-gateway-token")
+        .and_then(|value| value.to_str().ok())
+        != Some(state.gateway_token.as_str())
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match read_tree_inner(&state, request).await {
+        Ok(entries) => Json(TreeResponse { entries }).into_response(),
+        Err(error) => {
+            eprintln!("repository tree read failed: {error:#}");
+            StatusCode::NOT_FOUND.into_response()
+        }
+    }
+}
+
+async fn read_tree_inner(state: &AppState, request: TreeRequest) -> Result<Vec<IndexedEntry>> {
+    if !safe_segment(&request.owner)
+        || !safe_segment(&request.repository)
+        || !is_object_id(&request.commit_id)
+        || (!request.path.is_empty() && !safe_repository_path(&request.path))
+    {
+        anyhow::bail!("invalid repository tree request")
+    }
+    let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
+    let tree_id = git_output(
+        &repository,
+        &["rev-parse", &format!("{}^{{tree}}", request.commit_id)],
+    )
+    .await?;
+    let treeish = if request.path.is_empty() {
+        request.commit_id
+    } else {
+        format!("{}:{}", request.commit_id, request.path)
+    };
+    let output = Command::new("git")
+        .args(["-C"])
+        .arg(&repository)
+        .args(["ls-tree", "-l", "-z", &treeish])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git ls-tree failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+    Ok(parse_tree_entries(
+        &output.stdout,
+        tree_id.trim(),
+        &request.path,
+    ))
 }
 
 async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
@@ -356,9 +431,12 @@ async fn index_tree(
             String::from_utf8_lossy(&tree.stderr)
         )
     }
+    Ok(parse_tree_entries(&tree.stdout, tree_id, ""))
+}
+
+fn parse_tree_entries(output: &[u8], tree_id: &str, prefix: &str) -> Vec<IndexedEntry> {
     let mut entries = Vec::new();
-    for record in tree
-        .stdout
+    for record in output
         .split(|byte| *byte == 0)
         .filter(|record| !record.is_empty())
     {
@@ -366,7 +444,12 @@ async fn index_tree(
             continue;
         };
         let metadata = String::from_utf8_lossy(&record[..tab]);
-        let path = String::from_utf8_lossy(&record[tab + 1..]).into_owned();
+        let name_path = String::from_utf8_lossy(&record[tab + 1..]);
+        let path = if prefix.is_empty() {
+            name_path.into_owned()
+        } else {
+            format!("{prefix}/{name_path}")
+        };
         let fields = metadata.split_whitespace().collect::<Vec<_>>();
         if fields.len() != 4 {
             continue;
@@ -391,7 +474,7 @@ async fn index_tree(
             byte_size: fields[3].parse().ok(),
         });
     }
-    Ok(entries)
+    entries
 }
 
 fn parse_records(value: &str, fields: usize) -> Vec<Vec<String>> {
@@ -440,5 +523,19 @@ mod tests {
         assert_eq!(changes[1].paths, ["README.md"]);
         assert_eq!(changes[0].position, 2);
         assert_eq!(changes[1].position, 1);
+    }
+
+    #[test]
+    fn tree_entries_preserve_the_requested_directory() {
+        let tree_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let blob_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let output = format!("100644 blob {blob_id} 12\tapp.ts\0");
+        let entries = parse_tree_entries(output.as_bytes(), tree_id, "apps/web");
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "apps/web/app.ts");
+        assert_eq!(entries[0].parent_path, "apps/web");
+        assert_eq!(entries[0].object_id, blob_id);
+        assert_eq!(entries[0].byte_size, Some(12));
     }
 }

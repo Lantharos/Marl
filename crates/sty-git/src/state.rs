@@ -42,6 +42,14 @@ pub(crate) fn is_object_id(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+pub(crate) fn safe_repository_path(value: &str) -> bool {
+    !value.starts_with('/')
+        && !value.contains('\\')
+        && value
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
+}
+
 pub(crate) fn repository_path(root: &Path, owner: &str, repository: &str) -> Result<PathBuf> {
     let value = root.join(owner).join(format!("{repository}.git"));
     if value

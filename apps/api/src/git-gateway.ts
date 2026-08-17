@@ -7,6 +7,7 @@ interface GatewayRequestOptions {
 
 export interface GitGatewayRequestMap {
   '/_sty/blob': { owner: string; repository: string; objectId: string };
+  '/_sty/tree': { owner: string; repository: string; commitId: string; path: string };
   '/_sty/commit': { owner: string; repository: string; commitId: string };
   '/_sty/compare': { owner: string; repository: string; base: string; head: string };
   '/_sty/merge': { operationId: string; method: string; repositoryId: string; owner: string; repository: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; title: string; author: string };

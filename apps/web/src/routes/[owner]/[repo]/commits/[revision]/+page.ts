@@ -12,5 +12,5 @@ export type CommitSummary = {
 };
 
 export const load: PageLoad = async ({ fetch, params }) => ({
-  history: await routeLoad(apiWith<{ commits: CommitSummary[] }>(fetch, `/repositories/${params.owner}/${params.repo}/commits?revision=${encodeURIComponent(params.revision)}&limit=100`))
+  history: await routeLoad(apiWith<{ commits: CommitSummary[]; total: number; nextCursor: string | null }>(fetch, `/repositories/${params.owner}/${params.repo}/commits?revision=${encodeURIComponent(params.revision)}&limit=50`))
 });
