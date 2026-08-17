@@ -35,7 +35,7 @@
   let fileQuery = $state('');
   let finderInput = $state<HTMLInputElement>();
   let branchItems = $state<BranchItem[]>(untrack(() => data.branches.map((branch: BranchData) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), title: branch.title, updatedAt: branch.updatedAt, isDefault: branch.name === data.defaultBranch, ahead: 0, behind: 0 }))));
-  let fileItems = $state<FileItem[]>(untrack(() => data.tree.entries.map((entry: TreeEntryData) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' as const : 'file' as const, size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? 'History unavailable', updatedAt: entry.updatedAt ?? '' }))));
+  let fileItems = $state<FileItem[]>(untrack(() => data.tree.entries.map((entry: TreeEntryData) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' as const : 'file' as const, size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? '', updatedAt: entry.updatedAt ?? '' }))));
   let finderItems = $state<FileItem[]>([]);
   let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
   let fileSearchRequest = 0;
@@ -66,7 +66,7 @@
       try {
         const result = await api<{ entries: TreeEntryData[] }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(selectedBranch)}&query=${encodeURIComponent(query)}`);
         if (request !== fileSearchRequest) return;
-        finderItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? 'History unavailable', updatedAt: entry.updatedAt ?? '' }));
+        finderItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? '', updatedAt: entry.updatedAt ?? '' }));
       } catch {
         if (request === fileSearchRequest) finderItems = [];
       }
@@ -76,7 +76,7 @@
   async function loadTree(branch: string) {
     const result = await api<{ commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: TreeEntryData[] }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
     latestCommit = { ...result.commit, verified: result.commit.signatureStatus === 'verified' };
-    fileItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? 'History unavailable', updatedAt: entry.updatedAt ?? '' }));
+    fileItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? '', updatedAt: entry.updatedAt ?? '' }));
     try { readme = await apiText(`/repositories/${owner}/${repo}/blob/${encodeURIComponent(branch)}/README.md`); } catch { readme = ''; }
   }
 
@@ -130,8 +130,7 @@
               {#if item.kind === 'folder'}<Folder size={16} fill="currentColor" />{:else}<File size={16} />{/if}
               <strong>{item.name}</strong>
             </span>
-            <span class="file-message">{item.message}</span>
-            {#if item.updatedAt}<Time class="right" value={item.updatedAt} />{/if}
+            <span class="file-meta">{#if item.message}<span class="file-message">{item.message}</span>{/if}{#if item.updatedAt}<Time class="file-time" value={item.updatedAt} />{/if}</span>
           </a>
         {:else}<div class="empty-tree">{liveError ? 'Repository files could not be loaded.' : 'This branch is empty.'}</div>{/each}
       </div>
@@ -180,13 +179,14 @@
   .commit-copy span { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; }
   .commit-id { color: var(--text-faint); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; text-decoration: none; }
   .history { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 10px; text-decoration: none; }
-  .file-row { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(200px, 1fr) 100px; min-height: 39px; align-items: center; gap: 14px; padding: 0 11px; border-top: 1px solid var(--border-subtle); color: inherit; text-decoration: none; }
+  .file-row { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(0, 1.3fr); min-height: 39px; align-items: center; gap: 14px; padding: 0 11px; border-top: 1px solid var(--border-subtle); color: inherit; text-decoration: none; }
   .file-row:first-child { border-top: 0; }
   .file-row:hover { background: var(--surface-hover); }
   .file-name { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--brand); }
   .file-name strong { overflow: hidden; color: var(--text-strong); font-size: 11px; font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }
+  .file-meta { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 18px; }
   .file-message { overflow: hidden; color: var(--text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-  .file-row time { color: var(--text-faint); font-size: 9px; text-align: right; }
+  :global(.file-time) { flex: none; color: var(--text-faint); font-size: 9px; text-align: right; }
   .empty-tree { padding: 30px 12px; color: var(--text-faint); font-size: 10px; text-align: center; }
   .readme { margin-top: 18px; }
   .readme > header { display: flex; min-height: 43px; align-items: center; justify-content: space-between; padding: 0 11px 0 14px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
@@ -207,7 +207,7 @@
     .branch-group a span { display: none; }
     .latest-commit { grid-template-columns: 27px minmax(0, 1fr) auto; }
     .commit-id { display: none; }
-    .file-row { grid-template-columns: minmax(0, 1fr) 76px; }
+    .file-row { grid-template-columns: minmax(0, 1fr) auto; }
     .file-message { display: none; }
     .readme-content { padding: 22px 19px 28px; }
   }

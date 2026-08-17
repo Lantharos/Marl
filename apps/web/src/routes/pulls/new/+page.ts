@@ -9,7 +9,7 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
   const layout = await parent();
   const result = { repositories: layout.shellRepositories };
   const requested = url.searchParams.get('repository');
-  const repository = requested && result.repositories.some((item) => `${item.owner}/${item.name}` === requested)
+  const repository = requested && result.repositories.some((item: { owner: string; name: string }) => `${item.owner}/${item.name}` === requested)
     ? requested
     : result.repositories[0] ? `${result.repositories[0].owner}/${result.repositories[0].name}` : '';
   if (!repository) return { repositories: result.repositories, repository, branches: [] as Branch[], base: '', compare: '', comparison: null as PullRequestDiff | null };

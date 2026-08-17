@@ -27,6 +27,11 @@ export async function authorizeGit(env: Env, principal: Principal | null, owner:
   return json({ repositoryId: repo.id, storageKey: repo.id, organizationId: repo.organizationId, visibility: repo.visibility, read, write });
 }
 
+export async function listPendingGitIndexes(env: Env): Promise<Response> {
+  const repositories = await env.DB.prepare(`SELECT repositories.id AS repositoryId,organizations.slug AS owner,repositories.name AS repository FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.deletion_scheduled_at IS NULL AND EXISTS (SELECT 1 FROM commits WHERE commits.repository_id=repositories.id AND NOT EXISTS (SELECT 1 FROM indexed_commit_changes WHERE indexed_commit_changes.repository_id=commits.repository_id AND indexed_commit_changes.commit_id=commits.id)) ORDER BY repositories.id`).all<{ repositoryId: string; owner: string; repository: string }>();
+  return json({ repositories: repositories.results });
+}
+
 export async function indexGit(request: Request, env: Env, principal: Principal | null, gatewayTrusted = false): Promise<Response> {
   const body = await readJson(request, gitIndexBody);
   if (!body || typeof body.repositoryId !== 'string' || !Array.isArray(body.commits) || !Array.isArray(body.branches) || !Array.isArray(body.entries) || !Array.isArray(body.changes)) return problem(422, 'invalid_git_index', 'Git index payload is invalid.');

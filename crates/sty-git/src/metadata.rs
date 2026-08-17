@@ -13,6 +13,7 @@ use std::{
     sync::Arc,
 };
 use tokio::process::Command;
+use tokio::time::{Duration, sleep};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +70,49 @@ struct IndexedChange {
     commit_id: String,
     position: usize,
     paths: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct PendingIndexes {
+    repositories: Vec<IndexRequest>,
+}
+
+pub(crate) async fn backfill_pending_repositories(state: Arc<AppState>) {
+    for attempt in 0..10 {
+        let response = state
+            .client
+            .get(format!(
+                "{}/api/v1/git/pending-indexes",
+                state.control_plane
+            ))
+            .header("x-sty-gateway-token", &state.gateway_token)
+            .send()
+            .await;
+        match response {
+            Ok(response) if response.status().is_success() => {
+                match response.json::<PendingIndexes>().await {
+                    Ok(pending) => {
+                        for repository in pending.repositories {
+                            if let Err(error) = index_inner(&state, repository).await {
+                                eprintln!("repository history backfill failed: {error:#}");
+                            }
+                        }
+                    }
+                    Err(error) => eprintln!("decode pending repository indexes failed: {error:#}"),
+                }
+                return;
+            }
+            Ok(response) => eprintln!(
+                "pending repository index request failed with {}",
+                response.status()
+            ),
+            Err(error) if attempt == 9 => {
+                eprintln!("pending repository index request failed: {error:#}")
+            }
+            Err(_) => {}
+        }
+        sleep(Duration::from_millis(250 * (attempt + 1))).await;
+    }
 }
 
 pub(crate) async fn index_repository(

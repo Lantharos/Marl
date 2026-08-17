@@ -43,6 +43,9 @@ async fn main() -> Result<()> {
         local_storage,
     });
     let repository_root = state.repositories.display().to_string();
+    if state.local_storage {
+        tokio::spawn(metadata::backfill_pending_repositories(state.clone()));
+    }
     let app = Router::new()
         .route("/health", axum::routing::get(|| async { "ok\n" }))
         .route(
