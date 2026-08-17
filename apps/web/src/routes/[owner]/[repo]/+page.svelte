@@ -23,7 +23,7 @@
   type FileItem = { path: string; name: string; kind: 'folder' | 'file'; size?: string; message: string; updatedAt: string };
   type CommitItem = { id: string; shortId: string; title: string; author: string; authoredAt: string; verified: boolean };
   type BranchData = { name: string; commitId: string; title: string; updatedAt: string };
-  type TreeEntryData = { path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number };
+  type TreeEntryData = { path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number; message?: string; updatedAt?: string };
 
   let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner ?? 'lantharos');
@@ -35,7 +35,7 @@
   let fileQuery = $state('');
   let finderInput = $state<HTMLInputElement>();
   let branchItems = $state<BranchItem[]>(untrack(() => data.branches.map((branch: BranchData) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), title: branch.title, updatedAt: branch.updatedAt, isDefault: branch.name === data.defaultBranch, ahead: 0, behind: 0 }))));
-  let fileItems = $state<FileItem[]>(untrack(() => data.tree.entries.map((entry: TreeEntryData) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' as const : 'file' as const, size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: data.tree.commit.title, updatedAt: data.tree.commit.authoredAt }))));
+  let fileItems = $state<FileItem[]>(untrack(() => data.tree.entries.map((entry: TreeEntryData) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' as const : 'file' as const, size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? 'History unavailable', updatedAt: entry.updatedAt ?? '' }))));
   let finderItems = $state<FileItem[]>([]);
   let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
   let fileSearchRequest = 0;
@@ -64,9 +64,9 @@
     }
     fileSearchTimer = setTimeout(async () => {
       try {
-        const result = await api<{ entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number }> }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(selectedBranch)}&query=${encodeURIComponent(query)}`);
+        const result = await api<{ entries: TreeEntryData[] }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(selectedBranch)}&query=${encodeURIComponent(query)}`);
         if (request !== fileSearchRequest) return;
-        finderItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: '', updatedAt: '' }));
+        finderItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? 'History unavailable', updatedAt: entry.updatedAt ?? '' }));
       } catch {
         if (request === fileSearchRequest) finderItems = [];
       }
@@ -74,9 +74,9 @@
   }
 
   async function loadTree(branch: string) {
-    const result = await api<{ commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number }> }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
+    const result = await api<{ commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: TreeEntryData[] }>(`/repositories/${owner}/${repo}/tree?revision=${encodeURIComponent(branch)}`);
     latestCommit = { ...result.commit, verified: result.commit.signatureStatus === 'verified' };
-    fileItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: latestCommit?.title ?? '', updatedAt: latestCommit?.authoredAt ?? '' }));
+    fileItems = result.entries.map((entry) => ({ path: entry.path, name: entry.name, kind: entry.kind === 'tree' ? 'folder' : 'file', size: entry.byteSize ? `${entry.byteSize} B` : undefined, message: entry.message ?? 'History unavailable', updatedAt: entry.updatedAt ?? '' }));
     try { readme = await apiText(`/repositories/${owner}/${repo}/blob/${encodeURIComponent(branch)}/README.md`); } catch { readme = ''; }
   }
 

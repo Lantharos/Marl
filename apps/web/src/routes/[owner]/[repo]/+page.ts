@@ -3,7 +3,7 @@ import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
 type Branches = { defaultBranch: string; branches: Array<{ name: string; commitId: string; title: string; updatedAt: string }> };
-type Tree = { commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number }> };
+type Tree = { commit: { id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }; entries: Array<{ path: string; name: string; kind: 'blob' | 'tree'; byteSize?: number; message?: string; updatedAt?: string }> };
 
 export const load: PageLoad = async ({ fetch, params, parent }) => {
   const repository = (await parent()).repository;

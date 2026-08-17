@@ -29,17 +29,41 @@ export async function authorizeGit(env: Env, principal: Principal | null, owner:
 
 export async function indexGit(request: Request, env: Env, principal: Principal | null, gatewayTrusted = false): Promise<Response> {
   const body = await readJson(request, gitIndexBody);
-  if (!body || typeof body.repositoryId !== 'string' || !Array.isArray(body.commits) || !Array.isArray(body.branches) || !Array.isArray(body.entries)) return problem(422, 'invalid_git_index', 'Git index payload is invalid.');
+  if (!body || typeof body.repositoryId !== 'string' || !Array.isArray(body.commits) || !Array.isArray(body.branches) || !Array.isArray(body.entries) || !Array.isArray(body.changes)) return problem(422, 'invalid_git_index', 'Git index payload is invalid.');
   const owned = gatewayTrusted || (principal && await authorizeRepositoryId(env, principal, body.repositoryId, 'write'));
   if (!owned) return problem(403, 'git_access_denied', 'You cannot index this repository.');
-  const previous = await env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=?').bind(body.repositoryId).all<{ name: string; commitId: string }>();
+  const [previous, storedCommits, storedChanges] = await Promise.all([
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=?').bind(body.repositoryId).all<{ name: string; commitId: string }>(),
+    env.DB.prepare('SELECT id FROM commits WHERE repository_id=?').bind(body.repositoryId).all<{ id: string }>(),
+    env.DB.prepare('SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=?').bind(body.repositoryId).all<{ commitId: string }>()
+  ]);
   const previousHeads = new Map(previous.results.map((branch) => [branch.name, branch.commitId]));
+  const existingCommits = new Set(storedCommits.results.map((commit) => commit.id));
+  const indexedChanges = new Set(storedChanges.results.map((commit) => commit.commitId));
   const statements = [];
   for (const value of body.commits.slice(0, 5000)) {
     if (!value || typeof value !== 'object') continue;
     const commit = value as Record<string, unknown>;
     if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string') || !Array.isArray(commit.parents) || !commit.parents.every((parent) => typeof parent === 'string' && /^[0-9a-f]{40,64}$/.test(parent))) continue;
+    if (existingCommits.has(commit.id as string)) continue;
     statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id, parent_ids) VALUES (?, ?, ?, ?, '', ?, ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name, authored_at=excluded.authored_at, tree_id=excluded.tree_id, parent_ids=excluded.parent_ids`).bind(body.repositoryId, commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents)));
+  }
+  let indexedPaths = 0;
+  for (const value of body.changes.slice(0, 5000)) {
+    if (!value || typeof value !== 'object') continue;
+    const change = value as Record<string, unknown>;
+    if (typeof change.commitId !== 'string' || !/^[0-9a-f]{40,64}$/.test(change.commitId) || typeof change.position !== 'number' || !Number.isInteger(change.position) || change.position < 0 || change.position > 5000 || !Array.isArray(change.paths)) continue;
+    if (indexedChanges.has(change.commitId)) continue;
+    const paths = [...new Set(change.paths.filter((path): path is string => typeof path === 'string' && safeRepositoryPath(path)))];
+    if (paths.length > 200_000) return problem(422, 'git_index_too_large', 'A single commit changed too many paths to index safely.');
+    if (indexedPaths + paths.length > 200_000) break;
+    for (let offset = 0; offset < paths.length; offset += 20) {
+      const chunk = paths.slice(offset, offset + 20);
+      const values = chunk.map(() => '(?,?,?,?)').join(',');
+      statements.push(env.DB.prepare(`INSERT OR IGNORE INTO commit_changes (repository_id,commit_id,path,position) VALUES ${values}`).bind(...chunk.flatMap((path) => [body.repositoryId, change.commitId, path, change.position])));
+    }
+    statements.push(env.DB.prepare('INSERT OR IGNORE INTO indexed_commit_changes (repository_id,commit_id) VALUES (?,?)').bind(body.repositoryId, change.commitId));
+    indexedPaths += paths.length;
   }
   const indexedBranches: Array<{ name: string; commitId: string }> = [];
   for (const value of body.branches.slice(0, 1000)) {
@@ -267,7 +291,13 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
   const result = query
     ? await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND instr(lower(path), lower(?)) > 0 ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, path COLLATE NOCASE LIMIT 100').bind(repo.id, resolved.treeId, query).all()
     : await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND parent_path = ? ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, name COLLATE NOCASE').bind(repo.id, resolved.treeId, parentPath).all();
-  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: result.results });
+  const paths = result.results.map((entry) => entry.path).filter((path): path is string => typeof path === 'string');
+  const lastChanges = paths.length
+    ? await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`).bind(resolved.id, repo.id, JSON.stringify(paths), repo.id).all<{ path: string; commitId: string; message: string; author: string; updatedAt: string }>()
+    : { results: [] };
+  const metadata = new Map(lastChanges.results.map((change) => [change.path, change]));
+  const entries = result.results.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) }));
+  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries });
 }
 
 export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string): Promise<Response> {

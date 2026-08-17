@@ -30,6 +30,7 @@ struct GitIndex {
     commits: Vec<IndexedCommit>,
     branches: Vec<IndexedBranch>,
     entries: Vec<IndexedEntry>,
+    changes: Vec<IndexedChange>,
 }
 
 #[derive(Serialize)]
@@ -60,6 +61,14 @@ struct IndexedEntry {
     kind: String,
     object_id: String,
     byte_size: Option<u64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IndexedChange {
+    commit_id: String,
+    position: usize,
+    paths: Vec<String>,
 }
 
 pub(crate) async fn index_repository(
@@ -121,6 +130,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
             &[
                 "log",
                 "--all",
+                "--topo-order",
                 "--date=iso-strict",
                 "--format=%H%x1f%s%x1f%an%x1f%aI%x1f%T%x1f%P%x1e",
                 "-n",
@@ -140,6 +150,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
             parents: fields[5].split_whitespace().map(str::to_owned).collect(),
         })
         .collect::<Vec<_>>();
+    let changes = index_changes(&repository, &commits).await?;
     let trees = commits
         .iter()
         .map(|commit| (commit.id.as_str(), commit.tree_id.as_str()))
@@ -160,6 +171,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
         commits,
         branches,
         entries,
+        changes,
     };
     let response = state
         .client
@@ -173,6 +185,97 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
         .error_for_status()
         .context("control plane rejected Git index")?;
     Ok(())
+}
+
+async fn index_changes(repository: &Path, commits: &[IndexedCommit]) -> Result<Vec<IndexedChange>> {
+    if commits.is_empty() {
+        return Ok(Vec::new());
+    }
+    let output = Command::new("git")
+        .args(["-C"])
+        .arg(repository)
+        .args([
+            "log",
+            "--all",
+            "--topo-order",
+            "-n",
+            "5000",
+            "--format=C%H%x00",
+            "--name-status",
+            "-z",
+            "--no-renames",
+        ])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git log changed paths failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+    Ok(parse_changed_paths(&output.stdout, commits))
+}
+
+fn parse_changed_paths(output: &[u8], commits: &[IndexedCommit]) -> Vec<IndexedChange> {
+    let positions = commits
+        .iter()
+        .enumerate()
+        .map(|(index, commit)| (commit.id.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    let mut paths = vec![HashSet::new(); commits.len()];
+    let mut generations = vec![0; commits.len()];
+    for (index, commit) in commits.iter().enumerate().rev() {
+        generations[index] = commit
+            .parents
+            .iter()
+            .filter_map(|parent| positions.get(parent.as_str()))
+            .map(|parent| generations[*parent])
+            .max()
+            .unwrap_or(0)
+            + 1;
+    }
+    let mut current = None;
+    let mut tokens = output
+        .split(|byte| *byte == 0)
+        .filter(|token| !token.is_empty());
+    while let Some(token) = tokens.next() {
+        if token.first() == Some(&b'C') {
+            current = std::str::from_utf8(&token[1..])
+                .ok()
+                .and_then(|id| positions.get(id).copied());
+            continue;
+        }
+        if token.len() != 1 || !token[0].is_ascii_alphabetic() {
+            current = None;
+            continue;
+        }
+        let Some(path) = tokens.next() else { break };
+        let Some(index) = current else { continue };
+        let path = String::from_utf8_lossy(path).replace('\\', "/");
+        if path.is_empty() {
+            continue;
+        }
+        paths[index].insert(path.clone());
+        let mut ancestor = path.as_str();
+        while let Some((parent, _)) = ancestor.rsplit_once('/') {
+            paths[index].insert(parent.to_owned());
+            ancestor = parent;
+        }
+    }
+    commits
+        .iter()
+        .zip(paths)
+        .enumerate()
+        .map(|(position, (commit, paths))| {
+            let mut paths = paths.into_iter().collect::<Vec<_>>();
+            paths.sort_unstable();
+            IndexedChange {
+                commit_id: commit.id.clone(),
+                position: generations[position],
+                paths,
+            }
+        })
+        .collect()
 }
 
 pub(crate) async fn index_local_repository(
@@ -260,4 +363,38 @@ fn parse_records(value: &str, fields: usize) -> Vec<Vec<String>> {
             (values.len() == fields).then_some(values)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn commit(id: &str, parents: &[&str]) -> IndexedCommit {
+        IndexedCommit {
+            id: id.into(),
+            title: String::new(),
+            author: String::new(),
+            authored_at: String::new(),
+            tree_id: String::new(),
+            parents: parents.iter().map(|parent| (*parent).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn changed_paths_include_parent_directories() {
+        let first = "1111111111111111111111111111111111111111";
+        let second = "2222222222222222222222222222222222222222";
+        let output = format!("C{first}\0\0M\0apps/web/src/app.ts\0C{second}\0\0A\0README.md\0");
+        let changes = parse_changed_paths(
+            output.as_bytes(),
+            &[commit(first, &[second]), commit(second, &[])],
+        );
+        assert_eq!(
+            changes[0].paths,
+            ["apps", "apps/web", "apps/web/src", "apps/web/src/app.ts"]
+        );
+        assert_eq!(changes[1].paths, ["README.md"]);
+        assert_eq!(changes[0].position, 2);
+        assert_eq!(changes[1].position, 1);
+    }
 }
