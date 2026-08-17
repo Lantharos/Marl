@@ -1,9 +1,11 @@
 import { authenticate } from './auth';
 import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
+import { getDashboard } from './dashboard';
 import type { Env } from './platform';
 import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
-import { addPullComment, addThreadComment, compareBranches, connectPullRealtime, createPull, createThread, deletePullComment, deleteReviewComment, getPull, getPullDiff, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
+import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
+import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
 import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
@@ -44,12 +46,13 @@ const worker = {
     }
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Sty API.');
 
-    if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal);
+    if (request.method === 'GET' && url.pathname === '/api/v1/dashboard') return getDashboard(_env, principal);
+    if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/runners') return listRunners(_env, principal);
     const runnerDetail = url.pathname.match(/^\/api\/v1\/runners\/(runner_[a-z0-9]+)$/);
     if (request.method === 'GET' && runnerDetail) return getRunner(_env, principal, runnerDetail[1]);
     if (request.method === 'POST' && url.pathname === '/api/v1/runner-enrollments') return createEnrollment(request, _env, principal);
-    if (request.method === 'GET' && url.pathname === '/api/v1/runs') return listRuns(_env, principal);
+    if (request.method === 'GET' && url.pathname === '/api/v1/runs') return listRuns(_env, principal, url);
     const jobLogs = url.pathname.match(/^\/api\/v1\/jobs\/(job_[a-z0-9]+)\/logs$/);
     if (request.method === 'GET' && jobLogs) return readJobLogs(_env, principal, jobLogs[1], url);
     const artifact = url.pathname.match(/^\/api\/v1\/artifacts\/(artifact_[a-z0-9]+)$/);
@@ -61,7 +64,7 @@ const worker = {
     const runRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/runs(?:\/(\d+)(?:\/(cancel|retry|state))?)?$/);
     if (runRoute) {
       const owner = decodeURIComponent(runRoute[1]); const repository = decodeURIComponent(runRoute[2]);
-      if (!runRoute[3] && request.method === 'GET') return listRepositoryRuns(_env, principal, owner, repository);
+      if (!runRoute[3] && request.method === 'GET') return listRepositoryRuns(_env, principal, owner, repository, url);
       if (runRoute[3] && !runRoute[4] && request.method === 'GET') return getRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'state' && request.method === 'GET') return getRunState(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'cancel' && request.method === 'POST') return cancelRun(_env, principal, owner, repository, Number(runRoute[3]));
@@ -72,13 +75,13 @@ const worker = {
     if (workflowRoute) {
       const owner = decodeURIComponent(workflowRoute[1]); const repository = decodeURIComponent(workflowRoute[2]); const workflowId = workflowRoute[3]; const action = workflowRoute[4];
       if (!workflowId && request.method === 'GET') return listWorkflows(_env, principal, owner, repository);
-      if (workflowId && !action && request.method === 'GET') return getWorkflow(_env, principal, owner, repository, workflowId);
+      if (workflowId && !action && request.method === 'GET') return getWorkflow(_env, principal, owner, repository, workflowId, url);
       if (workflowId && action === 'dispatch' && request.method === 'POST') return dispatchWorkflow(_env, principal, owner, repository, workflowId);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
     if (url.pathname === '/api/v1/repositories') {
-      if (request.method === 'GET') return listRepositories(_env, principal);
+      if (request.method === 'GET') return listRepositories(_env, principal, url);
       if (request.method === 'POST') return createRepository(request, _env, principal);
       return problem(405, 'method_not_allowed', 'This method is not allowed.', { allow: ['GET', 'POST'] });
     }
@@ -107,7 +110,7 @@ const worker = {
       const repository = decodeURIComponent(pullRoute[2]);
       const number = pullRoute[3] ? Number(pullRoute[3]) : null;
       const action = pullRoute[4];
-      if (number === null && request.method === 'GET') return listPulls(_env, principal, owner, repository);
+      if (number === null && request.method === 'GET') return listPulls(_env, principal, owner, repository, url);
       if (number === null && request.method === 'POST') return createPull(request, _env, principal, owner, repository);
       if (number !== null && !action && request.method === 'GET') return getPull(_env, principal, owner, repository, number);
       if (number !== null && !action && request.method === 'PATCH') return updatePullDetails(request, _env, principal, owner, repository, number);

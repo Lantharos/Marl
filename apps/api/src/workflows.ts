@@ -2,6 +2,8 @@ import { parse } from 'yaml';
 import type { Principal } from './auth';
 import { auditStatement } from './audit';
 import { identifier } from './domain';
+import { pageResult, pageSize, readCursor } from './cursor';
+import { requestGitGateway } from './git-gateway';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { parseRunJobs, queueRun, runSelect, summarizeRun, type RunJob } from './runs';
@@ -176,31 +178,36 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
   const warnings: WorkflowWarning[] = [];
   const indexed: IndexedWorkflow[] = [];
   let queued = 0;
-  for (const entry of entries.results) {
-    const object = await fetch(`${env.GIT_GATEWAY_URL}/_sty/blob`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner: repository.owner, repository: repository.name, objectId: entry.objectId }) });
-    const size = Number(object.headers.get('content-length'));
-    if (!object.ok || !Number.isSafeInteger(size) || size > 1024 * 1024) {
-      const error = 'Workflow file is missing or larger than 1 MiB.';
-      warnings.push({ path: entry.path, error });
-      indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error, pushEnabled: false });
-      continue;
-    }
-    try {
-      const value = parse(await object.text(), { maxAliasCount: 10 }) as ObjectValue | null;
-      const triggers = declaredTriggers(value?.on);
-      const parsed = value ? parseWorkflow(value, entry.path) : { error: 'Workflow YAML must contain an object.' };
-      const unsupported = triggers.filter((trigger) => !executableTriggers.has(trigger));
-      const error = !triggers.length
-        ? 'Workflow must declare push or workflow_dispatch.'
-        : unsupported.length
-          ? `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported yet.`
-          : parsed.error ?? null;
-      if (error) warnings.push({ path: entry.path, error });
-      indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message.slice(0, 240) : 'Workflow YAML is invalid.';
-      warnings.push({ path: entry.path, error: message });
-      indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error: message, pushEnabled: false });
+  for (let offset = 0; offset < entries.results.length; offset += 8) {
+    const batch = await Promise.all(entries.results.slice(offset, offset + 8).map(async (entry) => ({
+      entry,
+      object: await requestGitGateway(env, '/_sty/blob', { owner: repository.owner, repository: repository.name, objectId: entry.objectId }, { attempts: 2 })
+    })));
+    for (const { entry, object } of batch) {
+      const size = Number(object.headers.get('content-length'));
+      if (!object.ok || !Number.isSafeInteger(size) || size > 1024 * 1024) {
+        const error = 'Workflow file is missing or larger than 1 MiB.';
+        warnings.push({ path: entry.path, error });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error, pushEnabled: false });
+        continue;
+      }
+      try {
+        const value = parse(await object.text(), { maxAliasCount: 10 }) as ObjectValue | null;
+        const triggers = declaredTriggers(value?.on);
+        const parsed = value ? parseWorkflow(value, entry.path) : { error: 'Workflow YAML must contain an object.' };
+        const unsupported = triggers.filter((trigger) => !executableTriggers.has(trigger));
+        const error = !triggers.length
+          ? 'Workflow must declare push or workflow_dispatch.'
+          : unsupported.length
+            ? `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported yet.`
+            : parsed.error ?? null;
+        if (error) warnings.push({ path: entry.path, error });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch) });
+      } catch (error) {
+        const message = error instanceof Error ? error.message.slice(0, 240) : 'Workflow YAML is invalid.';
+        warnings.push({ path: entry.path, error: message });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error: message, pushEnabled: false });
+      }
     }
   }
   const statements = [env.DB.prepare('UPDATE workflows SET active=0,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND branch=?').bind(repositoryId, branch)];
@@ -259,13 +266,18 @@ export async function listWorkflows(env: Env, principal: Principal, owner: strin
   return json({ workflows: rows.map((row) => workflowSummary(row, row.lastRunId ? lastRuns.get(row.lastRunId) : null)) });
 }
 
-export async function getWorkflow(env: Env, principal: Principal, owner: string, name: string, workflowId: string): Promise<Response> {
+export async function getWorkflow(env: Env, principal: Principal, owner: string, name: string, workflowId: string, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const workflow = (await workflowRows(env, repository.id, workflowId))[0];
   if (!workflow) return problem(404, 'workflow_not_found', 'Workflow not found.');
-  const runs = await env.DB.prepare(runSelect('WHERE runs.repository_id=? AND runs.workflow_id=? ORDER BY runs.created_at DESC LIMIT 100')).bind(repository.id, workflow.id).all<Record<string, unknown>>();
-  return json({ workflow: { ...workflowSummary(workflow, runs.results[0]), runs: runs.results.map(summarizeRun) } });
+  const limit = pageSize(url);
+  const cursor = readCursor(url);
+  const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
+  const values = cursor ? [repository.id, workflow.id, cursor.value, cursor.value, cursor.id, limit + 1] : [repository.id, workflow.id, limit + 1];
+  const runs = await env.DB.prepare(runSelect(`WHERE runs.repository_id=? AND runs.workflow_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const page = pageResult(runs.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
+  return json({ workflow: { ...workflowSummary(workflow, page.items[0]), runs: page.items.map(summarizeRun) }, nextCursor: page.nextCursor });
 }
 
 export async function dispatchWorkflow(env: Env, principal: Principal, owner: string, name: string, workflowId: string): Promise<Response> {

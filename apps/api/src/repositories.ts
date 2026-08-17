@@ -2,7 +2,9 @@ import type { RepositorySummary } from '@sty/contracts';
 import { auditStatement } from './audit';
 import type { Principal } from './auth';
 import { identifier, safeRepositoryPath, validBranchName, validSlug, validVisibility } from './domain';
+import { pageResult, pageSize, readCursor } from './cursor';
 import { pinPullRefs } from './git-writes';
+import { requestGitGateway } from './git-gateway';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
@@ -107,9 +109,14 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   return json({ indexed: { commits: body.commits.length, branches: indexedBranches.length, entries: body.entries.length }, workflows: { queued: workflowsQueued, warnings: workflowWarnings } });
 }
 
-export async function listRepositories(env: Env, principal: Principal): Promise<Response> {
-  const result = await env.DB.prepare(`${selectRepository} JOIN organization_members ON organization_members.organization_id = repositories.organization_id WHERE organization_members.user_id = ? AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC LIMIT 100`).bind(principal.id).all<RepositoryRow>();
-  return json({ repositories: result.results.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo) });
+export async function listRepositories(env: Env, principal: Principal, url: URL): Promise<Response> {
+  const limit = pageSize(url);
+  const cursor = readCursor(url);
+  const after = cursor ? 'AND (repositories.updated_at<? OR (repositories.updated_at=? AND repositories.id<?))' : '';
+  const values = cursor ? [principal.id, cursor.value, cursor.value, cursor.id, limit + 1] : [principal.id, limit + 1];
+  const result = await env.DB.prepare(`${selectRepository} JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organization_members.user_id=? AND repositories.deletion_scheduled_at IS NULL ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`).bind(...values).all<RepositoryRow>();
+  const page = pageResult(result.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
+  return json({ repositories: page.items.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo), nextCursor: page.nextCursor });
 }
 
 export async function createRepository(request: Request, env: Env, principal: Principal): Promise<Response> {
@@ -215,7 +222,7 @@ export async function scheduleRepositoryDeletion(request: Request, env: Env, pri
 }
 
 function relocateStorage(env: Env, oldOwner: string, oldRepository: string, newOwner: string, newRepository: string) {
-  return fetch(`${env.GIT_GATEWAY_URL}/_sty/repositories/relocate`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ oldOwner, oldRepository, newOwner, newRepository }) }).catch(() => new Response(null, { status: 502 }));
+  return requestGitGateway(env, '/_sty/repositories/relocate', { oldOwner, oldRepository, newOwner, newRepository }, { attempts: 2, timeoutMs: 30_000 }).catch(() => new Response(null, { status: 502 }));
 }
 
 export async function listBranches(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -242,7 +249,7 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
   const indexed = await env.DB.prepare('SELECT id FROM commits WHERE repository_id=? AND id=?').bind(repo.id, commitId).first();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
-  const response = await fetch(`${env.GIT_GATEWAY_URL}/_sty/commit`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner, repository: name, commitId }) });
+  const response = await requestGitGateway(env, '/_sty/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   return new Response(response.body, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
 }
@@ -271,7 +278,7 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
   const entry = await env.DB.prepare(`SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`).bind(repo.id, resolved.treeId, path).first<{ objectId: string }>();
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const response = await fetch(`${env.GIT_GATEWAY_URL}/_sty/blob`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-gateway-token': env.GIT_GATEWAY_TOKEN ?? 'sty-local' }, body: JSON.stringify({ owner, repository: name, objectId: entry.objectId }) }).catch(() => null);
+  const response = await requestGitGateway(env, '/_sty/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 }).catch(() => null);
   if (!response?.ok || !response.body) return problem(502, 'blob_gateway_failed', 'Git gateway could not read this file.');
   return new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount, untrack } from 'svelte';
-  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullTimelineItem, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@sty/contracts';
+  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullTimelineWindow } from '@sty/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
@@ -26,6 +26,8 @@
   import PullMetadata from '$lib/components/PullMetadata.svelte';
   import PullTimelineEvent from '$lib/components/PullTimelineEvent.svelte';
   import ReviewThread from '$lib/components/ReviewThread.svelte';
+  import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
+  import { connectPullLive } from '$lib/pulls/pull-live';
   import { dismissable } from '$lib/actions/dismissable';
   import type { PageData } from './$types';
 
@@ -36,6 +38,7 @@
   const repo = $derived($page.params.repo);
   const number = $derived(Number($page.params.number));
   let pull = $state<PullRequestDetail>(untrack(() => data.pull));
+  const timeline = new PullTimelineState(untrack(() => data.pull.timeline));
   let diff = $state<PullRequestDiff | null>(null);
   let diffLoading = $state(false);
   let tab = $state<Tab>('conversation');
@@ -52,34 +55,6 @@
   let editingDetails = $state(false);
   let editedTitle = $state('');
   let editedBody = $state('');
-
-  function syncTimeline(window: PullTimelineWindow) {
-    const items = [...window.items].sort((a, b) => a.sequence - b.sequence);
-    pull = {
-      ...pull,
-      timeline: { ...window, items },
-      comments: items.filter((item) => item.kind === 'comment').map((item) => item.value),
-      reviews: items.filter((item) => item.kind === 'review').map((item) => item.value),
-      threads: items.filter((item) => item.kind === 'thread').map((item) => item.value),
-      events: items.filter((item) => item.kind === 'event').map((item) => item.value)
-    };
-  }
-
-  function patchTimeline(kind: PullTimelineItem['kind'], id: string, patch: Record<string, unknown>) {
-    syncTimeline({ ...pull.timeline, items: pull.timeline.items.map((item) => item.kind === kind && item.value.id === id ? { ...item, value: { ...item.value, ...patch } } as PullTimelineItem : item) });
-  }
-
-  function appendTimeline(entries: unknown[]) {
-    if (!entries.length) return;
-    let sequence = (pull.timeline.newestLoadedSequence ?? 0) + 1;
-    const additions = entries.flatMap((entry) => {
-      const item = entry as { kind?: PullTimelineItem['kind']; value?: { id?: string }; createdAt?: string };
-      if (!item.kind || !item.value?.id || !item.createdAt || pull.timeline.items.some((existing) => existing.kind === item.kind && existing.value.id === item.value?.id)) return [];
-      return [{ sequence: sequence++, kind: item.kind, value: item.value, createdAt: item.createdAt } as PullTimelineItem];
-    });
-    if (!additions.length) return;
-    syncTimeline({ ...pull.timeline, items: [...pull.timeline.items, ...additions], total: pull.timeline.total + additions.length, newestLoadedSequence: sequence - 1 });
-  }
 
   let stateRefreshQueued = false;
   function scheduleStateRefresh() {
@@ -110,17 +85,17 @@
         locked: metadata.locked ?? pull.locked
       };
     }
-    if (payload.comment) patchTimeline('comment', String((payload.comment as { id: string }).id), payload.comment as Record<string, unknown>);
-    if (payload.thread) patchTimeline('thread', String((payload.thread as { id: string }).id), payload.thread as Record<string, unknown>);
+    if (payload.comment) timeline.patch('comment', String((payload.comment as { id: string }).id), payload.comment as Record<string, unknown>);
+    if (payload.thread) timeline.patch('thread', String((payload.thread as { id: string }).id), payload.thread as Record<string, unknown>);
     if (payload.threadComment) {
       const change = payload.threadComment as { threadId: string; comment: { id: string } & Record<string, unknown> };
-      const thread = pull.timeline.items.find((item) => item.kind === 'thread' && item.value.id === change.threadId)?.value as ReviewThreadType | undefined;
+      const thread = timeline.getThread(change.threadId);
       if (thread) {
         const exists = thread.comments.some((comment) => comment.id === change.comment.id);
-        patchTimeline('thread', change.threadId, { comments: exists ? thread.comments.map((comment) => comment.id === change.comment.id ? { ...comment, ...change.comment } : comment) : [...thread.comments, change.comment] });
+        timeline.patch('thread', change.threadId, { comments: exists ? thread.comments.map((comment) => comment.id === change.comment.id ? { ...comment, ...change.comment } : comment) : [...thread.comments, change.comment] });
       }
     }
-    if (Array.isArray(payload.timeline)) appendTimeline(payload.timeline);
+    if (Array.isArray(payload.timeline)) timeline.append(payload.timeline);
     pull = { ...pull, realtimeVersion: update.version };
     if (payload.refreshState) scheduleStateRefresh();
   }
@@ -142,35 +117,20 @@
     }
   }
 
-  onMount(() => {
-    let stopped = false;
-    let socket: WebSocket | null = null;
-    let reconnect: ReturnType<typeof setTimeout> | null = null;
-    let delay = 500;
-    const connect = () => {
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      socket = new WebSocket(`${protocol}//${location.host}/api/v1/repositories/${encodeURIComponent(owner ?? '')}/${encodeURIComponent(repo ?? '')}/pulls/${number}/live`);
-      socket.onopen = () => { delay = 500; void catchUp(); };
-      socket.onmessage = (message) => {
-        try { const value = JSON.parse(String(message.data)) as { type: string; update?: PullRealtimeUpdate }; if (value.type === 'update') applyUpdate(value.update); } catch {}
-      };
-      socket.onclose = () => { if (!stopped) { reconnect = setTimeout(connect, delay); delay = Math.min(delay * 2, 10_000); } };
-    };
-    const visible = () => { if (document.visibilityState === 'visible') void catchUp(); };
-    connect();
-    document.addEventListener('visibilitychange', visible);
-    return () => { stopped = true; if (reconnect) clearTimeout(reconnect); socket?.close(); document.removeEventListener('visibilitychange', visible); };
-  });
+  onMount(() => connectPullLive({
+    path: `/api/v1/repositories/${encodeURIComponent(owner ?? '')}/${encodeURIComponent(repo ?? '')}/pulls/${number}/live`,
+    onUpdate: applyUpdate,
+    catchUp
+  }));
 
   async function loadOlderTimeline() {
-    const before = pull.timeline.loadBeforeSequence;
-    const after = pull.timeline.firstBoundarySequence;
+    const before = timeline.loadBeforeSequence;
+    const after = timeline.firstBoundarySequence;
     if (!before || !after || busy) return;
     busy = true;
     try {
       const result = await api<{ timeline: PullTimelineWindow }>(`/repositories/${owner}/${repo}/pulls/${number}/timeline?before=${before}&after=${after}`);
-      const items = [...pull.timeline.items, ...result.timeline.items];
-      syncTimeline({ ...pull.timeline, items: [...new Map(items.map((item) => [`${item.kind}:${item.value.id}`, item])).values()], hidden: result.timeline.hidden, loadBeforeSequence: result.timeline.loadBeforeSequence });
+      timeline.mergeOlder(result.timeline);
     } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Older conversation could not be loaded.'; }
     finally { busy = false; }
   }
@@ -249,10 +209,10 @@
 
   async function setThreadResolved(threadId: string, resolved: boolean) {
     if (busy) return; busy = true; error = '';
-    const before = pull.timeline;
-    patchTimeline('thread', threadId, { resolved });
+    const before = timeline.get('thread', threadId);
+    timeline.patch('thread', threadId, { resolved });
     try { const result = await api<{ update?: PullRealtimeUpdate }>(`/review-threads/${threadId}/resolve`, { method: 'POST', body: JSON.stringify({ resolved }) }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Conversation could not be updated.'; syncTimeline(before); }
+    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Conversation could not be updated.'; timeline.restore(before); }
     finally { busy = false; }
   }
 
@@ -309,7 +269,7 @@
   </header>
 
   <nav class="tabs" aria-label="Pull request sections">
-    <button class:active={tab === 'conversation'} onclick={() => selectTab('conversation')}><MessageSquare size={15} />Conversation <span>{pull.timeline.total}</span></button>
+    <button class:active={tab === 'conversation'} onclick={() => selectTab('conversation')}><MessageSquare size={15} />Conversation <span>{timeline.total}</span></button>
     <button class:active={tab === 'commits'} onclick={() => selectTab('commits')}><GitCommitHorizontal size={15} />Commits <span>{pull.commits.length}</span></button>
     <button class:active={tab === 'changes'} onclick={() => selectTab('changes')}><FileDiff size={15} />Changes {#if diff}<span>{diff.files.length}</span>{/if}</button>
     <button class:active={tab === 'checks'} onclick={() => selectTab('checks')}><CircleCheck size={15} />Checks <span>{pull.checks.length}</span></button>
@@ -320,8 +280,10 @@
     <div class="conversation-layout">
       <main class="timeline">
         <article class="comment"><header><span class="avatar">{pull.author.slice(0,2).toUpperCase()}</span><strong>{pull.author}</strong><span>opened this pull request</span><time>{pull.createdAt}</time></header><div><MarkdownBody source={pull.body || 'No description was provided.'} /></div></article>
-        {#each pull.timeline.items as item, index (`${item.kind}:${item.value.id}`)}
-          {#if pull.timeline.hidden > 0 && index === 2}<button class="timeline-gap" disabled={busy} onclick={loadOlderTimeline}>{pull.timeline.hidden} comments and events hidden <span>Load earlier activity</span></button>{/if}
+        {#each timeline.order as key, index (key)}
+          {@const item = timeline.items.get(key)}
+          {#if item}
+          {#if timeline.hidden > 0 && index === 2}<button class="timeline-gap" disabled={busy} onclick={loadOlderTimeline}>{timeline.hidden} comments and events hidden <span>Load earlier activity</span></button>{/if}
           {#if item.kind === 'event'}
             <PullTimelineEvent event={item.value} />
           {:else if item.kind === 'review'}
@@ -330,6 +292,7 @@
             <ReviewThread thread={item.value} {busy} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
           {:else}
             <article class="comment"><header><span class="avatar">{item.value.author.slice(0,2).toUpperCase()}</span><strong>{item.value.author}</strong><span>commented</span><time>{item.value.createdAt}</time>{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<button class="danger" onclick={() => deletePullComment(item.value.id)}>Delete</button><button onclick={() => (confirmingPullDelete = null)}>Cancel</button>{:else}<button onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</button><button onclick={() => (confirmingPullDelete = item.value.id)}>Delete</button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} minHeight={90} /><footer class="comment-edit-actions"><button onclick={() => (editingPullComment = null)}>Cancel</button><button class="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</button></footer>{:else}<MarkdownBody source={item.value.body} />{/if}</div></article>
+          {/if}
           {/if}
         {/each}
         <PullActionComposer bind:value={commentBody} bind:mergeMethod pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} allowedMergeMethods={pull.allowedMergeMethods} onComment={addPullComment} onAction={composerAction} />

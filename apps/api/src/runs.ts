@@ -1,5 +1,6 @@
 import type { Principal } from './auth';
 import { identifier } from './domain';
+import { pageResult, pageSize, readCursor } from './cursor';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { notifyPullsForCommit } from './pull-realtime';
@@ -24,16 +25,26 @@ export function summarizeRun(row: Record<string, unknown>) {
   return { id: row.id, number: Number(row.number), repository: { owner: row.owner, name: row.repository }, name: row.name, trigger: row.trigger, ...(row.workflowId ? { workflowId: row.workflowId, workflowPath: row.workflowPath } : {}), actor: row.actor, branch: row.branch, commit: row.commitId, state: row.state, jobs: Number(row.jobs), queuedAt: row.queuedAt, startedAt: row.startedAt, completedAt: row.completedAt };
 }
 
-export async function listRuns(env: Env, principal: Principal): Promise<Response> {
-  const rows = await env.DB.prepare(runSelect(`JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organization_members.user_id=? ORDER BY runs.created_at DESC LIMIT 100`)).bind(principal.id).all();
-  return json({ runs: rows.results.map(summarizeRun) });
+export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
+  const limit = pageSize(url);
+  const cursor = readCursor(url);
+  const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
+  const values = cursor ? [principal.id, cursor.value, cursor.value, cursor.id, limit + 1] : [principal.id, limit + 1];
+  const rows = await env.DB.prepare(runSelect(`JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organization_members.user_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
+  return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
 }
 
-export async function listRepositoryRuns(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+export async function listRepositoryRuns(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
   const repo = await repository(env, principal, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const rows = await env.DB.prepare(runSelect(`WHERE runs.repository_id=? ORDER BY runs.created_at DESC LIMIT 100`)).bind(repo.id).all();
-  return json({ runs: rows.results.map(summarizeRun) });
+  const limit = pageSize(url);
+  const cursor = readCursor(url);
+  const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
+  const values = cursor ? [repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [repo.id, limit + 1];
+  const rows = await env.DB.prepare(runSelect(`WHERE runs.repository_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
+  return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
 }
 
 function environment(value: unknown): Record<string, string> | null {

@@ -1,10 +1,13 @@
 mod blob;
 mod compare;
 mod merge;
+mod merge_operations;
 mod metadata;
 mod pack;
+mod pack_graph;
 mod refs;
 mod relocate;
+mod repository_files;
 mod repository_storage;
 mod smart_http;
 mod state;
