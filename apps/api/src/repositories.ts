@@ -288,6 +288,22 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   return new Response(response.body, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
 }
 
+export async function readCommitPatch(env: Env, principal: Principal, owner: string, name: string, commitId: string, url: URL): Promise<Response> {
+  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
+  const path = url.searchParams.get('path') ?? '';
+  if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
+  const resolved = await resolveRevision(env, repo.id, commitId);
+  if (!resolved) return problem(404, 'commit_not_found', 'Commit not found.');
+  const commit = await env.DB.prepare('SELECT parent_ids AS parentIds FROM commits WHERE repository_id=? AND id=?').bind(repo.id, resolved.id).first<{ parentIds: string }>();
+  let parents: unknown = [];
+  try { parents = JSON.parse(commit?.parentIds ?? '[]'); } catch { return problem(500, 'commit_metadata_invalid', 'Stored commit metadata is invalid.'); }
+  const base = Array.isArray(parents) && typeof parents[0] === 'string' ? parents[0] : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+  const response = await requestGitGateway(env, '/_sty/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 }).catch(() => null);
+  if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
+  return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store' } });
+}
+
 export async function listTree(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');

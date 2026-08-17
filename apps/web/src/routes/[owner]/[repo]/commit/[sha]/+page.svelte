@@ -5,6 +5,7 @@
   import Check from 'lucide-svelte/icons/check';
   import Copy from 'lucide-svelte/icons/copy';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
+  import { api } from '$lib/api';
   import DiffViewer from '$lib/components/DiffViewer.svelte';
   import Time from '$lib/components/Time.svelte';
   import { encodeRevision } from '$lib/repository-path';
@@ -23,6 +24,10 @@
     copied = true;
     setTimeout(() => (copied = false), 1200);
   }
+  async function loadPatch(file: CommitDetail['files'][number]) {
+    const result = await api<{ patch: string }>(`/repositories/${owner}/${repo}/commits/${commit.id}/patch?path=${encodeURIComponent(file.path)}`);
+    return result.patch;
+  }
 </script>
 
 <svelte:head><title>{commit.id.slice(0, 7)} · {owner}/{repo} · Sty</title></svelte:head>
@@ -37,7 +42,7 @@
 {#if commit.files.some((file) => file.oldPath)}
   <div class="renames">{#each commit.files.filter((file) => file.oldPath) as file}<span><code>{file.oldPath}</code><ArrowRight size={12} /><code>{file.path}</code></span>{/each}</div>
 {/if}
-{#if commit.files.length}<DiffViewer files={commit.files} reviewable={false} />{:else}<div class="empty"><strong>No file changes</strong><p>This commit does not change the tree relative to its first parent.</p></div>{/if}
+{#if commit.files.length}<DiffViewer files={commit.files} reviewable={false} onLoadPatch={loadPatch} />{:else}<div class="empty"><strong>No file changes</strong><p>This commit does not change the tree relative to its first parent.</p></div>{/if}
 
 <style>
   .commit-head{position:relative;padding:5px 0 22px;border-bottom:1px solid var(--border)}.heading{display:flex;align-items:flex-start;gap:9px;color:var(--brand)}.heading h1{max-width:790px;margin:0;color:var(--text-strong);font-size:20px;font-weight:660;letter-spacing:-.025em}.heading p{max-width:760px;margin:8px 0 0;color:var(--text-muted);font-size:11px;line-height:1.55;white-space:pre-wrap}.meta{display:flex;align-items:center;gap:6px;margin-top:14px;color:var(--text-faint);font-size:9px}.avatar{display:grid;width:24px;height:24px;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-size:8px;font-weight:740}.meta strong{color:var(--text-strong)}.meta time{margin-left:3px}.meta i{display:flex;align-items:center;gap:3px;color:var(--success);font-style:normal}.identity{position:absolute;top:0;right:0;display:flex;max-width:310px;border:1px solid var(--border);border-radius:6px}.identity code{overflow:hidden;padding:8px;color:var(--text-muted);font-size:8px;text-overflow:ellipsis}.identity button{display:grid;min-width:34px;place-items:center;border:0;border-left:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer}.parents{display:flex;gap:12px;margin-top:13px}.parents a{color:var(--brand);font-size:9px;text-decoration:none}.parents a:last-child{margin-left:auto}.change-summary{display:flex;align-items:center;gap:7px;padding:16px 1px 11px;color:var(--text-muted);font-size:10px}.change-summary strong{color:var(--text-strong)}.change-summary span{display:flex;gap:6px;margin-left:auto}.change-summary b{color:var(--success)}.change-summary i{color:var(--danger);font-style:normal}.renames{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.renames span{display:flex;align-items:center;gap:6px;color:var(--text-faint);font-size:9px}.renames code{color:var(--text-muted)}.empty{padding:50px 0;border-top:1px solid var(--border-subtle);color:var(--text-faint);text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{font-size:10px}@media(max-width:760px){.identity{position:static;width:100%;max-width:none;margin-top:14px}.meta{flex-wrap:wrap}.meta time{width:100%;margin-left:30px}.parents a:last-child{margin-left:0}}

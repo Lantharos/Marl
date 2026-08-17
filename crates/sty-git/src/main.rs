@@ -109,6 +109,7 @@ async fn main() -> Result<()> {
             "/_sty/compare",
             axum::routing::post(compare::compare_request),
         )
+        .route("/_sty/patch", axum::routing::post(compare::patch_request))
         .route("/_sty/commit", axum::routing::post(compare::commit_request))
         .route("/{*path}", any(smart_http::git_request))
         .with_state(state);

@@ -1,4 +1,6 @@
-use crate::state::{AppState, git_output, is_object_id, repository_path, safe_segment};
+use crate::state::{
+    AppState, git_output, is_object_id, repository_path, safe_repository_path, safe_segment,
+};
 use anyhow::Result;
 use axum::{
     Json,
@@ -7,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use std::{path::Path, process::Stdio, sync::Arc};
+use std::{collections::HashMap, path::Path, process::Stdio, sync::Arc};
 use tokio::process::Command;
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +27,16 @@ pub(crate) struct CommitRequest {
     owner: String,
     repository: String,
     commit_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PatchRequest {
+    owner: String,
+    repository: String,
+    base: String,
+    head: String,
+    path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +70,13 @@ struct ComparedFile {
     status: String,
     additions: usize,
     deletions: usize,
+    patch: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    patch_omitted: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct PatchResponse {
     patch: String,
 }
 
@@ -108,6 +127,48 @@ pub(crate) async fn commit_request(
                 .into_response()
         }
     }
+}
+
+pub(crate) async fn patch_request(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<PatchRequest>,
+) -> Response {
+    if !trusted(&headers, &state) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    match perform_patch(&state, request).await {
+        Ok(patch) => Json(PatchResponse { patch }).into_response(),
+        Err(error) => {
+            eprintln!("patch read failed: {error:#}");
+            StatusCode::BAD_GATEWAY.into_response()
+        }
+    }
+}
+
+async fn perform_patch(state: &AppState, request: PatchRequest) -> Result<String> {
+    if !safe_segment(&request.owner)
+        || !safe_segment(&request.repository)
+        || !is_object_id(&request.base)
+        || !is_object_id(&request.head)
+        || !safe_repository_path(&request.path)
+    {
+        anyhow::bail!("invalid patch request")
+    }
+    let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
+    git_output(
+        &repository,
+        &[
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--unified=3",
+            &format!("{}..{}", request.base, request.head),
+            "--",
+            &request.path,
+        ],
+    )
+    .await
 }
 
 async fn perform_compare(state: &AppState, request: CompareRequest) -> Result<CompareResponse> {
@@ -187,6 +248,7 @@ async fn perform_commit(state: &AppState, request: CommitRequest) -> Result<Comm
 }
 
 async fn diff_files(repository: &Path, range: &str) -> Result<Vec<ComparedFile>> {
+    let stats = diff_stats(repository, range).await?;
     let names = Command::new("git")
         .args(["-C"])
         .arg(repository)
@@ -230,14 +292,64 @@ async fn diff_files(repository: &Path, range: &str) -> Result<Vec<ComparedFile>>
                 },
             )
         };
-        let stat_output = Command::new("git")
-            .args(["-C"])
-            .arg(repository)
-            .args(["diff", "--numstat", range, "--", &path])
-            .output()
-            .await?;
-        let stat = String::from_utf8_lossy(&stat_output.stdout);
-        let mut fields = stat.split_whitespace();
+        let (additions, deletions) = stats.get(&path).copied().unwrap_or_default();
+        let patch_omitted = if status == "deleted" {
+            Some("deleted".into())
+        } else if additions + deletions >= 1_000 {
+            Some("large".into())
+        } else {
+            None
+        };
+        let patch = if patch_omitted.is_some() {
+            String::new()
+        } else {
+            git_output(
+                repository,
+                &[
+                    "diff",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "--unified=3",
+                    range,
+                    "--",
+                    &path,
+                ],
+            )
+            .await?
+        };
+        files.push(ComparedFile {
+            path,
+            old_path,
+            status: status.into(),
+            additions,
+            deletions,
+            patch,
+            patch_omitted,
+        });
+    }
+    Ok(files)
+}
+
+async fn diff_stats(repository: &Path, range: &str) -> Result<HashMap<String, (usize, usize)>> {
+    let output = Command::new("git")
+        .args(["-C"])
+        .arg(repository)
+        .args(["diff", "--numstat", "-z", "--find-renames", range])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!("git diff stats failed")
+    }
+    let records = output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+        .collect::<Vec<_>>();
+    let mut stats = HashMap::new();
+    let mut index = 0;
+    while index < records.len() {
+        let record = String::from_utf8_lossy(records[index]);
+        let mut fields = record.splitn(3, '\t');
         let additions = fields
             .next()
             .and_then(|value| value.parse().ok())
@@ -246,29 +358,25 @@ async fn diff_files(repository: &Path, range: &str) -> Result<Vec<ComparedFile>>
             .next()
             .and_then(|value| value.parse().ok())
             .unwrap_or(0);
-        let patch = git_output(
-            repository,
-            &[
-                "diff",
-                "--no-color",
-                "--no-ext-diff",
-                "--unified=3",
-                range,
-                "--",
-                &path,
-            ],
-        )
-        .await?;
-        files.push(ComparedFile {
-            path,
-            old_path,
-            status: status.into(),
-            additions,
-            deletions,
-            patch,
-        });
+        let Some(path) = fields.next() else {
+            index += 1;
+            continue;
+        };
+        if path.is_empty() {
+            if index + 2 >= records.len() {
+                break;
+            }
+            stats.insert(
+                String::from_utf8_lossy(records[index + 2]).into_owned(),
+                (additions, deletions),
+            );
+            index += 3;
+        } else {
+            stats.insert(path.to_owned(), (additions, deletions));
+            index += 1;
+        }
     }
-    Ok(files)
+    Ok(stats)
 }
 
 #[cfg(test)]
@@ -340,7 +448,7 @@ mod tests {
             CommitRequest {
                 owner: "lantharos".into(),
                 repository: "sty".into(),
-                commit_id,
+                commit_id: commit_id.clone(),
             },
         )
         .await
@@ -349,6 +457,70 @@ mod tests {
         assert_eq!(commit.files.len(), 1);
         assert_eq!(commit.files[0].path, "README.md");
         assert!(commit.files[0].patch.contains("+hello"));
+
+        std::fs::remove_file(repository.join("README.md")).unwrap();
+        std::fs::write(
+            repository.join("large.txt"),
+            (0..1_001)
+                .map(|line| format!("line {line}\n"))
+                .collect::<String>(),
+        )
+        .unwrap();
+        assert!(
+            Command::new("git")
+                .args(["-C"])
+                .arg(&repository)
+                .args(["add", "--all"])
+                .status()
+                .await
+                .unwrap()
+                .success()
+        );
+        assert!(
+            Command::new("git")
+                .args(["-C"])
+                .arg(&repository)
+                .args([
+                    "-c",
+                    "user.name=Sty Test",
+                    "-c",
+                    "user.email=sty@example.invalid",
+                    "commit",
+                    "-m",
+                    "Large change"
+                ])
+                .status()
+                .await
+                .unwrap()
+                .success()
+        );
+        let head = git_output(&repository, &["rev-parse", "HEAD"])
+            .await
+            .unwrap()
+            .trim()
+            .to_owned();
+        let files = diff_files(&repository, &format!("{commit_id}..{head}"))
+            .await
+            .unwrap();
+        let deleted = files.iter().find(|file| file.path == "README.md").unwrap();
+        let large = files.iter().find(|file| file.path == "large.txt").unwrap();
+        assert_eq!(deleted.patch_omitted.as_deref(), Some("deleted"));
+        assert!(deleted.patch.is_empty());
+        assert_eq!(large.patch_omitted.as_deref(), Some("large"));
+        assert!(large.patch.is_empty());
+        let loaded = perform_patch(
+            &state,
+            PatchRequest {
+                owner: "lantharos".into(),
+                repository: "sty".into(),
+                base: commit_id,
+                head,
+                path: "large.txt".into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(loaded.contains("+line 1000"));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

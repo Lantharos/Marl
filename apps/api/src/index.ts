@@ -3,9 +3,9 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listRepositories, listTree, readBlob, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
+import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
 import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
-import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
+import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, claimJob, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifact, uploadLog } from './runners';
 import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
@@ -108,7 +108,7 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
-    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|threads|comments|metadata|ready|close|reopen|timeline|updates|live|state))?)?$/);
+    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|patch|threads|comments|metadata|ready|close|reopen|timeline|updates|live|state))?)?$/);
     if (pullRoute) {
       const owner = decodeURIComponent(pullRoute[1]);
       const repository = decodeURIComponent(pullRoute[2]);
@@ -121,6 +121,7 @@ const worker = {
       if (number !== null && action === 'reviews' && request.method === 'POST') return reviewPull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'merge' && request.method === 'POST') return mergePull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'diff' && request.method === 'GET') return getPullDiff(_env, principal, owner, repository, number);
+      if (number !== null && action === 'patch' && request.method === 'GET') return getPullPatch(_env, principal, owner, repository, number, url);
       if (number !== null && action === 'timeline' && request.method === 'GET') return getPullTimeline(_env, principal, owner, repository, number, url);
       if (number !== null && action === 'updates' && request.method === 'GET') return getPullUpdates(_env, principal, owner, repository, number, url);
       if (number !== null && action === 'live' && request.method === 'GET') return connectPullRealtime(request, _env, principal, owner, repository, number);
@@ -148,7 +149,11 @@ const worker = {
       const name = decodeURIComponent(encodedName);
       if (!resource && request.method === 'GET') return getRepository(_env, principal, owner, name);
       if (resource === 'branches' && request.method === 'GET') return listBranches(_env, principal, owner, name);
-      if (resource === 'commits' && request.method === 'GET') return rest ? getCommit(_env, principal, owner, name, decodeURIComponent(rest)) : listCommits(_env, principal, owner, name, url);
+      if (resource === 'commits' && request.method === 'GET') {
+        if (!rest) return listCommits(_env, principal, owner, name, url);
+        if (rest.endsWith('/patch')) return readCommitPatch(_env, principal, owner, name, decodeURIComponent(rest.slice(0, -6)), url);
+        return getCommit(_env, principal, owner, name, decodeURIComponent(rest));
+      }
       if (resource === 'tree' && request.method === 'GET') return listTree(_env, principal, owner, name, url);
       if (resource === 'blob' && rest && request.method === 'GET') {
         const separator = rest.indexOf('/');

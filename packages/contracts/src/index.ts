@@ -222,7 +222,7 @@ export interface PullRequestDiff {
   base: string;
   head: string;
   mergeBase: string;
-  files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string }>;
+  files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string; patchOmitted?: 'deleted' | 'large' }>;
   threads?: ReviewThread[];
 }
 

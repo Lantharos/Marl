@@ -10,6 +10,7 @@ export interface GitGatewayRequestMap {
   '/_sty/tree': { owner: string; repository: string; commitId: string; path: string };
   '/_sty/commit': { owner: string; repository: string; commitId: string };
   '/_sty/compare': { owner: string; repository: string; base: string; head: string };
+  '/_sty/patch': { owner: string; repository: string; base: string; head: string; path: string };
   '/_sty/merge': { operationId: string; method: string; repositoryId: string; owner: string; repository: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; title: string; author: string };
   '/_sty/pulls/pin': { owner: string; repository: string; number: number; sourceCommitId: string; targetCommitId: string };
   '/_sty/repositories/relocate': { oldOwner: string; oldRepository: string; newOwner: string; newRepository: string };
