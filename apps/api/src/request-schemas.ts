@@ -49,3 +49,4 @@ export const teamMemberBody = strictObject({ userId: identifier });
 export const repositoryCollaboratorBody = strictObject({ userId: identifier, role: repositoryRole });
 export const repositoryTeamGrantBody = strictObject({ teamId: identifier, role: repositoryRole });
 export const personalAccessTokenBody = strictObject({ name: pipe(string(), minLength(1), maxLength(120)), scopes: pipe(array(tokenScope), minLength(1), maxLength(5)), repositoryIds: optional(pipe(array(identifier), maxLength(100))), expiresDays: optional(pipe(number(), integer(), minValue(1), maxValue(365))) });
+export const profileBody = strictObject({ displayName: pipe(string(), minLength(1), maxLength(80)), username: pipe(string(), minLength(2), maxLength(39)), bio: pipe(string(), maxLength(280)), website: pipe(string(), maxLength(200)) });

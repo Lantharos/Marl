@@ -80,8 +80,8 @@ async function applicationUserByHandle(env: Env, handle: string) {
 async function ensureApplicationUser(env: Env, authUser: { id: string; name: string; email: string; image?: string | null; username?: string | null }) {
   const existing = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE').bind(authUser.id, authUser.email).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null; authUserId: string | null }>();
   if (existing) {
-    if (!existing.authUserId) await env.DB.prepare('UPDATE users SET auth_user_id=?,avatar_url=COALESCE(?,avatar_url) WHERE id=? AND auth_user_id IS NULL').bind(authUser.id, authUser.image ?? null, existing.id).run();
-    return { id: existing.id, handle: existing.handle, displayName: existing.displayName, email: existing.email, avatarUrl: authUser.image ?? existing.avatarUrl };
+    if (!existing.authUserId) await env.DB.prepare('UPDATE users SET auth_user_id=?,avatar_url=COALESCE(avatar_url,?) WHERE id=? AND auth_user_id IS NULL').bind(authUser.id, authUser.image ?? null, existing.id).run();
+    return { id: existing.id, handle: existing.handle, displayName: existing.displayName, email: existing.email, avatarUrl: existing.avatarUrl ?? authUser.image ?? null };
   }
   if (env.ENVIRONMENT === 'development') {
     const legacyHandle = authUser.username ?? authUser.email.split('@')[0].toLowerCase();

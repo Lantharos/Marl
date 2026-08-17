@@ -2,9 +2,18 @@ import type { Principal } from './auth';
 import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAccessToken } from './developer-tokens';
 import { acceptOrganizationInvitation, addTeamMember, createOrganization, createTeam, deleteTeam, getOrganizationAccess, inviteOrganizationMember, listOrganizations, removeOrganizationMember, removeTeamMember, revokeOrganizationInvitation, updateOrganization, updateOrganizationMember } from './organizations';
 import type { Env } from './platform';
+import { getProfile, readAvatar, updateProfile, uploadAvatar } from './profile';
 import { deleteRepositoryCollaborator, deleteRepositoryTeamGrant, getRepositoryAccess, putRepositoryCollaborator, putRepositoryTeamGrant } from './repository-access-api';
 
 export async function handleAccessRoute(request: Request, env: Env, principal: Principal, url: URL): Promise<Response | null> {
+  if (url.pathname === '/api/v1/profile') {
+    if (request.method === 'GET') return getProfile(env, principal);
+    if (request.method === 'PATCH') return updateProfile(request, env, principal);
+  }
+  if (url.pathname === '/api/v1/profile/avatar' && request.method === 'PUT') return uploadAvatar(request, env, principal);
+  const avatar = url.pathname.match(/^\/api\/v1\/avatars\/([^/]+)\/([^/]+)$/);
+  if (avatar && request.method === 'GET') return readAvatar(env, avatar[1], avatar[2]);
+
   if (url.pathname === '/api/v1/organizations') {
     if (request.method === 'GET') return listOrganizations(env, principal);
     if (request.method === 'POST') return createOrganization(request, env, principal);

@@ -66,6 +66,12 @@ require a recently created session. Personal access tokens are separately hashed
 shown only once, and carry explicit repository and operation scopes; they are never accepted as a
 browser step-up credential.
 
+Display names, usernames, biographies, websites, and the active avatar reference live with the
+application user in D1. Avatar bytes are validated and stored under immutable versioned keys in
+R2; replacing an avatar publishes the new reference before removing the previous object. Username
+changes update the linked authentication identity and any owned personal-organization slug in the
+same D1 batch.
+
 Verification, recovery, and organization invitation email is sent directly by the API Worker
 through a sender-restricted Cloudflare Email Service binding. Local development writes action URLs
 to the API log instead of delivering mail.

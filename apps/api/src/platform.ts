@@ -39,6 +39,7 @@ export interface R2Bucket {
   get(key: string): Promise<R2ObjectBody | null>;
   head(key: string): Promise<Omit<R2ObjectBody, 'body'> | null>;
   put(key: string, value: ReadableStream | ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+  delete(key: string): Promise<void>;
   createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }): Promise<R2MultipartUpload>;
   resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload;
 }
