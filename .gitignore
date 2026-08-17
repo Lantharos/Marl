@@ -4,6 +4,7 @@
 **/.wrangler/**
 **/build/**
 **/dist/**
+**/.dev.vars
 /.dev-web.log
 /.dev-web.err.log
 /.dev-api.log

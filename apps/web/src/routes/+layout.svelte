@@ -8,6 +8,10 @@
 </script>
 
 <NavigationProgress />
-<AppShell repositories={data.shellRepositories}>
+{#if data.shellUser}
+  <AppShell repositories={data.shellRepositories} user={data.shellUser}>
+    {@render children()}
+  </AppShell>
+{:else}
   {@render children()}
-</AppShell>
+{/if}

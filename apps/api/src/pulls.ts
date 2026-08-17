@@ -5,7 +5,7 @@ import { identifier, safeRepositoryPath, validBranchName } from './domain';
 import { pinPullRefs, requestGatewayWrite } from './git-writes';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
-import { createPullEvent, pullRepository as repo, pullSelect, pullSummary as summary, preservePullRefs, repositoryMember as membership, latestReviews, type PullRow } from './pull-context';
+import { canManageRepository as membership, createPullEvent, latestReviews, preservePullRefs, pullRepository as repo, pullSelect, pullSummary as summary, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
 import { commitPullUpdate } from './pull-realtime';
 import { commentBody, createPullBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
@@ -190,7 +190,7 @@ export async function createThread(request: Request, env: Env, principal: Princi
 
 export async function resolveThread(request: Request, env: Env, principal: Principal, threadId: string): Promise<Response> {
   const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,pull_requests.repository_id AS repositoryId,review_threads.path,COALESCE(review_threads.start_line,review_threads.line) AS startLine,review_threads.line,review_threads.resolved_at AS resolvedAt FROM review_threads JOIN pull_requests ON pull_requests.id = review_threads.pull_request_id WHERE review_threads.id = ?`).bind(threadId).first<{ id: string; pullId: string; repositoryId: string; path: string; startLine: number; line: number; resolvedAt?: string }>();
-  if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'write'))) return problem(404, 'review_thread_not_found', 'Review thread not found.');
+  if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'repository.triage'))) return problem(404, 'review_thread_not_found', 'Review thread not found.');
   const body = await readJson(request, resolveThreadBody);
   const resolved = body?.resolved !== false;
   if (resolved === Boolean(thread.resolvedAt)) return json({ resolved });
@@ -206,7 +206,7 @@ export async function resolveThread(request: Request, env: Env, principal: Princ
 
 export async function addThreadComment(request: Request, env: Env, principal: Principal, threadId: string): Promise<Response> {
   const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,pull_requests.repository_id AS repositoryId FROM review_threads JOIN pull_requests ON pull_requests.id=review_threads.pull_request_id WHERE review_threads.id=? AND pull_requests.state IN ('draft','open') AND pull_requests.locked_at IS NULL`).bind(threadId).first<{ id: string; pullId: string; repositoryId: string }>();
-  if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'write'))) return problem(404, 'review_thread_not_found', 'Review conversation not found.');
+  if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'repository.triage'))) return problem(404, 'review_thread_not_found', 'Review conversation not found.');
   const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_comment', 'A review comment is required.');
   const id = identifier('comment');

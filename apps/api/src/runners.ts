@@ -1,5 +1,5 @@
 import type { Principal } from './auth';
-import { sha256 } from './auth';
+import { requireFreshSession, sha256 } from './auth';
 import { identifier, validSlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
@@ -29,10 +29,11 @@ export async function authenticateRunner(request: Request, env: Env): Promise<Ru
 }
 
 export async function createEnrollment(request: Request, env: Env, principal: Principal): Promise<Response> {
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity before connecting a runner.');
   const body = await readJson(request, runnerEnrollmentBody);
   if (!body || typeof body.organization !== 'string') return problem(422, 'organization_required', 'Choose an organization for this runner.');
-  const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role = 'owner'`).bind(body.organization, principal.id).first<{ id: string }>();
-  if (!organization) return problem(403, 'owner_required', 'Only organization owners can connect runners.');
+  const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role IN ('owner','admin')`).bind(body.organization, principal.id).first<{ id: string }>();
+  if (!organization) return problem(403, 'admin_required', 'Only organization administrators can connect runners.');
   const token = `sty_enroll_${crypto.randomUUID().replaceAll('-', '')}`;
   const minutes = Math.min(Math.max(Number(body.expiresMinutes) || 15, 5), 60);
   const id = identifier('enrollment');
@@ -63,11 +64,13 @@ export async function registerRunner(request: Request, env: Env): Promise<Respon
 }
 
 export async function listRunners(env: Env, principal: Principal): Promise<Response> {
+  if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Runners can only be managed from a browser session.');
   const rows = await env.DB.prepare(`${runnerSelect} WHERE organization_members.user_id=? ORDER BY state,runners.name`).bind(principal.id).all<{ id: string; name: string; labelsJson: string; activeJobs: number; concurrency: number; platform: string; architecture: string; version: string; lastSeenAt: string; state: string }>();
   return json({ runners: rows.results.map(({ labelsJson, ...runner }) => ({ ...runner, labels: JSON.parse(labelsJson) })) });
 }
 
 export async function getRunner(env: Env, principal: Principal, id: string): Promise<Response> {
+  if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Runners can only be managed from a browser session.');
   const row = await env.DB.prepare(`${runnerSelect} WHERE organization_members.user_id=? AND runners.id=?`).bind(principal.id, id).first<{ id: string; name: string; labelsJson: string; activeJobs: number; concurrency: number; platform: string; architecture: string; version: string; lastSeenAt: string; state: string }>();
   if (!row) return problem(404, 'runner_not_found', 'Runner not found.');
   const { labelsJson, ...runner } = row;

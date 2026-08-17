@@ -36,3 +36,16 @@ export const runnerRegistrationBody = strictObject({ enrollmentToken: identifier
 export const completeJobBody = strictObject({ state: picklist(['success', 'failure', 'canceled']), exitCode: pipe(number(), integer()), summary: optional(shortString) });
 export const artifactUploadBody = strictObject({ name: pipe(string(), minLength(1), maxLength(160)), byteSize: pipe(number(), integer(), minValue(0), maxValue(2 * 1024 * 1024 * 1024)), contentType: optional(pipe(string(), minLength(1), maxLength(200))) });
 export const pullRealtimeUpdateBody = strictObject({ id: identifier, pullId: identifier, version: pipe(number(), integer(), minValue(1)), kind: identifier, payload: record(string(), unknown()), createdAt: identifier });
+
+const organizationRole = picklist(['admin', 'member']);
+const repositoryRole = picklist(['read', 'triage', 'write', 'maintain', 'admin']);
+const tokenScope = picklist(['repo:read', 'repo:write', 'repo:admin', 'workflow:dispatch']);
+export const createOrganizationBody = strictObject({ slug: identifier, name: pipe(string(), minLength(1), maxLength(120)), baseRepositoryRole: optional(picklist(['read', 'triage', 'write', 'maintain'])) });
+export const organizationSettingsBody = strictObject({ name: pipe(string(), minLength(1), maxLength(120)), baseRepositoryRole: optional(picklist(['read', 'triage', 'write', 'maintain'])) });
+export const organizationMemberBody = strictObject({ role: organizationRole });
+export const organizationInvitationBody = strictObject({ email: pipe(string(), minLength(3), maxLength(320)), role: organizationRole });
+export const createTeamBody = strictObject({ slug: identifier, name: pipe(string(), minLength(1), maxLength(120)), description: optional(pipe(string(), maxLength(280))) });
+export const teamMemberBody = strictObject({ userId: identifier });
+export const repositoryCollaboratorBody = strictObject({ userId: identifier, role: repositoryRole });
+export const repositoryTeamGrantBody = strictObject({ teamId: identifier, role: repositoryRole });
+export const personalAccessTokenBody = strictObject({ name: pipe(string(), minLength(1), maxLength(120)), scopes: pipe(array(tokenScope), minLength(1), maxLength(5)), repositoryIds: optional(pipe(array(identifier), maxLength(100))), expiresDays: optional(pipe(number(), integer(), minValue(1), maxValue(365))) });

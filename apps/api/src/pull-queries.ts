@@ -5,24 +5,26 @@ import { safeRepositoryPath, validBranchName } from './domain';
 import { requestGitGateway } from './git-gateway';
 import { json, problem } from './http';
 import type { Env } from './platform';
-import { latestReviews, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, preservePullRefs, repositoryMember as membership, reviewStatusFor, summarizePullRows as summarizeRows, type PullRow } from './pull-context';
+import { canManageRepository as membership, latestReviews, preservePullRefs, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, reviewStatusFor, summarizePullRows as summarizeRows, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
 import { pullUpdatesAfter } from './pull-realtime';
 import { allPullThreads, initialPullTimeline, olderPullTimeline } from './pull-timeline';
+import { authorizeRepository, repositoryListFilter } from './repository-access';
 
 export async function listAllPulls(env: Env, principal: Principal, url: URL): Promise<Response> {
   const limit = pageSize(url);
   const cursor = readCursor(url);
+  const access = repositoryListFilter(principal);
   const after = cursor ? 'AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))' : '';
-  const values = cursor ? [principal.id, cursor.value, cursor.value, cursor.id, limit + 1] : [principal.id, limit + 1];
-  const rows = await env.DB.prepare(`${pullSelect} JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organization_members.user_id=? AND pull_requests.state IN ('draft','open') ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
+  const values = cursor ? [...access.values, cursor.value, cursor.value, cursor.id, limit + 1] : [...access.values, limit + 1];
+  const rows = await env.DB.prepare(`${pullSelect} WHERE ${access.sql} AND pull_requests.state IN ('draft','open') ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
   return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor });
 }
 
 export async function listPulls(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const limit = pageSize(url);
   const cursor = readCursor(url);
   const rank = `CASE pull_requests.state WHEN 'open' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END`;
@@ -36,7 +38,7 @@ export async function listPulls(env: Env, principal: Principal, owner: string, n
 
 export async function getPull(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [reviews, checks, unresolvedThreads, rule, commits, labels, availableLabels, assignees, availableAssignees, timeline] = await Promise.all([
@@ -66,7 +68,7 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
 
 export async function getPullTimeline(env: Env, principal: Principal, owner: string, name: string, number: number, url: URL): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const before = Number(url.searchParams.get('before'));
@@ -77,7 +79,7 @@ export async function getPullTimeline(env: Env, principal: Principal, owner: str
 
 export async function getPullUpdates(env: Env, principal: Principal, owner: string, name: string, number: number, url: URL): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id,realtime_version AS realtimeVersion FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; realtimeVersion: number }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const after = Number(url.searchParams.get('after') ?? 0);
@@ -88,7 +90,7 @@ export async function getPullUpdates(env: Env, principal: Principal, owner: stri
 
 export async function getPullState(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? AND pull_requests.number=?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [checks, reviews, unresolvedThreads, rule] = await Promise.all([
@@ -107,7 +109,7 @@ export async function getPullState(env: Env, principal: Principal, owner: string
 export async function connectPullRealtime(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   if (request.headers.get('upgrade') !== 'websocket') return problem(426, 'websocket_required', 'This endpoint requires a WebSocket connection.');
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   return env.PULL_ROOMS.get(env.PULL_ROOMS.idFromName(pull.id)).fetch(request);
@@ -115,7 +117,7 @@ export async function connectPullRealtime(request: Request, env: Env, principal:
 
 export async function getPullDiff(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id,source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; sourceCommitId: string; targetCommitId: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const response = await requestGitGateway(env, '/_sty/compare', { owner, repository: name, base: pull.targetCommitId, head: pull.sourceCommitId }, { attempts: 2 });
@@ -126,7 +128,7 @@ export async function getPullDiff(env: Env, principal: Principal, owner: string,
 
 export async function getPullPatch(env: Env, principal: Principal, owner: string, name: string, number: number, url: URL): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const path = url.searchParams.get('path') ?? '';
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
   const pull = await env.DB.prepare('SELECT source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ sourceCommitId: string; targetCommitId: string }>();
@@ -138,7 +140,7 @@ export async function getPullPatch(env: Env, principal: Principal, owner: string
 
 export async function compareBranches(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(repository.visibility === 'public' || await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const base = url.searchParams.get('base');
   const head = url.searchParams.get('head');
   if (!validBranchName(base) || !validBranchName(head) || base === head) return problem(422, 'invalid_comparison', 'Choose two different valid branches.');

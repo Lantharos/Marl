@@ -12,14 +12,18 @@
     "@sveltejs/adapter-cloudflare": "^7.2.8",
     "@sveltejs/kit": "^2.57.0",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/qrcode": "^1.5.6",
     "svelte": "^5.55.2",
     "svelte-check": "^4.4.6",
     "typescript": "^6.0.2",
     "vite": "^8.0.7"
   },
   "dependencies": {
+    "@better-auth/passkey": "1.6.29",
     "@sty/contracts": "workspace:*",
+    "better-auth": "1.6.29",
     "lucide-svelte": "^1.0.1",
-    "marked": "^18.0.9"
+    "marked": "^18.0.9",
+    "qrcode": "^1.5.4"
   }
 }

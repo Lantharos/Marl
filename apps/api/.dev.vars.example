@@ -1,0 +1,6 @@
+AUTH_SECRET=replace-with-at-least-32-random-bytes
+PUBLIC_URL=http://127.0.0.1:42617
+
+# Optional. Ave must be linked from an existing Sty account.
+AVE_CLIENT_ID=
+AVE_CLIENT_SECRET=

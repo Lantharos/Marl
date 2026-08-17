@@ -52,6 +52,27 @@ leases. Each job has a hibernating realtime room for new log frames, while persi
 pages recover anything missed during disconnects. Completed artifacts are loaded once, after the
 run reaches a terminal state.
 
+## Identity and access
+
+Sty owns its identity database and sessions. Email and password are the recovery-capable root
+credential, while passkeys and authenticator-based two-factor authentication strengthen the same
+account. Ave is an optional, explicitly linked OpenID Connect identity; it cannot create a Sty
+account or implicitly attach itself by matching an email address. An Ave outage therefore cannot
+prevent local account recovery or create a dependency cycle when Ave itself is hosted on Sty.
+
+Browser sessions use secure, HTTP-only cookies. Sensitive changes such as repository deletion,
+ownership transfer, organization role changes, runner enrollment, and developer-token management
+require a recently created session. Personal access tokens are separately hashed, expire, are
+shown only once, and carry explicit repository and operation scopes; they are never accepted as a
+browser step-up credential.
+
+Authorization has one repository capability resolver. It combines organization ownership, the
+organization's base repository role, direct collaborators, team grants, repository visibility,
+and token restrictions into `read`, `triage`, `push`, `maintain`, and `admin` decisions. Feature
+handlers do not recreate membership SQL or infer permissions from the UI. Organization owners and
+administrators manage invitations and teams, only owners change organization-wide policy, and
+personal organizations cannot gain additional members.
+
 ## Git and the local core
 
 Git compatibility is non-negotiable. Sty hosts ordinary Git repositories; a developer can

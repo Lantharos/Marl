@@ -19,6 +19,10 @@ Install JavaScript dependencies once:
 bun install
 ```
 
+Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECRET` before
+creating an account. Ave credentials are optional; local password and passkey sign-in work without
+them.
+
 Start the web application, API, and local Git gateway together:
 
 ```powershell

@@ -4,7 +4,7 @@ import { pageResult, pageSize, readCursor } from './cursor';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { notifyPullsForCommit } from './pull-realtime';
-import { authorizeRepository, authorizeRepositoryId, type RepositoryCapability } from './repository-access';
+import { authorizeRepository, authorizeRepositoryId, repositoryListFilter, type RepositoryCapability } from './repository-access';
 
 type Repository = { id: string; organizationId: string; owner: string; name: string };
 export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
@@ -13,7 +13,7 @@ export type RunJob = { key: string; name: string; labels: string[]; needs: strin
 type QueueRun = { repositoryId: string; workflowId?: string; name: string; trigger: 'workflow_dispatch' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[] };
 export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
-async function repository(env: Env, principal: Principal, owner: string, name: string, capability: RepositoryCapability = 'read'): Promise<Repository | null> {
+async function repository(env: Env, principal: Principal, owner: string, name: string, capability: RepositoryCapability = 'repository.read'): Promise<Repository | null> {
   return authorizeRepository(env, principal, owner, name, capability);
 }
 
@@ -28,9 +28,10 @@ export function summarizeRun(row: Record<string, unknown>) {
 export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
   const limit = pageSize(url);
   const cursor = readCursor(url);
+  const access = repositoryListFilter(principal);
   const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
-  const values = cursor ? [principal.id, cursor.value, cursor.value, cursor.id, limit + 1] : [principal.id, limit + 1];
-  const rows = await env.DB.prepare(runSelect(`JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organization_members.user_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const values = cursor ? [...access.values, cursor.value, cursor.value, cursor.id, limit + 1] : [...access.values, limit + 1];
+  const rows = await env.DB.prepare(runSelect(`WHERE ${access.sql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
   const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
   return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
 }
@@ -152,7 +153,7 @@ export async function getRunState(env: Env, principal: Principal, owner: string,
 }
 
 export async function cancelRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
-  const repo = await repository(env, principal, owner, name, 'write');
+  const repo = await repository(env, principal, owner, name, 'repository.push');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const run = await env.DB.prepare(`SELECT id,state,commit_id AS commitId FROM runs WHERE repository_id=? AND number=?`).bind(repo.id, number).first<{ id: string; state: string; commitId: string }>();
   if (!run || !['queued', 'running'].includes(run.state)) return problem(409, 'run_not_active', 'Only queued or running runs can be canceled.');
@@ -167,7 +168,7 @@ export async function cancelRun(env: Env, principal: Principal, owner: string, n
 }
 
 export async function retryRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
-  const repo = await repository(env, principal, owner, name, 'write');
+  const repo = await repository(env, principal, owner, name, 'repository.push');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const previous = await env.DB.prepare(`SELECT id,workflow_id AS workflowId,name,branch,commit_id AS commitId FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; workflowId?: string; name: string; branch: string; commitId: string }>();
   if (!previous) return problem(409, 'run_not_retryable', 'This run cannot be retried yet.');
@@ -186,7 +187,7 @@ export async function retryRun(env: Env, principal: Principal, owner: string, na
 
 export async function readJobLogs(env: Env, principal: Principal, jobId: string, url: URL): Promise<Response> {
   const job = await env.DB.prepare(`SELECT jobs.id,runs.repository_id AS repositoryId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=?`).bind(jobId).first<{ id: string; repositoryId: string }>();
-  if (!job || !(await authorizeRepositoryId(env, principal, job.repositoryId, 'member'))) return problem(404, 'job_not_found', 'Job not found.');
+  if (!job || !(await authorizeRepositoryId(env, principal, job.repositoryId, 'repository.read'))) return problem(404, 'job_not_found', 'Job not found.');
   const after = Number(url.searchParams.get('after') ?? -1);
   if (!Number.isSafeInteger(after) || after < -1) return problem(422, 'invalid_log_cursor', 'Log cursor is invalid.');
   const chunks = await env.DB.prepare('SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT 5').bind(jobId, after).all<{ sequence: number; objectKey: string }>();
@@ -201,7 +202,7 @@ export async function readJobLogs(env: Env, principal: Principal, jobId: string,
 
 export async function downloadArtifact(env: Env, principal: Principal, artifactId: string): Promise<Response> {
   const artifact = await env.DB.prepare(`SELECT artifacts.name,artifacts.object_key AS objectKey,artifacts.content_type AS contentType,runs.repository_id AS repositoryId FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id JOIN runs ON runs.id=jobs.run_id WHERE artifacts.id=?`).bind(artifactId).first<{ name: string; objectKey: string; contentType: string; repositoryId: string }>();
-  if (!artifact || !(await authorizeRepositoryId(env, principal, artifact.repositoryId, 'member'))) return problem(404, 'artifact_not_found', 'Artifact not found.');
+  if (!artifact || !(await authorizeRepositoryId(env, principal, artifact.repositoryId, 'repository.read'))) return problem(404, 'artifact_not_found', 'Artifact not found.');
   const object = await env.OBJECTS.get(artifact.objectKey);
   if (!object) return problem(502, 'artifact_missing', 'Artifact bytes are missing.');
   return new Response(object.body, { headers: { 'content-type': artifact.contentType, 'content-disposition': `attachment; filename="${artifact.name.replaceAll('"', '')}"`, 'content-length': String(object.size) } });

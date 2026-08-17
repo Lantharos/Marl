@@ -1,4 +1,6 @@
 import { authenticate } from './auth';
+import { handleAccessRoute } from './access-routes';
+import { createAuth } from './auth/instance';
 import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
@@ -19,7 +21,10 @@ const worker = {
       return json({ service: 'sty-api', status: 'ok' });
     }
 
+    if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) return createAuth(_env, request).handler(request);
+
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Sty API route does not exist.');
+    if (request.method === 'GET' && url.pathname === '/api/v1/auth/methods') return json({ password: true, passkey: true, ave: Boolean(_env.AVE_CLIENT_ID && _env.AVE_CLIENT_SECRET), emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
     const gatewayTrusted = request.headers.get('x-sty-gateway-token') === (_env.GIT_GATEWAY_TOKEN ?? (_env.ENVIRONMENT === 'development' ? 'sty-local' : ''));
     const principal = await authenticate(request, _env);
     const runner = await authenticateRunner(request, _env);
@@ -59,6 +64,10 @@ const worker = {
       return indexGit(request, _env, principal, gatewayTrusted);
     }
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Sty API.');
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });
+    const accessRoute = await handleAccessRoute(request, _env, principal, url);
+    if (accessRoute) return accessRoute;
 
     if (request.method === 'GET' && url.pathname === '/api/v1/dashboard') return getDashboard(_env, principal);
     if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal, url);

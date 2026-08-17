@@ -1,5 +1,5 @@
 import { parse } from 'yaml';
-import type { Principal } from './auth';
+import { principalHasScope, type Principal } from './auth';
 import { auditStatement } from './audit';
 import { identifier } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
@@ -253,7 +253,7 @@ async function workflowRows(env: Env, repositoryId: string, workflowId?: string)
 }
 
 export async function listWorkflows(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const repository = await authorizeRepository(env, principal, owner, name, 'read');
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const rows = await workflowRows(env, repository.id);
   const lastRunIds = rows.map((row) => row.lastRunId).filter((id): id is string => typeof id === 'string');
@@ -267,7 +267,7 @@ export async function listWorkflows(env: Env, principal: Principal, owner: strin
 }
 
 export async function getWorkflow(env: Env, principal: Principal, owner: string, name: string, workflowId: string, url: URL): Promise<Response> {
-  const repository = await authorizeRepository(env, principal, owner, name, 'read');
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const workflow = (await workflowRows(env, repository.id, workflowId))[0];
   if (!workflow) return problem(404, 'workflow_not_found', 'Workflow not found.');
@@ -281,7 +281,8 @@ export async function getWorkflow(env: Env, principal: Principal, owner: string,
 }
 
 export async function dispatchWorkflow(env: Env, principal: Principal, owner: string, name: string, workflowId: string): Promise<Response> {
-  const repository = await authorizeRepository(env, principal, owner, name, 'write');
+  if (!principalHasScope(principal, 'workflow:dispatch')) return problem(403, 'token_scope_required', 'This token cannot dispatch workflows.');
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.push');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const workflow = (await workflowRows(env, repository.id, workflowId))[0];
   if (!workflow || !workflow.active || workflow.status !== 'valid' || !workflow.jobsJson) return problem(409, 'workflow_not_runnable', 'This workflow is not runnable.');

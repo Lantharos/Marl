@@ -5,12 +5,12 @@
   import { dismissable } from '$lib/actions/dismissable';
 
   type Option = { value: string; label: string; description?: string };
-  let { value = $bindable(), options, ariaLabel, onchange }: { value: string; options: Option[]; ariaLabel: string; onchange?: () => void | Promise<void> } = $props();
+  let { value = $bindable(), options, ariaLabel, onchange }: { value: string; options: Option[]; ariaLabel: string; onchange?: (value: string) => void | Promise<void> } = $props();
   let open = $state(false);
   let activeIndex = $state(0);
   const selected = $derived(options.find((option) => option.value === value) ?? options[0]);
 
-  async function choose(option: Option) { value = option.value; open = false; await tick(); await onchange?.(); }
+  async function choose(option: Option) { value = option.value; open = false; await tick(); await onchange?.(value); }
   function toggle() { open = !open; activeIndex = Math.max(0, options.findIndex((option) => option.value === value)); }
   function keydown(event: KeyboardEvent) {
     if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); toggle(); return; }

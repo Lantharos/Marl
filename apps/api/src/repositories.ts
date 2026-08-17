@@ -1,6 +1,6 @@
 import type { RepositorySummary } from '@sty/contracts';
 import { auditStatement } from './audit';
-import type { Principal } from './auth';
+import { requireFreshSession, type Principal } from './auth';
 import { identifier, safeRepositoryPath, validBranchName, validSlug, validVisibility } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
 import { pinPullRefs } from './git-writes';
@@ -10,7 +10,7 @@ import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
-import { authorizeRepository, authorizeRepositoryId, lookupRepository } from './repository-access';
+import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
 
 type RepositoryRow = RepositorySummary & { organizationId: string; defaultBranch: string; archivedAt: string | null; deletionScheduledAt: string | null };
 
@@ -19,8 +19,8 @@ const selectRepository = `SELECT repositories.id, organizations.slug AS owner, r
 export async function authorizeGit(env: Env, principal: Principal | null, owner: string, name: string, service: string, gatewayTrusted = false): Promise<Response> {
   const repo = await lookupRepository(env, owner, name, principal);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const read = gatewayTrusted || repo.visibility === 'public' || Boolean(repo.role);
-  const write = (gatewayTrusted || Boolean(repo.role)) && (service === 'git-receive-pack');
+  const read = gatewayTrusted || Boolean(await authorizeRepository(env, principal, owner, name, 'repository.read'));
+  const write = service === 'git-receive-pack' && (gatewayTrusted || Boolean(await authorizeRepository(env, principal, owner, name, 'repository.push')));
   if (repo.deletionScheduledAt) return problem(404, 'repository_not_found', 'Repository not found.');
   if (repo.archivedAt && service === 'git-receive-pack') return problem(409, 'repository_archived', 'Archived repositories are read-only.');
   if (!read || (service === 'git-receive-pack' && !write)) return problem(principal ? 403 : 401, 'git_access_denied', 'You do not have access to this repository.');
@@ -36,7 +36,7 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const body = await readJson(request, gitIndexBody);
   if (!body || typeof body.repositoryId !== 'string' || !Array.isArray(body.commits) || !Array.isArray(body.branches) || !Array.isArray(body.entries) || !Array.isArray(body.changes)) return problem(422, 'invalid_git_index', 'Git index payload is invalid.');
   if (body.commits.length > 250 || body.changes.length > 250 || body.branches.length > 250 || body.entries.length > 1_000) return problem(413, 'git_index_page_too_large', 'Git index pages exceed the negotiated batch size.');
-  const owned = gatewayTrusted || (principal && await authorizeRepositoryId(env, principal, body.repositoryId, 'write'));
+  const owned = gatewayTrusted || (principal && await authorizeRepositoryId(env, principal, body.repositoryId, 'repository.push'));
   if (!owned) return problem(403, 'git_access_denied', 'You cannot index this repository.');
   const changeIds = body.changes.flatMap((value) => value && typeof value === 'object' && typeof (value as Record<string, unknown>).commitId === 'string' ? [(value as Record<string, unknown>).commitId as string] : []);
   const storedChanges = await queryInChunks(changeIds, 90, (chunk) => env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ commitId: string }>());
@@ -133,20 +133,22 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
 export async function listRepositories(env: Env, principal: Principal, url: URL): Promise<Response> {
   const limit = pageSize(url);
   const cursor = readCursor(url);
+  const access = repositoryListFilter(principal);
   const after = cursor ? 'AND (repositories.updated_at<? OR (repositories.updated_at=? AND repositories.id<?))' : '';
-  const values = cursor ? [principal.id, cursor.value, cursor.value, cursor.id, limit + 1] : [principal.id, limit + 1];
-  const result = await env.DB.prepare(`${selectRepository} JOIN organization_members ON organization_members.organization_id=repositories.organization_id WHERE organization_members.user_id=? AND repositories.deletion_scheduled_at IS NULL ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`).bind(...values).all<RepositoryRow>();
+  const values = cursor ? [...access.values, cursor.value, cursor.value, cursor.id, limit + 1] : [...access.values, limit + 1];
+  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`).bind(...values).all<RepositoryRow>();
   const page = pageResult(result.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
   return json({ repositories: page.items.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo), nextCursor: page.nextCursor });
 }
 
 export async function createRepository(request: Request, env: Env, principal: Principal): Promise<Response> {
+  if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Repositories must be created from a browser session.');
   const body = await readJson(request, createRepositoryBody);
   if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
   const { owner, name, description = '', visibility = 'private' } = body;
   if (!validSlug(owner) || !validSlug(name)) return problem(422, 'invalid_repository_name', 'Owner and repository names must be URL-safe slugs.');
   if (typeof description !== 'string' || description.length > 280 || !validVisibility(visibility)) return problem(422, 'invalid_repository', 'Description or visibility is invalid.');
-  const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role = 'owner'`).bind(owner, principal.id).first<{ id: string }>();
+  const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role IN ('owner','admin')`).bind(owner, principal.id).first<{ id: string }>();
   if (!organization) return problem(403, 'owner_required', 'You cannot create repositories for this owner.');
   const id = identifier('repo');
   const defaults = [
@@ -169,21 +171,21 @@ export async function createRepository(request: Request, env: Env, principal: Pr
 }
 
 export async function getRepository(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const { organizationId: _, role: __, ...visible } = repo;
   return json({ repository: { ...visible, cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git` } });
 }
 
 export async function getRepositorySettings(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const access = await authorizeRepository(env, principal, owner, name, 'member');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.maintain');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const organizations = await env.DB.prepare(`SELECT organizations.slug,organizations.name FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organization_members.role='owner' ORDER BY organizations.slug`).bind(principal.id).all<{ slug: string; name: string }>();
   return json({ repository: access, organizations: organizations.results });
 }
 
 export async function updateRepositorySettings(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const access = await authorizeRepository(env, principal, owner, name, 'admin');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const body = await readJson(request, repositorySettingsBody);
   if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
@@ -204,8 +206,9 @@ export async function updateRepositorySettings(request: Request, env: Env, princ
 }
 
 export async function renameRepository(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const access = await authorizeRepository(env, principal, owner, name, 'admin');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before renaming this repository.');
   const body = await readJson(request, renameRepositoryBody);
   if (!body || !validSlug(body.name)) return problem(422, 'invalid_repository_name', 'Repository names must be URL-safe slugs.');
   const moved = await relocateStorage(env, owner, name, owner, body.name);
@@ -216,8 +219,9 @@ export async function renameRepository(request: Request, env: Env, principal: Pr
 }
 
 export async function transferRepository(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const access = await authorizeRepository(env, principal, owner, name, 'admin');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before transferring this repository.');
   const body = await readJson(request, transferRepositoryBody);
   if (!body || !validSlug(body.owner)) return problem(422, 'invalid_owner', 'Choose a valid destination owner.');
   const destination = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organizations.slug=? COLLATE NOCASE AND organization_members.user_id=? AND organization_members.role='owner'`).bind(body.owner, principal.id).first<{ id: string }>();
@@ -230,8 +234,9 @@ export async function transferRepository(request: Request, env: Env, principal: 
 }
 
 export async function scheduleRepositoryDeletion(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const access = await authorizeRepository(env, principal, owner, name, 'admin');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before deleting this repository.');
   const body = await readJson(request, deleteRepositoryBody);
   if (!body || body.confirmation !== `${owner}/${name}`) return problem(422, 'confirmation_mismatch', 'Type the full repository name to confirm deletion.');
   const deletionScheduledAt = new Date(Date.now() + 30 * 86400000).toISOString();
@@ -247,14 +252,14 @@ function relocateStorage(env: Env, oldOwner: string, oldRepository: string, newO
 }
 
 export async function listBranches(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const result = await env.DB.prepare(`SELECT branches.name, branches.commit_id AS commitId, commits.title, branches.updated_at AS updatedAt FROM branches JOIN commits ON commits.repository_id = branches.repository_id AND commits.id = branches.commit_id WHERE branches.repository_id = ? ORDER BY branches.name`).bind(repo.id).all();
   return json({ defaultBranch: repo.defaultBranch, branches: result.results });
 }
 
 export async function listCommits(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const limit = pageSize(url, 50, 100);
   const cursor = readCursor(url);
@@ -270,7 +275,7 @@ export async function listCommits(env: Env, principal: Principal, owner: string,
 }
 
 export async function getCommit(env: Env, principal: Principal, owner: string, name: string, commitId: string): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
   const indexed = await env.DB.prepare('SELECT id FROM commits WHERE repository_id=? AND id=?').bind(repo.id, commitId).first();
@@ -281,7 +286,7 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
 }
 
 export async function readCommitPatch(env: Env, principal: Principal, owner: string, name: string, commitId: string, url: URL): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const path = url.searchParams.get('path') ?? '';
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
@@ -297,7 +302,7 @@ export async function readCommitPatch(env: Env, principal: Principal, owner: str
 }
 
 export async function listTree(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const revision = url.searchParams.get('revision') ?? repo.defaultBranch;
   const parentPath = url.searchParams.get('path') ?? '';
@@ -324,7 +329,7 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
 }
 
 export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string, ctx: ExecutionContext): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'read');
+  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
   const resolved = await resolveRevision(env, repo.id, revision);

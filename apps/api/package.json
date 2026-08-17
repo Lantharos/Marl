@@ -16,6 +16,9 @@
     "wrangler": "^4.85.0"
   },
   "dependencies": {
+    "@better-auth/passkey": "1.6.29",
+    "better-auth": "1.6.29",
+    "drizzle-orm": "0.45.2",
     "valibot": "^1.4.2",
     "yaml": "^2.9.0"
   }

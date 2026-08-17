@@ -27,8 +27,8 @@ export async function pullRepository(env: Env, owner: string, name: string): Pro
   return repository ? { id: repository.id, owner: repository.owner, name: repository.name, visibility: repository.visibility, organizationId: repository.organizationId } : null;
 }
 
-export async function repositoryMember(env: Env, principal: Principal, repository: PullRepository): Promise<boolean> {
-  return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'write'));
+export async function canManageRepository(env: Env, principal: Principal, repository: PullRepository): Promise<boolean> {
+  return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'repository.triage'));
 }
 
 export function reviewStatusFor(pull: PullRow, rule: BranchRule, reviews: RequirementReview[]): ReviewStatus {

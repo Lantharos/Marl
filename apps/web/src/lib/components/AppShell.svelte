@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import { onMount, tick } from 'svelte';
   import type { RepositorySummary } from '@sty/contracts';
@@ -17,11 +18,14 @@
   import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
   import BrandMark from './BrandMark.svelte';
+  import { authClient } from '$lib/auth-client';
 
   type CommandKind = 'home' | 'repository' | 'pull' | 'run' | 'runner' | 'create';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
-  let { repositories, children } = $props<{ repositories: RepositorySummary[]; children: import('svelte').Snippet }>();
+  type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
+  let { repositories, user, children } = $props<{ repositories: RepositorySummary[]; user: ShellUser; children: import('svelte').Snippet }>();
+  const initial = $derived((user.displayName || user.handle).slice(0, 1).toUpperCase());
   let theme = $state<'light' | 'dark'>('dark');
   let searchOpen = $state(false);
   let mobileOpen = $state(false);
@@ -102,6 +106,12 @@
     await goto(command.href);
   }
 
+  async function signOut() {
+    await authClient.signOut();
+    await invalidateAll();
+    await goto('/sign-in');
+  }
+
   async function commandKeydown(event: KeyboardEvent) {
     if (!results.length) return;
     if (event.key === 'ArrowDown') { event.preventDefault(); selectedIndex = (selectedIndex + 1) % results.length; }
@@ -131,8 +141,8 @@
         {#if createOpen}<div class="popover create-menu"><a href="/repositories/new" onclick={() => (createOpen = false)}><BookOpen size={15} /><span><strong>Repository</strong><small>Start or import code</small></span></a><a href="/pulls/new" onclick={() => (createOpen = false)}><GitPullRequest size={15} /><span><strong>Pull request</strong><small>Put a branch up for review</small></span></a></div>{/if}
       </div>
       <div class="menu-anchor" use:dismissable={() => (profileOpen = false)}>
-        <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}>K</button>
-        {#if profileOpen}<div class="popover profile-menu"><div><span class="avatar">K</span><span><strong>Kristof Imeri</strong><small>@kristof</small></span></div><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button></div>{/if}
+        <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}>{initial}</button>
+        {#if profileOpen}<div class="popover profile-menu"><div><span class="avatar">{initial}</span><span><strong>{user.displayName}</strong><small>@{user.handle}</small></span></div><a href="/settings/account" onclick={() => (profileOpen = false)}><span><strong>Account settings</strong><small>Security and developer access</small></span></a><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button><button onclick={signOut}>Sign out</button></div>{/if}
       </div>
       <button class="mobile-toggle" aria-label="Toggle navigation" onclick={() => (mobileOpen = !mobileOpen)}>{#if mobileOpen}<X size={18} />{:else}<Menu size={18} />{/if}</button>
     </div>

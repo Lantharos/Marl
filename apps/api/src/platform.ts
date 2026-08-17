@@ -50,6 +50,11 @@ export interface Env {
   GIT_GATEWAY_URL: string;
   GIT_PUBLIC_URL?: string;
   GIT_GATEWAY_TOKEN?: string;
+  PUBLIC_URL?: string;
+  AUTH_SECRET?: string;
+  AUTH_MAILER?: Fetcher;
+  AVE_CLIENT_ID?: string;
+  AVE_CLIENT_SECRET?: string;
   GIT_EDGE: Fetcher;
   PULL_ROOMS: DurableObjectNamespace;
   RUN_ROOMS: DurableObjectNamespace;

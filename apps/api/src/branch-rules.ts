@@ -37,14 +37,14 @@ export async function branchRulesFor(env: Env, targets: Array<{ repositoryId: st
 }
 
 export async function listBranchRules(env: Env, principal: Principal, owner: string, name: string) {
-  const access = await authorizeRepository(env, principal, owner, name, 'member');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const rows = await env.DB.prepare(`SELECT pattern,required_approvals AS requiredApprovals,require_checks AS requireChecks,require_conversations AS requireConversations,dismiss_stale_reviews AS dismissStaleReviews,allowed_merge_methods_json AS allowedMergeMethodsJson FROM branch_rules WHERE repository_id=? ORDER BY pattern`).bind(access.id).all<RuleRow>();
   return json({ branchRules: rows.results.map(mapRule) });
 }
 
 export async function putBranchRule(request: Request, env: Env, principal: Principal, owner: string, name: string) {
-  const access = await authorizeRepository(env, principal, owner, name, 'admin');
+  const access = await authorizeRepository(env, principal, owner, name, 'repository.maintain');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const body = await readJson(request, branchRuleBody);
   const methods = Array.isArray(body?.allowedMergeMethods) ? [...new Set(body.allowedMergeMethods)] : [];
