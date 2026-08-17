@@ -131,7 +131,7 @@
               <strong>{item.name}</strong>
             </span>
             <span class="file-message">{item.message}</span>
-            {#if item.updatedAt}<Time value={item.updatedAt} />{/if}
+            {#if item.updatedAt}<Time class="right" value={item.updatedAt} />{/if}
           </a>
         {:else}<div class="empty-tree">{liveError ? 'Repository files could not be loaded.' : 'This branch is empty.'}</div>{/each}
       </div>

@@ -34,7 +34,7 @@
 
 <article class="timeline-event {event.kind}">
   <span class="icon">{#if event.kind === 'locked'}<Lock size={14} />{:else if event.kind === 'unlocked'}<Unlock size={14} />{:else if event.kind.includes('label')}<Tag size={14} />{:else if event.kind.includes('assigned')}<UserRound size={14} />{:else if event.kind === 'title_changed' || event.kind === 'description_changed'}<Pencil size={14} />{:else if event.kind === 'merged'}<GitMerge size={14} />{:else if event.kind === 'closed'}<X size={14} />{:else if event.kind === 'reopened'}<RotateCcw size={14} />{:else}<GitPullRequest size={14} />{/if}</span>
-  <p><strong>{event.actor}</strong> {message}<Time value={event.createdAt} /></p>
+  <p><strong>{event.actor}</strong> {message}<Time class="end" value={event.createdAt} /></p>
 </article>
 
 <style>
