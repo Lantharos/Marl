@@ -36,15 +36,37 @@ for (const name of selected) console.log(`  ${services[name].label}`);
 
 if (requested === '--plan') process.exit(0);
 
+const workspace = import.meta.dir.replace(/[\\/]scripts$/, '');
+
+if (selected.includes('api')) {
+  console.log('  data      preparing local D1');
+  const commands = [
+    ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'sty', '--local'],
+    ['bunx', 'wrangler', 'd1', 'execute', 'sty', '--local', '--file=seed.sql']
+  ];
+  for (const command of commands) {
+    const result = Bun.spawnSync(command, {
+      cwd: `${workspace}/apps/api`,
+      env: { ...process.env, CI: 'true' },
+      stdin: 'inherit',
+      stdout: 'inherit',
+      stderr: 'inherit',
+      windowsHide: process.platform === 'win32'
+    });
+    if (result.exitCode !== 0) process.exit(result.exitCode);
+  }
+}
+
 const children = selected.map((name) => ({
   name,
   process: Bun.spawn(services[name].command, {
-    cwd: import.meta.dir.replace(/[\\/]scripts$/, ''),
+    cwd: workspace,
     env: process.env,
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
-    detached: true
+    detached: true,
+    windowsHide: process.platform === 'win32'
   })
 }));
 
