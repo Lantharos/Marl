@@ -1,6 +1,6 @@
 import { authenticate } from './auth';
 import { handleAccessRoute } from './access-routes';
-import { createAuth } from './auth/instance';
+import { handleAuth } from './auth/handler';
 import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
@@ -21,7 +21,7 @@ const worker = {
       return json({ service: 'sty-api', status: 'ok' });
     }
 
-    if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) return createAuth(_env, request).handler(request);
+    if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) return handleAuth(request, _env);
 
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Sty API route does not exist.');
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/methods') return json({ password: true, passkey: true, ave: Boolean(_env.AVE_CLIENT_ID && _env.AVE_CLIENT_SECRET), emailVerificationRequired: _env.ENVIRONMENT !== 'development' });

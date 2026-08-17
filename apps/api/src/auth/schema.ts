@@ -75,7 +75,8 @@ export const twoFactor = sqliteTable('auth_two_factor', {
 });
 
 export const rateLimit = sqliteTable('auth_rate_limit', {
-  key: text('key').primaryKey(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
   count: integer('count').notNull(),
   lastRequest: integer('last_request').notNull()
 });
