@@ -3,6 +3,7 @@
   import Lock from 'lucide-svelte/icons/lock';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
   const items = $derived(data.repositories as RepositorySummary[]);
@@ -22,7 +23,7 @@
   <FilterBar placeholder="Find a repository" tabs={['All', 'Public', 'Private']} bind:active={activeFilter} bind:query />
   <section class="list" aria-label="Repositories">
     {#each filteredItems as repository}
-      <a class="row" href="/{repository.owner}/{repository.name}"><span class="avatar">{repository.name[0].toLowerCase()}</span><span class="main"><strong><i>{repository.owner}/</i>{repository.name}</strong><p>{repository.description || 'No description yet.'}</p><small><Lock size={9} />{repository.visibility}</small></span><time>{repository.updatedAt}</time></a>
+      <a class="row" href="/{repository.owner}/{repository.name}"><span class="avatar">{repository.name[0].toLowerCase()}</span><span class="main"><strong><i>{repository.owner}/</i>{repository.name}</strong><p>{repository.description || 'No description yet.'}</p><small><Lock size={9} />{repository.visibility}</small></span><Time value={repository.updatedAt} /></a>
     {:else}<div class="empty"><strong>No matching repositories</strong><p>Try a different name or visibility.</p></div>{/each}
   </section>
 </main>

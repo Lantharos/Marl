@@ -4,6 +4,7 @@
   import ArrowUp from 'lucide-svelte/icons/arrow-up';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import Search from 'lucide-svelte/icons/search';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -19,7 +20,7 @@
 <label class="search"><Search size={14} /><input bind:value={query} placeholder="Find a branch" /></label>
 <section class="list">
   {#each visible as branch}
-    <div class="row"><span class="icon"><GitBranch size={16} /></span><span class="main"><a href="{base}/tree/{branch.name}">{branch.name}</a><small><code>{branch.commit}</code> {branch.title} · {branch.updatedAt}</small></span>{#if branch.isDefault}<span class="default">Default</span>{:else}<span class="distance"><i><ArrowUp size={11} />{branch.ahead}</i><i><ArrowDown size={11} />{branch.behind}</i></span><a class="compare" href="/pulls/new?repository={$page.params.owner}/{$page.params.repo}">Compare</a>{/if}</div>
+    <div class="row"><span class="icon"><GitBranch size={16} /></span><span class="main"><a href="{base}/tree/{branch.name}">{branch.name}</a><small><code>{branch.commit}</code> {branch.title} · <Time value={branch.updatedAt} /></small></span>{#if branch.isDefault}<span class="default">Default</span>{:else}<span class="distance"><i><ArrowUp size={11} />{branch.ahead}</i><i><ArrowDown size={11} />{branch.behind}</i></span><a class="compare" href="/pulls/new?repository={$page.params.owner}/{$page.params.repo}">Compare</a>{/if}</div>
   {/each}
 </section>
 

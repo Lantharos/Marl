@@ -10,6 +10,7 @@
   import Search from 'lucide-svelte/icons/search';
   import Timer from 'lucide-svelte/icons/timer';
   import Zap from 'lucide-svelte/icons/zap';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -21,13 +22,6 @@
 
   function triggerLabel(trigger: WorkflowTrigger) {
     return trigger === 'workflow_dispatch' ? 'Manual' : trigger === 'pull_request' ? 'Pull request' : trigger[0].toUpperCase() + trigger.slice(1);
-  }
-  function elapsed(value: string) {
-    const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return `${Math.floor(seconds / 86400)}d ago`;
   }
 </script>
 
@@ -55,7 +49,7 @@
       <span class="latest">
         {#if workflow.lastRun}
           <span class="run-state {workflow.lastRun.state}">{#if ['queued', 'running'].includes(workflow.lastRun.state)}<CircleDot size={14} />{:else if workflow.lastRun.state === 'success'}<CircleCheck size={14} />{:else}<CircleAlert size={14} />{/if}</span>
-          <span><strong>{workflow.lastRun.state}</strong><small>#{workflow.lastRun.number} · {elapsed(workflow.lastRun.queuedAt)}</small></span>
+          <span><strong>{workflow.lastRun.state}</strong><small>#{workflow.lastRun.number} · <Time value={workflow.lastRun.queuedAt} /></small></span>
         {:else if workflow.status === 'invalid'}
           <span class="run-state failure"><CircleAlert size={14} /></span><span><strong>Needs attention</strong><small>{workflow.error}</small></span>
         {:else}

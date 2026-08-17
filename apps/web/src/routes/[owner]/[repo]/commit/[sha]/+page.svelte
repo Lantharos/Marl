@@ -4,9 +4,9 @@
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
   import Copy from 'lucide-svelte/icons/copy';
-  import FileDiff from 'lucide-svelte/icons/file-diff';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import DiffViewer from '$lib/components/DiffViewer.svelte';
+  import Time from '$lib/components/Time.svelte';
   import type { CommitDetail } from './+page';
   import type { PageData } from './$types';
 
@@ -28,12 +28,11 @@
 
 <header class="commit-head">
   <div class="heading"><GitCommitHorizontal size={20} /><div><h1>{commit.title}</h1>{#if commit.body}<p>{commit.body}</p>{/if}</div></div>
-  <div class="meta"><span class="avatar">{commit.author.slice(0, 2).toUpperCase()}</span><strong>{commit.author}</strong><span>&lt;{commit.authorEmail}&gt;</span><time>{commit.authoredAt}</time>{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={13} />Verified</i>{/if}</div>
+  <div class="meta"><span class="avatar">{commit.author.slice(0, 2).toUpperCase()}</span><strong>{commit.author}</strong><span>&lt;{commit.authorEmail}&gt;</span><Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={13} />Verified</i>{/if}</div>
   <div class="identity"><code>{commit.id}</code><button aria-label="Copy commit hash" onclick={copy}>{#if copied}<Check size={13} />{:else}<Copy size={13} />{/if}</button></div>
   <div class="parents">{#each commit.parents as parent}<a href="{base}/commit/{parent}">Parent {parent.slice(0, 7)}</a>{/each}<a href="{base}/tree/{commit.id}">Browse files</a></div>
 </header>
 
-<div class="change-summary"><FileDiff size={15} /><strong>{commit.files.length} changed {commit.files.length === 1 ? 'file' : 'files'}</strong><span><b>+{commit.files.reduce((sum, file) => sum + file.additions, 0)}</b><i>−{commit.files.reduce((sum, file) => sum + file.deletions, 0)}</i></span></div>
 {#if commit.files.some((file) => file.oldPath)}
   <div class="renames">{#each commit.files.filter((file) => file.oldPath) as file}<span><code>{file.oldPath}</code><ArrowRight size={12} /><code>{file.path}</code></span>{/each}</div>
 {/if}

@@ -6,6 +6,7 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import ServerOff from 'lucide-svelte/icons/server-off';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
   const pulls = $derived(data.pulls as PullRequestSummary[]);
@@ -37,7 +38,7 @@
           <a href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"><span class="signal danger"><CircleAlert size={16} /></span><span><strong>{run.name} failed</strong><small>{run.repository.owner}/{run.repository.name} · {run.branch} · {run.commit.slice(0,7)}</small></span><ArrowUpRight size={14} /></a>
         {/each}
         {#each offlineRunners as runner}
-          <a href="/runners"><span class="signal warning"><ServerOff size={16} /></span><span><strong>{runner.name} is offline</strong><small>Last seen {runner.lastSeenAt} · {runner.labels.join(', ')}</small></span><ArrowUpRight size={14} /></a>
+          <a href="/runners"><span class="signal warning"><ServerOff size={16} /></span><span><strong>{runner.name} is offline</strong><small>Last seen <Time value={runner.lastSeenAt} /> · {runner.labels.join(', ')}</small></span><ArrowUpRight size={14} /></a>
         {/each}
         {#if attentionCount === 0}<div class="clear"><span><CircleCheck size={18} /></span><div><strong>Nothing is blocked.</strong><p>Failed runs, requested changes, and unhealthy runners will land here.</p></div></div>{/if}
       </div>

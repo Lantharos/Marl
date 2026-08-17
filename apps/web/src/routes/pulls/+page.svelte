@@ -9,6 +9,7 @@
   import GitPullRequestClosed from 'lucide-svelte/icons/git-pull-request-closed';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -30,7 +31,7 @@
     {#each filteredItems as pull}
       <a class="row" href="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}">
         <span class:blocked={pull.state === 'blocked'} class:ready={pull.state === 'mergeable'} class:merged={pull.state === 'merged'} class:closed={pull.state === 'closed'} class="state">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}</span>
-        <span class="main"><strong>{pull.title}</strong><small>{pull.repository.owner}/{pull.repository.name} #{pull.number} opened by {pull.author} · {pull.updatedAt}</small><code>{pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
+        <span class="main"><strong>{pull.title}</strong><small>{pull.repository.owner}/{pull.repository.name} #{pull.number} opened by {pull.author} · <Time value={pull.updatedAt} /></small><code>{pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
         <span class="review">{#if pull.reviewStatus === 'approved'}<CircleCheck size={14} />Approved{:else if pull.reviewStatus === 'changes_requested'}<CircleAlert size={14} />Changes requested{:else}<CircleDot size={14} />Review requested{/if}</span>
         <span class="checks" class:failed={pull.checkSummary.failed > 0} class:empty-checks={pull.checkSummary.total === 0}>{#if pull.checkSummary.total === 0}<CircleDot size={14} />No checks{:else}<CircleCheck size={14} />{pull.checkSummary.passed}/{pull.checkSummary.total}{/if}</span>
       </a>

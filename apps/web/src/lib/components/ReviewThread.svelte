@@ -8,6 +8,7 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import MarkdownBody from './MarkdownBody.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
+  import Time from './Time.svelte';
 
   let { thread, busy, inline = false, onReply, onResolve, onEdit, onDelete } = $props<{
     thread: ReviewThread;
@@ -34,12 +35,12 @@
 <article class="thread" class:inline class:outdated={thread.outdated} class:collapsed={thread.resolved && !expanded}>
   <header>
     {#if thread.resolved}<button class="collapse" aria-label={expanded ? 'Collapse resolved conversation' : 'Expand resolved conversation'} onclick={() => (expanded = !expanded)}>{#if expanded}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}</button>{/if}
-    <a href="#file-{thread.path.replaceAll('/','-')}">{thread.path}:{thread.startLine === thread.line ? thread.line : `${thread.startLine}–${thread.line}`}</a>
+    <span class="path">{thread.path}:{thread.startLine === thread.line ? thread.line : `${thread.startLine}–${thread.line}`}</span>
     <div>{#if thread.outdated}<span>Outdated</span>{:else if thread.resolved}<span class="resolved"><Check size={11} />Resolved</span><button disabled={busy} onclick={() => onResolve(thread.id, false)}>Reopen</button>{:else}<button disabled={busy} onclick={() => onResolve(thread.id, true)}>Resolve conversation</button>{/if}</div>
   </header>
   {#if !thread.resolved || expanded}
     {#each thread.comments as comment}
-      <section class="entry"><div class="meta"><span class="avatar">{comment.author.slice(0,2).toUpperCase()}</span><strong>{comment.author}</strong><time>{comment.createdAt}</time>{#if comment.canEdit && !comment.deleted}<div class="actions"><button aria-label="Edit comment" onclick={() => { editing = comment.id; editBody = comment.body; }}><Pencil size={12} /></button>{#if confirmingDelete === comment.id}<button class="confirm" onclick={async () => { await onDelete(comment.id); confirmingDelete = null; }}>Delete</button><button onclick={() => (confirmingDelete = null)}>Cancel</button>{:else}<button aria-label="Delete comment" onclick={() => (confirmingDelete = comment.id)}><Trash2 size={12} /></button>{/if}</div>{/if}</div>
+      <section class="entry"><div class="meta"><span class="avatar">{comment.author.slice(0,2).toUpperCase()}</span><strong>{comment.author}</strong><Time value={comment.createdAt} />{#if comment.canEdit && !comment.deleted}<div class="actions"><button aria-label="Edit comment" onclick={() => { editing = comment.id; editBody = comment.body; }}><Pencil size={12} /></button>{#if confirmingDelete === comment.id}<button class="confirm" onclick={async () => { await onDelete(comment.id); confirmingDelete = null; }}>Delete</button><button onclick={() => (confirmingDelete = null)}>Cancel</button>{:else}<button aria-label="Delete comment" onclick={() => (confirmingDelete = comment.id)}><Trash2 size={12} /></button>{/if}</div>{/if}</div>
         {#if comment.deleted}<p class="deleted">Comment deleted</p>{:else if editing === comment.id}<MarkdownComposer bind:value={editBody} minHeight={70} /><footer><button onclick={() => (editing = null)}>Cancel</button><button class="primary" disabled={busy || !editBody.trim()} onclick={() => submitEdit(comment.id)}>Save</button></footer>{:else}<MarkdownBody source={comment.body} />{/if}
       </section>
     {/each}

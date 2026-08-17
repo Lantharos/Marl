@@ -14,6 +14,7 @@
   import X from 'lucide-svelte/icons/x';
   import { api, apiText } from '$lib/api';
   import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
+  import Time from '$lib/components/Time.svelte';
   import { dismissable } from '$lib/actions/dismissable';
   import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
   import type { PageData } from './$types';
@@ -103,7 +104,7 @@
   <div class="branch-group">
     <div class="popover-anchor" use:dismissable={() => (branchOpen = false)}>
       <button class="branch-button" aria-expanded={branchOpen} onclick={() => (branchOpen = !branchOpen)}><GitBranch size={15} /><span>{selectedBranch}</span><ChevronDown size={13} /></button>
-      {#if branchOpen}<div class="branch-menu"><label><Search size={13} /><input bind:value={branchQuery} placeholder="Find a branch" /></label>{#each matchingBranches as branch}<button class:chosen={branch.name === selectedBranch} onclick={() => void chooseBranch(branch.name)}><span><strong>{branch.name}</strong><small>{branch.commit} · {branch.updatedAt}</small></span>{#if branch.name === selectedBranch}<Check size={14} />{/if}</button>{:else}<p class="no-branches">No matching branches</p>{/each}</div>{/if}
+      {#if branchOpen}<div class="branch-menu"><label><Search size={13} /><input bind:value={branchQuery} placeholder="Find a branch" /></label>{#each matchingBranches as branch}<button class:chosen={branch.name === selectedBranch} onclick={() => void chooseBranch(branch.name)}><span><strong>{branch.name}</strong><small>{branch.commit} · <Time value={branch.updatedAt} /></small></span>{#if branch.name === selectedBranch}<Check size={14} />{/if}</button>{:else}<p class="no-branches">No matching branches</p>{/each}</div>{/if}
     </div>
     <a href="/{owner}/{repo}/branches"><GitBranch size={14} /><span>{branchItems.length} branches</span></a>
   </div>
@@ -130,7 +131,7 @@
               <strong>{item.name}</strong>
             </span>
             <span class="file-message">{item.message}</span>
-            <time>{item.updatedAt}</time>
+            {#if item.updatedAt}<Time value={item.updatedAt} />{/if}
           </a>
         {:else}<div class="empty-tree">{liveError ? 'Repository files could not be loaded.' : 'This branch is empty.'}</div>{/each}
       </div>

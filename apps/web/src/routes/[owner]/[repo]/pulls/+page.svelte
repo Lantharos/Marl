@@ -9,6 +9,7 @@
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import GitPullRequestClosed from 'lucide-svelte/icons/git-pull-request-closed';
   import FilterBar from '$lib/components/FilterBar.svelte';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -29,7 +30,7 @@
   {#each filteredItems as pull}
     <a class="row" href="/{owner}/{repo}/pulls/{pull.number}">
       <span class:blocked={pull.state === 'blocked'} class:merged={pull.state === 'merged'} class:closed={pull.state === 'closed'} class="icon">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}</span>
-      <span class="main"><strong>{pull.title}</strong><small>#{pull.number} opened by {pull.author} · {pull.updatedAt}</small><code>{pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
+      <span class="main"><strong>{pull.title}</strong><small>#{pull.number} opened by {pull.author} · <Time value={pull.updatedAt} /></small><code>{pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
       <span class:failed={pull.checkSummary.failed > 0} class:quiet={pull.checkSummary.total === 0} class="checks">{#if pull.checkSummary.failed}<CircleAlert size={14} />{pull.checkSummary.failed} failed{:else if pull.checkSummary.total === 0}<CircleDot size={14} />No checks{:else}<CircleCheck size={14} />{pull.checkSummary.passed} passed{/if}</span>
     </a>
   {:else}

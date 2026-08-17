@@ -1,6 +1,7 @@
 <script lang="ts">
   import Cpu from 'lucide-svelte/icons/cpu';
   import BackLink from '$lib/components/BackLink.svelte';
+  import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
   const runner = $derived(data.runner);
@@ -10,7 +11,7 @@
 <main class="page">
   <BackLink href="/runners" label="Runners" />
   <header><span class="machine"><Cpu size={21} /></span><div><h1>{runner.name}</h1><p>{runner.platform} {runner.architecture} · runner {runner.version}</p></div><span class="status {runner.state}"><i></i>{runner.state}</span></header>
-  <dl><div><dt>Capacity</dt><dd>{runner.activeJobs} of {runner.concurrency} jobs active</dd></div><div><dt>Last seen</dt><dd>{runner.lastSeenAt}</dd></div><div><dt>Labels</dt><dd class="labels">{#each runner.labels as label}<code>{label}</code>{/each}</dd></div><div><dt>Runner ID</dt><dd><code>{runner.id}</code></dd></div></dl>
+  <dl><div><dt>Capacity</dt><dd>{runner.activeJobs} of {runner.concurrency} jobs active</dd></div><div><dt>Last seen</dt><dd><Time value={runner.lastSeenAt} /></dd></div><div><dt>Labels</dt><dd class="labels">{#each runner.labels as label}<code>{label}</code>{/each}</dd></div><div><dt>Runner ID</dt><dd><code>{runner.id}</code></dd></div></dl>
 </main>
 
 <style>
