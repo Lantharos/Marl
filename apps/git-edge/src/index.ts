@@ -4,6 +4,7 @@ import { handleCompatibilityPush } from './compatibility';
 import type { GitEdgeEnv } from './env';
 import { hydrateRepository } from './hydration';
 import { handleNativePush, nativePushRoute } from './native-push';
+import { readPackedObject } from './pack-reader';
 export { OrganizationQuotaObject } from './organization-quota-object';
 export { RepositoryStateObject } from './repository-state-object';
 export { UploadSessionObject } from './upload-session-object';
@@ -45,6 +46,13 @@ export default {
     try {
       if (new URL(request.url).pathname === '/_sty/repositories/relocate' && request.method === 'POST') {
         return new Response(null, { status: request.headers.get('x-sty-gateway-token') === env.STY_GIT_GATEWAY_TOKEN ? 204 : 404 });
+      }
+      if (new URL(request.url).pathname === '/_sty/object' && request.method === 'POST') {
+        if (request.headers.get('x-sty-gateway-token') !== env.STY_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+        const body = await request.json<{ repositoryId?: unknown; objectId?: unknown }>().catch(() => null);
+        if (!body || typeof body.repositoryId !== 'string' || typeof body.objectId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.objectId)) return new Response(null, { status: 422 });
+        const object = await readPackedObject(env, body.repositoryId, body.objectId);
+        return new Response(new Uint8Array(object.bytes).buffer, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(object.bytes.byteLength), 'x-sty-git-object-type': object.kind, 'cache-control': 'private, max-age=31536000, immutable' } });
       }
       const nativeRoute = nativePushRoute(request);
       if (nativeRoute) return handleNativePush(request, env, nativeRoute);

@@ -11,7 +11,7 @@ export type CommitDetail = {
   authorEmail: string;
   authoredAt: string;
   signatureStatus: string;
-  files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string; patchOmitted?: 'deleted' | 'large' }>;
+  files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string; patchOmitted?: 'deleted' | 'large' | 'lazy' }>;
 };
 
 export const load: PageLoad = async ({ fetch, params }) => ({

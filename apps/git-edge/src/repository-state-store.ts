@@ -14,6 +14,8 @@ type MetaRow = {
 
 type RefRow = { name: string; objectId: string };
 type PackRow = PackDescriptor;
+export type ObjectLocator = { id: string; packId: string; packKey: string; kind: string; size: number; packedBytes: number; offset: number };
+export type CatalogObject = Omit<ObjectLocator, 'packId' | 'packKey'>;
 
 export class RepositoryStateStore {
   private sql: SqlStorage;
@@ -120,6 +122,24 @@ export class RepositoryStateStore {
     this.sql.exec('DELETE FROM repository_generations WHERE generation=?', generation);
   }
 
+  catalog(packId: string, objects: CatalogObject[]) {
+    this.storage.transactionSync(() => {
+      for (const object of objects) this.sql.exec('INSERT INTO repository_objects (id,pack_id,kind,size,packed_bytes,offset) VALUES (?,?,?,?,?,?) ON CONFLICT(id,pack_id) DO UPDATE SET kind=excluded.kind,size=excluded.size,packed_bytes=excluded.packed_bytes,offset=excluded.offset', object.id, packId, object.kind, object.size, object.packedBytes, object.offset);
+    });
+  }
+
+  catalogCounts() {
+    return this.sql.exec<{ packId: string; objectCount: number; catalogCount: number }>('SELECT repository_packs.id AS packId,repository_packs.object_count AS objectCount,COUNT(repository_objects.id) AS catalogCount FROM repository_packs LEFT JOIN repository_objects ON repository_objects.pack_id=repository_packs.id GROUP BY repository_packs.id,repository_packs.object_count').toArray();
+  }
+
+  object(id: string) {
+    return this.sql.exec<ObjectLocator>('SELECT repository_objects.id,repository_objects.pack_id AS packId,repository_packs.pack_key AS packKey,repository_objects.kind,repository_objects.size,repository_objects.packed_bytes AS packedBytes,repository_objects.offset FROM repository_objects JOIN repository_packs ON repository_packs.id=repository_objects.pack_id WHERE repository_objects.id=? ORDER BY repository_packs.ordinal DESC LIMIT 1', id).toArray()[0] ?? null;
+  }
+
+  objectAt(packId: string, offset: number) {
+    return this.sql.exec<ObjectLocator>('SELECT repository_objects.id,repository_objects.pack_id AS packId,repository_packs.pack_key AS packKey,repository_objects.kind,repository_objects.size,repository_objects.packed_bytes AS packedBytes,repository_objects.offset FROM repository_objects JOIN repository_packs ON repository_packs.id=repository_objects.pack_id WHERE repository_objects.pack_id=? AND repository_objects.offset=? LIMIT 1', packId, offset).toArray()[0] ?? null;
+  }
+
   private initialize() {
     this.sql.exec(`
       PRAGMA foreign_keys=ON;
@@ -127,6 +147,8 @@ export class RepositoryStateStore {
       CREATE TABLE IF NOT EXISTS repository_refs (name TEXT PRIMARY KEY,object_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS proposed_refs (name TEXT PRIMARY KEY,object_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS repository_packs (id TEXT PRIMARY KEY,ordinal INTEGER NOT NULL,pack_key TEXT NOT NULL,index_key TEXT NOT NULL,object_index_key TEXT NOT NULL,compressed_bytes INTEGER NOT NULL,expanded_bytes INTEGER NOT NULL,object_count INTEGER NOT NULL,largest_blob_bytes INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS repository_objects (id TEXT NOT NULL,pack_id TEXT NOT NULL,kind TEXT NOT NULL,size INTEGER NOT NULL,packed_bytes INTEGER NOT NULL,offset INTEGER NOT NULL,PRIMARY KEY(id,pack_id));
+      CREATE INDEX IF NOT EXISTS repository_objects_by_pack_offset ON repository_objects(pack_id,offset);
       CREATE TABLE IF NOT EXISTS committed_pushes (push_id TEXT PRIMARY KEY,generation INTEGER NOT NULL,actual_bytes INTEGER NOT NULL,accounting_delta INTEGER NOT NULL,manifest_key TEXT NOT NULL,manifest_hash TEXT NOT NULL,committed_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS repository_generations (generation INTEGER PRIMARY KEY,manifest_key TEXT NOT NULL,manifest_hash TEXT NOT NULL,created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS integrity_schedule (id INTEGER PRIMARY KEY CHECK(id=1),generation INTEGER NOT NULL,attempts INTEGER NOT NULL,next_verify_at INTEGER NOT NULL);
@@ -147,4 +169,5 @@ function syncPacks(sql: SqlStorage, previous: PackDescriptor[], next: PackDescri
   const nextIds = new Set(next.map((pack) => pack.id));
   for (const pack of previous) if (!nextIds.has(pack.id)) sql.exec('DELETE FROM repository_packs WHERE id=?', pack.id);
   for (const [ordinal, pack] of next.entries()) sql.exec('INSERT INTO repository_packs (id,ordinal,pack_key,index_key,object_index_key,compressed_bytes,expanded_bytes,object_count,largest_blob_bytes) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET ordinal=excluded.ordinal,pack_key=excluded.pack_key,index_key=excluded.index_key,object_index_key=excluded.object_index_key,compressed_bytes=excluded.compressed_bytes,expanded_bytes=excluded.expanded_bytes,object_count=excluded.object_count,largest_blob_bytes=excluded.largest_blob_bytes', pack.id, ordinal, pack.packKey, pack.indexKey, pack.objectIndexKey, pack.compressedBytes, pack.expandedBytes, pack.objectCount, pack.largestBlobBytes);
+  sql.exec('DELETE FROM repository_objects WHERE pack_id NOT IN (SELECT id FROM repository_packs)');
 }

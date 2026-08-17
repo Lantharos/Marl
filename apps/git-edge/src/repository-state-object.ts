@@ -16,6 +16,29 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
     if (!trusted(request, this.env)) return stateResponse({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
+      const object = path.match(/^\/objects\/([0-9a-f]{40,64})$/);
+      if (request.method === 'GET' && object) {
+        const locator = this.store.object(object[1]);
+        return locator ? stateResponse({ locator }) : stateResponse({ error: 'object_not_found' }, 404);
+      }
+      const offset = path.match(/^\/packs\/([0-9a-f]{40,64})\/offsets\/(\d+)$/);
+      if (request.method === 'GET' && offset) {
+        const locator = this.store.objectAt(offset[1], Number(offset[2]));
+        return locator ? stateResponse({ locator }) : stateResponse({ error: 'object_not_found' }, 404);
+      }
+      if (request.method === 'POST' && path === '/catalog') {
+        const body = await request.json<{ packId?: unknown; objects?: unknown }>();
+        if (typeof body.packId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.packId) || !Array.isArray(body.objects) || body.objects.length > 500) return stateResponse({ error: 'invalid_catalog' }, 422);
+        const objects = body.objects.filter((value): value is { id: string; kind: string; size: number; packedBytes: number; offset: number } => {
+          if (!value || typeof value !== 'object') return false;
+          const object = value as Record<string, unknown>;
+          return typeof object.id === 'string' && /^[0-9a-f]{40,64}$/.test(object.id) && typeof object.kind === 'string' && ['commit', 'tree', 'blob', 'tag'].includes(object.kind) && [object.size, object.packedBytes, object.offset].every((number) => typeof number === 'number' && Number.isSafeInteger(number) && number >= 0);
+        });
+        if (objects.length !== body.objects.length) return stateResponse({ error: 'invalid_catalog' }, 422);
+        this.store.catalog(body.packId, objects);
+        return new Response(null, { status: 204 });
+      }
+      if (request.method === 'GET' && path === '/catalogs') return stateResponse({ catalogs: this.store.catalogCounts() });
       const state = this.store.read();
       if (request.method === 'GET' && path === '/snapshot') return stateResponse({ state });
       const generation = path.match(/^\/generations\/(\d+)$/);

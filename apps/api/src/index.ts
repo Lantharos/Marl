@@ -12,7 +12,7 @@ import { connectRunRealtime } from './run-realtime';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
 
 const worker = {
-  async fetch(request: Request, _env: Env): Promise<Response> {
+  async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === 'GET' && url.pathname === '/health') {
@@ -20,9 +20,13 @@ const worker = {
     }
 
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Sty API route does not exist.');
+    const gatewayTrusted = request.headers.get('x-sty-gateway-token') === (_env.GIT_GATEWAY_TOKEN ?? (_env.ENVIRONMENT === 'development' ? 'sty-local' : ''));
     const principal = await authenticate(request, _env);
     const runner = await authenticateRunner(request, _env);
-    const gatewayTrusted = request.headers.get('x-sty-gateway-token') === (_env.GIT_GATEWAY_TOKEN ?? (_env.ENVIRONMENT === 'development' ? 'sty-local' : ''));
+    if (!gatewayTrusted) {
+      const rate = await _env.RATE_LIMITER.limit({ key: principal?.id ?? runner?.id ?? request.headers.get('cf-connecting-ip') ?? 'anonymous' });
+      if (!rate.success) return problem(429, 'rate_limited', 'Too many requests. Try again shortly.');
+    }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') {
       if (!gatewayTrusted) return problem(404, 'not_found', 'The requested Sty API route does not exist.');
       return listPendingGitIndexes(_env);
@@ -165,7 +169,7 @@ const worker = {
       if (resource === 'tree' && request.method === 'GET') return listTree(_env, principal, owner, name, url);
       if (resource === 'blob' && rest && request.method === 'GET') {
         const separator = rest.indexOf('/');
-        if (separator > 0) return readBlob(_env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)));
+        if (separator > 0) return readBlob(_env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)), ctx);
       }
     }
 

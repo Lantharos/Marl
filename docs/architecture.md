@@ -45,11 +45,12 @@ The TypeScript API begins with a new database schema. It owns:
 - runs, jobs, runner registrations, leases, logs, and artifacts.
 
 Canonical Git packs, log chunks, and artifacts live in object storage. Repository file
-contents are read from canonical packs instead of being copied into one object-storage entry
-per blob. Relational state is derived from published repository generations and lives in the
-database. Runners claim label-compatible jobs through authenticated leases. While an active run
-is open, the web application polls a narrow state endpoint and requests only log chunks after its
-last sequence cursor. Completed artifacts are loaded once, after the run reaches a terminal state.
+contents are read with exact R2 range requests from canonical packs instead of being copied into
+one object-storage entry per blob. Relational state is derived from published repository
+generations and lives in the database. Runners claim label-compatible jobs through authenticated
+leases. Each job has a hibernating realtime room for new log frames, while persisted cursor-based
+pages recover anything missed during disconnects. Completed artifacts are loaded once, after the
+run reaches a terminal state.
 
 ## Git and the local core
 
@@ -69,9 +70,10 @@ rendering, HTTP sessions, or browser product concepts.
 
 Git's object model remains canonical, but a long-running bare repository does not. R2 stores
 immutable `.pack` and `.idx` files. A repository Durable Object owns the authoritative refs,
-active generation, manifest pointer, and publication lease. An organization Durable Object
-owns upload reservations and eventual quota settlement. Repository publication never depends
-on cross-object accounting completing successfully.
+active generation, manifest pointer, publication lease, and derived object-locator catalog in
+SQLite rows. An organization Durable Object owns upload reservations and eventual quota
+settlement in its own SQLite row store. Repository publication never depends on cross-object
+accounting completing successfully.
 
 A native push follows this flow:
 
@@ -90,8 +92,9 @@ A native push follows this flow:
    database row. The
    repository Durable Object atomically publishes a new immutable manifest generation and
    its refs. Quota settlement is idempotent and may reconcile after publication. A separate
-   alarm-backed job derives branch, commit, tree, and workflow state without holding the push
-   connection open.
+    alarm-backed job derives branch, commit, tree, and workflow state in bounded generation-tagged
+    pages without holding the push connection open. A newer completed generation prunes stale
+    derived rows only after all of its pages have arrived.
 
 The client proposes bytes; Sty decides whether they are publishable. Upload-session alarms
 abort abandoned multipart uploads, remove tracked quarantine objects, release leases, or
@@ -100,7 +103,9 @@ recorded durably before its response is returned. If that response disappears, S
 commit record and completes accounting instead of deleting possibly published objects.
 
 Native fetch reads refs and a generation manifest from the Worker, then downloads the pack
-and index files for that exact generation. Old packs remain available for a one-hour grace
+and index files for that exact generation. Source blob reads resolve the validated object catalog
+and fetch only the packed byte range required for the object and its bounded delta chain. Missing
+derived locator rows are rebuilt from the canonical R2 object index. Old packs remain available for a 31-day recovery
 window so an in-flight fetch can finish after compaction. Standard `git clone`, `git fetch`,
 and `git push` use a compatibility Container. It hydrates an exact generation from R2 packs,
 runs Git Smart HTTP, captures only newly reachable objects, and publishes through the same
@@ -113,7 +118,7 @@ states, attempt counts, last errors, bounded backoff, and an operator-readable s
 Newer generations safely supersede older queued work. The
 maintenance Container creates and strictly indexes one self-contained pack, publishes it as
 a replacement generation, reconciles the storage delta, and retires superseded packs after
-the grace window. Compatibility and validator Containers use the 1 GiB/4 GB `basic` shape.
+    the recovery window. Compatibility and validator Containers use the 1 GiB/4 GB `basic` shape.
 Compatibility sleeps after one idle minute, while validators stop as soon as a push is checked.
 Compaction uses an isolated 4 GiB/8 GB `standard-1` Container and stops immediately when the
 job ends. Validator and maintenance Containers have no Internet access.

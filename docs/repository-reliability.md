@@ -19,11 +19,14 @@ acknowledged Git generation disappear.
   the commit record before cleanup.
 - Organization quota settlement is idempotent and deliberately occurs after repository
   correctness. Accounting failure cannot roll back published refs.
-- Compaction uses the same publication protocol. Old generations are retired only after a
-  grace period, and failed or retention-locked deletions remain scheduled until they succeed.
+- Compaction uses the same publication protocol. Superseded generations remain recoverable for
+  31 days, and failed or retention-locked deletions remain scheduled until they succeed.
 - A repository alarm verifies the active manifest hash and contents plus the presence and
   stored size of every active pack and both indexes each day. Failures retry indefinitely with
   bounded backoff and remain visible in Worker logs.
+- The SQLite object-locator catalog is derived state. If it is absent or incomplete, reads rebuild
+  it from the canonical R2 object index before touching pack bytes; catalog loss cannot make Git
+  objects unreachable or require a repository rewrite.
 
 The deterministic failure harness interrupts publication after every durable boundary: pack,
 Git index, object index, manifest, ref publication, quota settlement, and acknowledgement. It

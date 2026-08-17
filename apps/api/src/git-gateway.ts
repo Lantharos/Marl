@@ -14,6 +14,7 @@ export interface GitGatewayRequestMap {
   '/_sty/merge': { operationId: string; method: string; repositoryId: string; owner: string; repository: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; title: string; author: string };
   '/_sty/pulls/pin': { owner: string; repository: string; number: number; sourceCommitId: string; targetCommitId: string };
   '/_sty/repositories/relocate': { oldOwner: string; oldRepository: string; newOwner: string; newRepository: string };
+  '/_sty/object': { repositoryId: string; objectId: string };
 }
 
 export type GitGatewayPath = keyof GitGatewayRequestMap;
@@ -26,12 +27,12 @@ function gatewayToken(env: Env) {
 
 export async function requestGitGateway<Path extends GitGatewayPath>(env: Env, path: Path, body: GitGatewayRequestMap[Path], options: GatewayRequestOptions = {}) {
   const attempts = options.attempts ?? 1;
-  return retryGatewayRequest(() => fetch(`${env.GIT_GATEWAY_URL}${path}`, {
+  return retryGatewayRequest(() => env.GIT_EDGE.fetch(new Request(`http://git-edge.internal${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-sty-gateway-token': gatewayToken(env) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(options.timeoutMs ?? 15_000)
-  }), attempts);
+  })), attempts);
 }
 
 export async function retryGatewayRequest(send: () => Promise<Response>, attempts = 2) {

@@ -98,7 +98,10 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
         expectContainer(container.fetch(internalRequest(`${base}/idx`, env))),
         expectContainer(container.fetch(internalRequest(`${base}/objects`, env)))
       ]);
-      if (!pack.body || !index.body || !objects.body) throw new Error('Compaction returned an incomplete pack index.');
+      if (!pack.body || !index.body) throw new Error('Compaction returned an incomplete pack index.');
+      const objectCatalog = await objects.json<Array<{ id: string; kind: string; size: number; packedBytes: number; offset: number; references: string[] }>>();
+      if (!Array.isArray(objectCatalog) || objectCatalog.length !== capture.objectCount) throw new Error('Compaction returned an invalid object catalog.');
+      const objectMetadata = JSON.stringify(objectCatalog);
       const quarantinePrefix = `quarantine/${repository}/${pushId}/canonical`;
       const quarantinePackKey = `${quarantinePrefix}.pack`;
       const quarantineIndexKey = `${quarantinePrefix}.idx`;
@@ -107,7 +110,7 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
       await Promise.all([
         env.REPOSITORIES.put(quarantinePackKey, pack.body, { httpMetadata: { contentType: 'application/x-git-packed-objects' } }),
         env.REPOSITORIES.put(quarantineIndexKey, index.body, { httpMetadata: { contentType: 'application/x-git-packed-objects-toc' } }),
-        env.REPOSITORIES.put(quarantineObjectIndexKey, objects.body, { httpMetadata: { contentType: 'application/json' } })
+        env.REPOSITORIES.put(quarantineObjectIndexKey, objectMetadata, { httpMetadata: { contentType: 'application/json' } })
       ]);
       const prefix = `repositories/${repository}/packs/${capture.packId}`;
       const packKey = `${prefix}.pack`;
@@ -117,6 +120,7 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
       if (await promoteCanonicalObject(env.REPOSITORIES, quarantineIndexKey, indexKey, null, 'application/x-git-packed-objects-toc')) createdKeys.push(indexKey);
       if (await promoteCanonicalObject(env.REPOSITORIES, quarantineObjectIndexKey, objectIndexKey, null, 'application/json')) createdKeys.push(objectIndexKey);
       packs.push({ id: capture.packId, packKey, indexKey, objectIndexKey, compressedBytes: capture.packBytes, expandedBytes: capture.expandedBytes, objectCount: capture.objectCount, largestBlobBytes: capture.largestBlobBytes });
+      for (let offset = 0; offset < objectCatalog.length; offset += 500) await repo.request('/catalog', { packId: capture.packId, objects: objectCatalog.slice(offset, offset + 500) });
     }
     const generation = current.state.generation + 1;
     const manifest = JSON.stringify({ generation, refsVersion: current.state.refsVersion, refs: current.state.refs, packs });

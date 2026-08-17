@@ -29,10 +29,11 @@ export async function hydrateRepository(container: ContainerStub, env: GitEdgeEn
   return snapshot.state;
 }
 
-export async function indexHydratedRepository(container: ContainerStub, env: GitEdgeEnv, repositoryId: string, owner: string, repository: string) {
-  await expectContainer(container.fetch(internalRequest('http://container/_sty/index', env, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository })
+export async function indexHydratedRepository(container: ContainerStub, env: GitEdgeEnv, repositoryId: string, owner: string, repository: string, generation: number, excludeCommits: string[]) {
+  const response = await expectContainer(container.fetch(internalRequest('http://container/_sty/index', env, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository, indexId: `generation_${generation}`, excludeCommits })
   })));
+  return response.json<{ heads: string[] }>();
 }
 
 export function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit = {}) {

@@ -13,7 +13,7 @@
   type PatchLine = { kind: 'hunk' | 'context' | 'added' | 'removed'; text: string; oldLine: number | null; newLine: number | null; side: 'old' | 'new' | null; line: number | null };
   type Draft = { path: string; side: 'old' | 'new'; startLine: number; line: number };
   type DiffFile = PullRequestDiff['files'][number];
-  type CollapseReason = 'deleted' | 'large' | null;
+  type CollapseReason = 'deleted' | 'large' | 'lazy' | null;
 
   const LARGE_DIFF_LINES = 1_000;
   const LARGE_DIFF_BYTES = 200_000;
@@ -107,6 +107,14 @@
   function threadsAt(path: string, line: PatchLine) { return threadIndex.get(`${path}:${line.side}:${line.line}`) ?? []; }
   function draftAt(path: string, line: PatchLine) { return draft?.path === path && draft.side === line.side && draft.line === line.line ? draft : null; }
   function fileAnchor(index: number) { return `changed-file-${index + 1}`; }
+  function visible(node: HTMLElement, load: () => void) {
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect(); load();
+    }, { rootMargin: '800px 0px' });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
   function goToFile(file: (typeof parsedFiles)[number]) {
     const index = parsedFiles.indexOf(file);
     document.getElementById(fileAnchor(index))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); navigatorOpen = false; fileQuery = '';
@@ -141,11 +149,11 @@
   </div>
   <main class="diffs">
     {#each parsedFiles as file, index (file.path)}
-      <section class="diff" id={fileAnchor(index)}>
+      <section class="diff" id={fileAnchor(index)} use:visible={() => file.reason === 'lazy' && void expandFile(file)}>
         <header><strong>{file.path}</strong><span>{file.status}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small>{#if file.reason && file.expanded}<button class="collapse-file" aria-label="Collapse {file.path}" title="Collapse file" onclick={() => (expandedFiles[file.path] = false)}><ChevronUp size={14} /></button>{/if}</header>
         <div class="patch">
           {#if !file.expanded}
-            <div class="collapsed-patch"><FileWarning size={18} /><div><strong>{file.reason === 'deleted' ? 'Deleted file hidden' : 'Large diff hidden'}</strong><p>{file.failed ? 'The file diff could not be loaded. Try again.' : file.reason === 'deleted' ? 'Expand this file to inspect its previous contents.' : `This diff changes ${(file.additions + file.deletions).toLocaleString()} lines and is collapsed to keep the page responsive.`}</p></div><button disabled={file.loading} onclick={() => expandFile(file)}>{file.loading ? 'Loading…' : file.failed ? 'Try again' : file.reason === 'deleted' ? 'Show deleted file' : 'Load diff'}</button></div>
+            <div class="collapsed-patch"><FileWarning size={18} /><div><strong>{file.reason === 'deleted' ? 'Deleted file hidden' : file.reason === 'large' ? 'Large diff hidden' : 'Loading diff'}</strong><p>{file.failed ? 'The file diff could not be loaded. Try again.' : file.reason === 'deleted' ? 'Expand this file to inspect its previous contents.' : file.reason === 'large' ? `This diff changes ${(file.additions + file.deletions).toLocaleString()} lines and is collapsed to keep the page responsive.` : 'The patch loads when this file approaches the viewport.'}</p></div><button disabled={file.loading} onclick={() => expandFile(file)}>{file.loading ? 'Loading…' : file.failed ? 'Try again' : file.reason === 'deleted' ? 'Show deleted file' : 'Load diff'}</button></div>
           {:else}
             {#if file.lines.length === 0}<div class="empty-patch">No textual diff is available for this file.</div>{/if}
             {#each file.lines as line}

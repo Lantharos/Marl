@@ -23,17 +23,23 @@ pub(crate) struct IndexRequest {
     repository_id: String,
     owner: String,
     repository: String,
+    #[serde(default)]
+    index_id: String,
+    #[serde(default)]
+    exclude_commits: Vec<String>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GitIndex {
-    repository_id: String,
-    default_branch: String,
-    commits: Vec<IndexedCommit>,
-    branches: Vec<IndexedBranch>,
-    entries: Vec<IndexedEntry>,
-    changes: Vec<IndexedChange>,
+struct GitIndexPage<'a> {
+    repository_id: &'a str,
+    index_id: &'a str,
+    complete: bool,
+    default_branch: Option<&'a str>,
+    commits: &'a [IndexedCommit],
+    branches: &'a [IndexedBranch],
+    entries: &'a [IndexedEntry],
+    changes: &'a [IndexedChange],
 }
 
 #[derive(Serialize)]
@@ -45,6 +51,8 @@ struct IndexedCommit {
     authored_at: String,
     tree_id: String,
     parents: Vec<String>,
+    #[serde(skip)]
+    position: usize,
 }
 
 #[derive(Serialize)]
@@ -144,7 +152,7 @@ pub(crate) async fn index_repository(
         return StatusCode::NOT_FOUND.into_response();
     }
     match index_inner(&state, request).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Ok(heads) => Json(serde_json::json!({ "heads": heads })).into_response(),
         Err(error) => {
             eprintln!("repository indexing failed: {error:#}");
             (StatusCode::BAD_GATEWAY, "Repository indexing failed.\n").into_response()
@@ -211,7 +219,7 @@ async fn read_tree_inner(state: &AppState, request: TreeRequest) -> Result<Vec<I
     ))
 }
 
-async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
+async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<String>> {
     if !request.repository_id.starts_with("repo_")
         || !safe_segment(&request.owner)
         || !safe_segment(&request.repository)
@@ -244,21 +252,32 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
     let history = if branches.is_empty() {
         String::new()
     } else {
-        git_output(
-            &repository,
-            &[
-                "log",
-                "--all",
-                "--topo-order",
-                "--date=iso-strict",
-                "--format=%H%x1f%s%x1f%an%x1f%aI%x1f%T%x1f%P%x1e",
-                "-n",
-                "5000",
-            ],
-        )
-        .await?
+        let mut command = Command::new("git");
+        command.args(["-C"]).arg(&repository).args([
+            "log",
+            "--all",
+            "--topo-order",
+            "--date=iso-strict",
+            "--format=%H%x1f%s%x1f%an%x1f%aI%x1f%T%x1f%P%x1f%ct%x1e",
+            "--ignore-missing",
+        ]);
+        for commit in request
+            .exclude_commits
+            .iter()
+            .filter(|commit| is_object_id(commit))
+        {
+            command.arg("--not").arg(commit);
+        }
+        let output = command.output().await?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "git log failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+        }
+        String::from_utf8(output.stdout)?
     };
-    let commits = parse_records(&history, 6)
+    let commits = parse_records(&history, 7)
         .into_iter()
         .map(|fields| IndexedCommit {
             id: fields[0].clone(),
@@ -267,65 +286,171 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<()> {
             authored_at: fields[3].clone(),
             tree_id: fields[4].clone(),
             parents: fields[5].split_whitespace().map(str::to_owned).collect(),
+            position: fields[6].parse().unwrap_or(0),
         })
         .collect::<Vec<_>>();
-    let changes = index_changes(&repository, &commits).await?;
-    let trees = commits
-        .iter()
-        .map(|commit| (commit.id.as_str(), commit.tree_id.as_str()))
-        .collect::<HashMap<_, _>>();
+    let changes = index_changes(&repository, &commits, &request.exclude_commits).await?;
     let mut indexed = HashSet::new();
     let mut entries = Vec::new();
     for branch in &branches {
-        let tree_id = trees
-            .get(branch.commit_id.as_str())
-            .context("branch commit missing from indexed history")?;
-        if indexed.insert(*tree_id) {
+        let tree_id = git_output(
+            &repository,
+            &["rev-parse", &format!("{}^{{tree}}", branch.commit_id)],
+        )
+        .await?;
+        let tree_id = tree_id.trim();
+        if indexed.insert(tree_id.to_owned()) {
             entries.extend(index_tree(&repository, &branch.commit_id, tree_id).await?);
         }
     }
-    let payload = GitIndex {
-        repository_id: request.repository_id,
-        default_branch,
-        commits,
-        branches,
-        entries,
-        changes,
+    let index_id = if request.index_id.is_empty() {
+        format!(
+            "index_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        )
+    } else {
+        request.index_id
     };
-    let response = state
+    for page in commits.chunks(250) {
+        send_index_page(
+            state,
+            GitIndexPage {
+                repository_id: &request.repository_id,
+                index_id: &index_id,
+                complete: false,
+                default_branch: None,
+                commits: page,
+                branches: &[],
+                entries: &[],
+                changes: &[],
+            },
+        )
+        .await?;
+    }
+    let mut change_start = 0;
+    while change_start < changes.len() {
+        let mut change_end = change_start;
+        let mut path_count = 0;
+        while change_end < changes.len() && change_end - change_start < 250 {
+            let next = changes[change_end].paths.len();
+            if next > 100_000 {
+                anyhow::bail!(
+                    "a commit changes more paths than the metadata index can safely accept"
+                )
+            }
+            if change_end > change_start && path_count + next > 100_000 {
+                break;
+            }
+            path_count += next;
+            change_end += 1;
+        }
+        send_index_page(
+            state,
+            GitIndexPage {
+                repository_id: &request.repository_id,
+                index_id: &index_id,
+                complete: false,
+                default_branch: None,
+                commits: &[],
+                branches: &[],
+                entries: &[],
+                changes: &changes[change_start..change_end],
+            },
+        )
+        .await?;
+        change_start = change_end;
+    }
+    for page in entries.chunks(1_000) {
+        send_index_page(
+            state,
+            GitIndexPage {
+                repository_id: &request.repository_id,
+                index_id: &index_id,
+                complete: false,
+                default_branch: None,
+                commits: &[],
+                branches: &[],
+                entries: page,
+                changes: &[],
+            },
+        )
+        .await?;
+    }
+    for page in branches.chunks(250) {
+        send_index_page(
+            state,
+            GitIndexPage {
+                repository_id: &request.repository_id,
+                index_id: &index_id,
+                complete: false,
+                default_branch: None,
+                commits: &[],
+                branches: page,
+                entries: &[],
+                changes: &[],
+            },
+        )
+        .await?;
+    }
+    send_index_page(
+        state,
+        GitIndexPage {
+            repository_id: &request.repository_id,
+            index_id: &index_id,
+            complete: true,
+            default_branch: Some(&default_branch),
+            commits: &[],
+            branches: &[],
+            entries: &[],
+            changes: &[],
+        },
+    )
+    .await?;
+    Ok(branches
+        .into_iter()
+        .map(|branch| branch.commit_id)
+        .collect())
+}
+
+async fn send_index_page(state: &AppState, page: GitIndexPage<'_>) -> Result<()> {
+    state
         .client
         .post(format!("{}/api/v1/git/index", state.control_plane))
         .header("x-sty-gateway-token", &state.gateway_token)
-        .json(&payload)
+        .json(&page)
         .send()
         .await
-        .context("send Git index")?;
-    response
+        .context("send Git index page")?
         .error_for_status()
-        .context("control plane rejected Git index")?;
+        .context("control plane rejected Git index page")?;
     Ok(())
 }
 
-async fn index_changes(repository: &Path, commits: &[IndexedCommit]) -> Result<Vec<IndexedChange>> {
+async fn index_changes(
+    repository: &Path,
+    commits: &[IndexedCommit],
+    exclude_commits: &[String],
+) -> Result<Vec<IndexedChange>> {
     if commits.is_empty() {
         return Ok(Vec::new());
     }
-    let output = Command::new("git")
-        .args(["-C"])
-        .arg(repository)
-        .args([
-            "log",
-            "--all",
-            "--topo-order",
-            "-n",
-            "5000",
-            "--format=C%H%x00",
-            "--name-status",
-            "-z",
-            "--no-renames",
-        ])
-        .output()
-        .await?;
+    let mut command = Command::new("git");
+    command.args(["-C"]).arg(repository).args([
+        "log",
+        "--all",
+        "--topo-order",
+        "--ignore-missing",
+        "--format=C%H%x00",
+        "--name-status",
+        "-z",
+        "--no-renames",
+    ]);
+    for commit in exclude_commits.iter().filter(|commit| is_object_id(commit)) {
+        command.arg("--not").arg(commit);
+    }
+    let output = command.output().await?;
     if !output.status.success() {
         anyhow::bail!(
             "git log changed paths failed: {}",
@@ -342,17 +467,6 @@ fn parse_changed_paths(output: &[u8], commits: &[IndexedCommit]) -> Vec<IndexedC
         .map(|(index, commit)| (commit.id.as_str(), index))
         .collect::<HashMap<_, _>>();
     let mut paths = vec![HashSet::new(); commits.len()];
-    let mut generations = vec![0; commits.len()];
-    for (index, commit) in commits.iter().enumerate().rev() {
-        generations[index] = commit
-            .parents
-            .iter()
-            .filter_map(|parent| positions.get(parent.as_str()))
-            .map(|parent| generations[*parent])
-            .max()
-            .unwrap_or(0)
-            + 1;
-    }
     let mut current = None;
     let mut tokens = output
         .split(|byte| *byte == 0)
@@ -384,13 +498,12 @@ fn parse_changed_paths(output: &[u8], commits: &[IndexedCommit]) -> Vec<IndexedC
     commits
         .iter()
         .zip(paths)
-        .enumerate()
-        .map(|(position, (commit, paths))| {
+        .map(|(commit, paths)| {
             let mut paths = paths.into_iter().collect::<Vec<_>>();
             paths.sort_unstable();
             IndexedChange {
                 commit_id: commit.id.clone(),
-                position: generations[position],
+                position: commit.position,
                 paths,
             }
         })
@@ -409,9 +522,12 @@ pub(crate) async fn index_local_repository(
             repository_id,
             owner,
             repository,
+            index_id: String::new(),
+            exclude_commits: Vec::new(),
         },
     )
     .await
+    .map(|_| ())
 }
 
 async fn index_tree(
@@ -496,7 +612,7 @@ fn parse_records(value: &str, fields: usize) -> Vec<Vec<String>> {
 mod tests {
     use super::*;
 
-    fn commit(id: &str, parents: &[&str]) -> IndexedCommit {
+    fn commit(id: &str, parents: &[&str], position: usize) -> IndexedCommit {
         IndexedCommit {
             id: id.into(),
             title: String::new(),
@@ -504,6 +620,7 @@ mod tests {
             authored_at: String::new(),
             tree_id: String::new(),
             parents: parents.iter().map(|parent| (*parent).to_owned()).collect(),
+            position,
         }
     }
 
@@ -514,7 +631,7 @@ mod tests {
         let output = format!("C{first}\0\0M\0apps/web/src/app.ts\0C{second}\0\0A\0README.md\0");
         let changes = parse_changed_paths(
             output.as_bytes(),
-            &[commit(first, &[second]), commit(second, &[])],
+            &[commit(first, &[second], 2), commit(second, &[], 1)],
         );
         assert_eq!(
             changes[0].paths,

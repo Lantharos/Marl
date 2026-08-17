@@ -96,10 +96,13 @@ job step in one disposable job container. The checkout and repository-scoped cac
 only host directories mounted into that container.
 
 Job containers drop Linux capabilities, enable `no-new-privileges`, and receive CPU,
-memory, and process limits. Logs stream while a step runs. Cancellation and timeout kill
-the entire job container. Artifact paths are relative to the checkout; symlinks and paths
-outside the workspace are refused. Job containers and networks are removed after every
-attempt, while the repository cache survives.
+memory, and process limits. The runner coalesces small output into bounded log chunks and sends
+new frames through a per-job hibernating realtime room. Cursor-paged object-storage logs remain
+authoritative for reconnects and completed runs. Cancellation and timeout kill the entire job
+container. Artifact paths are relative to the checkout; symlinks and paths outside the workspace
+are refused. Artifacts use size-negotiated, lease-renewed multipart uploads directly to object
+storage. Job containers and networks are removed after every attempt, while the repository cache
+survives.
 
 Docker is the security boundary for job execution, but a Docker daemon is still privileged
 infrastructure. Keep runner administration narrow, do not mount the Docker socket into job

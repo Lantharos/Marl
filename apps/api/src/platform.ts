@@ -50,6 +50,8 @@ export interface Env {
   GIT_GATEWAY_URL: string;
   GIT_PUBLIC_URL?: string;
   GIT_GATEWAY_TOKEN?: string;
+  GIT_EDGE: Fetcher;
   PULL_ROOMS: DurableObjectNamespace;
   RUN_ROOMS: DurableObjectNamespace;
+  RATE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }

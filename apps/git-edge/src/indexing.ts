@@ -28,7 +28,9 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
     try {
       const container = getContainer(this.env.GIT_CONTAINERS, task.repositoryId);
       await hydrateRepository(container, this.env, task.owner, task.repository, task.repositoryId);
-      await indexHydratedRepository(container, this.env, task.repositoryId, task.owner, task.repository);
+      const previousHeads = await this.ctx.storage.get<string[]>('indexed-heads') ?? [];
+      const indexed = await indexHydratedRepository(container, this.env, task.repositoryId, task.owner, task.repository, task.generation, previousHeads);
+      await this.ctx.storage.put('indexed-heads', indexed.heads);
       await completeOperation(this.ctx.storage, operation.id);
     } catch (error) {
       console.error('repository indexing failed', error);

@@ -35,33 +35,29 @@ export async function listPendingGitIndexes(env: Env): Promise<Response> {
 export async function indexGit(request: Request, env: Env, principal: Principal | null, gatewayTrusted = false): Promise<Response> {
   const body = await readJson(request, gitIndexBody);
   if (!body || typeof body.repositoryId !== 'string' || !Array.isArray(body.commits) || !Array.isArray(body.branches) || !Array.isArray(body.entries) || !Array.isArray(body.changes)) return problem(422, 'invalid_git_index', 'Git index payload is invalid.');
+  if (body.commits.length > 250 || body.changes.length > 250 || body.branches.length > 250 || body.entries.length > 1_000) return problem(413, 'git_index_page_too_large', 'Git index pages exceed the negotiated batch size.');
   const owned = gatewayTrusted || (principal && await authorizeRepositoryId(env, principal, body.repositoryId, 'write'));
   if (!owned) return problem(403, 'git_access_denied', 'You cannot index this repository.');
-  const [previous, storedCommits, storedChanges] = await Promise.all([
-    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=?').bind(body.repositoryId).all<{ name: string; commitId: string }>(),
-    env.DB.prepare('SELECT id FROM commits WHERE repository_id=?').bind(body.repositoryId).all<{ id: string }>(),
-    env.DB.prepare('SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=?').bind(body.repositoryId).all<{ commitId: string }>()
-  ]);
-  const previousHeads = new Map(previous.results.map((branch) => [branch.name, branch.commitId]));
-  const existingCommits = new Set(storedCommits.results.map((commit) => commit.id));
+  const changeIds = body.changes.flatMap((value) => value && typeof value === 'object' && typeof (value as Record<string, unknown>).commitId === 'string' ? [(value as Record<string, unknown>).commitId as string] : []);
+  const storedChanges = changeIds.length
+    ? await env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${changeIds.map(() => '?').join(',')})`).bind(body.repositoryId, ...changeIds).all<{ commitId: string }>()
+    : { results: [] };
   const indexedChanges = new Set(storedChanges.results.map((commit) => commit.commitId));
   const statements = [];
-  for (const value of body.commits.slice(0, 5000)) {
+  for (const value of body.commits) {
     if (!value || typeof value !== 'object') continue;
     const commit = value as Record<string, unknown>;
     if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string') || !Array.isArray(commit.parents) || !commit.parents.every((parent) => typeof parent === 'string' && /^[0-9a-f]{40,64}$/.test(parent))) continue;
-    if (existingCommits.has(commit.id as string)) continue;
     statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id, parent_ids) VALUES (?, ?, ?, ?, '', ?, ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name, authored_at=excluded.authored_at, tree_id=excluded.tree_id, parent_ids=excluded.parent_ids`).bind(body.repositoryId, commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents)));
   }
   let indexedPaths = 0;
-  for (const value of body.changes.slice(0, 5000)) {
+  for (const value of body.changes) {
     if (!value || typeof value !== 'object') continue;
     const change = value as Record<string, unknown>;
-    if (typeof change.commitId !== 'string' || !/^[0-9a-f]{40,64}$/.test(change.commitId) || typeof change.position !== 'number' || !Number.isInteger(change.position) || change.position < 0 || change.position > 5000 || !Array.isArray(change.paths)) continue;
+    if (typeof change.commitId !== 'string' || !/^[0-9a-f]{40,64}$/.test(change.commitId) || typeof change.position !== 'number' || !Number.isSafeInteger(change.position) || change.position < 0 || !Array.isArray(change.paths)) continue;
     if (indexedChanges.has(change.commitId)) continue;
     const paths = [...new Set(change.paths.filter((path): path is string => typeof path === 'string' && safeRepositoryPath(path)))];
-    if (paths.length > 200_000) return problem(422, 'git_index_too_large', 'A single commit changed too many paths to index safely.');
-    if (indexedPaths + paths.length > 200_000) break;
+    if (paths.length > 100_000 || indexedPaths + paths.length > 100_000) return problem(413, 'git_index_page_too_large', 'Changed paths must be split across smaller index pages.');
     for (let offset = 0; offset < paths.length; offset += 20) {
       const chunk = paths.slice(offset, offset + 20);
       const values = chunk.map(() => '(?,?,?,?)').join(',');
@@ -71,21 +67,25 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     indexedPaths += paths.length;
   }
   const indexedBranches: Array<{ name: string; commitId: string }> = [];
-  for (const value of body.branches.slice(0, 1000)) {
+  for (const value of body.branches) {
     if (!value || typeof value !== 'object') continue;
     const branch = value as Record<string, unknown>;
     if (typeof branch.name !== 'string' || !validBranchName(branch.name) || typeof branch.commitId !== 'string' || !/^[0-9a-f]{40,64}$/.test(branch.commitId)) continue;
     indexedBranches.push({ name: branch.name, commitId: branch.commitId });
-    statements.push(env.DB.prepare(`INSERT INTO branches (repository_id, name, commit_id) VALUES (?, ?, ?) ON CONFLICT(repository_id, name) DO UPDATE SET commit_id=excluded.commit_id, updated_at=CURRENT_TIMESTAMP`).bind(body.repositoryId, branch.name, branch.commitId));
+    statements.push(env.DB.prepare(`INSERT INTO branches (repository_id, name, commit_id, index_version) VALUES (?, ?, ?, ?) ON CONFLICT(repository_id, name) DO UPDATE SET commit_id=excluded.commit_id,index_version=excluded.index_version,updated_at=CURRENT_TIMESTAMP`).bind(body.repositoryId, branch.name, branch.commitId, body.indexId));
     statements.push(env.DB.prepare(`UPDATE pull_requests SET source_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE repository_id = ? AND source_branch = ? AND state IN ('draft', 'open') AND source_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
     statements.push(env.DB.prepare(`UPDATE pull_requests SET target_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE repository_id = ? AND target_branch = ? AND state IN ('draft', 'open') AND target_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
   }
-  for (const value of body.entries.slice(0, 25000)) {
+  for (const value of body.entries) {
     if (!value || typeof value !== 'object') continue;
     const entry = value as Record<string, unknown>;
     if (![entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId].every((field) => typeof field === 'string')) continue;
     statements.push(env.DB.prepare(`INSERT INTO repository_entries (repository_id, tree_id, path, parent_path, name, kind, object_id, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, tree_id, path) DO UPDATE SET kind=excluded.kind, object_id=excluded.object_id, byte_size=excluded.byte_size`).bind(body.repositoryId, entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId, typeof entry.byteSize === 'number' ? entry.byteSize : null));
   }
+  const previous = indexedBranches.length
+    ? await env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (${indexedBranches.map(() => '?').join(',')})`).bind(body.repositoryId, ...indexedBranches.map((branch) => branch.name)).all<{ name: string; commitId: string }>()
+    : { results: [] };
+  const previousHeads = new Map(previous.results.map((branch) => [branch.name, branch.commitId]));
   const changedBranches = indexedBranches.filter((branch) => previousHeads.get(branch.name) !== branch.commitId);
   const pullHeadUpdates: Array<{ id: string; sourceCommitId: string; targetCommitId: string }> = [];
   if (changedBranches.length) {
@@ -110,21 +110,19 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
       pullHeadUpdates.push({ id: pull.id, sourceCommitId, targetCommitId });
     }
   }
-  if (typeof body.defaultBranch === 'string') statements.push(env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(body.defaultBranch, body.repositoryId));
+  if (body.complete && typeof body.defaultBranch === 'string') statements.push(env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(body.defaultBranch, body.repositoryId));
   for (let offset = 0; offset < statements.length; offset += 100) await env.DB.batch(statements.slice(offset, offset + 100));
   await Promise.all(pullHeadUpdates.map((pull) => commitPullUpdate(env, pull.id, 'pull.synchronized', { pull: { sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId }, refreshState: true }, [])));
-  if (indexedBranches.length) {
-    const placeholders = indexedBranches.map(() => '?').join(',');
-    await env.DB.prepare(`DELETE FROM branches WHERE repository_id=? AND name NOT IN (${placeholders})`).bind(body.repositoryId, ...indexedBranches.map((branch) => branch.name)).run();
-  } else {
-    await env.DB.prepare('DELETE FROM branches WHERE repository_id=?').bind(body.repositoryId).run();
-  }
+  if (body.complete) await env.DB.prepare('DELETE FROM branches WHERE repository_id=? AND index_version!=?').bind(body.repositoryId, body.indexId).run();
   const actorId = principal?.id ?? (await env.DB.prepare('SELECT created_by AS createdBy FROM repositories WHERE id=?').bind(body.repositoryId).first<{ createdBy: string }>())?.createdBy ?? null;
   if (changedBranches.length) {
     const auditRepository = await env.DB.prepare('SELECT organization_id AS organizationId FROM repositories WHERE id=?').bind(body.repositoryId).first<{ organizationId: string }>();
     if (auditRepository) await auditStatement(env, { organizationId: auditRepository.organizationId, repositoryId: body.repositoryId, actor: principal, action: 'repository.refs.indexed', subjectType: 'repository', subjectId: body.repositoryId, details: { refs: changedBranches.map((branch) => ({ name: branch.name, commitId: branch.commitId })) } }).run();
   }
-  const trees = new Map(body.commits.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === 'object')).map((commit) => [commit.id, commit.treeId]));
+  const branchCommits = indexedBranches.length
+    ? await env.DB.prepare(`SELECT id,tree_id AS treeId FROM commits WHERE repository_id=? AND id IN (${indexedBranches.map(() => '?').join(',')})`).bind(body.repositoryId, ...indexedBranches.map((branch) => branch.commitId)).all<{ id: string; treeId: string }>()
+    : { results: [] };
+  const trees = new Map(branchCommits.results.map((commit) => [commit.id, commit.treeId]));
   let workflowsQueued = 0;
   const workflowWarnings = [];
   const changedBranchNames = new Set(changedBranches.map((branch) => branch.name));
@@ -135,7 +133,7 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     workflowsQueued += result.queued;
     workflowWarnings.push(...result.warnings);
   }
-  return json({ indexed: { commits: body.commits.length, branches: indexedBranches.length, entries: body.entries.length }, workflows: { queued: workflowsQueued, warnings: workflowWarnings } });
+  return json({ indexed: { commits: body.commits.length, branches: indexedBranches.length, entries: body.entries.length, changes: body.changes.length, complete: Boolean(body.complete) }, workflows: { queued: workflowsQueued, warnings: workflowWarnings } });
 }
 
 export async function listRepositories(env: Env, principal: Principal, url: URL): Promise<Response> {
@@ -331,7 +329,7 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
   return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: entries.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) })) });
 }
 
-export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string): Promise<Response> {
+export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string, ctx: ExecutionContext): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
@@ -345,9 +343,17 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     entry = historical.find((candidate) => candidate.path === path && candidate.kind === 'blob') ?? null;
   }
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const response = await requestGitGateway(env, '/_sty/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 }).catch(() => null);
-  if (!response?.ok || !response.body) return problem(502, 'blob_gateway_failed', 'Git gateway could not read this file.');
-  return new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+  const cacheKey = new Request(`https://blob-cache.sty.internal/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
+  const publicCache = (caches as unknown as { default: Cache }).default;
+  if (repo.visibility === 'public') {
+    const cached = await publicCache.match(cacheKey);
+    if (cached) return cached;
+  }
+  const response = await requestGitGateway(env, '/_sty/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 }).catch(() => null);
+  if (!response?.ok || !response.body || response.headers.get('x-sty-git-object-type') !== 'blob') return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
+  const result = new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+  if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
+  return result;
 }
 
 type TreeEntry = { path: string; name: string; kind: string; objectId: string; byteSize?: number };

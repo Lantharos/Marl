@@ -6,6 +6,7 @@ import { organizationQuota, repositoryState, uploadSession, type RepositorySnaps
 import { STORAGE_LIMITS, type PackDescriptor } from './storage-model';
 
 type PackReport = { id: string; compressedBytes: number; expandedBytes: number; objectCount: number; largestBlobBytes: number };
+type PackObject = { id: string; kind: string; size: number; packedBytes: number; offset: number; references: string[] };
 
 export async function finalizeUploadedPush(env: GitEdgeEnv, repository: string, organizationId: string, session: UploadSnapshotResponse['session']) {
   const uploads = uploadSession(env, session.pushId);
@@ -22,6 +23,9 @@ export async function finalizeUploadedPush(env: GitEdgeEnv, repository: string, 
     if (current.state.packs.length + session.packs.length > STORAGE_LIMITS.packsPerGeneration) throw new Error('This repository needs compaction before another pack can be published.');
     const validated = await validatePacks(env, session, current.state.packs);
     const newPacks = validated.packs;
+    for (const catalog of validated.catalogs) {
+      for (let offset = 0; offset < catalog.objects.length; offset += 500) await repo.request('/catalog', { packId: catalog.packId, objects: catalog.objects.slice(offset, offset + 500) });
+    }
     validated.createdCanonicalKeys.forEach((key) => createdKeys.add(key));
     packs = [...current.state.packs, ...newPacks];
     generation = current.state.generation + 1;
@@ -91,6 +95,7 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
   const container = getContainer(env.VALIDATOR_CONTAINERS, session.pushId);
   const indexKeys: string[] = [];
   const createdCanonicalKeys: string[] = [];
+  const catalogs: Array<{ packId: string; objects: PackObject[] }> = [];
   try {
     for (const known of knownPacks) {
       const index = await env.REPOSITORIES.get(known.indexKey);
@@ -122,10 +127,12 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
     const packs: PackDescriptor[] = [];
     for (const [number, report] of reports.entries()) {
       const metadataResponse = await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/${number}/objects`, env)));
-      if (!metadataResponse.body) throw new Error('Validator returned an empty object index.');
+      const objects = await metadataResponse.json<PackObject[]>();
+      if (!Array.isArray(objects) || objects.length !== report.objectCount) throw new Error('Validator returned an invalid object index.');
+      const metadata = JSON.stringify(objects);
       const metadataKey = `quarantine/${session.repository}/${session.pushId}/${number}.objects.json`;
       await uploadSession(env, session.pushId).request('/track', { key: metadataKey });
-      await env.REPOSITORIES.put(metadataKey, metadataResponse.body, { httpMetadata: { contentType: 'application/json' } });
+      await env.REPOSITORIES.put(metadataKey, metadata, { httpMetadata: { contentType: 'application/json' } });
       const prefix = `repositories/${session.repository}/packs/${report.id}`;
       const packKey = `${prefix}.pack`;
       const indexKey = `${prefix}.idx`;
@@ -134,8 +141,9 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
       if (await promoteCanonicalObject(env.REPOSITORIES, indexKeys[number], indexKey, null, 'application/x-git-packed-objects-toc')) createdCanonicalKeys.push(indexKey);
       if (await promoteCanonicalObject(env.REPOSITORIES, metadataKey, objectIndexKey, null, 'application/json')) createdCanonicalKeys.push(objectIndexKey);
       packs.push({ ...report, packKey, indexKey, objectIndexKey });
+      catalogs.push({ packId: report.id, objects });
     }
-    return { packs, createdCanonicalKeys };
+    return { packs, catalogs, createdCanonicalKeys };
   } catch (error) {
     await Promise.allSettled([...indexKeys, ...createdCanonicalKeys].map((key) => env.REPOSITORIES.delete(key)));
     throw error;

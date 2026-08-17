@@ -298,24 +298,7 @@ async fn diff_files(repository: &Path, range: &str) -> Result<Vec<ComparedFile>>
         } else if additions + deletions >= 1_000 {
             Some("large".into())
         } else {
-            None
-        };
-        let patch = if patch_omitted.is_some() {
-            String::new()
-        } else {
-            git_output(
-                repository,
-                &[
-                    "diff",
-                    "--no-color",
-                    "--no-ext-diff",
-                    "--unified=3",
-                    range,
-                    "--",
-                    &path,
-                ],
-            )
-            .await?
+            Some("lazy".into())
         };
         files.push(ComparedFile {
             path,
@@ -323,7 +306,7 @@ async fn diff_files(repository: &Path, range: &str) -> Result<Vec<ComparedFile>>
             status: status.into(),
             additions,
             deletions,
-            patch,
+            patch: String::new(),
             patch_omitted,
         });
     }
@@ -456,7 +439,8 @@ mod tests {
         assert_eq!(commit.title, "Initial commit");
         assert_eq!(commit.files.len(), 1);
         assert_eq!(commit.files[0].path, "README.md");
-        assert!(commit.files[0].patch.contains("+hello"));
+        assert_eq!(commit.files[0].patch_omitted.as_deref(), Some("lazy"));
+        assert!(commit.files[0].patch.is_empty());
 
         std::fs::remove_file(repository.join("README.md")).unwrap();
         std::fs::write(

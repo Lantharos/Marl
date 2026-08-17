@@ -38,5 +38,5 @@
 </article>
 
 <style>
-  .timeline-event{display:grid;grid-template-columns:29px minmax(0,1fr);align-items:center;gap:9px;padding:2px 6px}.icon{display:grid;width:27px;height:27px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}p{display:flex;align-items:center;gap:3px;margin:0;color:var(--text-muted);font-size:10px;line-height:1.45}strong{color:var(--text-strong)}time{margin-left:auto;color:var(--text-faint);font-size:9px}.closed .icon{background:var(--danger-soft);color:var(--danger)}.merged .icon{background:color-mix(in srgb,#8b5cf6 18%,transparent);color:#a78bfa}.locked .icon{background:var(--warning-soft);color:var(--warning)}
+  .timeline-event{display:grid;grid-template-columns:29px minmax(0,1fr);align-items:center;gap:9px;padding:2px 6px}.icon{display:grid;width:27px;height:27px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}p{display:flex;align-items:center;gap:3px;margin:0;color:var(--text-muted);font-size:10px;line-height:1.45}strong{color:var(--text-strong)}.closed .icon{background:var(--danger-soft);color:var(--danger)}.merged .icon{background:color-mix(in srgb,#8b5cf6 18%,transparent);color:#a78bfa}.locked .icon{background:var(--warning-soft);color:var(--warning)}
 </style>
