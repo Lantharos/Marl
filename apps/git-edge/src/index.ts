@@ -12,6 +12,16 @@ export { RepositoryIndexObject } from './indexing';
 
 type RepositoryRoute = { owner: string; repository: string; writes: boolean };
 
+const INTERNAL_REPOSITORY_ROUTES = new Set([
+  '/_sty/blob',
+  '/_sty/commit',
+  '/_sty/compare',
+  '/_sty/merge',
+  '/_sty/patch',
+  '/_sty/pulls/pin',
+  '/_sty/tree'
+]);
+
 export class GitContainer extends Container<GitEdgeEnv> {
   defaultPort = 8788;
   sleepAfter = '1m';
@@ -60,7 +70,7 @@ export default {
 async function repositoryRoute(request: Request): Promise<RepositoryRoute | null> {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/_sty/')) {
-    if (request.method !== 'POST' || !['/_sty/merge', '/_sty/pulls/pin', '/_sty/compare', '/_sty/commit', '/_sty/blob'].includes(url.pathname)) return null;
+    if (request.method !== 'POST' || !INTERNAL_REPOSITORY_ROUTES.has(url.pathname)) return null;
     const body = await request.clone().json<Record<string, unknown>>().catch(() => null);
     if (!body || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
     return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_sty/merge' || url.pathname === '/_sty/pulls/pin' };
