@@ -6,6 +6,7 @@ import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { createOrganizationBody, createTeamBody, organizationInvitationBody, organizationMemberBody, organizationSettingsBody, teamMemberBody } from './request-schemas';
 import { organizationRole, requireOrganizationRole } from './repository-access';
+import { sendTransactionalEmail } from './email';
 
 export async function listOrganizations(env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Organizations can only be managed from a browser session.');
@@ -75,12 +76,11 @@ export async function inviteOrganizationMember(request: Request, env: Env, princ
     auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.invitation.created', subjectType: 'invitation', subjectId: invitationId, details: { email: body.email.toLowerCase(), role: body.role } })
   ]);
   const invitationUrl = `${env.PUBLIC_URL ?? new URL(request.url).origin}/invitations/${rawToken}`;
-  if (env.AUTH_MAILER) {
-    const delivery = await env.AUTH_MAILER.fetch('https://auth-mailer.internal/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ recipient: body.email, subject: `Join ${organization.name} on Sty`, actionUrl: invitationUrl }) });
-    if (!delivery.ok) {
+  try {
+    await sendTransactionalEmail(env, { recipient: body.email, subject: `Join ${organization.name} on Sty`, heading: `You are invited to ${organization.name}`, body: `${principal.displayName} invited you to collaborate on Sty.`, actionLabel: 'Accept invitation', actionUrl: invitationUrl });
+  } catch {
       await env.DB.prepare('UPDATE organization_invitations SET revoked_at=CURRENT_TIMESTAMP WHERE id=?').bind(invitationId).run();
       return problem(502, 'invitation_delivery_failed', 'The invitation could not be delivered. Try again in a moment.');
-    }
   }
   return json({ invitation: { id: invitationId, email: body.email.toLowerCase(), role: body.role, expiresAt }, ...(env.ENVIRONMENT === 'development' ? { invitationUrl } : {}) }, { status: 201 });
 }

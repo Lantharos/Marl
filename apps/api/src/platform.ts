@@ -52,7 +52,8 @@ export interface Env {
   GIT_GATEWAY_TOKEN?: string;
   PUBLIC_URL?: string;
   AUTH_SECRET?: string;
-  AUTH_MAILER?: Fetcher;
+  EMAIL?: SendEmail;
+  EMAIL_FROM?: string;
   AVE_CLIENT_ID?: string;
   AVE_CLIENT_SECRET?: string;
   GIT_EDGE: Fetcher;

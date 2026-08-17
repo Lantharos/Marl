@@ -66,6 +66,10 @@ require a recently created session. Personal access tokens are separately hashed
 shown only once, and carry explicit repository and operation scopes; they are never accepted as a
 browser step-up credential.
 
+Verification, recovery, and organization invitation email is sent directly by the API Worker
+through a sender-restricted Cloudflare Email Service binding. Local development writes action URLs
+to the API log instead of delivering mail.
+
 Authorization has one repository capability resolver. It combines organization ownership, the
 organization's base repository role, direct collaborators, team grants, repository visibility,
 and token restrictions into `read`, `triage`, `push`, `maintain`, and `admin` decisions. Feature

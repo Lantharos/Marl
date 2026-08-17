@@ -77,21 +77,21 @@ async function applicationUserByHandle(env: Env, handle: string) {
   return env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null }>();
 }
 
-async function ensureApplicationUser(env: Env, authUser: { id: string; name: string; email: string; image?: string | null }) {
+async function ensureApplicationUser(env: Env, authUser: { id: string; name: string; email: string; image?: string | null; username?: string | null }) {
   const existing = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE').bind(authUser.id, authUser.email).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null; authUserId: string | null }>();
   if (existing) {
     if (!existing.authUserId) await env.DB.prepare('UPDATE users SET auth_user_id=?,avatar_url=COALESCE(?,avatar_url) WHERE id=? AND auth_user_id IS NULL').bind(authUser.id, authUser.image ?? null, existing.id).run();
     return { id: existing.id, handle: existing.handle, displayName: existing.displayName, email: existing.email, avatarUrl: authUser.image ?? existing.avatarUrl };
   }
   if (env.ENVIRONMENT === 'development') {
-    const legacyHandle = authUser.email.split('@')[0].toLowerCase();
+    const legacyHandle = authUser.username ?? authUser.email.split('@')[0].toLowerCase();
     const legacy = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl FROM users WHERE handle=? COLLATE NOCASE AND email IS NULL').bind(legacyHandle).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null }>();
     if (legacy) {
       await env.DB.prepare('UPDATE users SET auth_user_id=?,email=?,avatar_url=COALESCE(?,avatar_url) WHERE id=?').bind(authUser.id, authUser.email, authUser.image ?? null, legacy.id).run();
       return { ...legacy, email: authUser.email, avatarUrl: authUser.image ?? legacy.avatarUrl };
     }
   }
-  const handle = await availableHandle(env, authUser.email.split('@')[0] || authUser.name);
+  const handle = authUser.username ?? await availableHandle(env, authUser.email.split('@')[0] || authUser.name);
   const organizationId = `org_${crypto.randomUUID().replaceAll('-', '')}`;
   await env.DB.batch([
     env.DB.prepare('INSERT OR IGNORE INTO users (id,handle,display_name,email,avatar_url,auth_user_id) VALUES (?,?,?,?,?,?)').bind(authUser.id, handle, authUser.name, authUser.email, authUser.image ?? null, authUser.id),

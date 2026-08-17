@@ -23,6 +23,9 @@ Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECR
 creating an account. Ave credentials are optional; local password and passkey sign-in work without
 them.
 
+Production authentication email is sent directly through Cloudflare Email Service. Onboard
+`sty.sh` for Email Sending and keep the `EMAIL` binding restricted to `noreply@sty.sh`.
+
 Start the web application, API, and local Git gateway together:
 
 ```powershell

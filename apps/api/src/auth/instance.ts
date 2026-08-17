@@ -1,8 +1,11 @@
 import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { genericOAuth, twoFactor } from 'better-auth/plugins';
+import { genericOAuth, twoFactor, username } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/d1';
+import { validSlug } from '../domain';
+import { sendTransactionalEmail } from '../email';
 import type { Env } from '../platform';
 import { authSchema } from './schema';
 
@@ -19,6 +22,17 @@ export function createAuth(env: Env, request: Request) {
     secret,
     database: drizzleAdapter(drizzle(env.DB as unknown as D1Database), { provider: 'sqlite', schema: authSchema }),
     trustedOrigins: [publicUrl.origin],
+    hooks: {
+      before: createAuthMiddleware(async (context) => {
+        if (context.path === '/update-user' && context.body?.username !== undefined) throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
+        if (context.path !== '/sign-up/email') return;
+        const candidate = typeof context.body?.username === 'string' ? context.body.username.toLowerCase() : '';
+        if (!validSlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
+        const unavailable = await env.DB.prepare('SELECT 1 AS found FROM users WHERE handle=? COLLATE NOCASE UNION SELECT 1 FROM organizations WHERE slug=? COLLATE NOCASE LIMIT 1').bind(candidate, candidate).first();
+        if (unavailable) throw new APIError('BAD_REQUEST', { message: 'That username is unavailable.' });
+      })
+    },
+    disabledPaths: ['/is-username-available'],
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 12,
@@ -65,6 +79,7 @@ export function createAuth(env: Env, request: Request) {
     plugins: [
       passkey({ rpID: publicUrl.hostname, rpName: 'Sty', origin: publicUrl.origin }),
       twoFactor({ issuer: 'Sty', allowPasswordless: true }),
+      username({ minUsernameLength: 2, maxUsernameLength: 39, usernameValidator: validSlug }),
       ...aveProvider(env)
     ]
   });
@@ -88,17 +103,12 @@ function aveProvider(env: Env) {
 }
 
 async function sendAuthEmail(env: Env, recipient: string, subject: string, actionUrl: string) {
-  if (!env.AUTH_MAILER) {
-    if (env.ENVIRONMENT === 'development') {
-      console.info(`[auth email] ${subject} for ${recipient}: ${actionUrl}`);
-      return;
-    }
-    throw new Error('The authentication mailer is not configured.');
-  }
-  const response = await env.AUTH_MAILER.fetch('https://auth-mailer.internal/send', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ recipient, subject, actionUrl })
+  await sendTransactionalEmail(env, {
+    recipient,
+    subject,
+    heading: subject,
+    body: subject.startsWith('Reset') ? 'Use the button below to choose a new password. This link expires automatically.' : 'Verify this email address to finish creating your Sty account.',
+    actionLabel: subject.startsWith('Reset') ? 'Reset password' : 'Verify email',
+    actionUrl
   });
-  if (!response.ok) throw new Error(`Authentication mail delivery failed (${response.status}).`);
 }

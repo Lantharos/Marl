@@ -6,7 +6,7 @@
   import { authClient } from '$lib/auth-client';
   import { api } from '$lib/api';
 
-  let email = $state('');
+  let identity = $state('');
   let password = $state('');
   let busy = $state(false);
   let error = $state('');
@@ -22,7 +22,9 @@
 
   async function signIn() {
     busy = true; error = '';
-    const result = await authClient.signIn.email({ email, password, callbackURL: returnTo });
+    const result = identity.includes('@')
+      ? await authClient.signIn.email({ email: identity, password, callbackURL: returnTo })
+      : await authClient.signIn.username({ username: identity, password, callbackURL: returnTo });
     busy = false;
     if (result.error) { error = result.error.message || 'Sign in failed.'; return; }
     await finish();
@@ -44,10 +46,10 @@
 </script>
 
 {#snippet footer()}New to Sty? <a class="auth-link" href="/sign-up">Create an account</a>{/snippet}
-<AuthShell title="Sign in to Sty" description="Your local Sty account remains available even when connected identity providers are not." {footer}>
+<AuthShell title="Sign in to Sty" description="Continue to your repositories and reviews." {footer}>
   <form class="auth-form" onsubmit={(event) => { event.preventDefault(); void signIn(); }}>
     {#if error}<p class="auth-error">{error}</p>{/if}
-    <label class="auth-field"><span>Email</span><input type="email" autocomplete="email" bind:value={email} required /></label>
+    <label class="auth-field"><span>Email or username</span><input autocomplete="username" bind:value={identity} required /></label>
     <label class="auth-field"><span>Password</span><input type="password" autocomplete="current-password" bind:value={password} required /></label><a class="auth-link recovery" href="/forgot-password">Forgot password?</a>
     <button class="auth-submit" disabled={busy}>Sign in</button>
     {#if methods.passkey}<div class="auth-divider">or</div><button class="auth-option" type="button" disabled={busy} onclick={usePasskey}><KeyRound size={15} />Use a passkey</button>{/if}

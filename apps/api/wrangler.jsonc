@@ -7,8 +7,16 @@
   "vars": {
     "ENVIRONMENT": "development",
     "GIT_GATEWAY_URL": "http://127.0.0.1:42619",
-    "GIT_PUBLIC_URL": "http://127.0.0.1:42619"
+    "GIT_PUBLIC_URL": "http://127.0.0.1:42619",
+    "EMAIL_FROM": "noreply@sty.sh"
   },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "remote": true,
+      "allowed_sender_addresses": ["noreply@sty.sh"]
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
