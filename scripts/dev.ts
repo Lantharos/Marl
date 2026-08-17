@@ -44,7 +44,7 @@ const children = selected.map((name) => ({
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
-    detached: process.platform !== 'win32'
+    detached: true
   })
 }));
 
@@ -84,9 +84,6 @@ async function stop(exitCode: number) {
 
 process.on('SIGINT', () => void stop(130));
 process.on('SIGTERM', () => void stop(143));
-process.on('exit', () => {
-  for (const child of children) killTree(child.process.pid, 'SIGTERM');
-});
 
 for (const child of children) {
   void child.process.exited.then((exitCode) => {
