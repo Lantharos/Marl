@@ -28,7 +28,7 @@ export function createAuth(env: Env, request: Request) {
         if (context.path !== '/sign-up/email') return;
         const candidate = typeof context.body?.username === 'string' ? context.body.username.toLowerCase() : '';
         if (!validSlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
-        const unavailable = await env.DB.prepare('SELECT 1 AS found FROM users WHERE handle=? COLLATE NOCASE UNION SELECT 1 FROM organizations WHERE slug=? COLLATE NOCASE LIMIT 1').bind(candidate, candidate).first();
+        const unavailable = await usernameUnavailable(env, candidate);
         if (unavailable) throw new APIError('BAD_REQUEST', { message: 'That username is unavailable.' });
       })
     },
@@ -83,6 +83,16 @@ export function createAuth(env: Env, request: Request) {
       ...aveProvider(env)
     ]
   });
+}
+
+async function usernameUnavailable(env: Env, candidate: string) {
+  const [organization, user] = await Promise.all([
+    env.DB.prepare('SELECT 1 AS found FROM organizations WHERE slug=? COLLATE NOCASE LIMIT 1').bind(candidate).first(),
+    env.DB.prepare('SELECT email,auth_user_id AS authUserId FROM users WHERE handle=? COLLATE NOCASE LIMIT 1').bind(candidate).first<{ email: string | null; authUserId: string | null }>()
+  ]);
+  if (organization) return true;
+  if (!user) return false;
+  return env.ENVIRONMENT !== 'development' || user.email !== null || user.authUserId !== null;
 }
 
 function aveProvider(env: Env) {
