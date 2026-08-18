@@ -10,7 +10,7 @@ type Repository = { id: string; organizationId: string; owner: string; name: str
 export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
 export type RunService = { name: string; image: string; environment: Record<string, string> };
 export type RunJob = { key: string; name: string; labels: string[]; needs: string[]; steps: RunStep[]; environment: Record<string, string>; artifacts: string[]; runtime: { image: string; timeoutMinutes: number; services: RunService[] } };
-type QueueRun = { repositoryId: string; workflowId?: string; name: string; trigger: 'workflow_dispatch' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[] };
+type QueueRun = { repositoryId: string; workflowId?: string; name: string; trigger: 'workflow_dispatch' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[]; supersede?: boolean };
 export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
 async function repository(env: Env, principal: Principal, owner: string, name: string, capability: RepositoryCapability = 'repository.read'): Promise<Repository | null> {
@@ -18,11 +18,11 @@ async function repository(env: Env, principal: Principal, owner: string, name: s
 }
 
 export function runSelect(where: string) {
-  return `SELECT runs.id,runs.number,runs.name,runs.trigger_name AS trigger,runs.workflow_id AS workflowId,workflows.path AS workflowPath,runs.branch,runs.commit_id AS commitId,runs.state,runs.created_at AS queuedAt,runs.started_at AS startedAt,runs.completed_at AS completedAt,users.handle AS actor,organizations.slug AS owner,repositories.name AS repository,(SELECT COUNT(*) FROM jobs WHERE jobs.run_id=runs.id) AS jobs FROM runs JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN users ON users.id=runs.actor_id LEFT JOIN workflows ON workflows.id=runs.workflow_id ${where}`;
+  return `SELECT runs.id,runs.number,runs.name,runs.trigger_name AS trigger,runs.workflow_id AS workflowId,workflows.path AS workflowPath,runs.branch,runs.commit_id AS commitId,runs.state,runs.cancellation_reason AS cancellationReason,runs.created_at AS queuedAt,runs.started_at AS startedAt,runs.completed_at AS completedAt,users.handle AS actor,organizations.slug AS owner,repositories.name AS repository,(SELECT COUNT(*) FROM jobs WHERE jobs.run_id=runs.id) AS jobs FROM runs JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN users ON users.id=runs.actor_id LEFT JOIN workflows ON workflows.id=runs.workflow_id ${where}`;
 }
 
 export function summarizeRun(row: Record<string, unknown>) {
-  return { id: row.id, number: Number(row.number), repository: { owner: row.owner, name: row.repository }, name: row.name, trigger: row.trigger, ...(row.workflowId ? { workflowId: row.workflowId, workflowPath: row.workflowPath } : {}), actor: row.actor, branch: row.branch, commit: row.commitId, state: row.state, jobs: Number(row.jobs), queuedAt: row.queuedAt, startedAt: row.startedAt, completedAt: row.completedAt };
+  return { id: row.id, number: Number(row.number), repository: { owner: row.owner, name: row.repository }, name: row.name, trigger: row.trigger, ...(row.workflowId ? { workflowId: row.workflowId, workflowPath: row.workflowPath } : {}), actor: row.actor, branch: row.branch, commit: row.commitId, state: row.state, ...(row.cancellationReason ? { cancellationReason: row.cancellationReason } : {}), jobs: Number(row.jobs), queuedAt: row.queuedAt, startedAt: row.startedAt, completedAt: row.completedAt };
 }
 
 export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
@@ -116,13 +116,25 @@ export function parseRunJobs(value: unknown): JobParseResult {
 
 export async function queueRun(env: Env, input: QueueRun): Promise<Record<string, unknown> | null> {
   const runId = identifier('run');
-  const statements = [env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM runs WHERE repository_id=?`).bind(runId, input.repositoryId, input.workflowId ?? null, input.name, input.trigger, input.branch, input.commitId, input.actorId, input.repositoryId)];
+  const supersede = Boolean(input.supersede === true && input.trigger === 'push' && input.workflowId);
+  const statements = supersede ? [
+    env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE state='queued' AND run_id IN (SELECT id FROM runs WHERE repository_id=? AND workflow_id=? AND branch=? AND trigger_name='push' AND state IN ('queued','running'))`).bind(input.repositoryId, input.workflowId, input.branch),
+    env.DB.prepare(`UPDATE jobs SET cancel_requested=1 WHERE state='running' AND run_id IN (SELECT id FROM runs WHERE repository_id=? AND workflow_id=? AND branch=? AND trigger_name='push' AND state IN ('queued','running'))`).bind(input.repositoryId, input.workflowId, input.branch),
+    env.DB.prepare(`UPDATE checks SET state='canceled',summary='Superseded by a newer push.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND EXISTS (SELECT 1 FROM runs JOIN jobs ON jobs.run_id=runs.id WHERE runs.repository_id=? AND runs.workflow_id=? AND runs.branch=? AND runs.trigger_name='push' AND runs.state IN ('queued','running') AND runs.commit_id=checks.commit_id AND jobs.check_name=checks.name)`).bind(input.repositoryId, input.repositoryId, input.workflowId, input.branch),
+    env.DB.prepare(`UPDATE runs SET state='canceled',cancellation_reason='superseded',completed_at=CURRENT_TIMESTAMP WHERE repository_id=? AND workflow_id=? AND branch=? AND trigger_name='push' AND state IN ('queued','running') RETURNING commit_id AS commitId`).bind(input.repositoryId, input.workflowId, input.branch)
+  ] : [];
+  const supersededResultIndex = statements.length - 1;
+  statements.push(env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM runs WHERE repository_id=?`).bind(runId, input.repositoryId, input.workflowId ?? null, input.name, input.trigger, input.branch, input.commitId, input.actorId, input.repositoryId));
   for (const job of input.jobs) {
     const checkName = `${input.name} / ${job.name}`.slice(0, 240);
     statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), runId, job.key, job.name, checkName, JSON.stringify(job.labels), JSON.stringify(job.steps), JSON.stringify(job.environment), JSON.stringify(job.artifacts), JSON.stringify(job.runtime), JSON.stringify(job.needs)));
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), input.repositoryId, input.commitId, checkName, 'queued'));
   }
-  await env.DB.batch(statements);
+  const results = await env.DB.batch(statements);
+  const supersededCommits = supersede
+    ? (results[supersededResultIndex]?.results ?? []).map((row) => String((row as { commitId: unknown }).commitId))
+    : [];
+  await Promise.all([...new Set(supersededCommits)].map((commitId) => notifyPullsForCommit(env, input.repositoryId, commitId)));
   await notifyPullsForCommit(env, input.repositoryId, input.commitId);
   return env.DB.prepare(runSelect('WHERE runs.id=?')).bind(runId).first<Record<string, unknown>>();
 }
@@ -161,7 +173,7 @@ export async function cancelRun(env: Env, principal: Principal, owner: string, n
     env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE run_id=? AND state='queued'`).bind(run.id),
     env.DB.prepare(`UPDATE jobs SET cancel_requested=1 WHERE run_id=? AND state='running'`).bind(run.id),
     env.DB.prepare(`UPDATE checks SET state='canceled',summary='Canceled by a developer.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND commit_id=(SELECT commit_id FROM runs WHERE id=?) AND name IN (SELECT check_name FROM jobs WHERE run_id=?)`).bind(repo.id, run.id, run.id),
-    env.DB.prepare(`UPDATE runs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE id=?`).bind(run.id)
+    env.DB.prepare(`UPDATE runs SET state='canceled',cancellation_reason='developer',completed_at=CURRENT_TIMESTAMP WHERE id=?`).bind(run.id)
   ]);
   await notifyPullsForCommit(env, repo.id, run.commitId);
   return json({ canceled: true, state: 'canceled' });

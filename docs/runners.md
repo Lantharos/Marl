@@ -74,6 +74,12 @@ Native workflows support job dependencies, per-job Docker images, service contai
 job and step timeouts, step working directories, continue-on-error, environment values,
 artifacts, runner labels, and push branch filters.
 
+Push runs are superseded by a newer push of the same workflow on the same branch. Sty cancels
+both queued jobs and an in-progress stale run so an offline runner processes only the newest
+revision when it returns. Manual dispatches and retries are never superseded. Set
+`supersede: false` at the top level of a native workflow when every push must run. GitHub
+workflows can opt out with `concurrency.cancel-in-progress: false`.
+
 The repository Runs tab lists workflow definitions from the default branch and keeps each
 workflow's run history together. A **Run workflow** action is available only when the file
 declares `workflow_dispatch`; Sty does not accept arbitrary commands from the Runs UI.

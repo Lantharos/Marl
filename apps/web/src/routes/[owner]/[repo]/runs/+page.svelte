@@ -49,7 +49,7 @@
       <span class="latest">
         {#if workflow.lastRun}
           <span class="run-state {workflow.lastRun.state}">{#if ['queued', 'running'].includes(workflow.lastRun.state)}<CircleDot size={14} />{:else if workflow.lastRun.state === 'success'}<CircleCheck size={14} />{:else}<CircleAlert size={14} />{/if}</span>
-          <span><strong>{workflow.lastRun.state}</strong><small>#{workflow.lastRun.number} · <Time value={workflow.lastRun.queuedAt} /></small></span>
+          <span><strong>{workflow.lastRun.cancellationReason === 'superseded' ? 'Superseded' : workflow.lastRun.state}</strong><small>#{workflow.lastRun.number} · <Time value={workflow.lastRun.queuedAt} /></small></span>
         {:else if workflow.status === 'invalid'}
           <span class="run-state failure"><CircleAlert size={14} /></span><span><strong>Needs attention</strong><small>{workflow.error}</small></span>
         {:else}

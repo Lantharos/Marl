@@ -22,6 +22,7 @@ type IndexedWorkflow = {
   jobs: RunJob[] | null;
   error: string | null;
   pushEnabled: boolean;
+  supersedePushes: boolean;
 };
 
 const knownTriggers = new Set<WorkflowTrigger>(['push', 'workflow_dispatch', 'pull_request', 'schedule']);
@@ -41,6 +42,16 @@ function declaredTriggers(value: unknown): WorkflowTrigger[] {
 function workflowName(value: ObjectValue | null, path: string): string {
   if (typeof value?.name === 'string' && value.name.trim().length >= 2 && value.name.trim().length <= 160) return value.name.trim();
   return path.split('/').at(-1)?.replace(/\.ya?ml$/i, '').replaceAll('-', ' ') || 'Workflow';
+}
+
+export function supersedePushes(value: ObjectValue | null): boolean {
+  if (typeof value?.supersede === 'boolean') return value.supersede;
+  const concurrency = value?.concurrency;
+  if (concurrency && typeof concurrency === 'object' && !Array.isArray(concurrency)) {
+    const cancelInProgress = (concurrency as ObjectValue)['cancel-in-progress'];
+    if (typeof cancelInProgress === 'boolean') return cancelInProgress;
+  }
+  return true;
 }
 
 function branchMatches(patterns: unknown, branch: string): boolean {
@@ -188,7 +199,7 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
       if (!object.ok || !Number.isSafeInteger(size) || size > 1024 * 1024) {
         const error = 'Workflow file is missing or larger than 1 MiB.';
         warnings.push({ path: entry.path, error });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error, pushEnabled: false });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error, pushEnabled: false, supersedePushes: true });
         continue;
       }
       try {
@@ -202,22 +213,22 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
             ? `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported yet.`
             : parsed.error ?? null;
         if (error) warnings.push({ path: entry.path, error });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch) });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch), supersedePushes: supersedePushes(value) });
       } catch (error) {
         const message = error instanceof Error ? error.message.slice(0, 240) : 'Workflow YAML is invalid.';
         warnings.push({ path: entry.path, error: message });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error: message, pushEnabled: false });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error: message, pushEnabled: false, supersedePushes: true });
       }
     }
   }
   const statements = [env.DB.prepare('UPDATE workflows SET active=0,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND branch=?').bind(repositoryId, branch)];
   for (const workflow of indexed) {
-    statements.push(env.DB.prepare(`INSERT INTO workflows (id,repository_id,branch,path,name,source,triggers_json,jobs_json,status,error,commit_id,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,1) ON CONFLICT(repository_id,branch,path) DO UPDATE SET name=excluded.name,source=excluded.source,triggers_json=excluded.triggers_json,jobs_json=excluded.jobs_json,status=excluded.status,error=excluded.error,commit_id=excluded.commit_id,active=1,updated_at=CURRENT_TIMESTAMP`).bind(workflow.id, repositoryId, branch, workflow.path, workflow.name, workflow.source, JSON.stringify(workflow.triggers), workflow.jobs ? JSON.stringify(workflow.jobs) : null, workflow.error ? 'invalid' : 'valid', workflow.error, commitId));
+    statements.push(env.DB.prepare(`INSERT INTO workflows (id,repository_id,branch,path,name,source,triggers_json,jobs_json,status,error,commit_id,supersede_pushes,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1) ON CONFLICT(repository_id,branch,path) DO UPDATE SET name=excluded.name,source=excluded.source,triggers_json=excluded.triggers_json,jobs_json=excluded.jobs_json,status=excluded.status,error=excluded.error,commit_id=excluded.commit_id,supersede_pushes=excluded.supersede_pushes,active=1,updated_at=CURRENT_TIMESTAMP`).bind(workflow.id, repositoryId, branch, workflow.path, workflow.name, workflow.source, JSON.stringify(workflow.triggers), workflow.jobs ? JSON.stringify(workflow.jobs) : null, workflow.error ? 'invalid' : 'valid', workflow.error, commitId, workflow.supersedePushes ? 1 : 0));
   }
   await env.DB.batch(statements);
   for (const workflow of indexed) {
     if (!queuePush || workflow.error || !workflow.jobs || !workflow.pushEnabled) continue;
-    await queueRun(env, { repositoryId, workflowId: workflow.id, name: workflow.name, trigger: 'push', branch, commitId, actorId, jobs: workflow.jobs });
+    await queueRun(env, { repositoryId, workflowId: workflow.id, name: workflow.name, trigger: 'push', branch, commitId, actorId, jobs: workflow.jobs, supersede: workflow.supersedePushes });
     queued += 1;
   }
   return { queued, warnings };

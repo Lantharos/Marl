@@ -1,0 +1,1 @@
+ALTER TABLE workflows ADD COLUMN supersede_pushes INTEGER NOT NULL DEFAULT 1;

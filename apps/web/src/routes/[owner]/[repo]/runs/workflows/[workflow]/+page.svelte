@@ -65,7 +65,7 @@
       <span class="state {run.state}">{#if ['queued', 'running'].includes(run.state)}<CircleDot size={15} />{:else if run.state === 'success'}<CircleCheck size={15} />{:else}<CircleAlert size={15} />{/if}</span>
       <span class="run-main"><strong>Run #{run.number}</strong><small>{run.trigger === 'workflow_dispatch' ? `Started manually${run.actor ? ` by ${run.actor}` : ''}` : run.trigger === 'retry' ? `Retried${run.actor ? ` by ${run.actor}` : ''}` : `Triggered by ${run.trigger}`}</small></span>
       <span class="ref"><GitBranch size={11} />{run.branch}<code>{run.commit.slice(0, 7)}</code></span>
-      <span class="result">{run.state}</span>
+      <span class="result">{run.cancellationReason === 'superseded' ? 'superseded' : run.state}</span>
     </a>
   {:else}<div class="empty"><strong>No runs yet</strong><p>{manual ? 'Run it manually, or wait for another declared trigger.' : 'The first matching event will appear here.'}</p></div>{/each}
 </section>

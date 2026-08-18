@@ -16,6 +16,7 @@ export interface HealthResponse {
 export type PullRequestState = 'draft' | 'open' | 'blocked' | 'mergeable' | 'merged' | 'closed';
 export type MergeMethod = 'merge' | 'squash' | 'rebase';
 export type RunState = 'queued' | 'running' | 'success' | 'failure' | 'canceled';
+export type RunCancellationReason = 'developer' | 'superseded';
 export type RunnerState = 'idle' | 'busy' | 'offline';
 
 export interface RepositorySummary {
@@ -242,6 +243,7 @@ export interface RunSummary {
   branch: string;
   commit: string;
   state: RunState;
+  cancellationReason?: RunCancellationReason;
   jobs: number;
   duration?: string;
   queuedAt: string;

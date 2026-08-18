@@ -112,7 +112,7 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
 
 async function ownsLease(env: Env, runner: Runner, jobId: string, leaseToken: string | null) {
   if (!leaseToken) return null;
-  return env.DB.prepare(`SELECT jobs.id, jobs.run_id AS runId, jobs.cancel_requested AS cancelRequested, runs.state AS runState, runs.repository_id AS repositoryId, runs.commit_id AS commitId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=? AND jobs.state='running' AND jobs.lease_expires_at > CURRENT_TIMESTAMP`).bind(jobId, runner.id, await sha256(leaseToken)).first<{ id: string; runId: string; cancelRequested: number; runState: string; repositoryId: string; commitId: string }>();
+  return env.DB.prepare(`SELECT jobs.id, jobs.run_id AS runId, jobs.cancel_requested AS cancelRequested, runs.state AS runState, runs.cancellation_reason AS cancellationReason, runs.repository_id AS repositoryId, runs.commit_id AS commitId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=? AND jobs.runner_id=? AND jobs.lease_token_hash=? AND jobs.state='running' AND jobs.lease_expires_at > CURRENT_TIMESTAMP`).bind(jobId, runner.id, await sha256(leaseToken)).first<{ id: string; runId: string; cancelRequested: number; runState: string; cancellationReason: string | null; repositoryId: string; commitId: string }>();
 }
 
 export async function renewJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
@@ -240,7 +240,13 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
   const body = await readJson(request, completeJobBody);
   if (!job || !body || !['success', 'failure', 'canceled'].includes(String(body.state)) || !Number.isInteger(body.exitCode)) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const state = job.cancelRequested || job.runState === 'canceled' ? 'canceled' : String(body.state);
-  const summary = state === 'canceled' ? 'Canceled by a developer.' : typeof body.summary === 'string' ? body.summary.slice(0, 1000) : '';
+  const summary = state === 'canceled'
+    ? job.cancellationReason === 'superseded'
+      ? 'Superseded by a newer push.'
+      : job.cancellationReason === 'developer'
+        ? 'Canceled by a developer.'
+        : typeof body.summary === 'string' ? body.summary.slice(0, 1000) : 'Canceled by the runner.'
+    : typeof body.summary === 'string' ? body.summary.slice(0, 1000) : '';
   await env.DB.batch([
     env.DB.prepare(`UPDATE jobs SET state=?,exit_code=?,completed_at=CURRENT_TIMESTAMP,lease_token_hash=NULL,lease_expires_at=NULL WHERE id=? AND state='running'`).bind(state, state === 'canceled' ? 130 : body.exitCode, jobId),
     env.DB.prepare(`UPDATE runners SET active_jobs=MAX(active_jobs-1,0),last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
