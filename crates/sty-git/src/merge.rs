@@ -1,6 +1,7 @@
 use crate::{
     merge_operations::{create_commit, merge_tree, rebase_commits},
     metadata::index_local_repository,
+    process::Command,
     state::{AppState, git_output, is_object_id, repository_path, safe_ref, safe_segment},
 };
 use anyhow::Result;
@@ -12,7 +13,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Arc};
-use tokio::process::Command;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

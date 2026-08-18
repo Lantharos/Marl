@@ -199,7 +199,6 @@
   .code-main { min-width: 0; }
   .file-browser, .readme { overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); box-shadow: var(--shadow-subtle); }
   .latest-commit { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto auto; min-height: 48px; align-items: center; gap: 9px; padding: 7px 11px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
-  .commit-avatar { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; background: #d5b496; color: #3d2518; font-size: 9px; font-weight: 740; }
   .commit-copy { display: flex; min-width: 0; gap: 5px; overflow: hidden; font-size: 11px; white-space: nowrap; }
   .commit-copy strong { color: var(--text-strong); font-weight: 630; }
   .commit-copy span { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; }

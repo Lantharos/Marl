@@ -5,6 +5,7 @@ mod merge_operations;
 mod metadata;
 mod pack;
 mod pack_graph;
+mod process;
 mod refs;
 mod relocate;
 mod repository_files;

@@ -72,6 +72,20 @@ bun test
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+Run the isolated dogfood qualification after Docker Engine is available:
+
+```powershell
+bun qualify
+```
+
+Qualification uses random loopback ports and temporary D1, R2, runner, and repository
+directories. It pushes Sty's real Git history, verifies workflow supersession and Docker
+execution, exercises every pull-request merge method and idempotent retry, restarts the local
+services, and checks a fresh clone with `git fsck --strict`. Its services, containers, networks,
+and temporary storage are removed whether the run succeeds or fails. The command validates the
+local compatibility topology; the Worker, R2, Durable Object, and Container release gate remains
+a separate Linux or WSL staging requirement.
+
 ## Product boundary
 
 Sty has four primary product surfaces:

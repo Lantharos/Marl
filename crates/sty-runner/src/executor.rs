@@ -3,6 +3,7 @@ use crate::{
     config::ensure_job_path,
     docker::DockerSandbox,
     models::{JobLease, JobStep, RunnerConfig},
+    process::Command,
 };
 use anyhow::{Context, Result, bail};
 use std::{
@@ -13,7 +14,6 @@ use std::{
 };
 use tokio::{
     io::AsyncReadExt,
-    process::Command,
     sync::{Semaphore, mpsc},
     task::JoinSet,
     time,

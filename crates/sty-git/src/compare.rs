@@ -1,3 +1,4 @@
+use crate::process::Command;
 use crate::state::{
     AppState, git_output, is_object_id, repository_path, safe_repository_path, safe_segment,
 };
@@ -10,7 +11,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path, process::Stdio, sync::Arc};
-use tokio::process::Command;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -12,6 +12,7 @@
     "dev:web": "bun scripts/dev.ts web",
     "dev:api": "bun scripts/dev.ts api",
     "dev:git": "bun scripts/dev.ts git",
+    "qualify": "bun scripts/qualify.ts",
     "check": "bun run --filter '*' check",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test && cargo test --workspace"

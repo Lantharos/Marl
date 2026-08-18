@@ -1,5 +1,6 @@
 use crate::{
     pack_graph::{inspect_pack, populate_object_references},
+    process::Command,
     repository_files::{
         ensure_bare_repository, read_refs, remove_inactive_packs, remove_loose_objects,
         replace_refs, write_limited,
@@ -17,7 +18,6 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
 };
 
 const MAX_PACK_BYTES: u64 = 256 * 1024 * 1024;

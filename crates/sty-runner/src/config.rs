@@ -1,4 +1,4 @@
-use crate::models::RunnerConfig;
+use crate::{models::RunnerConfig, process::standard_command};
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
@@ -60,7 +60,7 @@ pub fn save(path: &Path, config: &RunnerConfig) -> Result<()> {
     {
         let user =
             std::env::var("USERNAME").context("could not identify the runner config owner")?;
-        let status = std::process::Command::new("icacls.exe")
+        let status = standard_command("icacls.exe")
             .arg(path)
             .args([
                 "/inheritance:r",

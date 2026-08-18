@@ -1,7 +1,6 @@
-use crate::{merge::MergeRequest, state::git_output};
+use crate::{merge::MergeRequest, process::Command, state::git_output};
 use anyhow::{Context, Result};
 use std::path::Path;
-use tokio::process::Command;
 
 pub(crate) async fn merge_tree(
     repository: &Path,

@@ -3,6 +3,7 @@ pub mod config;
 pub mod docker;
 pub mod executor;
 pub mod models;
+mod process;
 pub mod service;
 
 use anyhow::Result;

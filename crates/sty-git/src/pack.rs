@@ -1,4 +1,5 @@
 use crate::pack_graph::{PackObject, inspect_pack, populate_object_references};
+use crate::process::Command;
 use crate::state::{AppState, is_object_id};
 use anyhow::{Context, Result, bail};
 use axum::{
@@ -13,7 +14,6 @@ use std::{collections::HashSet, path::PathBuf, process::Stdio, sync::Arc};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
 };
 use tokio_util::io::{ReaderStream, StreamReader};
 

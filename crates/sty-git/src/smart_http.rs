@@ -1,5 +1,6 @@
 use crate::{
     metadata::index_local_repository,
+    process::Command,
     repository_files::{ensure_bare_repository, repair_head},
     state::{AppState, repository_path, safe_segment},
 };
@@ -17,7 +18,6 @@ use std::{process::Stdio, sync::Arc};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
 };
 use tokio_util::io::{ReaderStream, StreamReader};
 

@@ -1,3 +1,4 @@
+use crate::process::Command;
 use crate::state::{
     AppState, git_output, is_object_id, repository_path, safe_repository_path, safe_segment,
 };
@@ -14,7 +15,6 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use tokio::process::Command;
 use tokio::time::{Duration, sleep};
 
 #[derive(Deserialize)]

@@ -1,11 +1,9 @@
+use crate::process::Command;
 use crate::state::is_object_id;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::{path::Path, process::Stdio};
-use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
-    process::Command,
-};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 const MAX_TREE_ENTRIES: usize = 10_000;
 

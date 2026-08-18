@@ -1,7 +1,10 @@
-use crate::models::{JobLease, JobStep};
+use crate::{
+    models::{JobLease, JobStep},
+    process::Command,
+};
 use anyhow::{Context, Result, bail};
 use std::{collections::BTreeMap, path::Path, process::Stdio};
-use tokio::process::{Child, Command};
+use tokio::process::Child;
 
 pub struct DockerSandbox {
     container: String,
@@ -208,7 +211,7 @@ async fn pull(image: &str) -> Result<()> {
     .map(|_| ())
 }
 
-async fn checked(command: &mut Command, operation: &str) -> Result<Vec<u8>> {
+async fn checked(command: &mut tokio::process::Command, operation: &str) -> Result<Vec<u8>> {
     let output = command
         .output()
         .await
