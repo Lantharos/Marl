@@ -3,7 +3,7 @@
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import { onMount, tick } from 'svelte';
-  import type { RepositorySummary } from '@sty/contracts';
+  import type { RepositorySummary } from '@marl/contracts';
   import BookOpen from 'lucide-svelte/icons/book-open';
   import Building2 from 'lucide-svelte/icons/building-2';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -40,7 +40,7 @@
   let selectedIndex = $state(0);
   const currentPath = $derived($page.url.pathname);
   const commands = $derived<Command[]>([
-    { label: 'Home', detail: 'Your work across Sty', href: '/', keywords: 'dashboard overview', kind: 'home' },
+    { label: 'Home', detail: 'Your work across Marl', href: '/', keywords: 'dashboard overview', kind: 'home' },
     ...repositories.map((repository: RepositorySummary) => ({
       label: `${repository.owner}/${repository.name}`,
       detail: repository.description || 'Repository',
@@ -67,7 +67,7 @@
   });
 
   onMount(() => {
-    theme = localStorage.getItem('sty-theme') === 'light' ? 'light' : 'dark';
+    theme = localStorage.getItem('marl-theme') === 'light' ? 'light' : 'dark';
     applyTheme();
     const onKeydown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -87,7 +87,7 @@
 
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('sty-theme', theme);
+    localStorage.setItem('marl-theme', theme);
     applyTheme();
     profileOpen = false;
   }
@@ -156,7 +156,7 @@
 
 {#if searchOpen}
   <div class="dialog-layer" role="presentation" onclick={(event) => event.currentTarget === event.target && closeSearch()}>
-    <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Search Sty">
+    <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Search Marl">
       <header><Search size={18} /><input bind:this={searchInput} bind:value={query} oninput={() => (selectedIndex = 0)} onkeydown={commandKeydown} placeholder="Repositories, pull requests, runs..." /><kbd>Esc</kbd></header>
       <section bind:this={commandList} aria-label="Commands">
         <p>{query ? `${results.length} results` : 'Jump to'}</p>

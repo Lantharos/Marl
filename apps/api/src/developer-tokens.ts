@@ -27,7 +27,7 @@ export async function createPersonalAccessToken(request: Request, env: Env, prin
   }
   const id = identifier('token');
   const secret = randomSecret();
-  const token = `sty_pat_${secret}`;
+  const token = `marl_pat_${secret}`;
   const expiresAt = new Date(Date.now() + (body.expiresDays ?? 30) * 86_400_000).toISOString();
   await env.DB.prepare(`INSERT INTO personal_access_tokens (id,user_id,name,token_hash,token_prefix,scopes_json,repository_ids_json,expires_at) VALUES (?,?,?,?,?,?,?,?)`).bind(id, principal.id, body.name, await sha256(token), token.slice(0, 16), JSON.stringify(scopes), repositoryIds ? JSON.stringify(repositoryIds) : null, expiresAt).run();
   return json({ token: { id, name: body.name, value: token, tokenPrefix: token.slice(0, 16), scopes, repositoryIds, expiresAt } }, { status: 201 });

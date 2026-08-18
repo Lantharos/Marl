@@ -7,7 +7,7 @@
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import SettingsShell from '$lib/components/SettingsShell.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -44,12 +44,12 @@
       const result = await api<{ organization: Record<string, unknown> }>('/organizations', { method: 'POST', body: JSON.stringify({ name, slug, baseRepositoryRole: baseRole }) });
       organizations = [...organizations, result.organization];
       closeCreate();
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'The organization could not be created.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The organization could not be created.'; }
     finally { busy = false; }
   }
 </script>
 
-<svelte:head><title>Organizations · Sty</title></svelte:head>
+<svelte:head><title>Organizations · Marl</title></svelte:head>
 <SettingsShell><div class="page"><header><div><h1>Organizations</h1><p>Ownership, teams, and default repository access.</p></div><button class="primary" onclick={() => (open = true)}><Plus size={14} />New organization</button></header>{#if error}<p class="error">{error}</p>{/if}<div class="org-list">{#each organizations as organization}<a href={`/organizations/${organization.slug}/settings/access`}><span class="icon"><Building2 size={17} /></span><div><strong>{organization.name}</strong><small>{organization.slug} · {organization.members} {organization.members === 1 ? 'member' : 'members'} · {organization.repositories} repositories</small></div><span>{organization.role}</span></a>{/each}</div></div></SettingsShell>
 
 {#snippet createActions()}<button onclick={closeCreate}>Cancel</button><button class="primary" disabled={busy || !name.trim() || !slug.trim()} onclick={create}>Create organization</button>{/snippet}

@@ -20,7 +20,7 @@ export class StateClient {
   async request<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
     const response = await this.stub.fetch(`http://state${path}`, {
       method,
-      headers: { 'content-type': 'application/json', 'x-sty-storage-token': this.env.STY_GIT_GATEWAY_TOKEN },
+      headers: { 'content-type': 'application/json', 'x-marl-storage-token': this.env.MARL_GIT_GATEWAY_TOKEN },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     const value: Record<string, unknown> = await response.json<Record<string, unknown>>().catch(() => ({}));

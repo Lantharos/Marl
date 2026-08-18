@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import type { PullRequestSummary } from '@sty/contracts';
+  import type { PullRequestSummary } from '@marl/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
@@ -23,7 +23,7 @@
   }));
 </script>
 
-<svelte:head><title>Pull requests · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>Pull requests · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <header class="heading"><div><h1>Pull requests</h1><p>Propose, review, and merge changes to this repository.</p></div><a href="/pulls/new?repository={owner}/{repo}">New pull request</a></header>
 <FilterBar placeholder="Search this repository" tabs={['Open', 'Merged', 'Closed']} bind:active={activeFilter} bind:query />
 <section class="list">

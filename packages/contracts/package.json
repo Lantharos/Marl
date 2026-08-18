@@ -1,5 +1,5 @@
 {
-  "name": "@sty/contracts",
+  "name": "@marl/contracts",
   "private": true,
   "type": "module",
   "exports": {

@@ -2,16 +2,16 @@
   import { goto } from '$app/navigation';
   import FormShell from '$lib/components/FormShell.svelte';
   import Select from '$lib/components/Select.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   let owner = $state('lantharos'); let name = $state(''); let visibility = $state('private'); let description = $state(''); let submitting = $state(false); let error = $state('');
   async function createRepository() {
     if (!name.trim() || submitting) return; submitting = true; error = '';
     try { await api('/repositories', { method: 'POST', body: JSON.stringify({ owner, name: name.trim(), description: description.trim(), visibility }) }); await goto(`/${owner}/${name.trim()}`); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Sty could not create the repository. Try again.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Marl could not create the repository. Try again.'; }
     finally { submitting = false; }
   }
 </script>
-<svelte:head><title>New repository · Sty</title></svelte:head>
+<svelte:head><title>New repository · Marl</title></svelte:head>
 <FormShell title="Create a repository" description="A new home for code, reviews, and self-hosted automation.">
   <form class="form-grid" onsubmit={(event) => { event.preventDefault(); void createRepository(); }}>
     <div class="field-row"><label class="field"><span>Owner</span><Select bind:value={owner} ariaLabel="Repository owner" options={[{ value: 'lantharos', label: 'lantharos' }]} /></label><label class="field"><span>Repository name</span><input bind:value={name} placeholder="new-project" autocomplete="off" /></label></div>

@@ -27,7 +27,7 @@
 </script>
 
 {#snippet footer()}Already have an account? <a class="auth-link" href="/sign-in">Sign in</a>{/snippet}
-<AuthShell title="Create your Sty account" description="Choose your profile and sign-in details." {footer}>
+<AuthShell title="Create your Marl account" description="Choose your profile and sign-in details." {footer}>
   {#if awaitingVerification}<div class="auth-form"><p>We sent a verification link to <strong>{email}</strong>. Verify the address before signing in.</p><a class="auth-submit" href="/sign-in">Back to sign in</a></div>{:else}<form class="auth-form" onsubmit={(event) => { event.preventDefault(); void signUp(); }}>
     {#if error}<p class="auth-error">{error}</p>{/if}
     <label class="auth-field"><span>Name</span><input autocomplete="name" bind:value={name} required /></label>

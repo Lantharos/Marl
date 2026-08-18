@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PullRequestDiff, ReviewThread as ReviewThreadType } from '@sty/contracts';
+  import type { PullRequestDiff, ReviewThread as ReviewThreadType } from '@marl/contracts';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ChevronUp from 'lucide-svelte/icons/chevron-up';
   import FileWarning from 'lucide-svelte/icons/file-warning';

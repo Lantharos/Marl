@@ -2,7 +2,7 @@ import { StorageError } from './storage-model';
 import { safeParse, type BaseIssue, type BaseSchema, type InferOutput } from 'valibot';
 
 export interface StateEnv {
-  STY_GIT_GATEWAY_TOKEN: string;
+  MARL_GIT_GATEWAY_TOKEN: string;
   REPOSITORY_STATE: DurableObjectNamespace;
   ORGANIZATION_QUOTAS: DurableObjectNamespace;
   REPOSITORIES: R2Bucket;
@@ -10,11 +10,11 @@ export interface StateEnv {
 
 export function stateFetch(namespace: DurableObjectNamespace, name: string, env: StateEnv, path: string, body: unknown) {
   const stub = namespace.get(namespace.idFromName(name));
-  return stub.fetch(`http://state${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-storage-token': env.STY_GIT_GATEWAY_TOKEN }, body: JSON.stringify(body) });
+  return stub.fetch(`http://state${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-marl-storage-token': env.MARL_GIT_GATEWAY_TOKEN }, body: JSON.stringify(body) });
 }
 
 export function trusted(request: Request, env: StateEnv) {
-  return Boolean(env.STY_GIT_GATEWAY_TOKEN) && request.headers.get('x-sty-storage-token') === env.STY_GIT_GATEWAY_TOKEN;
+  return Boolean(env.MARL_GIT_GATEWAY_TOKEN) && request.headers.get('x-marl-storage-token') === env.MARL_GIT_GATEWAY_TOKEN;
 }
 
 export async function parseStateBody<TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>>(request: Request, schema: TSchema): Promise<InferOutput<TSchema>> {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RepositorySummary } from '@sty/contracts';
+  import type { RepositorySummary } from '@marl/contracts';
   import Lock from 'lucide-svelte/icons/lock';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
@@ -17,7 +17,7 @@
 
 </script>
 
-<svelte:head><title>Repositories · Sty</title></svelte:head>
+<svelte:head><title>Repositories · Marl</title></svelte:head>
 <main class="page">
   <PageHeader title="Repositories" description="The projects you own and collaborate on." actionHref="/repositories/new" actionLabel="New repository" />
   <FilterBar placeholder="Find a repository" tabs={['All', 'Public', 'Private']} bind:active={activeFilter} bind:query />

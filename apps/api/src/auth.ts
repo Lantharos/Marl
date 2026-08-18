@@ -19,14 +19,14 @@ export async function sha256(value: string): Promise<string> {
 }
 
 export async function authenticate(request: Request, env: Env): Promise<Principal | null> {
-  if (env.ENVIRONMENT === 'development' && request.headers.has('x-sty-dev-user')) {
-    const handle = request.headers.get('x-sty-dev-user')!;
+  if (env.ENVIRONMENT === 'development' && request.headers.has('x-marl-dev-user')) {
+    const handle = request.headers.get('x-marl-dev-user')!;
     const user = await applicationUserByHandle(env, handle);
     return user ? { ...user, authType: 'development' } : null;
   }
 
   const token = authorizationToken(request.headers.get('authorization'));
-  if (token?.startsWith('sty_pat_')) return authenticatePersonalToken(env, token);
+  if (token?.startsWith('marl_pat_')) return authenticatePersonalToken(env, token);
 
   const session = await createAuth(env, request).api.getSession({ headers: request.headers });
   if (!session) return null;

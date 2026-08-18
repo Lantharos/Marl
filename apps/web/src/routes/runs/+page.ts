@@ -1,4 +1,4 @@
-import type { RunSummary } from '@sty/contracts';
+import type { RunSummary } from '@marl/contracts';
 import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';

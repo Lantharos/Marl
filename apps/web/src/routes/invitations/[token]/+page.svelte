@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import CheckCircle2 from 'lucide-svelte/icons/circle-check-big';
   import AuthShell from '$lib/components/AuthShell.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
 
   let busy = $state(false);
   let organization = $state<{ slug: string; name: string } | null>(null);
@@ -12,7 +12,7 @@
   async function accept() {
     busy = true; error = ''; needsSignIn = false;
     try { organization = (await api<{ organization: { slug: string; name: string } }>(`/invitations/${$page.params.token}/accept`, { method: 'POST' })).organization; }
-    catch (cause) { if (cause instanceof StyApiError && cause.status === 401) needsSignIn = true; else error = cause instanceof StyApiError ? cause.message : 'The invitation could not be accepted.'; }
+    catch (cause) { if (cause instanceof MarlApiError && cause.status === 401) needsSignIn = true; else error = cause instanceof MarlApiError ? cause.message : 'The invitation could not be accepted.'; }
     finally { busy = false; }
   }
 </script>

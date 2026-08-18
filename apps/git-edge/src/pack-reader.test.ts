@@ -20,7 +20,7 @@ describe('R2 Git pack reader', () => {
       return locator ? Response.json({ locator }) : new Response(null, { status: 404 });
     } };
     const env = {
-      STY_GIT_GATEWAY_TOKEN: 'test',
+      MARL_GIT_GATEWAY_TOKEN: 'test',
       REPOSITORY_STATE: { idFromName: () => 'repo', get: () => state },
       REPOSITORIES: { get: async (_key: string, options: { range: { offset: number; length: number } }) => {
         const bytes = pack.slice(options.range.offset, options.range.offset + options.range.length);

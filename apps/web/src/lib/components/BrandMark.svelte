@@ -2,8 +2,8 @@
   let { compact = false }: { compact?: boolean } = $props();
 </script>
 
-<span class:compact class="brand" aria-label="Sty">
-  <span class="word">sty</span><span class="cursor" aria-hidden="true"></span>
+<span class:compact class="brand" aria-label="Marl">
+  <span class="word">marl</span><span class="cursor" aria-hidden="true"></span>
 </span>
 
 <style>

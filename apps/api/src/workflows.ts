@@ -17,7 +17,7 @@ type IndexedWorkflow = {
   id: string;
   path: string;
   name: string;
-  source: 'sty' | 'github';
+  source: 'marl' | 'github';
   triggers: WorkflowTrigger[];
   jobs: RunJob[] | null;
   error: string | null;
@@ -131,11 +131,11 @@ function githubSteps(job: ObjectValue, matrix: Record<string, string>) {
         artifacts.push(...path.split(/\r?\n/).map((item) => item.trim()).filter(Boolean));
         continue;
       }
-      throw new Error(`Action ${step.uses} is not supported yet. Use a run step or a supported Sty action.`);
+      throw new Error(`Action ${step.uses} is not supported yet. Use a run step or a supported Marl action.`);
     }
     if (typeof step.run !== 'string') throw new Error('Every GitHub Actions step needs run or uses.');
-    const run = interpolate(step.run, matrix).replaceAll('${{ github.sha }}', '$STY_COMMIT').replaceAll('${{ github.ref_name }}', '$STY_BRANCH');
-    if (run.includes('${{')) throw new Error(`Step ${step.name ?? index + 1} uses an expression Sty cannot evaluate yet.`);
+    const run = interpolate(step.run, matrix).replaceAll('${{ github.sha }}', '$MARL_COMMIT').replaceAll('${{ github.ref_name }}', '$MARL_BRANCH');
+    if (run.includes('${{')) throw new Error(`Step ${step.name ?? index + 1} uses an expression Marl cannot evaluate yet.`);
     const shell = typeof step.shell === 'string' ? step.shell.split(/[ {]/)[0] : 'bash';
     steps.push({ name: String(step.name ?? `Step ${index + 1}`), run, shell, environment: stringEnvironment(step.env), ...(typeof step['working-directory'] === 'string' ? { workingDirectory: interpolate(step['working-directory'], matrix) } : {}), ...(step['timeout-minutes'] !== undefined ? { timeoutMinutes: Number(step['timeout-minutes']) } : {}), ...(step['continue-on-error'] === true ? { continueOnError: true } : {}) });
   }
@@ -183,7 +183,7 @@ export function parseWorkflow(value: ObjectValue, path: string): { jobs: RunJob[
 export async function queuePushWorkflows(env: Env, repositoryId: string, branch: string, commitId: string, treeId: string, actorId: string | null, queuePush = true): Promise<{ queued: number; warnings: WorkflowWarning[] }> {
   const repository = await env.DB.prepare(`SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.id=?`).bind(repositoryId).first<{ owner: string; name: string }>();
   if (!repository) return { queued: 0, warnings: [{ path: '', error: 'Repository metadata is missing.' }] };
-  const entries = await env.DB.prepare(`SELECT path,object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND kind='blob' AND (path LIKE '.sty/workflows/%.yml' OR path LIKE '.sty/workflows/%.yaml' OR path LIKE '.github/workflows/%.yml' OR path LIKE '.github/workflows/%.yaml') ORDER BY path LIMIT 100`).bind(repositoryId, treeId).all<WorkflowEntry>();
+  const entries = await env.DB.prepare(`SELECT path,object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND kind='blob' AND (path LIKE '.marl/workflows/%.yml' OR path LIKE '.marl/workflows/%.yaml' OR path LIKE '.github/workflows/%.yml' OR path LIKE '.github/workflows/%.yaml') ORDER BY path LIMIT 100`).bind(repositoryId, treeId).all<WorkflowEntry>();
   const existing = await env.DB.prepare('SELECT id,path FROM workflows WHERE repository_id=? AND branch=?').bind(repositoryId, branch).all<{ id: string; path: string }>();
   const existingIds = new Map(existing.results.map((workflow) => [workflow.path, workflow.id]));
   const warnings: WorkflowWarning[] = [];
@@ -192,14 +192,14 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
   for (let offset = 0; offset < entries.results.length; offset += 8) {
     const batch = await Promise.all(entries.results.slice(offset, offset + 8).map(async (entry) => ({
       entry,
-      object: await requestGitGateway(env, '/_sty/blob', { owner: repository.owner, repository: repository.name, objectId: entry.objectId }, { attempts: 2 })
+      object: await requestGitGateway(env, '/_marl/blob', { owner: repository.owner, repository: repository.name, objectId: entry.objectId }, { attempts: 2 })
     })));
     for (const { entry, object } of batch) {
       const size = Number(object.headers.get('content-length'));
       if (!object.ok || !Number.isSafeInteger(size) || size > 1024 * 1024) {
         const error = 'Workflow file is missing or larger than 1 MiB.';
         warnings.push({ path: entry.path, error });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error, pushEnabled: false, supersedePushes: true });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'marl', triggers: [], jobs: null, error, pushEnabled: false, supersedePushes: true });
         continue;
       }
       try {
@@ -213,11 +213,11 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
             ? `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported yet.`
             : parsed.error ?? null;
         if (error) warnings.push({ path: entry.path, error });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch), supersedePushes: supersedePushes(value) });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'marl', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch), supersedePushes: supersedePushes(value) });
       } catch (error) {
         const message = error instanceof Error ? error.message.slice(0, 240) : 'Workflow YAML is invalid.';
         warnings.push({ path: entry.path, error: message });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'sty', triggers: [], jobs: null, error: message, pushEnabled: false, supersedePushes: true });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'marl', triggers: [], jobs: null, error: message, pushEnabled: false, supersedePushes: true });
       }
     }
   }

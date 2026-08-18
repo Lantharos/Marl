@@ -32,7 +32,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
       await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
       return new Response(body, response);
     }
-    const base = `http://container/_sty/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
+    const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
     const captured = await expectContainer(container.fetch(internalRequest(base, env, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -65,7 +65,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     throw error;
   } finally {
     if (captureCreated) {
-      const base = `http://container/_sty/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
+      const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
       await container.fetch(internalRequest(base, env, { method: 'DELETE' })).catch(() => {});
     }
   }

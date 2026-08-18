@@ -34,7 +34,7 @@ export async function createEnrollment(request: Request, env: Env, principal: Pr
   if (!body || typeof body.organization !== 'string') return problem(422, 'organization_required', 'Choose an organization for this runner.');
   const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role IN ('owner','admin')`).bind(body.organization, principal.id).first<{ id: string }>();
   if (!organization) return problem(403, 'admin_required', 'Only organization administrators can connect runners.');
-  const token = `sty_enroll_${crypto.randomUUID().replaceAll('-', '')}`;
+  const token = `marl_enroll_${crypto.randomUUID().replaceAll('-', '')}`;
   const minutes = Math.min(Math.max(Number(body.expiresMinutes) || 15, 5), 60);
   const id = identifier('enrollment');
   await env.DB.prepare(`INSERT INTO runner_enrollment_tokens (id, organization_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, datetime('now', ?))`).bind(id, organization.id, await sha256(token), principal.id, `+${minutes} minutes`).run();
@@ -49,7 +49,7 @@ export async function registerRunner(request: Request, env: Env): Promise<Respon
   if (!enrollment) return problem(401, 'invalid_enrollment', 'This runner enrollment token is invalid, expired, or already used.');
   const concurrency = Math.min(Math.max(Number(body.concurrency) || 1, 1), 32);
   const id = identifier('runner');
-  const token = `sty_runner_${crypto.randomUUID().replaceAll('-', '')}`;
+  const token = `marl_runner_${crypto.randomUUID().replaceAll('-', '')}`;
   try {
     const results = await env.DB.batch([
       env.DB.prepare('INSERT INTO runners (id, organization_id, name, token_hash, labels_json, concurrency, platform, architecture, version, enrollment_id) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, id FROM runner_enrollment_tokens WHERE id = ? AND used_at IS NULL').bind(id, enrollment.organizationId, body.name, await sha256(token), JSON.stringify(labels), concurrency, body.platform.slice(0, 80), body.architecture.slice(0, 80), body.version.slice(0, 40), enrollment.id),
@@ -92,7 +92,7 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
   let job: ClaimedJob | null = null;
   for (const candidate of candidates.results) {
     if (!(JSON.parse(candidate.labelsJson) as string[]).every((label) => labels.has(label))) continue;
-    const token = `sty_lease_${crypto.randomUUID().replaceAll('-', '')}`;
+    const token = `marl_lease_${crypto.randomUUID().replaceAll('-', '')}`;
     const tokenHash = await sha256(token);
     const claimed = await env.DB.prepare(`UPDATE jobs SET state='running',runner_id=?,lease_token_hash=?,lease_expires_at=datetime('now','+45 seconds'),attempt=attempt+1,started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued' RETURNING id`).bind(runner.id, tokenHash, candidate.id).first<{ id: string }>();
     if (!claimed) continue;
@@ -116,7 +116,7 @@ async function ownsLease(env: Env, runner: Runner, jobId: string, leaseToken: st
 }
 
 export async function renewJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
-  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   if (!job) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   await env.DB.batch([
     env.DB.prepare(`UPDATE jobs SET lease_expires_at=datetime('now','+45 seconds') WHERE id=?`).bind(jobId),
@@ -127,7 +127,7 @@ export async function renewJob(request: Request, env: Env, runner: Runner, jobId
 }
 
 export async function uploadLog(request: Request, env: Env, runner: Runner, jobId: string, sequence: number): Promise<Response> {
-  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   if (!job || !request.body) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const size = Number(request.headers.get('content-length'));
   if (!Number.isFinite(size) || size < 0 || size > 1024 * 1024 || !Number.isSafeInteger(sequence) || sequence < 0) return problem(413, 'log_chunk_too_large', 'Log chunks are limited to 1 MiB and require a valid sequence.');
@@ -142,7 +142,7 @@ export async function uploadLog(request: Request, env: Env, runner: Runner, jobI
 }
 
 export async function beginArtifactUpload(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
-  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   if (!job) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const body = await readJson(request, artifactUploadBody);
   if (!body || !validArtifactName(body.name)) return problem(422, 'invalid_artifact', 'Artifact names must be relative workspace paths.');
@@ -168,7 +168,7 @@ export async function beginArtifactUpload(request: Request, env: Env, runner: Ru
 }
 
 export async function uploadArtifactPart(request: Request, env: Env, runner: Runner, jobId: string, uploadId: string, partNumber: number): Promise<Response> {
-  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   if (!job || !request.body) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const upload = await artifactUpload(env, jobId, uploadId);
   if (!upload || upload.state !== 'uploading') return problem(404, 'artifact_upload_not_found', 'Artifact upload not found.');
@@ -183,7 +183,7 @@ export async function uploadArtifactPart(request: Request, env: Env, runner: Run
 }
 
 export async function completeArtifactUpload(request: Request, env: Env, runner: Runner, jobId: string, uploadId: string): Promise<Response> {
-  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   if (!job) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const upload = await artifactUpload(env, jobId, uploadId);
   if (!upload) {
@@ -236,7 +236,7 @@ async function discardExpiredArtifactUploads(env: Env) {
 }
 
 export async function completeJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
-  const job = await ownsLease(env, runner, jobId, request.headers.get('x-sty-job-lease'));
+  const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   const body = await readJson(request, completeJobBody);
   if (!job || !body || !['success', 'failure', 'canceled'].includes(String(body.state)) || !Number.isInteger(body.exitCode)) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const state = job.cancelRequested || job.runState === 'canceled' ? 'canceled' : String(body.state);

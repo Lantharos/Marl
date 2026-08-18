@@ -14,13 +14,13 @@ export { RepositoryIndexObject } from './indexing';
 type RepositoryRoute = { owner: string; repository: string; writes: boolean };
 
 const INTERNAL_REPOSITORY_ROUTES = new Set([
-  '/_sty/blob',
-  '/_sty/commit',
-  '/_sty/compare',
-  '/_sty/merge',
-  '/_sty/patch',
-  '/_sty/pulls/pin',
-  '/_sty/tree'
+  '/_marl/blob',
+  '/_marl/commit',
+  '/_marl/compare',
+  '/_marl/merge',
+  '/_marl/patch',
+  '/_marl/pulls/pin',
+  '/_marl/tree'
 ]);
 
 export class GitContainer extends Container<GitEdgeEnv> {
@@ -28,11 +28,11 @@ export class GitContainer extends Container<GitEdgeEnv> {
   sleepAfter = '1m';
   enableInternet = true;
   envVars = {
-    STY_API_URL: this.env.STY_API_URL,
-    STY_GIT_GATEWAY_TOKEN: this.env.STY_GIT_GATEWAY_TOKEN,
-    STY_GIT_LISTEN: '0.0.0.0:8788',
-    STY_GIT_ROOT: '/var/lib/sty/repositories',
-    STY_GIT_LOCAL: '0'
+    MARL_API_URL: this.env.MARL_API_URL,
+    MARL_GIT_GATEWAY_TOKEN: this.env.MARL_GIT_GATEWAY_TOKEN,
+    MARL_GIT_LISTEN: '0.0.0.0:8788',
+    MARL_GIT_ROOT: '/var/lib/marl/repositories',
+    MARL_GIT_LOCAL: '0'
   };
 }
 
@@ -44,15 +44,15 @@ export { ContainerProxy };
 export default {
   async fetch(request: Request, env: GitEdgeEnv): Promise<Response> {
     try {
-      if (new URL(request.url).pathname === '/_sty/repositories/relocate' && request.method === 'POST') {
-        return new Response(null, { status: request.headers.get('x-sty-gateway-token') === env.STY_GIT_GATEWAY_TOKEN ? 204 : 404 });
+      if (new URL(request.url).pathname === '/_marl/repositories/relocate' && request.method === 'POST') {
+        return new Response(null, { status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404 });
       }
-      if (new URL(request.url).pathname === '/_sty/object' && request.method === 'POST') {
-        if (request.headers.get('x-sty-gateway-token') !== env.STY_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+      if (new URL(request.url).pathname === '/_marl/object' && request.method === 'POST') {
+        if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
         const body = await request.json<{ repositoryId?: unknown; objectId?: unknown }>().catch(() => null);
         if (!body || typeof body.repositoryId !== 'string' || typeof body.objectId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.objectId)) return new Response(null, { status: 422 });
         const object = await readPackedObject(env, body.repositoryId, body.objectId);
-        return new Response(new Uint8Array(object.bytes).buffer, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(object.bytes.byteLength), 'x-sty-git-object-type': object.kind, 'cache-control': 'private, max-age=31536000, immutable' } });
+        return new Response(new Uint8Array(object.bytes).buffer, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(object.bytes.byteLength), 'x-marl-git-object-type': object.kind, 'cache-control': 'private, max-age=31536000, immutable' } });
       }
       const nativeRoute = nativePushRoute(request);
       if (nativeRoute) return handleNativePush(request, env, nativeRoute);
@@ -66,7 +66,7 @@ export default {
     } catch (error) {
       if (error instanceof AuthorizationError) {
         const response = new Response('Git access denied\n', { status: error.status });
-        if (error.status === 401) response.headers.set('www-authenticate', 'Basic realm="Sty", charset="UTF-8"');
+        if (error.status === 401) response.headers.set('www-authenticate', 'Basic realm="Marl", charset="UTF-8"');
         return response;
       }
       console.error(error);
@@ -77,11 +77,11 @@ export default {
 
 async function repositoryRoute(request: Request): Promise<RepositoryRoute | null> {
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/_sty/')) {
+  if (url.pathname.startsWith('/_marl/')) {
     if (request.method !== 'POST' || !INTERNAL_REPOSITORY_ROUTES.has(url.pathname)) return null;
     const body = await request.clone().json<Record<string, unknown>>().catch(() => null);
     if (!body || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
-    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_sty/merge' || url.pathname === '/_sty/pulls/pin' };
+    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin' };
   }
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\.git\//);
   if (!match || !safeSegment(match[1]) || !safeSegment(match[2])) return null;

@@ -6,7 +6,7 @@ const now = Date.now();
 
 describe('bounded multipart sessions', () => {
   test('requires exact fixed-size parts and completes in order', () => {
-    let session = createUploadSession('push_1234567890abcdef', 'lantharos/sty', 'org_1', now + 60_000, 0, { 'refs/heads/main': 'a'.repeat(40) }, [{ bytes: STORAGE_LIMITS.partBytes + 7, parts: 2, key: 'packs/one.pack' }]);
+    let session = createUploadSession('push_1234567890abcdef', 'lantharos/marl', 'org_1', now + 60_000, 0, { 'refs/heads/main': 'a'.repeat(40) }, [{ bytes: STORAGE_LIMITS.partBytes + 7, parts: 2, key: 'packs/one.pack' }]);
     session = attachMultipart(session, 0, 'r2-upload');
     session = claimPart(session, 0, 1, STORAGE_LIMITS.partBytes, now);
     session = completePart(session, 0, 1, 'etag-one');
@@ -17,7 +17,7 @@ describe('bounded multipart sessions', () => {
   });
 
   test('rejects a part whose body would exceed the reservation', () => {
-    let session = createUploadSession('push_1234567890abcdef', 'lantharos/sty', 'org_1', now + 60_000, 0, {}, [{ bytes: 12, parts: 1, key: 'packs/one.pack' }]);
+    let session = createUploadSession('push_1234567890abcdef', 'lantharos/marl', 'org_1', now + 60_000, 0, {}, [{ bytes: 12, parts: 1, key: 'packs/one.pack' }]);
     session = attachMultipart(session, 0, 'r2-upload');
     expect(() => claimPart(session, 0, 1, 13, now)).toThrow();
   });

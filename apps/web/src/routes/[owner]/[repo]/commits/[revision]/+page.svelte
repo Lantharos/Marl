@@ -48,7 +48,7 @@
   }
 </script>
 
-<svelte:head><title>Commits · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>Commits · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <svelte:window onscroll={loadIfNearEnd} />
 
 <header class="page-head">

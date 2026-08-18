@@ -12,5 +12,5 @@ export async function connectRunRealtime(request: Request, env: Env, principal: 
 
 export async function publishRunLog(env: Env, jobId: string, sequence: number, body: ReadableStream) {
   const room = env.RUN_ROOMS.get(env.RUN_ROOMS.idFromName(jobId));
-  await room.fetch('https://run-room.internal/publish', { method: 'POST', headers: { 'x-sty-log-sequence': String(sequence) }, body });
+  await room.fetch('https://run-room.internal/publish', { method: 'POST', headers: { 'x-marl-log-sequence': String(sequence) }, body });
 }

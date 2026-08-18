@@ -7,7 +7,7 @@
   import Check from 'lucide-svelte/icons/check';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import type { PageData } from './$types';
@@ -38,7 +38,7 @@
     notice = '';
     error = '';
     try { await action(); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Repository settings could not be updated.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Repository settings could not be updated.'; }
     finally { busy = ''; }
   }
 
@@ -73,14 +73,14 @@
   }); }
 </script>
 
-<svelte:head><title>Settings · {owner}/{repo} · Sty</title></svelte:head>
+<svelte:head><title>Settings · {owner}/{repo} · Marl</title></svelte:head>
 
 <header class="page-head"><h2>General</h2><p>Repository identity, access, and lifecycle.</p></header>
 {#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 
 <section class="details">
-  <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Sty.</p></div><button class="primary" disabled={busy === 'general'} onclick={saveGeneral}>{busy === 'general' ? 'Saving…' : 'Save changes'}</button></header>
+  <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><button class="primary" disabled={busy === 'general'} onclick={saveGeneral}>{busy === 'general' ? 'Saving…' : 'Save changes'}</button></header>
   <label><span>Description</span><input bind:value={description} maxlength="280" placeholder="Describe this repository" /></label>
   <div class="fields"><label><span>Visibility</span><Select bind:value={visibility} ariaLabel="Repository visibility" options={[{ value: 'private', label: 'Private', description: 'Only organization members can view it' }, { value: 'public', label: 'Public', description: 'Anyone can view the code' }]} /></label><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
 </section>

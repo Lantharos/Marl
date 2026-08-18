@@ -3,10 +3,10 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "sty",
+      "name": "marl",
     },
     "apps/api": {
-      "name": "@sty/api",
+      "name": "@marl/api",
       "dependencies": {
         "@better-auth/passkey": "1.6.29",
         "better-auth": "1.6.29",
@@ -16,14 +16,14 @@
       },
       "devDependencies": {
         "@cloudflare/workers-types": "^5.20260816.1",
-        "@sty/contracts": "workspace:*",
+        "@marl/contracts": "workspace:*",
         "@types/bun": "^1.3.10",
         "typescript": "^6.0.2",
         "wrangler": "^4.85.0",
       },
     },
     "apps/git-edge": {
-      "name": "@sty/git-edge",
+      "name": "@marl/git-edge",
       "version": "0.0.0",
       "dependencies": {
         "@cloudflare/containers": "^0.3.7",
@@ -36,11 +36,11 @@
       },
     },
     "apps/web": {
-      "name": "@sty/web",
+      "name": "@marl/web",
       "version": "0.0.0",
       "dependencies": {
         "@better-auth/passkey": "1.6.29",
-        "@sty/contracts": "workspace:*",
+        "@marl/contracts": "workspace:*",
         "better-auth": "1.6.29",
         "lucide-svelte": "^1.0.1",
         "marked": "^18.0.9",
@@ -58,7 +58,7 @@
       },
     },
     "packages/contracts": {
-      "name": "@sty/contracts",
+      "name": "@marl/contracts",
       "devDependencies": {
         "typescript": "^6.0.2",
       },
@@ -309,13 +309,13 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@sty/api": ["@sty/api@workspace:apps/api"],
+    "@marl/api": ["@marl/api@workspace:apps/api"],
 
-    "@sty/contracts": ["@sty/contracts@workspace:packages/contracts"],
+    "@marl/contracts": ["@marl/contracts@workspace:packages/contracts"],
 
-    "@sty/git-edge": ["@sty/git-edge@workspace:apps/git-edge"],
+    "@marl/git-edge": ["@marl/git-edge@workspace:apps/git-edge"],
 
-    "@sty/web": ["@sty/web@workspace:apps/web"],
+    "@marl/web": ["@marl/web@workspace:apps/web"],
 
     "@sveltejs/acorn-typescript": ["@sveltejs/acorn-typescript@1.0.13", "", { "peerDependencies": { "acorn": "^8.9.0" } }, "sha512-wgKggnhZVL9Bfx1OaKKTrYY9BFRk6C8UAkQNUcIv1+llzYrIqy+RZm5HPKzn0NpEBvTVhTqB4kQyllZywsRBRQ=="],
 

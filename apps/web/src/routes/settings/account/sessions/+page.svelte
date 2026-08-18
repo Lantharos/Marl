@@ -23,7 +23,7 @@
   }
 </script>
 
-<svelte:head><title>Sessions · Sty</title></svelte:head>
+<svelte:head><title>Sessions · Marl</title></svelte:head>
 <header class="page-head"><h2>Sessions</h2><p>Browsers and devices currently signed in to your account.</p></header>
 <div class="session-list">{#each sessions as session}<article><span class="device"><MonitorSmartphone size={16} /></span><div><strong>{deviceName(session.userAgent)}</strong><span>{session.ipAddress || 'Unknown address'} · signed in {formatTimestamp(session.createdAt)}</span></div><button aria-label="Sign out this session" onclick={() => revokeSession(session.token)}><Trash2 size={14} /></button></article>{:else}<p class="empty">No active sessions.</p>{/each}</div>
 

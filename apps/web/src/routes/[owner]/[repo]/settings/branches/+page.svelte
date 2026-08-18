@@ -3,8 +3,8 @@
   import { untrack } from 'svelte';
   import Check from 'lucide-svelte/icons/check';
   import Save from 'lucide-svelte/icons/save';
-  import type { MergeMethod } from '@sty/contracts';
-  import { api, StyApiError } from '$lib/api';
+  import type { MergeMethod } from '@marl/contracts';
+  import { api, MarlApiError } from '$lib/api';
   import Checkbox from '$lib/components/Checkbox.svelte';
   import Select from '$lib/components/Select.svelte';
   import type { PageData } from './$types';
@@ -47,12 +47,12 @@
       const result = await api<{ branchRule: Rule }>(`/repositories/${$page.params.owner}/${$page.params.repo}/branch-rules`, { method: 'PUT', body: JSON.stringify({ pattern, requiredApprovals: Number(approvals), requireChecks, requireConversations, dismissStaleReviews, allowedMergeMethods }) });
       rules = [...rules.filter((rule) => rule.pattern !== pattern), result.branchRule];
       notice = 'Branch rule saved.';
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Branch rule could not be saved.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Branch rule could not be saved.'; }
     finally { saving = false; }
   }
 </script>
 
-<svelte:head><title>Branch settings · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>Branch settings · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <header class="page-head"><h2>Branches</h2><p>Set the conditions that must be satisfied before code reaches protected branches.</p></header>
 {#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}
 {#if error}<p class="error" role="alert">{error}</p>{/if}

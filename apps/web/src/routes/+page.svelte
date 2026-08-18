@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PullRequestSummary, RepositorySummary, RunnerSummary, RunSummary } from '@sty/contracts';
+  import type { PullRequestSummary, RepositorySummary, RunnerSummary, RunSummary } from '@marl/contracts';
   import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
@@ -21,7 +21,7 @@
 
 </script>
 
-<svelte:head><title>Home · Sty</title><meta name="description" content="Your work in Sty." /></svelte:head>
+<svelte:head><title>Home · Marl</title><meta name="description" content="Your work in Marl." /></svelte:head>
 
 <main class="page">
   <header class="hello"><div><h1>Hey, Kristof.</h1><p>{#if attentionCount > 0}{attentionCount} {attentionCount === 1 ? 'thing needs' : 'things need'} you.{:else}You’re clear for now.{/if}</p></div></header>
@@ -52,7 +52,7 @@
     <aside>
       <header><h2>Your places</h2><a href="/repositories">All repositories</a></header>
       <div class="repo-list">{#each repositories.slice(0,7) as repository}<a href="/{repository.owner}/{repository.name}"><span class="repo-letter">{repository.name.slice(0,1).toLowerCase()}</span><span><strong>{repository.name}</strong><small>{repository.owner}</small></span><ArrowUpRight size={13} /></a>{:else}<div class="no-repos"><p>No repositories yet.</p><a href="/repositories/new">Create the first one</a></div>{/each}</div>
-      <div class="tip"><strong><kbd>Ctrl</kbd><kbd>K</kbd> gets you anywhere.</strong><p>Search codebases and jump between the parts of Sty without breaking your flow.</p></div>
+      <div class="tip"><strong><kbd>Ctrl</kbd><kbd>K</kbd> gets you anywhere.</strong><p>Search codebases and jump between the parts of Marl without breaking your flow.</p></div>
     </aside>
   </div>
 </main>

@@ -2,13 +2,13 @@ FROM rust:bookworm AS builder
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-RUN cargo build --locked --release -p sty-git
+RUN cargo build --locked --release -p git
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /build/target/release/sty-git /usr/local/bin/sty-git
-ENV STY_GIT_LISTEN=0.0.0.0:8788
-ENV STY_GIT_ROOT=/var/lib/sty/repositories
-ENV STY_GIT_LOCAL=0
+COPY --from=builder /build/target/release/git-gateway /usr/local/bin/git-gateway
+ENV MARL_GIT_LISTEN=0.0.0.0:8788
+ENV MARL_GIT_ROOT=/var/lib/marl/repositories
+ENV MARL_GIT_LOCAL=0
 EXPOSE 8788
-ENTRYPOINT ["/usr/local/bin/sty-git"]
+ENTRYPOINT ["/usr/local/bin/git-gateway"]

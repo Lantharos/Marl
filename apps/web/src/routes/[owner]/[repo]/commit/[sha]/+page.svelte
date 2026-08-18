@@ -31,7 +31,7 @@
   }
 </script>
 
-<svelte:head><title>{commit.id.slice(0, 7)} · {owner}/{repo} · Sty</title></svelte:head>
+<svelte:head><title>{commit.id.slice(0, 7)} · {owner}/{repo} · Marl</title></svelte:head>
 
 <header class="commit-head">
   <div class="heading"><GitCommitHorizontal size={20} /><div><h1>{commit.title}</h1>{#if commit.body}<p>{commit.body}</p>{/if}</div></div>

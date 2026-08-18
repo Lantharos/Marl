@@ -9,7 +9,7 @@ export interface ApiError {
 }
 
 export interface HealthResponse {
-  service: 'sty-api';
+  service: 'marl-api';
   status: 'ok';
 }
 
@@ -256,7 +256,7 @@ export interface WorkflowSummary {
   id: Identifier;
   name: string;
   path: string;
-  source: 'sty' | 'github';
+  source: 'marl' | 'github';
   branch: string;
   commit: string;
   triggers: WorkflowTrigger[];

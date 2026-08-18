@@ -1,4 +1,4 @@
-import type { RunDetail } from '@sty/contracts';
+import type { RunDetail } from '@marl/contracts';
 import { apiTextCursorWith, apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';

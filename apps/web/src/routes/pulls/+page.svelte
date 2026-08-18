@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PullRequestSummary } from '@sty/contracts';
+  import type { PullRequestSummary } from '@marl/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
@@ -23,7 +23,7 @@
   }));
 </script>
 
-<svelte:head><title>Pull requests · Sty</title></svelte:head>
+<svelte:head><title>Pull requests · Marl</title></svelte:head>
 <main class="page">
   <PageHeader title="Pull requests" description="Review, unblock, and ship changes from one queue." actionHref="/pulls/new" actionLabel="New pull request" />
   <FilterBar placeholder="Search pull requests" tabs={['Open', 'Merged', 'Closed']} bind:active={activeFilter} bind:query />

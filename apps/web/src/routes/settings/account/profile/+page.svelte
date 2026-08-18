@@ -3,7 +3,7 @@
   import { untrack } from 'svelte';
   import Camera from 'lucide-svelte/icons/camera';
   import Check from 'lucide-svelte/icons/check';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import type { PageData } from './$types';
 
@@ -25,7 +25,7 @@
       displayName = result.profile.displayName; username = result.profile.handle; bio = result.profile.bio; website = result.profile.website ?? '';
       notice = 'Profile saved.';
       await invalidateAll();
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Your profile could not be saved.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Your profile could not be saved.'; }
     finally { busy = ''; }
   }
 
@@ -37,12 +37,12 @@
       const result = await api<{ avatarUrl: string }>('/profile/avatar', { method: 'PUT', headers: { 'content-type': file.type }, body: file });
       avatarUrl = result.avatarUrl; notice = 'Avatar updated.';
       await invalidateAll();
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Your avatar could not be uploaded.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Your avatar could not be uploaded.'; }
     finally { busy = ''; if (avatarInput) avatarInput.value = ''; }
   }
 </script>
 
-<svelte:head><title>Profile · Sty</title></svelte:head>
+<svelte:head><title>Profile · Marl</title></svelte:head>
 <header class="page-head"><h2>Profile</h2><p>Your identity across repositories, reviews, and organizations.</p></header>
 {#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}{#if error}<p class="error" role="alert">{error}</p>{/if}
 <form onsubmit={(event) => { event.preventDefault(); void save(); }}>

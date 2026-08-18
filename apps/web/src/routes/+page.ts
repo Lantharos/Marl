@@ -1,4 +1,4 @@
-import type { PullRequestSummary, RunnerSummary, RunSummary } from '@sty/contracts';
+import type { PullRequestSummary, RunnerSummary, RunSummary } from '@marl/contracts';
 import { apiWith } from '$lib/api';
 import type { PageLoad } from './$types';
 

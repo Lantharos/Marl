@@ -16,7 +16,7 @@ export function createAuth(env: Env, request: Request) {
   if (!secret) throw new Error('AUTH_SECRET is required.');
 
   return betterAuth({
-    appName: 'Sty',
+    appName: 'Marl',
     baseURL: publicUrl.origin,
     basePath: '/api/auth',
     secret,
@@ -38,12 +38,12 @@ export function createAuth(env: Env, request: Request) {
       minPasswordLength: 12,
       maxPasswordLength: 128,
       requireEmailVerification: env.ENVIRONMENT !== 'development',
-      sendResetPassword: async ({ user, url }) => sendAuthEmail(env, user.email, 'Reset your Sty password', url)
+      sendResetPassword: async ({ user, url }) => sendAuthEmail(env, user.email, 'Reset your Marl password', url)
     },
     emailVerification: {
       sendOnSignUp: env.ENVIRONMENT !== 'development',
       autoSignInAfterVerification: true,
-      sendVerificationEmail: async ({ user, url }) => sendAuthEmail(env, user.email, 'Verify your Sty account', url)
+      sendVerificationEmail: async ({ user, url }) => sendAuthEmail(env, user.email, 'Verify your Marl account', url)
     },
     session: {
       expiresIn: 60 * 60 * 24 * 14,
@@ -73,12 +73,12 @@ export function createAuth(env: Env, request: Request) {
       }
     },
     advanced: {
-      cookiePrefix: 'sty',
+      cookiePrefix: 'marl',
       useSecureCookies: env.ENVIRONMENT !== 'development'
     },
     plugins: [
-      passkey({ rpID: publicUrl.hostname, rpName: 'Sty', origin: publicUrl.origin }),
-      twoFactor({ issuer: 'Sty', allowPasswordless: true }),
+      passkey({ rpID: publicUrl.hostname, rpName: 'Marl', origin: publicUrl.origin }),
+      twoFactor({ issuer: 'Marl', allowPasswordless: true }),
       username({ minUsernameLength: 2, maxUsernameLength: 39, usernameValidator: validSlug }),
       ...aveProvider(env)
     ]
@@ -117,7 +117,7 @@ async function sendAuthEmail(env: Env, recipient: string, subject: string, actio
     recipient,
     subject,
     heading: subject,
-    body: subject.startsWith('Reset') ? 'Use the button below to choose a new password. This link expires automatically.' : 'Verify this email address to finish creating your Sty account.',
+    body: subject.startsWith('Reset') ? 'Use the button below to choose a new password. This link expires automatically.' : 'Verify this email address to finish creating your Marl account.',
     actionLabel: subject.startsWith('Reset') ? 'Reset password' : 'Verify email',
     actionUrl
   });

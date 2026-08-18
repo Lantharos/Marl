@@ -35,7 +35,7 @@
     })();
   });
 </script>
-<svelte:head><title>{current || revision} · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>{current || revision} · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <nav class="crumbs"><a href={base}>{$page.params.repo}</a><span>/</span>{#each current.split('/').filter(Boolean) as part, index}<a href="{base}/tree/{revisionPath}/{encodeRepositoryPath(current.split('/').slice(0,index+1).join('/'))}">{part}</a><span>/</span>{/each}</nav>
 <section class="tree"><header><strong>{revision}</strong><span>{current || 'Repository root'}</span></header>{#if current}<a class="row parent" href={parentHref}><span><Folder size={15} />..</span><small>Parent directory</small></a>{/if}{#each entries as entry}<a class="row" href="{base}/{entry.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(current ? `${current}/${entry.name}` : entry.name)}"><span>{#if entry.kind === 'folder'}<Folder size={15} fill="currentColor" />{:else}<File size={15} />{/if}<strong>{entry.name}</strong></span><span class="meta">{#if entry.message}<small>{entry.message}</small>{/if}{#if entry.updatedAt}<Time class="file-time" value={entry.updatedAt} />{/if}</span></a>{/each}</section>
 {#if loadError}<p class="error" role="alert">The repository tree could not be loaded. Refresh to try again.</p>{/if}

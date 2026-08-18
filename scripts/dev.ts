@@ -17,7 +17,7 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
   },
   git: {
     label: `git       http://127.0.0.1:${ports.git}`,
-    command: ['cargo', 'run', '-p', 'sty-git']
+    command: ['cargo', 'run', '-p', 'git']
   }
 };
 
@@ -31,7 +31,7 @@ if (selected.some((name) => !(name in services))) {
   process.exit(1);
 }
 
-console.log('Sty development services');
+console.log('Marl development services');
 for (const name of selected) console.log(`  ${services[name].label}`);
 
 if (requested === '--plan') process.exit(0);
@@ -41,8 +41,8 @@ const workspace = import.meta.dir.replace(/[\\/]scripts$/, '');
 if (selected.includes('api')) {
   console.log('  data      preparing local D1');
   const commands = [
-    ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'sty', '--local'],
-    ['bunx', 'wrangler', 'd1', 'execute', 'sty', '--local', '--file=seed.sql']
+    ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local'],
+    ['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--file=seed.sql']
   ];
   for (const command of commands) {
     const result = Bun.spawnSync(command, {
@@ -110,7 +110,7 @@ process.on('SIGTERM', () => void stop(143));
 for (const child of children) {
   void child.process.exited.then((exitCode) => {
     if (stopping) return;
-    if (exitCode !== 0) console.error(`${child.name} exited with code ${exitCode}; stopping Sty.`);
+    if (exitCode !== 0) console.error(`${child.name} exited with code ${exitCode}; stopping Marl.`);
     void stop(exitCode);
   });
 }

@@ -1,6 +1,6 @@
 import { run, type CommandResult } from './process';
 
-export class StyClient {
+export class MarlClient {
   constructor(
     readonly apiUrl: string,
     readonly gitUrl: string,
@@ -9,7 +9,7 @@ export class StyClient {
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set('x-sty-dev-user', 'kristof');
+    headers.set('x-marl-dev-user', 'kristof');
     if (init.body) headers.set('content-type', 'application/json');
     const response = await fetch(`${this.apiUrl}${path}`, { ...init, headers });
     if (!response.ok) {
@@ -19,7 +19,7 @@ export class StyClient {
   }
 
   async text(path: string) {
-    const response = await fetch(`${this.apiUrl}${path}`, { headers: { 'x-sty-dev-user': 'kristof' } });
+    const response = await fetch(`${this.apiUrl}${path}`, { headers: { 'x-marl-dev-user': 'kristof' } });
     if (!response.ok) throw new Error(`GET ${path} failed (${response.status}): ${await response.text()}`);
     return response.text();
   }

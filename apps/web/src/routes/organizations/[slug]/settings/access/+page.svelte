@@ -6,7 +6,7 @@
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   type Member = { id: string; handle: string; displayName: string; email: string | null; avatarUrl?: string | null; role: 'owner' | 'admin' | 'member' };
@@ -41,7 +41,7 @@
 
   async function run(key: string, action: () => Promise<void>) {
     busy = key; error = ''; notice = '';
-    try { await action(); } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Organization access could not be updated.'; } finally { busy = ''; }
+    try { await action(); } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Organization access could not be updated.'; } finally { busy = ''; }
   }
 
   function saveSettings() { return run('settings', async () => { await api(`/organizations/${slug}`, { method: 'PATCH', body: JSON.stringify({ name: organizationName, baseRepositoryRole: baseRole }) }); notice = 'Organization settings saved.'; }); }
@@ -55,7 +55,7 @@
   async function revokeInvitation(invitation: Invitation) { await api(`${base}/invitations/${invitation.id}`, { method: 'DELETE' }); invitations = invitations.filter((item) => item.id !== invitation.id); }
 </script>
 
-<svelte:head><title>{organizationName} access · Sty</title></svelte:head>
+<svelte:head><title>{organizationName} access · Marl</title></svelte:head>
 <div class="settings-layout"><aside><h1>{organizationName}</h1><nav><a class="active" href={`/organizations/${slug}/settings/access`}>People and teams</a><a href="/organizations">All organizations</a></nav></aside><main><header><h2>People and teams</h2><p>Organization membership and the access inherited by every repository.</p></header>{#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}{#if error}<p class="error">{error}</p>{/if}
   {#if isOwner}<section><div class="settings-form"><label><span>Organization name</span><input bind:value={organizationName} /></label>{#if data.organization.kind !== 'personal'}<label><span>Base repository role</span><Select bind:value={baseRole} options={repositoryRoles} ariaLabel="Base repository role" /></label>{/if}<button class="primary" disabled={busy === 'settings'} onclick={saveSettings}>Save settings</button></div></section>{/if}
   <section><header><div><h3>Members</h3><p>Organization roles govern teams, repositories, and invitations.</p></div>{#if canAdminister && data.organization.kind !== 'personal'}<button onclick={() => { memberRole = 'member'; dialog = 'invite'; }}>Invite member</button>{/if}</header><div class="list">{#each members as member}<article><UserAvatar name={member.displayName} src={member.avatarUrl} size={28} /><div><strong>{member.displayName}</strong><small>@{member.handle}{member.email ? ` · ${member.email}` : ''}</small></div>{#if member.role === 'owner' || !isOwner}<span class="role">{member.role}</span>{:else}<div class="role-select"><Select value={member.role} options={memberRoles} ariaLabel={`Role for ${member.handle}`} onchange={(value) => changeMember(member, value)} /></div><button aria-label={`Remove ${member.handle}`} onclick={() => removeMember(member)}><Trash2 size={14} /></button>{/if}</article>{/each}</div></section>

@@ -1,4 +1,4 @@
-import type { WorkflowSummary } from '@sty/contracts';
+import type { WorkflowSummary } from '@marl/contracts';
 import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';

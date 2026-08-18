@@ -1,4 +1,4 @@
-import type { PullTimelineItem, PullTimelineWindow } from '@sty/contracts';
+import type { PullTimelineItem, PullTimelineWindow } from '@marl/contracts';
 import type { Principal } from './auth';
 import type { Env } from './platform';
 

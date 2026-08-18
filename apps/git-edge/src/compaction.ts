@@ -15,7 +15,7 @@ type CompactionTask = { owner: string; repository: string; repositoryId: string;
 
 export class CompactionObject extends DurableObject<GitEdgeEnv> {
   async fetch(request: Request) {
-    if (request.headers.get('x-sty-storage-token') !== this.env.STY_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+    if (request.headers.get('x-marl-storage-token') !== this.env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
     if (request.method === 'GET' && new URL(request.url).pathname === '/status') return operationResponse(await readOperation(this.ctx.storage));
     try {
       const task = await parseStateBody(request, compactionTaskBody);
@@ -43,7 +43,7 @@ export class CompactionObject extends DurableObject<GitEdgeEnv> {
 export async function scheduleCompaction(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, organizationId: string, generation: number, force = false) {
   const stub = env.COMPACTIONS.get(env.COMPACTIONS.idFromName(repositoryId));
   const response = await stub.fetch('http://compaction/schedule', {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-storage-token': env.STY_GIT_GATEWAY_TOKEN },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-marl-storage-token': env.MARL_GIT_GATEWAY_TOKEN },
     body: JSON.stringify({ owner, repository, repositoryId, organizationId, generation, force })
   });
   if (!response.ok) throw new Error(`Compaction scheduling failed with ${response.status}.`);
@@ -81,7 +81,7 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
   const pushId = `compact_${current.state.generation}`;
   const expiresAt = Date.now() + 15 * 60 * 1000;
   const container = getContainer(env.MAINTENANCE_CONTAINERS, `${repository}:${current.state.generation}`);
-  const base = `http://container/_sty/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
+  const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
   const createdKeys: string[] = [];
   let publicationStarted = false;
   try {

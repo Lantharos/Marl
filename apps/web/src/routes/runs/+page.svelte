@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunSummary } from '@sty/contracts';
+  import type { RunSummary } from '@marl/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
@@ -19,7 +19,7 @@
 
 </script>
 
-<svelte:head><title>Runs · Sty</title></svelte:head>
+<svelte:head><title>Runs · Marl</title></svelte:head>
 <main class="page">
   <PageHeader title="Runs" description="Every workflow, job, and log across your repositories." />
   <FilterBar placeholder="Search runs" tabs={['All', 'Active', 'Success', 'Failure', 'Canceled']} bind:active={activeFilter} bind:query />

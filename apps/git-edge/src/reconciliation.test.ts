@@ -6,7 +6,7 @@ const committed: CommittedPush = {
   generation: 4,
   actualBytes: 700,
   accountingDelta: 700,
-  manifestKey: 'repositories/lantharos/sty/manifests/4.json',
+  manifestKey: 'repositories/lantharos/marl/manifests/4.json',
   manifestHash: 'a'.repeat(64),
   committedAt: 1_000
 };

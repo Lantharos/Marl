@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PullRequestEvent } from '@sty/contracts';
+  import type { PullRequestEvent } from '@marl/contracts';
   import GitMerge from 'lucide-svelte/icons/git-merge';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import Lock from 'lucide-svelte/icons/lock';

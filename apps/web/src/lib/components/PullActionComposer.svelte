@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MergeMethod, PullRequestState } from '@sty/contracts';
+  import type { MergeMethod, PullRequestState } from '@marl/contracts';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';

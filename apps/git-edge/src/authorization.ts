@@ -6,9 +6,9 @@ export async function authorizeGit(request: Request, env: GitEdgeEnv, owner: str
   const headers = new Headers();
   const authorization = request.headers.get('authorization');
   if (authorization) headers.set('authorization', authorization);
-  const gateway = request.headers.get('x-sty-gateway-token');
-  if (gateway) headers.set('x-sty-gateway-token', gateway);
-  const url = new URL('/api/v1/git/authorize', env.STY_API_URL);
+  const gateway = request.headers.get('x-marl-gateway-token');
+  if (gateway) headers.set('x-marl-gateway-token', gateway);
+  const url = new URL('/api/v1/git/authorize', env.MARL_API_URL);
   url.searchParams.set('owner', owner);
   url.searchParams.set('repository', repository);
   url.searchParams.set('service', service);

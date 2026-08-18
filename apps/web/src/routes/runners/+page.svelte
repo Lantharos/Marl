@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunnerSummary } from '@sty/contracts';
+  import type { RunnerSummary } from '@marl/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import Cpu from 'lucide-svelte/icons/cpu';
   import FilterBar from '$lib/components/FilterBar.svelte';
@@ -15,7 +15,7 @@
 
 </script>
 
-<svelte:head><title>Runners · Sty</title></svelte:head>
+<svelte:head><title>Runners · Marl</title></svelte:head>
 <main class="page">
   <PageHeader title="Runners" description="Your machines. Every job isolated in Docker." actionHref="/runners/new" actionLabel="Connect runner" />
   <div class="summary"><span><strong>{runners.length}</strong> connected</span><span><strong>{active}</strong> active {active === 1 ? 'job' : 'jobs'}</span>{#if offline}<span class="warn"><CircleAlert size={12} /><strong>{offline}</strong> offline</span>{/if}</div>

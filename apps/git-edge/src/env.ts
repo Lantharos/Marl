@@ -10,6 +10,6 @@ export interface GitEdgeEnv {
   COMPACTIONS: DurableObjectNamespace;
   INDEXING: DurableObjectNamespace;
   REPOSITORIES: R2Bucket;
-  STY_API_URL: string;
-  STY_GIT_GATEWAY_TOKEN: string;
+  MARL_API_URL: string;
+  MARL_GIT_GATEWAY_TOKEN: string;
 }

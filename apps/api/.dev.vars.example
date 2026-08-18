@@ -1,7 +1,7 @@
 AUTH_SECRET=replace-with-at-least-32-random-bytes
 PUBLIC_URL=http://127.0.0.1:42617
-EMAIL_FROM=noreply@sty.sh
+EMAIL_FROM=noreply@marl.sh
 
-# Optional. Ave must be linked from an existing Sty account.
+# Optional. Ave must be linked from an existing Marl account.
 AVE_CLIENT_ID=
 AVE_CLIENT_SECRET=

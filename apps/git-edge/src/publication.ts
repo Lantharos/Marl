@@ -100,33 +100,33 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
     for (const known of knownPacks) {
       const index = await env.REPOSITORIES.get(known.indexKey);
       if (!index) throw new Error(`Active pack index ${known.id} is missing.`);
-      await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/known/${known.id}`, env, { method: 'PUT', body: index.body })));
+      await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/known/${known.id}`, env, { method: 'PUT', body: index.body })));
     }
     const reports: PackReport[] = [];
     for (const pack of session.packs) {
       const object = await env.REPOSITORIES.get(pack.key);
       if (!object) throw new Error(`Uploaded pack ${pack.number} is missing.`);
-      const response = await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/${pack.number}`, env, { method: 'PUT', body: object.body })));
+      const response = await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${pack.number}`, env, { method: 'PUT', body: object.body })));
       reports.push(await response.json<PackReport>());
     }
     for (const [number, report] of reports.entries()) {
       if (report.compressedBytes !== session.packs[number].bytes) throw new Error(`Pack ${number} does not match its declared size.`);
-      const response = await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/${number}/index`, env)));
+      const response = await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${number}/index`, env)));
       if (!response.body) throw new Error('Validator returned an empty Git index.');
       const [storageBody, knownBody] = response.body.tee();
       const key = `quarantine/${session.repository}/${session.pushId}/${number}.idx`;
       await uploadSession(env, session.pushId).request('/track', { key });
       await env.REPOSITORIES.put(key, storageBody, { httpMetadata: { contentType: 'application/x-git-packed-objects-toc' } });
       indexKeys.push(key);
-      await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/known/${report.id}`, env, { method: 'PUT', body: knownBody })));
+      await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/known/${report.id}`, env, { method: 'PUT', body: knownBody })));
     }
     for (let number = 0; number < reports.length; number += 1) {
-      await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/${number}/graph`, env, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ refs: session.refs }) })));
+      await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${number}/graph`, env, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ refs: session.refs }) })));
     }
-    await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/refs`, env, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ refs: session.refs }) })));
+    await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/refs`, env, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ refs: session.refs }) })));
     const packs: PackDescriptor[] = [];
     for (const [number, report] of reports.entries()) {
-      const metadataResponse = await expectContainer(container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}/${number}/objects`, env)));
+      const metadataResponse = await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${number}/objects`, env)));
       const objects = await metadataResponse.json<PackObject[]>();
       if (!Array.isArray(objects) || objects.length !== report.objectCount) throw new Error('Validator returned an invalid object index.');
       const metadata = JSON.stringify(objects);
@@ -148,14 +148,14 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
     await Promise.allSettled([...indexKeys, ...createdCanonicalKeys].map((key) => env.REPOSITORIES.delete(key)));
     throw error;
   } finally {
-    await container.fetch(internalRequest(`http://container/_sty/packs/${session.pushId}`, env, { method: 'DELETE' })).catch(() => {});
+    await container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}`, env, { method: 'DELETE' })).catch(() => {});
     await container.stop().catch(() => {});
   }
 }
 
 function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  headers.set('x-sty-storage-token', env.STY_GIT_GATEWAY_TOKEN);
+  headers.set('x-marl-storage-token', env.MARL_GIT_GATEWAY_TOKEN);
   return new Request(url, { ...init, headers });
 }
 

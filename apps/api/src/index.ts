@@ -18,14 +18,14 @@ const worker = {
     const url = new URL(request.url);
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json({ service: 'sty-api', status: 'ok' });
+      return json({ service: 'marl-api', status: 'ok' });
     }
 
     if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) return handleAuth(request, _env);
 
-    if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Sty API route does not exist.');
+    if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/methods') return json({ password: true, passkey: true, ave: Boolean(_env.AVE_CLIENT_ID && _env.AVE_CLIENT_SECRET), emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
-    const gatewayTrusted = request.headers.get('x-sty-gateway-token') === (_env.GIT_GATEWAY_TOKEN ?? (_env.ENVIRONMENT === 'development' ? 'sty-local' : ''));
+    const gatewayTrusted = request.headers.get('x-marl-gateway-token') === (_env.GIT_GATEWAY_TOKEN ?? (_env.ENVIRONMENT === 'development' ? 'marl-local' : ''));
     const principal = await authenticate(request, _env);
     const runner = await authenticateRunner(request, _env);
     if (!gatewayTrusted) {
@@ -33,7 +33,7 @@ const worker = {
       if (!rate.success) return problem(429, 'rate_limited', 'Too many requests. Try again shortly.');
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') {
-      if (!gatewayTrusted) return problem(404, 'not_found', 'The requested Sty API route does not exist.');
+      if (!gatewayTrusted) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
       return listPendingGitIndexes(_env);
     }
     if (request.method === 'POST' && url.pathname === '/api/v1/runner/register') return registerRunner(request, _env);
@@ -63,7 +63,7 @@ const worker = {
       if (!principal && !gatewayTrusted) return problem(401, 'authentication_required', 'Authenticate the Git gateway.');
       return indexGit(request, _env, principal, gatewayTrusted);
     }
-    if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Sty API.');
+    if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });
     const accessRoute = await handleAccessRoute(request, _env, principal, url);
@@ -182,7 +182,7 @@ const worker = {
       }
     }
 
-    return problem(404, 'not_found', 'The requested Sty API route does not exist.');
+    return problem(404, 'not_found', 'The requested Marl API route does not exist.');
   }
 };
 

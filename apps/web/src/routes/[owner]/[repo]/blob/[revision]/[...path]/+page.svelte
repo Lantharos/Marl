@@ -41,7 +41,7 @@
     })();
   });
 </script>
-<svelte:head><title>{filePath} · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>{filePath} · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <nav class="crumbs"><a href={base}>{$page.params.repo}</a><span>/</span>{#each filePath.split('/') as part, index}<a href="{base}/{index === filePath.split('/').length - 1 ? 'blob' : 'tree'}/{revisionPath}/{encodeRepositoryPath(filePath.split('/').slice(0,index+1).join('/'))}">{part}</a>{#if index < filePath.split('/').length - 1}<span>/</span>{/if}{/each}</nav>
 <header class="file-head"><div><FileCode2 size={16} /><strong>{filePath.split('/').at(-1)}</strong><span>{lines.length} lines</span></div><div><a href="{base}/commits/{revisionPath}"><History size={14} />History</a><button aria-label="Copy file" onclick={copyFile}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button><button aria-label="Download file" onclick={downloadFile}><Download size={14} /></button></div></header>
 <section class="code"><table><tbody>{#each lines as line, index}<tr><td><a href="#L{index + 1}" id="L{index + 1}">{index + 1}</a></td><td><pre>{line || ' '}</pre></td></tr>{/each}</tbody></table></section>

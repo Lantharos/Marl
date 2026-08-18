@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunState, WorkflowDetail, WorkflowTrigger } from '@sty/contracts';
+  import type { RunState, WorkflowDetail, WorkflowTrigger } from '@marl/contracts';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { untrack } from 'svelte';
@@ -14,7 +14,7 @@
   import Zap from 'lucide-svelte/icons/zap';
   import BackLink from '$lib/components/BackLink.svelte';
   import Modal from '$lib/components/Modal.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -36,13 +36,13 @@
       const result = await api<{ run: { number: number } }>(`/repositories/${owner}/${repo}/workflows/${workflow.id}/dispatch`, { method: 'POST', body: '{}' });
       await goto(`/${owner}/${repo}/runs/${result.run.number}`);
     } catch (cause) {
-      error = cause instanceof StyApiError ? cause.message : 'The workflow could not be started.';
+      error = cause instanceof MarlApiError ? cause.message : 'The workflow could not be started.';
       busy = false;
     }
   }
 </script>
 
-<svelte:head><title>{workflow.name} · {owner}/{repo} · Sty</title></svelte:head>
+<svelte:head><title>{workflow.name} · {owner}/{repo} · Marl</title></svelte:head>
 
 <header class="workflow-head">
   <div><BackLink href="/{owner}/{repo}/runs" label="Workflows" /><div class="title"><span><Zap size={18} /></span><div><h1>{workflow.name}</h1><p><FileCode2 size={11} />{workflow.path}</p></div></div></div>
@@ -70,7 +70,7 @@
   {:else}<div class="empty"><strong>No runs yet</strong><p>{manual ? 'Run it manually, or wait for another declared trigger.' : 'The first matching event will appear here.'}</p></div>{/each}
 </section>
 
-<Modal open={dispatchOpen} title="Run {workflow.name}?" description="Sty will use the workflow definition at the current indexed head of {workflow.branch}." onClose={() => !busy && (dispatchOpen = false)}>
+<Modal open={dispatchOpen} title="Run {workflow.name}?" description="Marl will use the workflow definition at the current indexed head of {workflow.branch}." onClose={() => !busy && (dispatchOpen = false)}>
   {#snippet children()}<div class="dispatch-ref"><GitBranch size={13} /><span>{workflow.branch}</span><code>{workflow.commit.slice(0, 7)}</code></div>{/snippet}
   {#snippet actions()}<button class="secondary" disabled={busy} onclick={() => (dispatchOpen = false)}>Cancel</button><button class="confirm" disabled={busy} onclick={dispatch}>{busy ? 'Starting…' : 'Run workflow'}</button>{/snippet}
 </Modal>

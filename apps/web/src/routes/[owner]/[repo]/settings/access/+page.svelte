@@ -5,7 +5,7 @@
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   type Person = { id: string; handle: string; displayName: string; avatarUrl?: string | null; role?: string };
@@ -36,7 +36,7 @@
         teams = [...teams, { ...result.team, slug: source?.slug ?? '', members: 0 }];
       }
       dialog = null;
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Access could not be updated.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Access could not be updated.'; }
   }
 
   async function remove(kind: 'collaborators' | 'teams', id: string) {
@@ -52,7 +52,7 @@
   }
 </script>
 
-<svelte:head><title>Access · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>Access · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <header class="page-head"><h2>Access</h2><p>People and teams with explicit access to this repository.</p></header>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 <section><header><div><h3>Collaborators</h3><p>Direct repository access, independent of team membership.</p></div><button onclick={() => { selectedPerson = peopleOptions[0]?.value ?? ''; role = 'read'; dialog = 'person'; }}>Add collaborator</button></header><div class="access-list">{#each collaborators as person}<article><UserAvatar name={person.displayName} src={person.avatarUrl} size={28} /><div><strong>{person.displayName}</strong><small>@{person.handle}</small></div><div class="role-select"><Select value={person.role ?? 'read'} options={roles} ariaLabel={`Role for ${person.handle}`} onchange={(value) => updateRole('collaborators', person.id, value)} /></div><button aria-label={`Remove ${person.handle}`} onclick={() => remove('collaborators', person.id)}><Trash2 size={14} /></button></article>{:else}<p class="empty">No direct collaborators.</p>{/each}</div></section>

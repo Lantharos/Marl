@@ -1,4 +1,4 @@
-import type { ApiError } from '@sty/contracts';
+import type { ApiError } from '@marl/contracts';
 import { safeParse, type BaseIssue, type BaseSchema, type InferOutput } from 'valibot';
 
 export function json(value: unknown, init: ResponseInit = {}): Response {

@@ -2,28 +2,28 @@
   import Check from 'lucide-svelte/icons/check';
   import Copy from 'lucide-svelte/icons/copy';
   import FormShell from '$lib/components/FormShell.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
 
   let token = $state('');
   let expiresAt = $state('');
   let busy = $state(false);
   let error = $state('');
   let copied = $state(false);
-  const command = $derived(token ? `sty runner register --url https://sty.sh --token ${token}` : '');
+  const command = $derived(token ? `marl runner register --url https://marl.sh --token ${token}` : '');
 
   async function create() {
     busy = true; error = '';
     try {
       const result = await api<{ enrollment: { token: string; expiresAt: string } }>('/runner-enrollments', { method: 'POST', body: JSON.stringify({ organization: 'lantharos', expiresMinutes: 15 }) });
       token = result.enrollment.token; expiresAt = result.enrollment.expiresAt;
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Enrollment could not be created.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Enrollment could not be created.'; }
     finally { busy = false; }
   }
 
   async function copy() { await navigator.clipboard.writeText(command); copied = true; setTimeout(() => (copied = false), 1400); }
 </script>
 
-<svelte:head><title>Connect runner · Sty</title></svelte:head>
+<svelte:head><title>Connect runner · Marl</title></svelte:head>
 <FormShell title="Connect a runner" description="Give one machine permission to pick up jobs for lantharos.">
   {#if token}
     <div class="ready"><strong>Run this on the machine</strong><p>The enrollment token works once and expires at {expiresAt}. Registration verifies Docker before the runner is connected.</p><div><code>{command}</code><button aria-label="Copy runner command" onclick={copy}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div><a href="/runners">I'll finish on the machine</a></div>

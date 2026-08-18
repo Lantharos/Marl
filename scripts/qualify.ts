@@ -1,12 +1,12 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { assert, StyClient } from './qualification/client';
+import { assert, MarlClient } from './qualification/client';
 import { ManagedService, reservePorts, run, stopActiveProcesses, waitForHttp } from './qualification/process';
 
 const root = import.meta.dir.replace(/[\\/]scripts$/, '');
 const apiRoot = join(root, 'apps', 'api');
-const temporary = await mkdtemp(join(tmpdir(), 'sty-qualification-'));
+const temporary = await mkdtemp(join(tmpdir(), 'marl-qualification-'));
 const persistence = join(temporary, 'cloudflare');
 const repositories = join(temporary, 'repositories');
 const source = join(temporary, 'source');
@@ -17,7 +17,7 @@ const cargoTarget = join(root, 'target', 'qualification');
 const [apiPort, gitPort, inspectorPort] = reservePorts(3);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const gitUrl = `http://127.0.0.1:${gitPort}`;
-const client = new StyClient(apiUrl, gitUrl, source);
+const client = new MarlClient(apiUrl, gitUrl, source);
 let api: ManagedService | undefined;
 let git: ManagedService | undefined;
 const jobIds = new Set<string>();
@@ -30,20 +30,20 @@ try {
   stage('Prepare isolated control plane');
   await mkdir(persistence, { recursive: true });
   await mkdir(repositories, { recursive: true });
-  await run(['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'sty', '--local', '--persist-to', persistence], { cwd: apiRoot, timeoutMs: 120_000 });
-  await run(['bunx', 'wrangler', 'd1', 'execute', 'sty', '--local', '--persist-to', persistence, '--file=seed.sql'], { cwd: apiRoot, timeoutMs: 120_000 });
-  await run(['cargo', 'build', '-p', 'sty-git', '-p', 'sty-cli'], { cwd: root, env: { CARGO_TARGET_DIR: cargoTarget }, timeoutMs: 180_000 });
+  await run(['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local', '--persist-to', persistence], { cwd: apiRoot, timeoutMs: 120_000 });
+  await run(['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--persist-to', persistence, '--file=seed.sql'], { cwd: apiRoot, timeoutMs: 120_000 });
+  await run(['cargo', 'build', '-p', 'git', '-p', 'cli'], { cwd: root, env: { CARGO_TARGET_DIR: cargoTarget }, timeoutMs: 180_000 });
 
   api = startApi();
   await waitForHttp(`${apiUrl}/health`, api);
   git = startGit();
   await waitForHttp(`${gitUrl}/health`, git);
 
-  stage('Push Sty through Smart HTTP');
+  stage('Push Marl through Smart HTTP');
   const repositoryName = `qualification-${Date.now().toString(36)}`;
   const created = await client.request<{ repository: { id: string } }>('/api/v1/repositories', {
     method: 'POST',
-    body: JSON.stringify({ owner: 'lantharos', name: repositoryName, description: 'Isolated Sty qualification repository', visibility: 'private' })
+    body: JSON.stringify({ owner: 'lantharos', name: repositoryName, description: 'Isolated Marl qualification repository', visibility: 'private' })
   });
   const tokenResponse = await client.request<{ token: { value: string } }>('/api/v1/tokens', {
     method: 'POST',
@@ -52,12 +52,12 @@ try {
   const token = tokenResponse.token.value;
   const remote = `${gitUrl}/lantharos/${repositoryName}.git`;
   await run(['git', 'clone', '--quiet', '--no-hardlinks', root, source], { timeoutMs: 120_000 });
-  await run(['git', 'config', 'user.name', 'Sty Qualification'], { cwd: source });
-  await run(['git', 'config', 'user.email', 'qualification@sty.invalid'], { cwd: source });
+  await run(['git', 'config', 'user.name', 'Marl Qualification'], { cwd: source });
+  await run(['git', 'config', 'user.email', 'qualification@marl.invalid'], { cwd: source });
   await run(['git', 'switch', '-C', 'main'], { cwd: source });
-  await mkdir(join(source, '.sty', 'workflows'), { recursive: true });
-  await Bun.write(join(source, '.sty', 'workflows', 'qualification.yml'), workflowFile());
-  await run(['git', 'add', '.sty/workflows/qualification.yml'], { cwd: source });
+  await mkdir(join(source, '.marl', 'workflows'), { recursive: true });
+  await Bun.write(join(source, '.marl', 'workflows', 'qualification.yml'), workflowFile());
+  await run(['git', 'add', '.marl/workflows/qualification.yml'], { cwd: source });
   await run(['git', 'commit', '-m', 'Add qualification workflow'], { cwd: source });
   await run(['git', 'remote', 'set-url', 'origin', remote], { cwd: source });
   await client.git(['push', '--set-upstream', 'origin', 'main'], token);
@@ -86,11 +86,11 @@ try {
     body: JSON.stringify({ organization: 'lantharos', expiresMinutes: 15 })
   });
   await run([
-    executable('sty'), 'runner', 'register', '--url', apiUrl, '--token', enrollment.enrollment.token,
+    executable('marl'), 'runner', 'register', '--url', apiUrl, '--token', enrollment.enrollment.token,
     '--name', `qualification-${Date.now().toString(36)}`, '--label', 'docker', '--concurrency', '1',
     '--work-dir', runnerWork, '--config', runnerConfig
   ], { cwd: root, timeoutMs: 120_000 });
-  await run([executable('sty'), 'runner', 'run', '--once', '--config', runnerConfig], { cwd: root, timeoutMs: 300_000 });
+  await run([executable('marl'), 'runner', 'run', '--once', '--config', runnerConfig], { cwd: root, timeoutMs: 300_000 });
   const completedRuns = await client.request<{ runs: RunSummary[] }>(`/api/v1/repositories/lantharos/${repositoryName}/runs?limit=100`);
   const completed = completedRuns.runs.find((item) => item.trigger === 'push' && item.branch === 'main' && item.state === 'success');
   assert(completed, 'The latest push workflow did not complete successfully.');
@@ -159,7 +159,7 @@ try {
 
   stage('Run deterministic publication crash boundaries');
   await run(['bun', 'test', 'apps/git-edge/src/reliability-harness.test.ts', 'apps/git-edge/src/reconciliation.test.ts', 'apps/git-edge/src/canonical.test.ts'], { cwd: root, timeoutMs: 120_000 });
-  console.log('\nSty qualification passed. Git history, PR publication, runner execution, supersession, restart recovery, and strict clone integrity are healthy.');
+  console.log('\nMarl qualification passed. Git history, PR publication, runner execution, supersession, restart recovery, and strict clone integrity are healthy.');
   console.log(`Cloudflare state and repositories were isolated under ${temporary} and have been removed.`);
 } catch (error) {
   await Promise.allSettled([api?.stop(), git?.stop()].filter(Boolean) as Promise<void>[]);
@@ -179,14 +179,14 @@ function startApi() {
   return new ManagedService([
     'bunx', 'wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(apiPort), '--inspector-port', String(inspectorPort),
     '--persist-to', persistence, '--var', 'ENVIRONMENT:development', '--var', `GIT_GATEWAY_URL:${gitUrl}`,
-    '--var', `GIT_PUBLIC_URL:${gitUrl}`, '--var', 'EMAIL_FROM:noreply@sty.sh'
+    '--var', `GIT_PUBLIC_URL:${gitUrl}`, '--var', 'EMAIL_FROM:noreply@marl.sh'
   ], { cwd: apiRoot });
 }
 
 function startGit() {
-  return new ManagedService([executable('sty-git')], {
+  return new ManagedService([executable('git-gateway')], {
     cwd: root,
-    env: { STY_GIT_ROOT: repositories, STY_API_URL: apiUrl, STY_GIT_LISTEN: `127.0.0.1:${gitPort}`, STY_GIT_LOCAL: '1', STY_GIT_GATEWAY_TOKEN: 'sty-local' }
+    env: { MARL_GIT_ROOT: repositories, MARL_API_URL: apiUrl, MARL_GIT_LISTEN: `127.0.0.1:${gitPort}`, MARL_GIT_LOCAL: '1', MARL_GIT_GATEWAY_TOKEN: 'marl-local' }
   });
 }
 
@@ -201,8 +201,8 @@ async function commitMarker(message: string) {
 async function cleanupDockerJobs(ids: Set<string>) {
   for (const id of ids) {
     const suffix = id.replace(/^job_/, '').toLowerCase();
-    await run(['docker', 'rm', '--force', `sty-job-${suffix}`], { allowFailure: true, timeoutMs: 15_000 });
-    await run(['docker', 'network', 'rm', `sty-job-${suffix}`], { allowFailure: true, timeoutMs: 15_000 });
+    await run(['docker', 'rm', '--force', `marl-job-${suffix}`], { allowFailure: true, timeoutMs: 15_000 });
+    await run(['docker', 'network', 'rm', `marl-job-${suffix}`], { allowFailure: true, timeoutMs: 15_000 });
   }
 }
 

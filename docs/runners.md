@@ -1,6 +1,6 @@
 # Self-hosted runners
 
-Sty runs jobs only on machines you connect. A runner belongs to one organization and can
+Marl runs jobs only on machines you connect. A runner belongs to one organization and can
 read repositories in that organization. It never receives write access to Git.
 
 ## Connect a runner
@@ -10,7 +10,7 @@ Install Git and Docker Engine, then create a one-time enrollment token from
 jobs:
 
 ```powershell
-sty runner register --url https://sty.sh --token <enrollment-token> --name build-01 --label x86_64
+marl runner register --url https://marl.sh --token <enrollment-token> --name build-01 --label x86_64
 ```
 
 Registration verifies the Docker daemon and automatically adds the `docker` label. It writes
@@ -20,14 +20,14 @@ the operating-system service account. Enrollment tokens expire and can be used o
 Run interactively while setting the machine up:
 
 ```powershell
-sty runner run
+marl runner run
 ```
 
 Install it with automatic restart once the configuration is correct:
 
 ```powershell
-sty runner service install
-sty runner service status
+marl runner service install
+marl runner service status
 ```
 
 Service installation supports Windows Service Control Manager and Linux systemd. It needs
@@ -35,7 +35,7 @@ administrator or root access because it creates a system service.
 
 ## Workflow files
 
-Sty reads native workflows from `.sty/workflows/*.yml` and compatible GitHub Actions
+Marl reads native workflows from `.marl/workflows/*.yml` and compatible GitHub Actions
 workflows from `.github/workflows/*.yml`. A workflow runs from the exact commit that
 contained its configuration.
 
@@ -74,7 +74,7 @@ Native workflows support job dependencies, per-job Docker images, service contai
 job and step timeouts, step working directories, continue-on-error, environment values,
 artifacts, runner labels, and push branch filters.
 
-Push runs are superseded by a newer push of the same workflow on the same branch. Sty cancels
+Push runs are superseded by a newer push of the same workflow on the same branch. Marl cancels
 both queued jobs and an in-progress stale run so an offline runner processes only the newest
 revision when it returns. Manual dispatches and retries are never superseded. Set
 `supersede: false` at the top level of a native workflow when every push must run. GitHub
@@ -82,13 +82,13 @@ workflows can opt out with `concurrency.cancel-in-progress: false`.
 
 The repository Runs tab lists workflow definitions from the default branch and keeps each
 workflow's run history together. A **Run workflow** action is available only when the file
-declares `workflow_dispatch`; Sty does not accept arbitrary commands from the Runs UI.
+declares `workflow_dispatch`; Marl does not accept arbitrary commands from the Runs UI.
 
 The GitHub workflow reader supports `runs-on`, `needs`, simple strategy matrices with
 `include` and `exclude`, `container`, service images and environments, job and step
 environments, timeouts, working directories, continue-on-error, `actions/checkout`, and
 `actions/upload-artifact`. Windows and macOS hosted images and arbitrary Marketplace
-`uses:` actions are rejected with a workflow warning; Sty never reports an unsupported
+`uses:` actions are rejected with a workflow warning; Marl never reports an unsupported
 action as successful.
 
 Environment values in workflow files are ordinary repository content. Secret storage and

@@ -1,4 +1,4 @@
-import type { MergeMethod } from '@sty/contracts';
+import type { MergeMethod } from '@marl/contracts';
 import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';

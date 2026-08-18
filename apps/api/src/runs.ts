@@ -209,7 +209,7 @@ export async function readJobLogs(env: Env, principal: Principal, jobId: string,
     return object ? new Response(object.body).text() : '';
   }));
   const cursor = visible.at(-1)?.sequence ?? after;
-  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-sty-log-cursor': String(cursor), 'x-sty-log-more': String(chunks.results.length > visible.length) } });
+  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-marl-log-cursor': String(cursor), 'x-marl-log-more': String(chunks.results.length > visible.length) } });
 }
 
 export async function downloadArtifact(env: Env, principal: Principal, artifactId: string): Promise<Response> {

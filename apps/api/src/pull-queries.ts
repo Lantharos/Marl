@@ -120,7 +120,7 @@ export async function getPullDiff(env: Env, principal: Principal, owner: string,
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id,source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; sourceCommitId: string; targetCommitId: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const response = await requestGitGateway(env, '/_sty/compare', { owner, repository: name, base: pull.targetCommitId, head: pull.sourceCommitId }, { attempts: 2 });
+  const response = await requestGitGateway(env, '/_marl/compare', { owner, repository: name, base: pull.targetCommitId, head: pull.sourceCommitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'diff_gateway_failed', 'Git gateway could not build this comparison.');
   const [diff, timelineThreads] = await Promise.all([response.json<Record<string, unknown>>(), allPullThreads(env, principal, pull.id)]);
   return json({ ...diff, threads: timelineThreads.map((item) => item.value) });
@@ -133,7 +133,7 @@ export async function getPullPatch(env: Env, principal: Principal, owner: string
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
   const pull = await env.DB.prepare('SELECT source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ sourceCommitId: string; targetCommitId: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const response = await requestGitGateway(env, '/_sty/patch', { owner, repository: name, base: pull.targetCommitId, head: pull.sourceCommitId, path }, { attempts: 2 }).catch(() => null);
+  const response = await requestGitGateway(env, '/_marl/patch', { owner, repository: name, base: pull.targetCommitId, head: pull.sourceCommitId, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
   return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store' } });
 }
@@ -148,7 +148,7 @@ export async function compareBranches(env: Env, principal: Principal, owner: str
   const baseBranch = branches.results.find((branch) => branch.name === base);
   const headBranch = branches.results.find((branch) => branch.name === head);
   if (!baseBranch || !headBranch) return problem(404, 'branch_not_found', 'A comparison branch does not exist.');
-  const response = await requestGitGateway(env, '/_sty/compare', { owner, repository: name, base: baseBranch.commitId, head: headBranch.commitId }, { attempts: 2 });
+  const response = await requestGitGateway(env, '/_marl/compare', { owner, repository: name, base: baseBranch.commitId, head: headBranch.commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'diff_gateway_failed', 'Git gateway could not build this comparison.');
   return json(await response.json());
 }

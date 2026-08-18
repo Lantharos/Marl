@@ -4,7 +4,7 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Checkbox from '$lib/components/Checkbox.svelte';
   import Modal from '$lib/components/Modal.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import { formatTimestamp } from '$lib/time';
   import type { PageData } from './$types';
 
@@ -29,7 +29,7 @@
       const result = await api<{ token: { id: string; name: string; value: string; tokenPrefix: string; scopes: string[]; expiresAt: string; lastUsedAt: null; createdAt?: string } }>('/tokens', { method: 'POST', body: JSON.stringify({ name: tokenName, scopes, expiresDays: 90 }) });
       newToken = result.token.value;
       tokens = [{ ...result.token, createdAt: new Date().toISOString(), lastUsedAt: null }, ...tokens];
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'The developer token could not be created.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The developer token could not be created.'; }
     finally { busy = false; }
   }
 
@@ -44,8 +44,8 @@
   }
 </script>
 
-<svelte:head><title>Developer access · Sty</title></svelte:head>
-<header class="page-head"><div><h2>Developer access</h2><p>Scoped credentials for Git, the Sty CLI, and automation.</p></div><button class="primary" onclick={() => { tokenDialog = true; newToken = ''; notice = ''; }}>Create token</button></header>
+<svelte:head><title>Developer access · Marl</title></svelte:head>
+<header class="page-head"><div><h2>Developer access</h2><p>Scoped credentials for Git, the Marl CLI, and automation.</p></div><button class="primary" onclick={() => { tokenDialog = true; newToken = ''; notice = ''; }}>Create token</button></header>
 {#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}{#if error}<p class="error" role="alert">{error}</p>{/if}
 <div class="token-list">{#each tokens as token}<article><div><strong>{token.name}</strong><span>{token.tokenPrefix}… · expires {formatTimestamp(token.expiresAt)}</span><small>{token.scopes.join(', ')}{token.lastUsedAt ? ` · last used ${formatTimestamp(token.lastUsedAt)}` : ' · never used'}</small></div><button aria-label={`Revoke ${token.name}`} onclick={() => revokeToken(token.id)}><Trash2 size={14} /></button></article>{:else}<p class="empty">No developer tokens.</p>{/each}</div>
 

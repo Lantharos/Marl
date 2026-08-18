@@ -17,7 +17,7 @@ export async function sendTransactionalEmail(env: Env, email: TransactionalEmail
   if (!env.EMAIL) throw new Error('Cloudflare Email Service is not configured.');
   await env.EMAIL.send({
     to: email.recipient,
-    from: { name: 'Sty', email: env.EMAIL_FROM ?? 'noreply@sty.sh' },
+    from: { name: 'Marl', email: env.EMAIL_FROM ?? 'noreply@marl.sh' },
     subject: email.subject,
     text: `${email.heading}\n\n${email.body}\n\n${email.actionLabel}: ${email.actionUrl}`,
     html: emailHtml(email)

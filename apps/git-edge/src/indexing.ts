@@ -10,7 +10,7 @@ type IndexTask = { owner: string; repository: string; repositoryId: string; gene
 
 export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
   async fetch(request: Request) {
-    if (request.headers.get('x-sty-storage-token') !== this.env.STY_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+    if (request.headers.get('x-marl-storage-token') !== this.env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
     if (request.method === 'GET' && new URL(request.url).pathname === '/status') return operationResponse(await readOperation(this.ctx.storage));
     try {
       const task = await parseStateBody(request, repositoryIndexTaskBody);
@@ -42,7 +42,7 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
 export async function scheduleRepositoryIndex(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, generation: number) {
   const stub = env.INDEXING.get(env.INDEXING.idFromName(repositoryId));
   const response = await stub.fetch('http://indexing/schedule', {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-sty-storage-token': env.STY_GIT_GATEWAY_TOKEN },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-marl-storage-token': env.MARL_GIT_GATEWAY_TOKEN },
     body: JSON.stringify({ owner, repository, repositoryId, generation })
   });
   if (!response.ok) throw new Error(`Repository indexing schedule failed with ${response.status}.`);

@@ -7,7 +7,7 @@
   const runner = $derived(data.runner);
 </script>
 
-<svelte:head><title>{runner?.name ?? 'Runner'} · Sty</title></svelte:head>
+<svelte:head><title>{runner?.name ?? 'Runner'} · Marl</title></svelte:head>
 <main class="page">
   <BackLink href="/runners" label="Runners" />
   <header><span class="machine"><Cpu size={21} /></span><div><h1>{runner.name}</h1><p>{runner.platform} {runner.architecture} · runner {runner.version}</p></div><span class="status {runner.state}"><i></i>{runner.state}</span></header>

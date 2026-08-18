@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount, untrack } from 'svelte';
-  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullTimelineWindow } from '@sty/contracts';
+  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullTimelineWindow } from '@marl/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
@@ -17,7 +17,7 @@
   import MessageSquare from 'lucide-svelte/icons/message-square';
   import Pencil from 'lucide-svelte/icons/pencil';
   import X from 'lucide-svelte/icons/x';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import MarkdownBody from '$lib/components/MarkdownBody.svelte';
   import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
   import Modal from '$lib/components/Modal.svelte';
@@ -133,7 +133,7 @@
     try {
       const result = await api<{ timeline: PullTimelineWindow }>(`/repositories/${owner}/${repo}/pulls/${number}/timeline?before=${before}&after=${after}`);
       timeline.mergeOlder(result.timeline);
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Older conversation could not be loaded.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Older conversation could not be loaded.'; }
     finally { busy = false; }
   }
 
@@ -148,63 +148,63 @@
       ]);
       diff = loadedDiff; DiffViewer = viewer.default;
     }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Changes could not be loaded.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Changes could not be loaded.'; }
     finally { diffLoading = false; }
   }
 
   async function submitReview() {
     if (!pull || busy) return; busy = true; error = '';
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: reviewState, body: reviewBody }) }); applyUpdate(result.update); reviewBody = ''; reviewOpen = false; tab = 'conversation'; }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Review could not be submitted.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Review could not be submitted.'; }
     finally { busy = false; }
   }
 
   async function reply(threadId: string, body: string) {
     if (!body.trim() || busy) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/review-threads/${threadId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Reply could not be added.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Reply could not be added.'; }
     finally { busy = false; }
   }
 
   async function saveComment(commentId: string, body: string) {
     if (!body.trim() || busy) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/review-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body }) }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be updated.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be updated.'; }
     finally { busy = false; }
   }
 
   async function deleteComment(commentId: string) {
     if (busy) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/review-comments/${commentId}`, { method: 'DELETE' }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be deleted.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be deleted.'; }
     finally { busy = false; }
   }
 
   async function addPullComment() {
     if (!commentBody.trim() || busy) return; busy = true; error = '';
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/comments`, { method: 'POST', body: JSON.stringify({ body: commentBody }) }); applyUpdate(result.update); commentBody = ''; }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be added.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be added.'; }
     finally { busy = false; }
   }
 
   async function savePullComment(commentId: string) {
     if (!editingPullBody.trim() || busy) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/pull-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body: editingPullBody }) }); applyUpdate(result.update); editingPullComment = null; editingPullBody = ''; }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be updated.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be updated.'; }
     finally { busy = false; }
   }
 
   async function deletePullComment(commentId: string) {
     if (busy) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/pull-comments/${commentId}`, { method: 'DELETE' }); applyUpdate(result.update); confirmingPullDelete = null; }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be deleted.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be deleted.'; }
     finally { busy = false; }
   }
 
   async function createLineComment(draft: { path: string; side: 'old' | 'new'; startLine: number; line: number }, body: string) {
     if (!body.trim() || busy) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/threads`, { method: 'POST', body: JSON.stringify({ ...draft, startSide: draft.side, body }) }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Comment could not be added.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be added.'; }
     finally { busy = false; }
   }
   async function loadPatch(file: PullRequestDiff['files'][number]) {
@@ -215,7 +215,7 @@
   async function updateMetadata(body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) {
     if (busy) return; busy = true; error = '';
     try { const result = await api<{ update?: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/metadata`, { method: 'PATCH', body: JSON.stringify(body) }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request metadata could not be updated.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull request metadata could not be updated.'; }
     finally { busy = false; }
   }
 
@@ -224,7 +224,7 @@
     const before = timeline.get('thread', threadId);
     timeline.patch('thread', threadId, { resolved });
     try { const result = await api<{ update?: PullRealtimeUpdate }>(`/review-threads/${threadId}/resolve`, { method: 'POST', body: JSON.stringify({ resolved }) }); applyUpdate(result.update); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Conversation could not be updated.'; timeline.restore(before); }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Conversation could not be updated.'; timeline.restore(before); }
     finally { busy = false; }
   }
 
@@ -242,7 +242,7 @@
         applyUpdate(result.update);
       }
       commentBody = '';
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request action could not be completed.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull request action could not be completed.'; }
     finally { busy = false; }
   }
 
@@ -259,7 +259,7 @@
       const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}`, { method: 'PATCH', body: JSON.stringify({ title: editedTitle, body: editedBody }) });
       applyUpdate(result.update);
       editingDetails = false;
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request details could not be updated.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull request details could not be updated.'; }
     finally { busy = false; }
   }
 
@@ -269,7 +269,7 @@
 
 </script>
 
-<svelte:head><title>{pull?.title ?? `Pull request #${number}`} · {owner}/{repo} · Sty</title></svelte:head>
+<svelte:head><title>{pull?.title ?? `Pull request #${number}`} · {owner}/{repo} · Marl</title></svelte:head>
 
 {#if !pull}
   <div class="fatal"><CircleAlert size={24} /><strong>Pull request unavailable</strong><p>{error}</p><a href="/{owner}/{repo}/pulls">Back to pull requests</a></div>

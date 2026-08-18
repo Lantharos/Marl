@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunState, WorkflowSummary, WorkflowTrigger } from '@sty/contracts';
+  import type { RunState, WorkflowSummary, WorkflowTrigger } from '@marl/contracts';
   import { page } from '$app/stores';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
@@ -25,7 +25,7 @@
   }
 </script>
 
-<svelte:head><title>Workflows · {owner}/{repo} · Sty</title></svelte:head>
+<svelte:head><title>Workflows · {owner}/{repo} · Marl</title></svelte:head>
 
 <header class="heading">
   <div><h1>Workflows</h1><p>Automation defined alongside your code.</p></div>
@@ -58,7 +58,7 @@
       </span>
     </a>
   {:else}
-    <div class="empty"><Zap size={22} /><strong>{query ? 'No matching workflows' : 'No workflows yet'}</strong><p>{query ? 'Try a different name, path, or trigger.' : 'Add a YAML workflow under .sty/workflows or .github/workflows and push it.'}</p></div>
+    <div class="empty"><Zap size={22} /><strong>{query ? 'No matching workflows' : 'No workflows yet'}</strong><p>{query ? 'Try a different name, path, or trigger.' : 'Add a YAML workflow under .marl/workflows or .github/workflows and push it.'}</p></div>
   {/each}
 </section>
 

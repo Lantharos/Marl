@@ -1,14 +1,14 @@
-# Sty product contract
+# Marl product contract
 
 ## Purpose
 
-Sty is the daily workspace for hosting code, reviewing changes, and running checks on
+Marl is the daily workspace for hosting code, reviewing changes, and running checks on
 self-hosted machines. It should be comfortable enough to remain open all day and precise
 enough that developers can understand the state of their work without reconstructing it
 from several pages.
 
-Sty is one product. The local repository engine, CLI, hosted application, API, and runner
-are implementation parts of Sty, not separately branded products.
+Marl is one product. The local repository engine, CLI, hosted application, API, and runner
+are implementation parts of Marl, not separately branded products.
 
 ## Primary loop
 
@@ -16,7 +16,7 @@ Every product decision must improve this loop:
 
 1. Create or switch to a line of work.
 2. Save a meaningful revision.
-3. Push it to Sty.
+3. Push it to Marl.
 4. Open a pull request.
 5. Review code and discuss specific lines.
 6. Run required checks on self-hosted runners.
@@ -78,7 +78,7 @@ request state should remain easy to reach.
 
 ## Pull requests
 
-Pull requests are Sty's flagship surface. A developer must be able to understand the
+Pull requests are Marl's flagship surface. A developer must be able to understand the
 proposal, review every file, follow conversations, inspect checks, and identify every merge
 blocker without hunting across unrelated screens.
 
@@ -103,7 +103,7 @@ squash, or rebase methods. These rules are enforcement policy, not UI suggestion
 Runs expose queue time, execution time, job dependencies, live logs, runner identity,
 cancellation, retry, and artifacts. A waiting job explains which runner labels it requires.
 
-Runners are always self-hosted. Sty does not imply that hosted execution is available or
+Runners are always self-hosted. Marl does not imply that hosted execution is available or
 planned.
 
 ## Explicitly deferred
@@ -131,4 +131,4 @@ A milestone is complete only when:
 - Important state is represented by text or iconography, not color alone.
 - The implementation passes type checks and relevant tests.
 - The actual rendered UI has been inspected.
-- Sty can use the feature in its own development workflow where applicable.
+- Marl can use the feature in its own development workflow where applicable.

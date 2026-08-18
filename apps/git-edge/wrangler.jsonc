@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "sty-git",
+  "name": "marl-git",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-15",
   "observability": {
@@ -45,5 +45,5 @@
     { "tag": "v2", "new_sqlite_classes": ["RepositoryStateObject", "OrganizationQuotaObject", "UploadSessionObject"] },
     { "tag": "v3", "new_sqlite_classes": ["ValidatorContainer", "MaintenanceContainer", "CompactionObject", "RepositoryIndexObject"] }
   ],
-  "r2_buckets": [{ "binding": "REPOSITORIES", "bucket_name": "sty-git-repositories" }]
+  "r2_buckets": [{ "binding": "REPOSITORIES", "bucket_name": "marl-git-repositories" }]
 }

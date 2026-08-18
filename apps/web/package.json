@@ -1,5 +1,5 @@
 {
-  "name": "@sty/web",
+  "name": "@marl/web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "1.6.29",
-    "@sty/contracts": "workspace:*",
+    "@marl/contracts": "workspace:*",
     "better-auth": "1.6.29",
     "lucide-svelte": "^1.0.1",
     "marked": "^18.0.9",

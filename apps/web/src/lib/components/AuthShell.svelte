@@ -5,7 +5,7 @@
 
 <main class="auth-page">
   <section>
-    <a class="brand" href="/" aria-label="Sty"><BrandMark /></a>
+    <a class="brand" href="/" aria-label="Marl"><BrandMark /></a>
     <header><h1>{title}</h1><p>{description}</p></header>
     {@render children()}
     {#if footer}<footer>{@render footer()}</footer>{/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ReviewThread } from '@sty/contracts';
+  import type { ReviewThread } from '@marl/contracts';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';

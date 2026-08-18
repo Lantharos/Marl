@@ -9,7 +9,7 @@
     if (status === 404) return { title: 'That page is not here', image: '/error-not-found.webp' };
     if (status === 403) return { title: 'You cannot access this page', image: '/error-access.webp' };
     if (status === 401) return { title: 'Sign in required', image: '/error-access.webp' };
-    if (status >= 500) return { title: 'Sty hit a snag', image: '/error-repository.webp' };
+    if (status >= 500) return { title: 'Marl hit a snag', image: '/error-repository.webp' };
     return { title: 'This page could not be opened', image: '/error-request.webp' };
   });
 
@@ -19,7 +19,7 @@
   }
 </script>
 
-<svelte:head><title>{copy.title} · Sty</title></svelte:head>
+<svelte:head><title>{copy.title} · Marl</title></svelte:head>
 
 <section class="error-page">
   <img class="illustration" src={copy.image} alt="" width="960" height="640" fetchpriority="high" />

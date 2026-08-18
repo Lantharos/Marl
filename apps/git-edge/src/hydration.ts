@@ -7,7 +7,7 @@ type ContainerStatus = { generation: number | null; cachedPacks: string[] };
 
 export async function hydrateRepository(container: ContainerStub, env: GitEdgeEnv, owner: string, repository: string, storageKey: string) {
   const snapshot = await repositoryState(env, storageKey).request<RepositorySnapshotResponse>('/snapshot');
-  const base = `http://container/_sty/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
+  const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
   const status = await expectContainer(container.fetch(internalRequest(`${base}/status`, env))).then((response) => response.json<ContainerStatus>());
   if (status.generation === snapshot.state.generation) return snapshot.state;
   const cached = new Set(status.cachedPacks);
@@ -30,7 +30,7 @@ export async function hydrateRepository(container: ContainerStub, env: GitEdgeEn
 }
 
 export async function indexHydratedRepository(container: ContainerStub, env: GitEdgeEnv, repositoryId: string, owner: string, repository: string, generation: number, excludeCommits: string[]) {
-  const response = await expectContainer(container.fetch(internalRequest('http://container/_sty/index', env, {
+  const response = await expectContainer(container.fetch(internalRequest('http://container/_marl/index', env, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository, indexId: `generation_${generation}`, excludeCommits })
   })));
   return response.json<{ heads: string[] }>();
@@ -38,7 +38,7 @@ export async function indexHydratedRepository(container: ContainerStub, env: Git
 
 export function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  headers.set('x-sty-storage-token', env.STY_GIT_GATEWAY_TOKEN);
+  headers.set('x-marl-storage-token', env.MARL_GIT_GATEWAY_TOKEN);
   return new Request(url, { ...init, headers });
 }
 

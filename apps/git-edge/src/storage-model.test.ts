@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { STORAGE_LIMITS, StorageError, adjustStorage, beginPush, emptyOrganizationQuota, emptyRepositoryState, proposePushRefs, publish, releaseReservation, reserveStorage, settleStorage } from './storage-model';
 
 const now = 1_000_000;
-const reservation = { id: 'push_1', repository: 'lantharos/sty', maximumBytes: 1024, expiresAt: now + 60_000, state: 'reserved' as const };
-const pack = { id: 'a'.repeat(40), packKey: 'repositories/lantharos/sty/packs/a.pack', indexKey: 'repositories/lantharos/sty/packs/a.idx', objectIndexKey: 'repositories/lantharos/sty/packs/a.objects.json', compressedBytes: 700, expandedBytes: 900, objectCount: 12, largestBlobBytes: 200 };
+const reservation = { id: 'push_1', repository: 'lantharos/marl', maximumBytes: 1024, expiresAt: now + 60_000, state: 'reserved' as const };
+const pack = { id: 'a'.repeat(40), packKey: 'repositories/lantharos/marl/packs/a.pack', indexKey: 'repositories/lantharos/marl/packs/a.idx', objectIndexKey: 'repositories/lantharos/marl/packs/a.objects.json', compressedBytes: 700, expandedBytes: 900, objectCount: 12, largestBlobBytes: 200 };
 
 describe('repository publication', () => {
   test('publishes an immutable generation under the matching lease', () => {

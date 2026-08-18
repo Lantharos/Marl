@@ -1,4 +1,4 @@
-# Sty architecture
+# Marl architecture
 
 ## Principles
 
@@ -18,10 +18,10 @@ apps/web            SvelteKit application
 apps/api            TypeScript control-plane Worker
 apps/git-edge       Cloudflare Worker and Container routing for Git
 packages/contracts  Shared transport types and validation
-crates/sty-core      Local repository engine
-crates/sty-cli       The `sty` executable
-crates/sty-git       Smart HTTP Git gateway
-crates/sty-runner    Self-hosted job execution
+crates/repository    Local repository engine
+crates/cli           The `marl` executable
+crates/git           Smart HTTP Git gateway
+crates/runner        Self-hosted job execution
 ```
 
 The discarded prototype is not part of this workspace and has no compatibility layer.
@@ -54,11 +54,11 @@ run reaches a terminal state.
 
 ## Identity and access
 
-Sty owns its identity database and sessions. Email and password are the recovery-capable root
+Marl owns its identity database and sessions. Email and password are the recovery-capable root
 credential, while passkeys and authenticator-based two-factor authentication strengthen the same
-account. Ave is an optional, explicitly linked OpenID Connect identity; it cannot create a Sty
+account. Ave is an optional, explicitly linked OpenID Connect identity; it cannot create a Marl
 account or implicitly attach itself by matching an email address. An Ave outage therefore cannot
-prevent local account recovery or create a dependency cycle when Ave itself is hosted on Sty.
+prevent local account recovery or create a dependency cycle when Ave itself is hosted on Marl.
 
 Browser sessions use secure, HTTP-only cookies. Sensitive changes such as repository deletion,
 ownership transfer, organization role changes, runner enrollment, and developer-token management
@@ -85,9 +85,9 @@ personal organizations cannot gain additional members.
 
 ## Git and the local core
 
-Git compatibility is non-negotiable. Sty hosts ordinary Git repositories; a developer can
+Git compatibility is non-negotiable. Marl hosts ordinary Git repositories; a developer can
 use `git clone`, `git fetch`, and `git push` without adopting a new version-control model.
-The `sty` CLI improves authentication, repository inspection, pull requests, and runners,
+The `marl` CLI improves authentication, repository inspection, pull requests, and runners,
 but never replaces Git or creates a second repository database.
 
 PIG's custom database, remotes, semantic layer, TUI, and public vocabulary are discarded.
@@ -127,10 +127,10 @@ A native push follows this flow:
     pages without holding the push connection open. A newer completed generation prunes stale
     derived rows only after all of its pages have arrived.
 
-The client proposes bytes; Sty decides whether they are publishable. Upload-session alarms
+The client proposes bytes; Marl decides whether they are publishable. Upload-session alarms
 abort abandoned multipart uploads, remove tracked quarantine objects, release leases, or
 settle a push that was committed before its request disappeared. A successful publication is
-recorded durably before its response is returned. If that response disappears, Sty reads the
+recorded durably before its response is returned. If that response disappears, Marl reads the
 commit record and completes accounting instead of deleting possibly published objects.
 
 Native fetch reads refs and a generation manifest from the Worker, then downloads the pack
@@ -159,7 +159,7 @@ per push, 100 MiB per blob, 50,000 objects per push, and 32 changed refs per pus
 implementation and abuse ceilings unless they describe a user-facing storage or upload limit.
 
 Open pull requests pin their current base and head plus immutable reviewed revisions under
-`refs/sty/pulls`. These refs are included in pack capture and compaction, so force-pushing a
+`refs/marl/pulls`. These refs are included in pack capture and compaction, so force-pushing a
 branch cannot silently garbage collect commits used by an active or historical review. Merge,
 squash, and rebase operations carry the stable pull-request ID into their published result and
 are idempotent across gateway retries. The relational pull-request row and branch index
@@ -196,7 +196,7 @@ root loader supplies the repository list to both the shell and child routes with
 browser fetch. Client requests are reserved for user-driven changes, cursor pagination, and narrow
 live updates, keeping the current document mounted while mutations run. Route loaders translate
 API failures into their original HTTP status
-so missing, forbidden, and unavailable resources render the correct error boundary. Sty keeps
+so missing, forbidden, and unavailable resources render the correct error boundary. Marl keeps
 SvelteKit's routing and rendering model instead of introducing a second React runtime for typed
 routing or server functions.
 
@@ -205,7 +205,7 @@ documented in [`repository-reliability.md`](repository-reliability.md).
 
 ## Runner
 
-The runner ships with the `sty` executable but is internally separated from interactive CLI
+The runner ships with the `marl` executable but is internally separated from interactive CLI
 commands. It supports registration, installation as an operating-system service, concurrent
 job execution, Docker job and service containers, dependency-aware scheduling, matrices,
 timeouts, incremental log upload, isolated checkouts, artifacts, caches, and health reporting.

@@ -15,7 +15,7 @@
 
 </script>
 
-<svelte:head><title>Branches · {$page.params.owner}/{$page.params.repo} · Sty</title></svelte:head>
+<svelte:head><title>Branches · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
 <header><h1>Branches</h1><p>Browse active lines of work and compare them with the default branch.</p></header>
 <label class="search"><Search size={14} /><input bind:value={query} placeholder="Find a branch" /></label>
 <section class="list">

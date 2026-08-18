@@ -1,4 +1,4 @@
-import type { PullTimelineItem, PullTimelineWindow, ReviewThread } from '@sty/contracts';
+import type { PullTimelineItem, PullTimelineWindow, ReviewThread } from '@marl/contracts';
 import { SvelteMap } from 'svelte/reactivity';
 
 type TimelineKind = PullTimelineItem['kind'];

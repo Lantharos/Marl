@@ -330,7 +330,7 @@ CREATE TABLE workflows (
   branch TEXT NOT NULL,
   path TEXT NOT NULL,
   name TEXT NOT NULL,
-  source TEXT NOT NULL CHECK (source IN ('sty', 'github')),
+  source TEXT NOT NULL CHECK (source IN ('marl', 'github')),
   triggers_json TEXT NOT NULL,
   jobs_json TEXT,
   status TEXT NOT NULL CHECK (status IN ('valid', 'invalid')),

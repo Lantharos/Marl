@@ -1,4 +1,4 @@
-import type { PullRealtimeUpdate } from '@sty/contracts';
+import type { PullRealtimeUpdate } from '@marl/contracts';
 import { identifier } from './domain';
 import type { D1PreparedStatement, Env } from './platform';
 

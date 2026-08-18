@@ -1,4 +1,4 @@
-import type { RepositorySummary } from '@sty/contracts';
+import type { RepositorySummary } from '@marl/contracts';
 import { redirect } from '@sveltejs/kit';
 import { apiWith } from '$lib/api';
 import type { LayoutLoad } from './$types';

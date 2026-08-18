@@ -77,7 +77,7 @@ export async function inviteOrganizationMember(request: Request, env: Env, princ
   ]);
   const invitationUrl = `${env.PUBLIC_URL ?? new URL(request.url).origin}/invitations/${rawToken}`;
   try {
-    await sendTransactionalEmail(env, { recipient: body.email, subject: `Join ${organization.name} on Sty`, heading: `You are invited to ${organization.name}`, body: `${principal.displayName} invited you to collaborate on Sty.`, actionLabel: 'Accept invitation', actionUrl: invitationUrl });
+    await sendTransactionalEmail(env, { recipient: body.email, subject: `Join ${organization.name} on Marl`, heading: `You are invited to ${organization.name}`, body: `${principal.displayName} invited you to collaborate on Marl.`, actionLabel: 'Accept invitation', actionUrl: invitationUrl });
   } catch {
       await env.DB.prepare('UPDATE organization_invitations SET revoked_at=CURRENT_TIMESTAMP WHERE id=?').bind(invitationId).run();
       return problem(502, 'invitation_delivery_failed', 'The invitation could not be delivered. Try again in a moment.');

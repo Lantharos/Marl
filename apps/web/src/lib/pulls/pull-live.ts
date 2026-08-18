@@ -1,4 +1,4 @@
-import type { PullRealtimeUpdate } from '@sty/contracts';
+import type { PullRealtimeUpdate } from '@marl/contracts';
 
 interface PullLiveOptions {
   path: string;

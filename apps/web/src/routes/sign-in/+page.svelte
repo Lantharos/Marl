@@ -45,8 +45,8 @@
   }
 </script>
 
-{#snippet footer()}New to Sty? <a class="auth-link" href="/sign-up">Create an account</a>{/snippet}
-<AuthShell title="Sign in to Sty" description="Continue to your repositories and reviews." {footer}>
+{#snippet footer()}New to Marl? <a class="auth-link" href="/sign-up">Create an account</a>{/snippet}
+<AuthShell title="Sign in to Marl" description="Continue to your repositories and reviews." {footer}>
   <form class="auth-form" onsubmit={(event) => { event.preventDefault(); void signIn(); }}>
     {#if error}<p class="auth-error">{error}</p>{/if}
     <label class="auth-field"><span>Email or username</span><input autocomplete="username" bind:value={identity} required /></label>

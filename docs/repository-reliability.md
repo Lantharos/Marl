@@ -1,6 +1,6 @@
 # Repository reliability
 
-Sty treats a successful push or merge response as an acknowledgement that the new refs and
+Marl treats a successful push or merge response as an acknowledgement that the new refs and
 every object reachable from them have been durably published. Derived branch rows, commit
 indexes, usage totals, and UI state may converge afterward; none of them can make an
 acknowledged Git generation disappear.
@@ -55,7 +55,7 @@ cannot bypass them.
 
 ## Required production configuration
 
-The `sty-git-repositories` R2 bucket must have a bucket-lock rule for the `repositories/`
+The `marl-git-repositories` R2 bucket must have a bucket-lock rule for the `repositories/`
 prefix. Start with a 30-day retention period. Do not lock `quarantine/`; abandoned uploads
 must remain removable. Retention turns an application bug or compromised delete credential
 into recoverable storage rather than immediate code loss. Configure and verify this rule in

@@ -1,4 +1,4 @@
-import type { RepositorySummary } from '@sty/contracts';
+import type { RepositorySummary } from '@marl/contracts';
 import { auditStatement } from './audit';
 import { requireFreshSession, type Principal } from './auth';
 import { identifier, safeRepositoryPath, validBranchName, validSlug, validVisibility } from './domain';
@@ -249,7 +249,7 @@ export async function scheduleRepositoryDeletion(request: Request, env: Env, pri
 }
 
 function relocateStorage(env: Env, oldOwner: string, oldRepository: string, newOwner: string, newRepository: string) {
-  return requestGitGateway(env, '/_sty/repositories/relocate', { oldOwner, oldRepository, newOwner, newRepository }, { attempts: 2, timeoutMs: 30_000 }).catch(() => new Response(null, { status: 502 }));
+  return requestGitGateway(env, '/_marl/repositories/relocate', { oldOwner, oldRepository, newOwner, newRepository }, { attempts: 2, timeoutMs: 30_000 }).catch(() => new Response(null, { status: 502 }));
 }
 
 export async function listBranches(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -281,7 +281,7 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
   const indexed = await env.DB.prepare('SELECT id FROM commits WHERE repository_id=? AND id=?').bind(repo.id, commitId).first();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
-  const response = await requestGitGateway(env, '/_sty/commit', { owner, repository: name, commitId }, { attempts: 2 });
+  const response = await requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   const commit = await response.json().catch(() => null) as { author?: string; authorEmail?: string } | null;
   if (!commit || typeof commit.author !== 'string') return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
@@ -300,7 +300,7 @@ export async function readCommitPatch(env: Env, principal: Principal, owner: str
   let parents: unknown = [];
   try { parents = JSON.parse(commit?.parentIds ?? '[]'); } catch { return problem(500, 'commit_metadata_invalid', 'Stored commit metadata is invalid.'); }
   const base = Array.isArray(parents) && typeof parents[0] === 'string' ? parents[0] : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-  const response = await requestGitGateway(env, '/_sty/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 }).catch(() => null);
+  const response = await requestGitGateway(env, '/_marl/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
   return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store' } });
 }
@@ -346,16 +346,16 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     entry = historical.find((candidate) => candidate.path === path && candidate.kind === 'blob') ?? null;
   }
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const cacheKey = new Request(`https://blob-cache.sty.internal/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
+  const cacheKey = new Request(`https://blob-cache.marl.internal/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
   const publicCache = (caches as unknown as { default: Cache }).default;
   if (repo.visibility === 'public') {
     const cached = await publicCache.match(cacheKey);
     if (cached) return cached;
   }
   const response = await (env.ENVIRONMENT === 'development'
-    ? requestGitGateway(env, '/_sty/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 })
-    : requestGitGateway(env, '/_sty/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 })).catch(() => null);
-  if (!response?.ok || !response.body || (env.ENVIRONMENT !== 'development' && response.headers.get('x-sty-git-object-type') !== 'blob')) return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
+    ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 })
+    : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 })).catch(() => null);
+  if (!response?.ok || !response.body || (env.ENVIRONMENT !== 'development' && response.headers.get('x-marl-git-object-type') !== 'blob')) return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
   const result = new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
   if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
   return result;
@@ -364,7 +364,7 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
 type TreeEntry = { path: string; name: string; kind: string; objectId: string; byteSize?: number };
 
 async function readGatewayTree(env: Env, owner: string, repository: string, commitId: string, path: string): Promise<TreeEntry[] | null> {
-  const response = await requestGitGateway(env, '/_sty/tree', { owner, repository, commitId, path }, { attempts: 2 }).catch(() => null);
+  const response = await requestGitGateway(env, '/_marl/tree', { owner, repository, commitId, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return null;
   const body = await response.json().catch(() => null) as { entries?: TreeEntry[] } | null;
   if (!Array.isArray(body?.entries)) return null;

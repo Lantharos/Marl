@@ -30,7 +30,7 @@
 
   let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner ?? 'lantharos');
-  const repo = $derived($page.params.repo ?? 'sty');
+  const repo = $derived($page.params.repo ?? 'marl');
   let branchOpen = $state(false);
   let fileFinderOpen = $state(false);
   let selectedBranch = $state(untrack(() => data.defaultBranch));
@@ -123,7 +123,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-  <title>{owner}/{repo} · Sty</title>
+  <title>{owner}/{repo} · Marl</title>
 </svelte:head>
 
 <div class="code-toolbar">

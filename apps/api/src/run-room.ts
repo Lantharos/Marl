@@ -10,7 +10,7 @@ export class RunRoom extends DurableObject<Env> {
       return new Response(null, { status: 101, webSocket: client });
     }
     if (request.method !== 'POST' || !request.body) return new Response(null, { status: 405 });
-    const sequence = Number(request.headers.get('x-sty-log-sequence'));
+    const sequence = Number(request.headers.get('x-marl-log-sequence'));
     if (!Number.isSafeInteger(sequence) || sequence < 0) return new Response(null, { status: 422 });
     const bytes = new Uint8Array(await request.arrayBuffer());
     const message = new Uint8Array(8 + bytes.byteLength);

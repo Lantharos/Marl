@@ -1,6 +1,6 @@
-# Sty
+# Marl
 
-Sty is a focused code-hosting platform for repositories, pull requests, and self-hosted CI.
+Marl is a focused code-hosting platform for repositories, pull requests, and self-hosted CI.
 
 This repository is undergoing a ground-up rebuild. The current product contract lives in
 [`docs/product.md`](docs/product.md), and the implementation boundaries live in
@@ -24,7 +24,7 @@ creating an account. Ave credentials are optional; local password and passkey si
 them.
 
 Production authentication email is sent directly through Cloudflare Email Service. Onboard
-`sty.sh` for Email Sending and keep the `EMAIL` binding restricted to `noreply@sty.sh`.
+`marl.sh` for Email Sending and keep the `EMAIL` binding restricted to `noreply@marl.sh`.
 
 Start the web application, API, and local Git gateway together:
 
@@ -32,7 +32,7 @@ Start the web application, API, and local Git gateway together:
 bun dev
 ```
 
-Sty uses a dedicated local port range so it can run alongside other projects:
+Marl uses a dedicated local port range so it can run alongside other projects:
 
 - web: `http://127.0.0.1:42617`
 - API: `http://127.0.0.1:42618`
@@ -41,7 +41,7 @@ Sty uses a dedicated local port range so it can run alongside other projects:
 
 The development supervisor owns every service process tree. Pressing Ctrl+C stops Vite,
 Wrangler, the Rust Git gateway, and their descendants together. If one service fails, the
-others are stopped as well so a partial Sty stack is not left running.
+others are stopped as well so a partial Marl stack is not left running.
 
 Or run a surface independently:
 
@@ -79,7 +79,7 @@ bun qualify
 ```
 
 Qualification uses random loopback ports and temporary D1, R2, runner, and repository
-directories. It pushes Sty's real Git history, verifies workflow supersession and Docker
+directories. It pushes Marl's real Git history, verifies workflow supersession and Docker
 execution, exercises every pull-request merge method and idempotent retry, restarts the local
 services, and checks a fresh clone with `git fsck --strict`. Its services, containers, networks,
 and temporary storage are removed whether the run succeeds or fails. The command validates the
@@ -88,7 +88,7 @@ a separate Linux or WSL staging requirement.
 
 ## Product boundary
 
-Sty has four primary product surfaces:
+Marl has four primary product surfaces:
 
 - Home: work that needs attention.
 - Code: repositories, files, branches, and history.

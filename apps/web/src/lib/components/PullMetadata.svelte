@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PullRequestDetail, PullRequestLabel, PullRequestPerson } from '@sty/contracts';
+  import type { PullRequestDetail, PullRequestLabel, PullRequestPerson } from '@marl/contracts';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import Lock from 'lucide-svelte/icons/lock';

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
-  import type { PullRequestDiff, RepositorySummary } from '@sty/contracts';
+  import type { PullRequestDiff, RepositorySummary } from '@marl/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import FileDiff from 'lucide-svelte/icons/file-diff';
   import Checkbox from '$lib/components/Checkbox.svelte';
   import FormShell from '$lib/components/FormShell.svelte';
   import Select from '$lib/components/Select.svelte';
-  import { api, StyApiError } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   type Branch = { name: string; commitId: string };
@@ -44,7 +44,7 @@
       base = result.defaultBranch;
       compare = branches.find((branch) => branch.name !== base)?.name ?? '';
       await loadComparison();
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Branches could not be loaded.'; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Branches could not be loaded.'; }
   }
 
   async function loadComparison() {
@@ -53,7 +53,7 @@
     comparing = true; error = '';
     const { owner, name } = repoParts();
     try { comparison = await api<PullRequestDiff>(`/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}`); }
-    catch (cause) { error = cause instanceof StyApiError ? cause.message : 'These branches could not be compared.'; }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'These branches could not be compared.'; }
     finally { comparing = false; }
   }
 
@@ -64,12 +64,12 @@
     try {
       const result = await api<{ pullRequest: { number: number } }>(`/repositories/${owner}/${name}/pulls`, { method: 'POST', body: JSON.stringify({ title, body, sourceBranch: compare, targetBranch: base, draft }) });
       await goto(`/${owner}/${name}/pulls/${result.pullRequest.number}`);
-    } catch (cause) { error = cause instanceof StyApiError ? cause.message : 'Pull request could not be created.'; creating = false; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull request could not be created.'; creating = false; }
   }
 
 </script>
 
-<svelte:head><title>New pull request · Sty</title></svelte:head>
+<svelte:head><title>New pull request · Marl</title></svelte:head>
 
 <FormShell title="Open a pull request" description="Compare live Git branches, describe the change, then open it for review.">
   {#if error}<div class="error" role="alert"><CircleAlert size={15} />{error}</div>{/if}
