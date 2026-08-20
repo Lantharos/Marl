@@ -12,6 +12,14 @@ import { pullUpdatesAfter } from './pull-realtime';
 import { allPullThreads, initialPullTimeline, olderPullTimeline } from './pull-timeline';
 import { authorizeRepository, repositoryListFilter } from './repository-access';
 
+function selectedLabels(url: URL) {
+  return [...new Set(url.searchParams.getAll('label').map((label) => label.trim()).filter(Boolean))];
+}
+
+function labelFilterSql(labels: string[]) {
+  return labels.length ? `AND (SELECT COUNT(DISTINCT lower(repository_labels.name)) FROM pull_request_labels JOIN repository_labels ON repository_labels.id=pull_request_labels.label_id WHERE pull_request_labels.pull_request_id=pull_requests.id AND lower(repository_labels.name) IN (${labels.map(() => '?').join(',')}))=?` : '';
+}
+
 export async function listAllPulls(env: Env, principal: Principal, url: URL): Promise<Response> {
   const search = readListQuery(url);
   if ('error' in search) return search.error;
@@ -20,14 +28,20 @@ export async function listAllPulls(env: Env, principal: Principal, url: URL): Pr
   const access = repositoryListFilter(principal);
   const state = url.searchParams.get('state') ?? 'open';
   if (!['open', 'merged', 'closed', 'all'].includes(state)) return problem(422, 'invalid_pull_state', 'Pull request state is invalid.');
+  const labels = selectedLabels(url);
+  if (labels.length > 10 || labels.some((label) => label.length > 100)) return problem(422, 'invalid_labels', 'Choose up to ten valid labels.');
   const stateSql = state === 'open' ? "AND pull_requests.state IN ('draft','open')" : state === 'all' ? '' : 'AND pull_requests.state=?';
+  const labelsSql = labelFilterSql(labels);
   const querySql = search.query ? `AND (pull_requests.title LIKE ? ESCAPE '\\' OR users.handle LIKE ? ESCAPE '\\' OR pull_requests.source_branch LIKE ? ESCAPE '\\' OR pull_requests.target_branch LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM pull_request_labels JOIN repository_labels ON repository_labels.id=pull_request_labels.label_id WHERE pull_request_labels.pull_request_id=pull_requests.id AND repository_labels.name LIKE ? ESCAPE '\\'))` : '';
   const after = cursor ? 'AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))' : '';
-  const filters = [...access.values, ...(state !== 'open' && state !== 'all' ? [state] : []), ...(search.query ? [search.like, search.like, search.like, search.like, search.like, search.like] : [])];
+  const filters = [...access.values, ...(state !== 'open' && state !== 'all' ? [state] : []), ...labels.map((label) => label.toLowerCase()), ...(labels.length ? [labels.length] : []), ...(search.query ? [search.like, search.like, search.like, search.like, search.like, search.like] : [])];
   const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
-  const rows = await env.DB.prepare(`${pullSelect} WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
+  const [rows, availableLabels] = await Promise.all([
+    env.DB.prepare(`${pullSelect} WHERE ${access.sql} ${stateSql} ${labelsSql} ${querySql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>(),
+    env.DB.prepare(`SELECT repository_labels.name,repository_labels.color,repository_labels.description,COUNT(*) AS uses FROM repository_labels JOIN repositories ON repositories.id=repository_labels.repository_id WHERE ${access.sql} GROUP BY lower(repository_labels.name) ORDER BY uses DESC,repository_labels.name LIMIT 100`).bind(...access.values).all<{ name: string; color: string; description: string; uses: number }>()
+  ]);
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
-  return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor });
+  return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor, availableLabels: availableLabels.results });
 }
 
 export async function listPulls(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
@@ -37,13 +51,19 @@ export async function listPulls(env: Env, principal: Principal, owner: string, n
   const cursor = readCursor(url);
   const state = url.searchParams.get('state') ?? 'all';
   if (!['open', 'merged', 'closed', 'all'].includes(state)) return problem(422, 'invalid_pull_state', 'Pull request state is invalid.');
+  const labels = selectedLabels(url);
+  if (labels.length > 10 || labels.some((label) => label.length > 100)) return problem(422, 'invalid_labels', 'Choose up to ten valid labels.');
   const stateSql = state === 'open' ? "AND pull_requests.state IN ('draft','open')" : state === 'all' ? '' : 'AND pull_requests.state=?';
+  const labelsSql = labelFilterSql(labels);
   const after = cursor ? 'AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))' : '';
-  const filters = [repository.id, ...(state !== 'open' && state !== 'all' ? [state] : [])];
+  const filters = [repository.id, ...(state !== 'open' && state !== 'all' ? [state] : []), ...labels.map((label) => label.toLowerCase()), ...(labels.length ? [labels.length] : [])];
   const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
-  const rows = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? ${stateSql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
+  const [rows, availableLabels] = await Promise.all([
+    env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? ${stateSql} ${labelsSql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>(),
+    env.DB.prepare('SELECT name,color,description FROM repository_labels WHERE repository_id=? ORDER BY name').bind(repository.id).all<{ name: string; color: string; description: string }>()
+  ]);
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
-  return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor });
+  return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor, availableLabels: availableLabels.results });
 }
 
 

@@ -7,6 +7,7 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import { api } from '$lib/api';
+  import Button from '$lib/components/Button.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import Time from '$lib/components/Time.svelte';
@@ -63,8 +64,7 @@
           <small>{run.repository.owner}/{run.repository.name} · run #{run.number} · <Time value={run.queuedAt} /></small>
           <code><GitBranch size={12} />{run.branch}<i>{run.commit.slice(0, 7)}</i></code>
         </span>
-        <span class="jobs">{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</span>
-        <span class="run-state">{run.state}</span>
+        <span class="run-meta"><span class="run-state {run.state}">{run.state}</span><small>{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</small></span>
       </a>
     {:else}
       <div class="empty">
@@ -74,9 +74,9 @@
       </div>
     {/each}
   </section>
-  {#if nextCursor}<button class="load-more" disabled={loadingMore} onclick={loadMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>{/if}
+  {#if nextCursor}<Button class="load-more" loading={loadingMore} onclick={loadMore}>Load more</Button>{/if}
 </main>
 
 <style>
-  .page{width:min(1080px,calc(100% - 56px));margin:0 auto;padding:48px 0 72px}.row{display:grid;grid-template-columns:36px minmax(0,1fr) 68px 72px;align-items:center;gap:12px;min-height:82px;padding:11px 5px;border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;color:var(--text-muted)}.state.running,.state.queued{color:var(--brand)}.state.failure{color:var(--danger)}.state.success{color:var(--success)}.main{min-width:0}.main strong,.main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main strong{color:var(--text-strong);font-size:14px}.main small{margin-top:4px;color:var(--text-muted);font-size:12px}.main small :global(time){font-size:12px}code{display:flex;align-items:center;gap:5px;margin-top:5px;color:var(--text);font-size:11px}code i{color:var(--text-muted);font-style:normal}.jobs,.run-state{color:var(--text-muted);font-size:12px}.run-state{text-transform:capitalize}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.load-more{display:block;height:36px;margin:18px auto 0;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}.row{grid-template-columns:36px minmax(0,1fr) 65px}.jobs{display:none}}
+  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.list{display:grid;gap:4px}.row{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:80px;padding:10px 12px;border-radius:8px;color:inherit;text-decoration:none;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--surface-muted);color:var(--text-muted)}.state.running,.state.queued{background:var(--brand-soft);color:var(--brand)}.state.failure{background:var(--danger-soft);color:var(--danger)}.state.success{background:var(--success-soft);color:var(--success)}.main{min-width:0}.main strong,.main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main strong{color:var(--text-strong);font-size:13px}.main small{margin-top:4px;color:var(--text-muted);font-size:10px}.main small :global(time){font-size:10px}code{display:flex;align-items:center;gap:5px;margin-top:5px;color:var(--text);font-size:9px}code i{color:var(--text-muted);font-style:normal}.run-meta{display:grid;justify-items:end;gap:5px}.run-meta small{color:var(--text-faint);font-size:9px}.run-state{padding:4px 7px;border-radius:999px;background:var(--surface-muted);color:var(--text-muted);font-size:9px;font-weight:650;text-transform:capitalize}.run-state.running,.run-state.queued{background:var(--brand-soft);color:var(--brand)}.run-state.failure{background:var(--danger-soft);color:var(--danger)}.run-state.success{background:var(--success-soft);color:var(--success)}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}.row{grid-template-columns:36px minmax(0,1fr);padding-inline:6px}.run-meta{display:none}}
 </style>

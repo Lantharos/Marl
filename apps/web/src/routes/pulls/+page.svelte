@@ -21,6 +21,7 @@
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let query = $state(untrack(() => data.query));
   let activeFilter = $state(untrack(() => data.state[0].toUpperCase() + data.state.slice(1)));
+  let selectedLabels = $state<string[]>(untrack(() => data.labels));
   let loadingMore = $state(false);
   let queryTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -29,12 +30,14 @@
     nextCursor = data.nextCursor;
     query = data.query;
     activeFilter = data.state[0].toUpperCase() + data.state.slice(1);
+    selectedLabels = [...data.labels];
   });
 
-  function navigate(state = activeFilter, value = query) {
+  function navigate(state = activeFilter, value = query, labels = selectedLabels) {
     const params = new URLSearchParams();
     if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase());
     if (value.trim()) params.set('q', value.trim());
+    for (const label of labels) params.append('label', label);
     void goto(`/pulls${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true });
   }
 
@@ -46,7 +49,10 @@
   async function loadMore() {
     if (!nextCursor || loadingMore) return;
     loadingMore = true;
-    const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(`/pulls?limit=30&state=${activeFilter.toLowerCase()}&q=${encodeURIComponent(query.trim())}&cursor=${encodeURIComponent(nextCursor)}`);
+    const params = new URLSearchParams({ limit: '30', state: activeFilter.toLowerCase(), cursor: nextCursor });
+    if (query.trim()) params.set('q', query.trim());
+    for (const label of selectedLabels) params.append('label', label);
+    const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(`/pulls?${params}`);
     items = [...items, ...result.pullRequests];
     nextCursor = result.nextCursor;
     loadingMore = false;
@@ -56,7 +62,7 @@
 <svelte:head><title>Pull requests · Marl</title></svelte:head>
 <main class="page">
   <PageHeader title="Pull requests" description="Review, unblock, and ship changes from one queue." actionHref="/pulls/new" actionLabel="New pull request" />
-  <FilterBar placeholder="Search pull requests" tabs={['Open', 'Merged', 'Closed']} bind:active={activeFilter} bind:query onActiveChange={() => navigate()} onQueryChange={changeQuery} />
+  <FilterBar placeholder="Search pull requests" tabs={['Open', 'Merged', 'Closed']} labelOptions={data.availableLabels} bind:active={activeFilter} bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(activeFilter, query, labels)} />
   <section class="list" aria-label="Pull requests">
     {#each items as pull}
       <article class="row">
@@ -70,6 +76,5 @@
 </main>
 
 <style>
-  .page{width:min(1080px,calc(100% - 64px));margin:0 auto;padding:48px 0 72px}.empty{padding:70px 20px;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:10px;color:var(--text-strong);font-size:15px}.empty p{margin:7px auto 0;max-width:420px;font-size:12px}.empty a{display:inline-flex;margin-top:16px;color:var(--brand-strong);font-size:12px;text-decoration:none}.row{position:relative;display:grid;grid-template-columns:36px minmax(0,1fr) 145px;align-items:center;gap:12px;min-height:88px;padding:12px 5px;border-bottom:1px solid var(--border-subtle);color:inherit}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--brand-soft);color:var(--brand)}.state.blocked{background:var(--danger-soft);color:var(--danger)}.state.ready{background:var(--success-soft);color:var(--success)}.state.merged{background:color-mix(in srgb,#8b5cf6 18%,transparent);color:#a78bfa}.main{min-width:0}.main .title-link,.main>small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main .title-link{color:var(--text-strong);font-size:14px;font-weight:640;text-decoration:none}.main .title-link::after{position:absolute;z-index:0;inset:0;content:''}.main>small{margin-top:5px;color:var(--text-muted);font-size:12px}.main .author-link{position:relative;z-index:1;color:var(--text-strong);text-decoration:none}.main .author-link:hover{color:var(--brand)}.details{display:flex;min-width:0;align-items:center;gap:6px;margin-top:6px}.main code{display:flex;align-items:center;gap:5px;color:var(--text-muted);font-size:10px;white-space:nowrap}.label{padding:3px 6px;border-radius:4px;background:color-mix(in srgb,var(--label-color) 15%,transparent);color:var(--label-color);font-size:9px;font-weight:650}.more-labels{color:var(--text-faint);font-size:9px}.review,.checks{display:inline-flex;align-items:center;gap:5px;color:var(--text-muted);font-size:11px;font-weight:580}.checks{color:var(--success);font-size:10px;white-space:nowrap}.checks.failed{color:var(--danger)}.checks.running{color:var(--warning)}.checks.empty-checks{color:var(--text-muted)}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:760px){.page{width:calc(100% - 28px);padding-top:28px}.row{grid-template-columns:36px minmax(0,1fr)}.review{display:none}.label,.more-labels{display:none}}
-  .state.closed{background:var(--danger-soft);color:var(--danger)}
+  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.list{display:grid;gap:4px}.empty{padding:70px 20px;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:10px;color:var(--text-strong);font-size:15px}.empty p{margin:7px auto 0;max-width:420px;font-size:12px}.empty a{display:inline-flex;margin-top:16px;color:var(--brand-strong);font-size:12px;text-decoration:none}.row{position:relative;display:grid;grid-template-columns:36px minmax(0,1fr) 140px;align-items:center;gap:12px;min-height:84px;padding:11px 12px;border-radius:8px;color:inherit;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--brand-soft);color:var(--brand)}.state.blocked,.state.closed{background:var(--danger-soft);color:var(--danger)}.state.ready{background:var(--success-soft);color:var(--success)}.state.merged{background:color-mix(in srgb,#8b5cf6 18%,transparent);color:#a78bfa}.main{min-width:0}.main .title-link,.main>small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main .title-link{color:var(--text-strong);font-size:13px;font-weight:640;text-decoration:none}.main .title-link::after{position:absolute;z-index:0;inset:0;content:''}.main>small{margin-top:4px;color:var(--text-muted);font-size:10px}.main .author-link{position:relative;z-index:1;color:var(--text-strong);text-decoration:none}.main .author-link:hover{color:var(--brand)}.details{display:flex;min-width:0;align-items:center;gap:6px;margin-top:6px}.main code{display:flex;align-items:center;gap:5px;color:var(--text-muted);font-size:9px;white-space:nowrap}.label{padding:3px 6px;border-radius:999px;background:color-mix(in srgb,var(--label-color) 14%,transparent);color:var(--label-color);font-size:8px;font-weight:650}.more-labels{color:var(--text-faint);font-size:8px}.review,.checks{display:inline-flex;align-items:center;gap:5px;color:var(--text-muted);font-size:10px;font-weight:580}.checks{color:var(--success);font-size:9px;white-space:nowrap}.checks.failed{color:var(--danger)}.checks.running{color:var(--warning)}.checks.empty-checks{color:var(--text-muted)}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:760px){.page{width:calc(100% - 28px);padding-top:28px}.row{grid-template-columns:36px minmax(0,1fr);padding-inline:6px}.review{display:none}.label,.more-labels{display:none}}
 </style>
