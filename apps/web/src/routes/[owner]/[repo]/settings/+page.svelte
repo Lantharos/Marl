@@ -4,18 +4,16 @@
   import { untrack } from 'svelte';
   import Archive from 'lucide-svelte/icons/archive';
   import ArrowRightLeft from 'lucide-svelte/icons/arrow-right-left';
-  import Camera from 'lucide-svelte/icons/camera';
-  import Check from 'lucide-svelte/icons/check';
   import Globe2 from 'lucide-svelte/icons/globe-2';
   import GitFork from 'lucide-svelte/icons/git-fork';
   import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
-  import LoaderCircle from 'lucide-svelte/icons/loader-circle';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
   import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
   import Button from '$lib/components/Button.svelte';
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
+  import ImageUploadButton from '$lib/components/ImageUploadButton.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
   import Select from '$lib/components/Select.svelte';
@@ -137,7 +135,7 @@
 
 <section class="details">
   <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><SettingsAction state={generalState} onclick={saveGeneral} /></header>
-  <div class="icon-field"><button class="icon-upload {iconState}" type="button" aria-label="Change repository icon" disabled={iconState !== 'idle'} onclick={() => iconInput.click()}><RepositoryIcon name={repo} src={iconUrl} size={52} /><span class="icon-overlay">{#if iconState === 'saving'}<LoaderCircle size={19} />{:else if iconState === 'saved'}<Check size={19} />{:else}<Camera size={18} />{/if}</span></button><div><strong>Repository icon</strong><small>Click the icon to change it. PNG, JPEG, or WebP up to 2 MB.</small></div><input bind:this={iconInput} type="file" accept="image/png,image/jpeg,image/webp" onchange={uploadIcon} /><span class="icon-status" aria-live="polite">{iconState === 'saving' ? 'Uploading repository icon' : iconState === 'saved' ? 'Repository icon saved' : ''}</span></div>
+  <div class="icon-field"><ImageUploadButton state={iconState} label="Change repository icon" size={52} onclick={() => iconInput.click()}>{#snippet children()}<RepositoryIcon name={repo} src={iconUrl} size={52} />{/snippet}</ImageUploadButton><div><strong>Repository icon</strong><small>Click the icon to change it. PNG, JPEG, or WebP up to 2 MB.</small></div><input bind:this={iconInput} type="file" accept="image/png,image/jpeg,image/webp" onchange={uploadIcon} /></div>
   <label><span>Description</span><input bind:value={description} maxlength="280" placeholder="Describe this repository" /></label>
   <div class="fields single"><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
 </section>
@@ -194,6 +192,6 @@
 
 <style>
   .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle);margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}
-  .fields.single{grid-template-columns:1fr}.icon-field{display:grid;grid-template-columns:52px minmax(0,1fr);align-items:center;gap:12px;margin-bottom:18px}.icon-field>input{display:none}.icon-field strong,.icon-field small{display:block}.icon-field strong{color:var(--text-strong);font-size:12px}.icon-field small{margin-top:4px;color:var(--text-faint);font-size:10px}.icon-upload{position:relative;width:52px;height:52px;padding:0;border:0;border-radius:7px;outline:0;background:transparent;cursor:pointer}.icon-upload:focus-visible{outline:2px solid var(--brand);outline-offset:3px}.icon-overlay{position:absolute;inset:0;display:grid;border-radius:7px;background:color-mix(in srgb,var(--canvas) 78%,transparent);color:var(--text-strong);opacity:0;place-items:center;transition:opacity 120ms ease}.icon-upload:hover .icon-overlay,.icon-upload:focus-visible .icon-overlay,.icon-upload.saving .icon-overlay,.icon-upload.saved .icon-overlay{opacity:1}.icon-upload.saving .icon-overlay>:global(svg){animation:spin .7s linear infinite}.icon-upload.saved .icon-overlay{background:color-mix(in srgb,var(--success-soft) 88%,transparent);color:var(--success)}.icon-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}@keyframes spin{to{transform:rotate(360deg)}}
+  .fields.single{grid-template-columns:1fr}.icon-field{display:grid;grid-template-columns:52px minmax(0,1fr);align-items:center;gap:12px;margin-bottom:18px}.icon-field>input{display:none}.icon-field strong,.icon-field small{display:block}.icon-field strong{color:var(--text-strong);font-size:12px}.icon-field small{margin-top:4px;color:var(--text-faint);font-size:10px}
   @media(max-width:580px){.fields{grid-template-columns:1fr}.details>header{align-items:flex-start}.operation{grid-template-columns:32px minmax(0,1fr)}.operation>:global(.button){grid-column:2;justify-self:start}}
 </style>

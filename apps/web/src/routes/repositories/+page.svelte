@@ -57,9 +57,8 @@
       <a class="row" href="/{repository.owner}/{repository.name}">
         <RepositoryIcon name={repository.name} src={repository.iconUrl} size={36} />
         <span class="main">
-          <strong><i>{repository.owner}/</i>{repository.name}</strong>
+          <strong><i>{repository.owner}/</i>{repository.name}{#if repository.visibility === 'private'}<Lock size={12} aria-label="Private repository" />{/if}</strong>
           <p>{repository.description || 'No description yet.'}</p>
-          <small><Lock size={11} />{repository.visibility}</small>
         </span>
         <Time value={repository.updatedAt} />
       </a>
@@ -75,5 +74,5 @@
 </main>
 
 <style>
-  .page{width:min(1080px,calc(100% - 56px));margin:0 auto;padding:48px 0 72px}.row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:14px;min-height:88px;padding:12px 5px;border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none}.row:hover{background:var(--surface-hover)}.main{min-width:0}.main strong{color:var(--text-strong);font-size:14px;font-weight:650}.main strong i{color:var(--text-muted);font-style:normal;font-weight:500}.main p{overflow:hidden;margin:5px 0;color:var(--text);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.main small{display:flex;align-items:center;gap:5px;color:var(--text-muted);font-size:11px;text-transform:capitalize}.row :global(time){font-size:12px}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.load-more{display:block;height:36px;margin:18px auto 0;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}}
+  .page{width:min(1080px,calc(100% - 56px));margin:0 auto;padding:48px 0 72px}.row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:14px;min-height:88px;padding:12px 5px;border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none}.row:hover{background:var(--surface-hover)}.main{min-width:0}.main strong{display:inline-flex;align-items:center;gap:5px;color:var(--text-strong);font-size:14px;font-weight:650}.main strong i{color:var(--text-muted);font-style:normal;font-weight:500}.main strong :global(svg){color:var(--text-faint)}.main p{overflow:hidden;margin:5px 0;color:var(--text);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.row :global(time){font-size:12px}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.load-more{display:block;height:36px;margin:18px auto 0;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}}
 </style>
