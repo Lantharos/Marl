@@ -21,8 +21,9 @@ export const repositorySettingsBody = strictObject({ description: optional(pipe(
 export const renameRepositoryBody = strictObject({ name: identifier });
 export const transferRepositoryBody = strictObject({ owner: identifier });
 export const deleteRepositoryBody = strictObject({ confirmation: pipe(string(), maxLength(500)) });
+export const forkRepositoryBody = strictObject({ owner: identifier, name: identifier });
 
-export const createPullBody = strictObject({ title: pipe(string(), minLength(1), maxLength(240)), body: optional(bodyString), sourceBranch: branch, targetBranch: branch, draft: optional(boolean()) });
+export const createPullBody = strictObject({ title: pipe(string(), minLength(1), maxLength(240)), body: optional(bodyString), sourceBranch: branch, sourceRepository: optional(identifier), targetBranch: branch, draft: optional(boolean()) });
 export const updatePullBody = strictObject({ title: optional(pipe(string(), maxLength(240))), body: optional(bodyString) });
 export const pullMetadataBody = strictObject({ assigneeIds: optional(pipe(array(identifier), maxLength(10))), labelIds: optional(pipe(array(identifier), maxLength(20))), locked: optional(boolean()) });
 export const commentBody = strictObject({ body: pipe(string(), minLength(1), maxLength(50_000)) });

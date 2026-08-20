@@ -5,7 +5,7 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, transferRepository, updateRepositorySettings } from './repositories';
+import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositorySettings } from './repositories';
 import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
@@ -147,13 +147,25 @@ const worker = {
       if (request.method === 'PUT') return putBranchRule(request, _env, principal, owner, repository);
     }
 
-    const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|delete))?$/);
+    const socialRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/(star|forks)$/);
+    if (socialRoute) {
+      const owner = decodeURIComponent(socialRoute[1]); const repository = decodeURIComponent(socialRoute[2]);
+      if (socialRoute[3] === 'star' && request.method === 'PUT') return setRepositoryStar(_env, principal, owner, repository, true);
+      if (socialRoute[3] === 'star' && request.method === 'DELETE') return setRepositoryStar(_env, principal, owner, repository, false);
+      if (socialRoute[3] === 'forks' && request.method === 'POST') return forkRepository(request, _env, principal, owner, repository);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
+    const pullSourcesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pull-sources$/);
+    if (pullSourcesRoute && request.method === 'GET') return listPullSources(_env, principal, decodeURIComponent(pullSourcesRoute[1]), decodeURIComponent(pullSourcesRoute[2]));
+
+    const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|detach-fork|delete))?$/);
     if (settingsRoute) {
       const owner = decodeURIComponent(settingsRoute[1]); const repository = decodeURIComponent(settingsRoute[2]); const action = settingsRoute[3];
       if (!action && request.method === 'GET') return getRepositorySettings(_env, principal, owner, repository);
       if (!action && request.method === 'PATCH') return updateRepositorySettings(request, _env, principal, owner, repository);
       if (action === 'rename' && request.method === 'POST') return renameRepository(request, _env, principal, owner, repository);
       if (action === 'transfer' && request.method === 'POST') return transferRepository(request, _env, principal, owner, repository);
+      if (action === 'detach-fork' && request.method === 'POST') return detachRepositoryFork(request, _env, principal, owner, repository);
       if (action === 'delete' && request.method === 'POST') return scheduleRepositoryDeletion(request, _env, principal, owner, repository);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }

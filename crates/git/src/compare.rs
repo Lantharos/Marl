@@ -19,6 +19,8 @@ pub(crate) struct CompareRequest {
     repository: String,
     base: String,
     head: String,
+    source_owner: Option<String>,
+    source_repository: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,6 +182,7 @@ async fn perform_compare(state: &AppState, request: CompareRequest) -> Result<Co
         anyhow::bail!("invalid comparison")
     }
     let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
+    crate::cross_repository::import_commit(state, &repository, request.source_owner.as_deref(), request.source_repository.as_deref(), &request.head).await?;
     let merge_base = git_output(&repository, &["merge-base", &request.base, &request.head])
         .await?
         .trim()

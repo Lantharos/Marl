@@ -24,13 +24,13 @@
 </script>
 
 <svelte:head><title>Pull requests · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
-<header class="heading"><div><h1>Pull requests</h1><p>Propose, review, and merge changes to this repository.</p></div><a href="/pulls/new?repository={owner}/{repo}">New pull request</a></header>
+<header class="heading"><div><h1>Pull requests</h1><p>Propose, review, and merge changes to this repository.</p></div><a href={data.repository?.upstream ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}` : `/pulls/new?repository=${owner}/${repo}`}>{data.repository?.upstream ? 'Contribute upstream' : 'New pull request'}</a></header>
 <FilterBar placeholder="Search this repository" tabs={['Open', 'Merged', 'Closed']} bind:active={activeFilter} bind:query />
 <section class="list">
   {#each filteredItems as pull}
     <a class="row" href="/{owner}/{repo}/pulls/{pull.number}">
       <span class:blocked={pull.state === 'blocked'} class:merged={pull.state === 'merged'} class:closed={pull.state === 'closed'} class="icon">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}</span>
-      <span class="main"><strong>{pull.title}</strong><small>#{pull.number} opened by {pull.author} · <Time value={pull.updatedAt} /></small><code>{pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
+      <span class="main"><strong>{pull.title}</strong><small>#{pull.number} opened by {pull.author} · <Time value={pull.updatedAt} /></small><code>{pull.sourceRepository && `${pull.sourceRepository.owner}/${pull.sourceRepository.name}` !== `${owner}/${repo}` ? `${pull.sourceRepository.owner}:${pull.sourceBranch}` : pull.sourceBranch}<ArrowRight size={11} />{pull.targetBranch}</code></span>
       <span class:failed={pull.checkSummary.failed > 0} class:quiet={pull.checkSummary.total === 0} class="checks">{#if pull.checkSummary.failed}<CircleAlert size={14} />{pull.checkSummary.failed} failed{:else if pull.checkSummary.total === 0}<CircleDot size={14} />No checks{:else}<CircleCheck size={14} />{pull.checkSummary.passed} passed{/if}</span>
     </a>
   {:else}

@@ -12,9 +12,12 @@
   import type { PageData } from './$types';
 
   type Branch = { name: string; commitId: string };
+  type PullSource = { owner: string; name: string; defaultBranch: string; branches: Branch[] };
   let { data } = $props<{ data: PageData }>();
   let repositories = $state<RepositorySummary[]>(untrack(() => data.repositories));
-  let branches = $state<Branch[]>(untrack(() => data.branches));
+  let sources = $state<PullSource[]>(untrack(() => data.sources));
+  let targetBranches = $state<Branch[]>(untrack(() => data.targetBranches));
+  let sourceRepository = $state(untrack(() => data.sourceRepository));
   let repository = $state(untrack(() => data.repository));
   let base = $state(untrack(() => data.base));
   let compare = $state(untrack(() => data.compare));
@@ -26,8 +29,10 @@
   let creating = $state(false);
   let error = $state('');
   const repositoryOptions = $derived(repositories.map((repo) => ({ value: `${repo.owner}/${repo.name}`, label: `${repo.owner}/${repo.name}`, description: repo.description })));
-  const baseOptions = $derived(branches.map((branch) => ({ value: branch.name, label: branch.name, description: branch.commitId.slice(0, 7) })));
-  const compareOptions = $derived(branches.filter((branch) => branch.name !== base).map((branch) => ({ value: branch.name, label: branch.name, description: branch.commitId.slice(0, 7) })));
+  const sourceOptions = $derived(sources.map((source) => ({ value: `${source.owner}/${source.name}`, label: `${source.owner}/${source.name}`, description: `${source.branches.length} branches` })));
+  const sourceBranches = $derived(sources.find((source) => `${source.owner}/${source.name}` === sourceRepository)?.branches ?? []);
+  const baseOptions = $derived(targetBranches.map((branch) => ({ value: branch.name, label: branch.name, description: branch.commitId.slice(0, 7) })));
+  const compareOptions = $derived(sourceBranches.filter((branch) => sourceRepository !== repository || branch.name !== base).map((branch) => ({ value: branch.name, label: branch.name, description: branch.commitId.slice(0, 7) })));
 
   function repoParts() {
     const [owner, ...name] = repository.split('/');
@@ -39,20 +44,28 @@
     const { owner, name } = repoParts();
     comparison = null; error = '';
     try {
-      const result = await api<{ defaultBranch: string; branches: Branch[] }>(`/repositories/${owner}/${name}/branches`);
-      branches = result.branches;
-      base = result.defaultBranch;
-      compare = branches.find((branch) => branch.name !== base)?.name ?? '';
+      const result = await api<{ target: { defaultBranch: string; branches: Branch[] }; sources: PullSource[] }>(`/repositories/${owner}/${name}/pull-sources`);
+      sources = result.sources;
+      targetBranches = result.target.branches;
+      sourceRepository = sources.some((source) => `${source.owner}/${source.name}` === repository) ? repository : sources[0] ? `${sources[0].owner}/${sources[0].name}` : '';
+      base = result.target.defaultBranch;
+      compare = sourceBranches.find((branch) => sourceRepository !== repository || branch.name !== base)?.name ?? '';
       await loadComparison();
     } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Branches could not be loaded.'; }
   }
 
+  async function loadSource() {
+    comparison = null;
+    compare = sourceBranches.find((branch) => sourceRepository !== repository || branch.name !== base)?.name ?? '';
+    await loadComparison();
+  }
+
   async function loadComparison() {
     comparison = null;
-    if (!repository || !base || !compare || base === compare) return;
+    if (!repository || !base || !compare || (sourceRepository === repository && base === compare)) return;
     comparing = true; error = '';
     const { owner, name } = repoParts();
-    try { comparison = await api<PullRequestDiff>(`/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}`); }
+    try { comparison = await api<PullRequestDiff>(`/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}&sourceRepository=${encodeURIComponent(sourceRepository)}`); }
     catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'These branches could not be compared.'; }
     finally { comparing = false; }
   }
@@ -62,7 +75,7 @@
     creating = true; error = '';
     const { owner, name } = repoParts();
     try {
-      const result = await api<{ pullRequest: { number: number } }>(`/repositories/${owner}/${name}/pulls`, { method: 'POST', body: JSON.stringify({ title, body, sourceBranch: compare, targetBranch: base, draft }) });
+      const result = await api<{ pullRequest: { number: number } }>(`/repositories/${owner}/${name}/pulls`, { method: 'POST', body: JSON.stringify({ title, body, sourceRepository, sourceBranch: compare, targetBranch: base, draft }) });
       await goto(`/${owner}/${name}/pulls/${result.pullRequest.number}`);
     } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull request could not be created.'; creating = false; }
   }
@@ -78,6 +91,7 @@
   {:else}
     <form class="form-grid" onsubmit={(event) => { event.preventDefault(); createPull(); }}>
       <label class="field"><span>Repository</span><Select bind:value={repository} options={repositoryOptions} ariaLabel="Repository" onchange={loadBranches} /></label>
+      <label class="field"><span>Source repository</span><Select bind:value={sourceRepository} options={sourceOptions} ariaLabel="Source repository" onchange={loadSource} /></label>
       <div class="compare">
         <label class="field"><span>Base branch</span><Select bind:value={base} options={baseOptions} ariaLabel="Base branch" onchange={loadComparison} /></label>
         <ArrowRight size={17} />

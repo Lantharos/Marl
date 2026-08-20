@@ -9,6 +9,9 @@ export type PullRefUpdate = {
   targetCommitId: string;
   expectedSourceCommitId?: string;
   expectedTargetCommitId?: string;
+  sourceOwner?: string;
+  sourceRepository?: string;
+  sourceRepositoryId?: string;
 };
 
 export async function pinPullRefs(env: Env, update: PullRefUpdate) {

@@ -5,6 +5,7 @@ import type { GitEdgeEnv } from './env';
 import { hydrateRepository } from './hydration';
 import { handleNativePush, nativePushRoute } from './native-push';
 import { readPackedObject } from './pack-reader';
+import { forkRepositoryStorage } from './fork-storage';
 export { OrganizationQuotaObject } from './organization-quota-object';
 export { RepositoryStateObject } from './repository-state-object';
 export { UploadSessionObject } from './upload-session-object';
@@ -47,6 +48,7 @@ export default {
       if (new URL(request.url).pathname === '/_marl/repositories/relocate' && request.method === 'POST') {
         return new Response(null, { status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404 });
       }
+      if (new URL(request.url).pathname === '/_marl/repositories/fork' && request.method === 'POST') return forkRepositoryStorage(request, env);
       if (new URL(request.url).pathname === '/_marl/object' && request.method === 'POST') {
         if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
         const body = await request.json<{ repositoryId?: unknown; objectId?: unknown }>().catch(() => null);
@@ -60,6 +62,10 @@ export default {
       if (!route) return new Response('Repository not found\n', { status: 404 });
       const authorization = await authorizeGit(request, env, route.owner, route.repository, route.writes ? 'git-receive-pack' : 'git-upload-pack');
       const container = getContainer(env.GIT_CONTAINERS, authorization.storageKey);
+      if (new URL(request.url).pathname === '/_marl/compare' || new URL(request.url).pathname === '/_marl/pulls/pin') {
+        const body = await request.clone().json<{ sourceOwner?: unknown; sourceRepository?: unknown; sourceRepositoryId?: unknown }>().catch(() => null);
+        if (body && typeof body.sourceOwner === 'string' && typeof body.sourceRepository === 'string' && typeof body.sourceRepositoryId === 'string' && safeSegment(body.sourceOwner) && safeSegment(body.sourceRepository)) await hydrateRepository(container, env, body.sourceOwner, body.sourceRepository, body.sourceRepositoryId);
+      }
       if (route.writes) return handleCompatibilityPush(request, container, env, route.owner, route.repository);
       await hydrateRepository(container, env, route.owner, route.repository, authorization.storageKey);
       return container.fetch(request);

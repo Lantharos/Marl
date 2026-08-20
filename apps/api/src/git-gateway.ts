@@ -9,11 +9,12 @@ export interface GitGatewayRequestMap {
   '/_marl/blob': { owner: string; repository: string; objectId: string };
   '/_marl/tree': { owner: string; repository: string; commitId: string; path: string };
   '/_marl/commit': { owner: string; repository: string; commitId: string };
-  '/_marl/compare': { owner: string; repository: string; base: string; head: string };
+  '/_marl/compare': { owner: string; repository: string; base: string; head: string; sourceOwner?: string; sourceRepository?: string; sourceRepositoryId?: string };
   '/_marl/patch': { owner: string; repository: string; base: string; head: string; path: string };
   '/_marl/merge': { operationId: string; method: string; repositoryId: string; owner: string; repository: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; title: string; author: string };
-  '/_marl/pulls/pin': { owner: string; repository: string; number: number; sourceCommitId: string; targetCommitId: string };
+  '/_marl/pulls/pin': { owner: string; repository: string; number: number; sourceCommitId: string; targetCommitId: string; sourceOwner?: string; sourceRepository?: string; sourceRepositoryId?: string };
   '/_marl/repositories/relocate': { oldOwner: string; oldRepository: string; newOwner: string; newRepository: string };
+  '/_marl/repositories/fork': { repositoryId: string; sourceRepositoryId: string; sourceOwner: string; sourceRepository: string; destinationOrganizationId: string; destinationOwner: string; destinationRepository: string };
   '/_marl/object': { repositoryId: string; objectId: string };
 }
 

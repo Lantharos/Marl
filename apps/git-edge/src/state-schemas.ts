@@ -21,6 +21,7 @@ export const repositoryManifest = strictObject({ generation: nonNegativeInteger,
 
 export const beginPushBody = strictObject({ pushId: identifier, reservationId: identifier, expiresAt: positiveInteger, proposedRefs: refs, expectedRefs });
 export const publishBody = strictObject({ pushId: identifier, expectedGeneration: nonNegativeInteger, refs, manifestKey: identifier, manifestHash: pipe(string(), regex(/^[0-9a-f]{64}$/)), packs: array(canonicalPack) });
+export const forkStateBody = strictObject({ refs, manifestKey: identifier, manifestHash: pipe(string(), regex(/^[0-9a-f]{64}$/)), packs: array(canonicalPack) });
 export const proposePushBody = strictObject({ pushId: identifier, refs });
 export const pushIdBody = strictObject({ pushId: identifier });
 

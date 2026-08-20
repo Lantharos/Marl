@@ -54,10 +54,10 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [reviews, checks, unresolvedThreads, rule, commits, labels, availableLabels, assignees, availableAssignees, timeline] = await Promise.all([
     latestReviews(env, pull.id),
-    env.DB.prepare(`SELECT id, name, state, summary, details_url AS detailsUrl, updated_at AS updatedAt FROM checks WHERE repository_id = ? AND commit_id = ? ORDER BY name`).bind(repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
+    env.DB.prepare(`SELECT id, name, state, summary, details_url AS detailsUrl, updated_at AS updatedAt FROM checks WHERE repository_id = ? AND commit_id = ? ORDER BY name`).bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
     branchRuleFor(env, repository.id, pull.targetBranch),
-    pullCommits(env, repository.id, pull.sourceCommitId, pull.targetCommitId),
+    pullCommits(env, repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, pull.targetCommitId),
     env.DB.prepare(`SELECT repository_labels.id,repository_labels.name,repository_labels.color,repository_labels.description FROM repository_labels JOIN pull_request_labels ON pull_request_labels.label_id=repository_labels.id WHERE pull_request_labels.pull_request_id=? ORDER BY repository_labels.name`).bind(pull.id).all(),
     env.DB.prepare(`SELECT id,name,color,description FROM repository_labels WHERE repository_id=? ORDER BY name`).bind(repository.id).all(),
     env.DB.prepare(`SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN pull_request_assignees ON pull_request_assignees.user_id=users.id WHERE pull_request_assignees.pull_request_id=? ORDER BY users.handle`).bind(pull.id).all(),
@@ -105,7 +105,7 @@ export async function getPullState(env: Env, principal: Principal, owner: string
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? AND pull_requests.number=?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [checks, reviews, unresolvedThreads, rule] = await Promise.all([
-    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id=? AND commit_id=?').bind(repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
+    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id=? AND commit_id=?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     latestReviews(env, pull.id),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
     branchRuleFor(env, repository.id, pull.targetBranch)
@@ -154,12 +154,22 @@ export async function compareBranches(env: Env, principal: Principal, owner: str
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const base = url.searchParams.get('base');
   const head = url.searchParams.get('head');
-  if (!validBranchName(base) || !validBranchName(head) || base === head) return problem(422, 'invalid_comparison', 'Choose two different valid branches.');
-  const branches = await env.DB.prepare('SELECT name, commit_id AS commitId FROM branches WHERE repository_id = ? AND name IN (?, ?)').bind(repository.id, base, head).all<{ name: string; commitId: string }>();
-  const baseBranch = branches.results.find((branch) => branch.name === base);
-  const headBranch = branches.results.find((branch) => branch.name === head);
+  const sourceParts = (url.searchParams.get('sourceRepository') ?? `${owner}/${name}`).split('/');
+  if (!validBranchName(base) || !validBranchName(head) || sourceParts.length !== 2) return problem(422, 'invalid_comparison', 'Choose valid repositories and branches.');
+  const sourceRepository = await repo(env, sourceParts[0], sourceParts[1]);
+  if (!sourceRepository || !(await authorizeRepository(env, principal, sourceParts[0], sourceParts[1], 'repository.read'))) return problem(404, 'repository_not_found', 'Source repository not found.');
+  if ((await comparisonRoot(env, sourceRepository.id)) !== (await comparisonRoot(env, repository.id))) return problem(422, 'unrelated_repositories', 'These repositories are not in the same fork network.');
+  if (sourceRepository.id === repository.id && base === head) return problem(422, 'invalid_comparison', 'Choose two different branches.');
+  const [baseBranch, headBranch] = await Promise.all([
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(repository.id, base).first<{ name: string; commitId: string }>(),
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(sourceRepository.id, head).first<{ name: string; commitId: string }>()
+  ]);
   if (!baseBranch || !headBranch) return problem(404, 'branch_not_found', 'A comparison branch does not exist.');
-  const response = await requestGitGateway(env, '/_marl/compare', { owner, repository: name, base: baseBranch.commitId, head: headBranch.commitId }, { attempts: 2 });
+  const response = await requestGitGateway(env, '/_marl/compare', { owner, repository: name, base: baseBranch.commitId, head: headBranch.commitId, ...(sourceRepository.id === repository.id ? {} : { sourceOwner: sourceParts[0], sourceRepository: sourceParts[1], sourceRepositoryId: sourceRepository.id }) }, { attempts: 2 });
   if (!response.ok) return problem(502, 'diff_gateway_failed', 'Git gateway could not build this comparison.');
   return json(await response.json());
+}
+
+async function comparisonRoot(env: Env, repositoryId: string) {
+  return (await env.DB.prepare('SELECT COALESCE(fork_root_repository_id,id) AS rootId FROM repositories WHERE id=?').bind(repositoryId).first<{ rootId: string }>())?.rootId ?? '';
 }

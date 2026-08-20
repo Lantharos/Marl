@@ -30,6 +30,10 @@ export interface RepositorySummary {
   archivedAt?: string;
   deletionScheduledAt?: string;
   language?: string;
+  starred?: boolean;
+  starCount?: number;
+  forkCount?: number;
+  upstream?: { owner: string; name: string } | null;
 }
 
 export interface PublicProfileRepository extends RepositorySummary {
@@ -108,6 +112,7 @@ export interface PullRequestSummary {
   author: string;
   authorAvatar?: string;
   sourceBranch: string;
+  sourceRepository?: { owner: string; name: string };
   targetBranch: string;
   state: PullRequestState;
   reviewStatus: 'none' | 'requested' | 'approved' | 'changes_requested';

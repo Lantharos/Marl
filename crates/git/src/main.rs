@@ -1,5 +1,7 @@
 mod blob;
 mod compare;
+mod cross_repository;
+mod fork;
 mod merge;
 mod merge_operations;
 mod metadata;
@@ -102,6 +104,7 @@ async fn main() -> Result<()> {
             "/_marl/repositories/relocate",
             axum::routing::post(relocate::relocate_repository),
         )
+        .route("/_marl/repositories/fork", axum::routing::post(fork::fork_repository))
         .route("/_marl/blob", axum::routing::post(blob::read_blob))
         .route("/_marl/tree", axum::routing::post(metadata::read_tree))
         .route(

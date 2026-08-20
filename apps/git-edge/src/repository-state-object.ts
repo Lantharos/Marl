@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { RepositoryStateStore } from './repository-state-store';
 import { abortPush, beginPush, proposePushRefs, publish, type RepositoryState } from './storage-model';
 import { parseStateBody, stateFailure, stateResponse, trusted, type StateEnv } from './state-http';
-import { beginPushBody, proposePushBody, publishBody, pushIdBody } from './state-schemas';
+import { beginPushBody, forkStateBody, proposePushBody, publishBody, pushIdBody } from './state-schemas';
 
 export class RepositoryStateObject extends DurableObject<StateEnv> {
   private store: RepositoryStateStore;
@@ -60,6 +60,12 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
         await this.ctx.storage.setAlarm(now);
         this.store.publish(state, next, body.pushId, removed, now);
         return stateResponse({ state: next });
+      }
+      if (request.method === 'POST' && path === '/fork') {
+        const body = await parseStateBody(request, forkStateBody);
+        const state: RepositoryState = { generation: 1, refsVersion: Object.keys(body.refs).length ? 1 : 0, refs: body.refs, manifestKey: body.manifestKey, manifestHash: body.manifestHash, packs: body.packs, storedBytes: body.packs.reduce((total, pack) => total + pack.compressedBytes, 0), activePush: null };
+        this.store.initializeFork(state, Date.now());
+        return stateResponse({ state }, 201);
       }
       if (request.method === 'POST' && path === '/propose') {
         const body = await parseStateBody(request, proposePushBody);

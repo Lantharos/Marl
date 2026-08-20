@@ -5,11 +5,14 @@
   import Archive from 'lucide-svelte/icons/archive';
   import ArrowRightLeft from 'lucide-svelte/icons/arrow-right-left';
   import Globe2 from 'lucide-svelte/icons/globe-2';
+  import GitFork from 'lucide-svelte/icons/git-fork';
   import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
+  import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
   import Button from '$lib/components/Button.svelte';
+  import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
@@ -29,11 +32,13 @@
   let destination = $state(untrack(() => data.organizations.find((organization: Organization) => organization.slug !== ($page.params.owner ?? ''))?.slug ?? ($page.params.owner ?? '')));
   let deleteConfirmation = $state('');
   let archived = $state(untrack(() => Boolean(data.repository.archivedAt)));
-  let dialog = $state<'visibility' | 'rename' | 'transfer' | 'archive' | 'delete' | null>(null);
+  let upstream = $state(untrack(() => data.repository.upstream));
+  let dialog = $state<'visibility' | 'rename' | 'transfer' | 'detach' | 'archive' | 'delete' | null>(null);
   let busy = $state('');
   let generalState = $state<'idle' | 'saving' | 'saved'>('idle');
   let visibilityState = $state<'idle' | 'saved'>('idle');
   let error = $state('');
+  const confirmation = new IdentityConfirmation();
   const ownerOptions = $derived(data.organizations.map((organization: Organization) => ({ value: organization.slug, label: organization.slug, description: organization.name })));
   const branchOptions = $derived(data.branches.map((branch: BranchOption) => ({ value: branch.name, label: branch.name })));
 
@@ -87,6 +92,12 @@
     await api(`/repositories/${owner}/${repo}/settings/delete`, { method: 'POST', body: JSON.stringify({ confirmation: deleteConfirmation }) });
     await goto('/repositories');
   }); }
+
+  function detachFork() { return run('detach', async () => {
+    await api(`/repositories/${owner}/${repo}/settings/detach-fork`, { method: 'POST' });
+    upstream = null;
+    dialog = null;
+  }); }
 </script>
 
 <svelte:head><title>Settings · {owner}/{repo} · Marl</title></svelte:head>
@@ -113,6 +124,7 @@
 
 <section class="danger-zone">
   <header><h3>Repository lifecycle</h3><p>These actions affect Git access and repository availability.</p></header>
+  {#if upstream}<div class="operation"><span class="operation-icon"><GitFork size={15} /></span><div><strong>Detach fork</strong><small>Remove the connection to {upstream.owner}/{upstream.name} while preserving this repository and its history.</small></div><Button size="small" onclick={() => (dialog = 'detach')}>Detach</Button></div>{/if}
   <div class="operation"><span class="operation-icon"><Archive size={15} /></span><div><strong>{archived ? 'Unarchive repository' : 'Archive repository'}</strong><small>{archived ? 'Restore pushes and normal repository activity.' : 'Make the repository read-only while preserving every object.'}</small></div><Button size="small" onclick={() => (dialog = 'archive')}>{archived ? 'Unarchive' : 'Archive'}</Button></div>
   <div class="operation delete"><span class="operation-icon"><Trash2 size={15} /></span><div><strong>Delete repository</strong><small>Hide it immediately and permanently purge it after 30 days.</small></div><Button size="small" variant="danger-soft" onclick={() => { deleteConfirmation = ''; dialog = 'delete'; }}>Delete</Button></div>
 </section>
@@ -137,10 +149,17 @@
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy === 'archive'} onclick={toggleArchive}>{archived ? 'Unarchive repository' : 'Archive repository'}</Button>{/snippet}
 </Modal>
 
+<Modal open={dialog === 'detach'} title="Detach this fork?" description="This repository will become the root of an independent fork network." onClose={() => (dialog = null)}>
+  {#snippet children()}<div class="modal-summary"><GitFork size={18} /><span><strong>{owner}/{repo}</strong><small>Code, branches, stars, and repository history will be preserved.</small></span></div>{/snippet}
+  {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="danger-soft" loading={busy === 'detach' || confirmation.busy} onclick={() => confirmation.request(detachFork)}>Detach fork</Button>{/snippet}
+</Modal>
+
 <Modal open={dialog === 'delete'} title="Delete repository?" description="This hides the repository immediately. Permanent deletion is scheduled for 30 days from now." onClose={() => (dialog = null)}>
   {#snippet children()}<label class="modal-field"><span>Type <code>{owner}/{repo}</code> to confirm</span><input bind:value={deleteConfirmation} autocomplete="off" placeholder="{owner}/{repo}" /></label>{/snippet}
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="danger" disabled={busy === 'delete' || deleteConfirmation !== `${owner}/${repo}`} onclick={scheduleDeletion}>Delete repository</Button>{/snippet}
 </Modal>
+
+<IdentityConfirmationModal open={confirmation.open} method={confirmation.method} description="Confirm that you want to detach this fork." onClose={confirmation.close} onVerified={confirmation.continue} />
 
 <style>
   .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle);margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}

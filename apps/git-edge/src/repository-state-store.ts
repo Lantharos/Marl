@@ -71,6 +71,18 @@ export class RepositoryStateStore {
     });
   }
 
+  initializeFork(next: RepositoryState, now: number) {
+    const previous = this.read();
+    if (previous.generation !== 0 || previous.activePush || previous.packs.length || Object.keys(previous.refs).length) throw new Error('Destination repository state already exists.');
+    this.storage.transactionSync(() => {
+      this.sql.exec('UPDATE repository_meta SET generation=?,refs_version=?,manifest_key=?,manifest_hash=?,stored_bytes=? WHERE id=1', next.generation, next.refsVersion, next.manifestKey, next.manifestHash, next.storedBytes);
+      syncRefs(this.sql, 'repository_refs', {}, next.refs);
+      syncPacks(this.sql, [], next.packs);
+      this.sql.exec('INSERT INTO repository_generations (generation,manifest_key,manifest_hash,created_at) VALUES (?,?,?,?)', next.generation, next.manifestKey, next.manifestHash, now);
+      this.sql.exec('INSERT OR REPLACE INTO integrity_schedule (id,generation,attempts,next_verify_at) VALUES (1,?,0,?)', next.generation, now);
+    });
+  }
+
   generation(value: number) {
     return this.sql.exec<{ manifestKey: string; manifestHash: string }>('SELECT manifest_key AS manifestKey,manifest_hash AS manifestHash FROM repository_generations WHERE generation=?', value).toArray()[0] ?? null;
   }

@@ -8,7 +8,7 @@ import { requestGitGateway } from './git-gateway';
 import { json, problem, readJson } from './http';
 import { readListQuery } from './list-query';
 import type { D1Result, Env } from './platform';
-import { createRepositoryBody, deleteRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
+import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
@@ -75,7 +75,7 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     if (typeof branch.name !== 'string' || !validBranchName(branch.name) || typeof branch.commitId !== 'string' || !/^[0-9a-f]{40,64}$/.test(branch.commitId)) continue;
     indexedBranches.push({ name: branch.name, commitId: branch.commitId });
     statements.push(env.DB.prepare(`INSERT INTO branches (repository_id, name, commit_id, index_version) VALUES (?, ?, ?, ?) ON CONFLICT(repository_id, name) DO UPDATE SET commit_id=excluded.commit_id,index_version=excluded.index_version,updated_at=CURRENT_TIMESTAMP`).bind(body.repositoryId, branch.name, branch.commitId, body.indexId));
-    statements.push(env.DB.prepare(`UPDATE pull_requests SET source_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE repository_id = ? AND source_branch = ? AND state IN ('draft', 'open') AND source_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
+    statements.push(env.DB.prepare(`UPDATE pull_requests SET source_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE COALESCE(source_repository_id, repository_id) = ? AND source_branch = ? AND state IN ('draft', 'open') AND source_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
     statements.push(env.DB.prepare(`UPDATE pull_requests SET target_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE repository_id = ? AND target_branch = ? AND state IN ('draft', 'open') AND target_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
   }
   for (const value of body.entries) {
@@ -90,12 +90,12 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const pullHeadUpdates: Array<{ id: string; sourceCommitId: string; targetCommitId: string }> = [];
   if (changedBranches.length) {
     const changedNames = changedBranches.map((branch) => branch.name);
-    const pullRows = await queryInChunks(changedNames, 45, (chunk) => env.DB.prepare(`SELECT pull_requests.id,pull_requests.number,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE pull_requests.repository_id=? AND pull_requests.state IN ('draft','open') AND (pull_requests.source_branch IN (${placeholders(chunk)}) OR pull_requests.target_branch IN (${placeholders(chunk)}))`).bind(body.repositoryId, ...chunk, ...chunk).all<{ id: string; number: number; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string }>());
+    const pullRows = await queryInChunks(changedNames, 45, (chunk) => env.DB.prepare(`SELECT pull_requests.id,pull_requests.number,pull_requests.repository_id AS repositoryId,COALESCE(pull_requests.source_repository_id,pull_requests.repository_id) AS sourceRepositoryId,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository,source_organizations.slug AS sourceOwner,source_repositories.name AS sourceRepository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN repositories AS source_repositories ON source_repositories.id=COALESCE(pull_requests.source_repository_id,pull_requests.repository_id) LEFT JOIN organizations AS source_organizations ON source_organizations.id=source_repositories.organization_id WHERE pull_requests.state IN ('draft','open') AND ((COALESCE(pull_requests.source_repository_id,pull_requests.repository_id)=? AND pull_requests.source_branch IN (${placeholders(chunk)})) OR (pull_requests.repository_id=? AND pull_requests.target_branch IN (${placeholders(chunk)})))`).bind(body.repositoryId, ...chunk, body.repositoryId, ...chunk).all<{ id: string; number: number; repositoryId: string; sourceRepositoryId: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string; sourceOwner: string; sourceRepository: string }>());
     const pulls = [...new Map(pullRows.map((pull) => [pull.id, pull])).values()];
     const heads = new Map(indexedBranches.map((branch) => [branch.name, branch.commitId]));
     for (const pull of pulls) {
-      const sourceCommitId = heads.get(pull.sourceBranch) ?? pull.sourceCommitId;
-      const targetCommitId = heads.get(pull.targetBranch) ?? pull.targetCommitId;
+      const sourceCommitId = pull.sourceRepositoryId === body.repositoryId ? heads.get(pull.sourceBranch) ?? pull.sourceCommitId : pull.sourceCommitId;
+      const targetCommitId = pull.repositoryId === body.repositoryId ? heads.get(pull.targetBranch) ?? pull.targetCommitId : pull.targetCommitId;
       if (sourceCommitId === pull.sourceCommitId && targetCommitId === pull.targetCommitId) continue;
       const pinned = await pinPullRefs(env, {
         owner: pull.owner,
@@ -104,7 +104,9 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
         sourceCommitId,
         targetCommitId,
         expectedSourceCommitId: pull.sourceCommitId,
-        expectedTargetCommitId: pull.targetCommitId
+        expectedTargetCommitId: pull.targetCommitId,
+        sourceOwner: pull.sourceOwner,
+        sourceRepository: pull.sourceRepository
       });
       if (!pinned.ok) return problem(502, 'pull_ref_sync_failed', `Pull request #${pull.number} could not preserve its updated commits.`);
       pullHeadUpdates.push({ id: pull.id, sourceCommitId, targetCommitId });
@@ -186,18 +188,77 @@ export async function getRepository(env: Env, principal: Principal, owner: strin
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const { organizationId: _, role: __, ...visible } = repo;
   const sshBase = env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
+  const social = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred,upstream_organizations.slug AS upstreamOwner,upstream.name AS upstreamName FROM repositories LEFT JOIN repositories AS upstream ON upstream.id=repositories.forked_from_repository_id LEFT JOIN organizations AS upstream_organizations ON upstream_organizations.id=upstream.organization_id WHERE repositories.id=?`).bind(principal.id, repo.id).first<{ starCount: number; forkCount: number; starred: number; upstreamOwner: string | null; upstreamName: string | null }>();
   return json({ repository: {
     ...visible,
+    starred: Boolean(social?.starred),
+    starCount: Number(social?.starCount ?? 0),
+    forkCount: Number(social?.forkCount ?? 0),
+    upstream: social?.upstreamOwner && social.upstreamName ? { owner: social.upstreamOwner, name: social.upstreamName } : null,
     cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git`,
     sshCloneUrl: sshBase ? `${sshBase.replace(/\/$/, '')}/${owner}/${name}.git` : null
   } });
+}
+
+export async function setRepositoryStar(env: Env, principal: Principal, owner: string, name: string, starred: boolean): Promise<Response> {
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (starred) await env.DB.prepare('INSERT OR IGNORE INTO repository_stars (repository_id,user_id) VALUES (?,?)').bind(repository.id, principal.id).run();
+  else await env.DB.prepare('DELETE FROM repository_stars WHERE repository_id=? AND user_id=?').bind(repository.id, principal.id).run();
+  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM repository_stars WHERE repository_id=?').bind(repository.id).first<{ count: number }>();
+  return json({ starred, starCount: Number(count?.count ?? 0) });
+}
+
+export async function forkRepository(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+  if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Repositories must be forked from a browser session.');
+  const source = await authorizeRepository(env, principal, owner, name, 'repository.read');
+  if (!source) return problem(404, 'repository_not_found', 'Repository not found.');
+  const body = await readJson(request, forkRepositoryBody);
+  if (!body || !validSlug(body.owner) || !validSlug(body.name)) return problem(422, 'invalid_repository_name', 'Owner and repository names must be URL-safe slugs.');
+  const destination = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organizations.slug=? COLLATE NOCASE AND organization_members.user_id=? AND organization_members.role IN ('owner','admin')`).bind(body.owner, principal.id).first<{ id: string }>();
+  if (!destination) return problem(403, 'owner_required', 'You cannot create repositories for this owner.');
+  const rootId = source.forkRootRepositoryId ?? source.id;
+  const existingFork = await env.DB.prepare(`SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.organization_id=? AND COALESCE(repositories.fork_root_repository_id,repositories.id)=? AND repositories.deletion_scheduled_at IS NULL`).bind(destination.id, rootId).first<{ owner: string; name: string }>();
+  if (existingFork) return problem(409, 'fork_exists', `This organization already has the fork ${existingFork.owner}/${existingFork.name}.`);
+  const id = identifier('repo');
+  const defaults = [['bug', '#e16f73', 'Something is not working'], ['enhancement', '#8c7ad8', 'New or improved functionality'], ['documentation', '#68a7b8', 'Documentation changes'], ['needs review', '#d3a45f', 'Ready for reviewer attention']];
+  try {
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO repositories (id,organization_id,name,description,visibility,default_branch,created_by,forked_from_repository_id,fork_root_repository_id) VALUES (?,?,?,?,?,?,?,?,?)').bind(id, destination.id, body.name, source.description, source.visibility, source.defaultBranch, principal.id, source.id, rootId),
+      ...defaults.map(([label, color, detail]) => env.DB.prepare('INSERT INTO repository_labels (id,repository_id,name,color,description) VALUES (?,?,?,?,?)').bind(identifier('label'), id, label, color, detail)),
+      auditStatement(env, { organizationId: destination.id, repositoryId: id, actor: principal, action: 'repository.forked', subjectType: 'repository', subjectId: id, details: { source: `${owner}/${name}` } })
+    ]);
+  } catch (error) {
+    if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
+    throw error;
+  }
+  const copied = await requestGitGateway(env, '/_marl/repositories/fork', { repositoryId: id, sourceRepositoryId: source.id, sourceOwner: owner, sourceRepository: name, destinationOrganizationId: destination.id, destinationOwner: body.owner, destinationRepository: body.name }, { attempts: 2, timeoutMs: 120_000 }).catch(() => new Response(null, { status: 502 }));
+  if (!copied.ok) {
+    await env.DB.prepare('DELETE FROM repositories WHERE id=?').bind(id).run();
+    return problem(502, 'repository_fork_failed', 'Repository storage could not be forked safely.');
+  }
+  return json({ repository: { id, owner: body.owner, name: body.name, description: source.description, visibility: source.visibility, defaultBranch: source.defaultBranch, upstream: { owner, name }, starred: false, starCount: 0, forkCount: 0, updatedAt: new Date().toISOString() } }, { status: 201 });
+}
+
+export async function detachRepositoryFork(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository.forkedFromRepositoryId) return problem(409, 'not_a_fork', 'This repository is not part of a fork network.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before detaching this fork.');
+  await env.DB.batch([
+    env.DB.prepare(`WITH RECURSIVE descendants(id) AS (SELECT ? UNION ALL SELECT repositories.id FROM repositories JOIN descendants ON repositories.forked_from_repository_id=descendants.id) UPDATE repositories SET fork_root_repository_id=? WHERE id IN (SELECT id FROM descendants)`).bind(repository.id, repository.id),
+    env.DB.prepare('UPDATE repositories SET forked_from_repository_id=NULL,fork_root_repository_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(repository.id),
+    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.fork.detached', subjectType: 'repository', subjectId: repository.id })
+  ]);
+  return json({ detached: true });
 }
 
 export async function getRepositorySettings(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const access = await authorizeRepository(env, principal, owner, name, 'repository.maintain');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const organizations = await env.DB.prepare(`SELECT organizations.slug,organizations.name FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organization_members.role='owner' ORDER BY organizations.slug`).bind(principal.id).all<{ slug: string; name: string }>();
-  return json({ repository: access, organizations: organizations.results });
+  const upstream = access.forkedFromRepositoryId ? await env.DB.prepare('SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.id=?').bind(access.forkedFromRepositoryId).first<{ owner: string; name: string }>() : null;
+  return json({ repository: { ...access, upstream }, organizations: organizations.results });
 }
 
 export async function updateRepositorySettings(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -272,6 +333,22 @@ export async function listBranches(env: Env, principal: Principal, owner: string
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const result = await env.DB.prepare(`SELECT branches.name, branches.commit_id AS commitId, commits.title, branches.updated_at AS updatedAt FROM branches JOIN commits ON commits.repository_id = branches.repository_id AND commits.id = branches.commit_id WHERE branches.repository_id = ? ORDER BY branches.name`).bind(repo.id).all();
   return json({ defaultBranch: repo.defaultBranch, branches: result.results });
+}
+
+export async function listPullSources(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+  const target = await authorizeRepository(env, principal, owner, name, 'repository.read');
+  if (!target) return problem(404, 'repository_not_found', 'Repository not found.');
+  const rootId = target.forkRootRepositoryId ?? target.id;
+  const targetBranches = await env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? ORDER BY name').bind(target.id).all<{ name: string; commitId: string }>();
+  const candidates = await env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.default_branch AS defaultBranch FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE COALESCE(repositories.fork_root_repository_id,repositories.id)=? AND repositories.deletion_scheduled_at IS NULL ORDER BY CASE WHEN repositories.id=? THEN 0 ELSE 1 END,organizations.slug,repositories.name`).bind(rootId, target.id).all<{ id: string; owner: string; name: string; defaultBranch: string }>();
+  const sources = [];
+  for (const candidate of candidates.results) {
+    const capability = candidate.id === target.id ? 'repository.triage' : 'repository.push';
+    if (!(await authorizeRepositoryId(env, principal, candidate.id, capability))) continue;
+    const branches = await env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? ORDER BY name').bind(candidate.id).all<{ name: string; commitId: string }>();
+    sources.push({ owner: candidate.owner, name: candidate.name, defaultBranch: candidate.defaultBranch, branches: branches.results });
+  }
+  return json({ target: { owner, name, defaultBranch: target.defaultBranch, branches: targetBranches.results }, sources });
 }
 
 export async function listCommits(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {

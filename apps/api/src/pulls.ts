@@ -9,18 +9,28 @@ import { canManageRepository as membership, createPullEvent, latestReviews, pres
 import { mergeRequirements } from './pull-requirements';
 import { commitPullUpdate } from './pull-realtime';
 import { commentBody, createPullBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
-import { authorizeRepositoryId } from './repository-access';
+import { authorizeRepository, authorizeRepositoryId } from './repository-access';
 
 export async function createPull(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const body = await readJson(request, createPullBody);
-  if (!body || typeof body.title !== 'string' || body.title.trim().length < 3 || body.title.length > 240 || !validBranchName(body.sourceBranch) || !validBranchName(body.targetBranch) || body.sourceBranch === body.targetBranch) return problem(422, 'invalid_pull_request', 'Title and two different valid branches are required.');
-  const branches = await env.DB.prepare('SELECT name, commit_id AS commitId FROM branches WHERE repository_id = ? AND name IN (?, ?)').bind(repository.id, body.sourceBranch, body.targetBranch).all<{ name: string; commitId: string }>();
-  const source = branches.results.find((branch) => branch.name === body.sourceBranch);
-  const target = branches.results.find((branch) => branch.name === body.targetBranch);
+  if (!body || typeof body.title !== 'string' || body.title.trim().length < 3 || body.title.length > 240 || !validBranchName(body.sourceBranch) || !validBranchName(body.targetBranch)) return problem(422, 'invalid_pull_request', 'Title and valid source and target branches are required.');
+  const sourceParts = body.sourceRepository?.split('/') ?? [owner, name];
+  if (sourceParts.length !== 2) return problem(422, 'invalid_source_repository', 'Choose a valid source repository.');
+  const [sourceOwner, sourceName] = sourceParts;
+  const sourceRepository = await repo(env, sourceOwner, sourceName);
+  if (!sourceRepository || !(await authorizeRepository(env, principal, sourceOwner, sourceName, 'repository.push'))) return problem(404, 'source_repository_not_found', 'Source repository not found.');
+  const sameRepository = sourceRepository.id === repository.id;
+  if (sameRepository && !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if ((await forkRoot(env, sourceRepository.id)) !== (await forkRoot(env, repository.id))) return problem(422, 'unrelated_repositories', 'Pull requests can only cross repositories in the same fork network.');
+  if (sameRepository && body.sourceBranch === body.targetBranch) return problem(422, 'invalid_pull_request', 'Choose two different branches.');
+  const [source, target] = await Promise.all([
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(sourceRepository.id, body.sourceBranch).first<{ name: string; commitId: string }>(),
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(repository.id, body.targetBranch).first<{ name: string; commitId: string }>()
+  ]);
   if (!source || !target) return problem(422, 'branch_not_found', 'Source or target branch does not exist.');
-  const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id = ? AND source_branch = ? AND target_branch = ? AND state IN ('draft','open')`).bind(repository.id, body.sourceBranch, body.targetBranch).first<{ number: number }>();
+  const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id=? AND COALESCE(source_repository_id,repository_id)=? AND source_branch=? AND target_branch=? AND state IN ('draft','open')`).bind(repository.id, sourceRepository.id, body.sourceBranch, body.targetBranch).first<{ number: number }>();
   if (duplicate) {
     const existing = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, duplicate.number).first<PullRow>();
     if (!existing) return problem(409, 'pull_request_exists', `Pull request #${duplicate.number} already proposes this branch.`);
@@ -31,14 +41,19 @@ export async function createPull(request: Request, env: Env, principal: Principa
   const id = identifier('pr');
   const state = body.draft === true ? 'draft' : 'open';
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO pull_requests (id, repository_id, number, title, body, author_id, source_branch, target_branch, source_commit_id, target_commit_id, state) SELECT ?, ?, COALESCE(MAX(number), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ? FROM pull_requests WHERE repository_id = ?`).bind(id, repository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
-    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.created', subjectType: 'pull_request', subjectId: id, details: { sourceBranch: body.sourceBranch, targetBranch: body.targetBranch, state } })
+    env.DB.prepare(`INSERT INTO pull_requests (id,repository_id,source_repository_id,number,title,body,author_id,source_branch,target_branch,source_commit_id,target_commit_id,state) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,?,?,?,? FROM pull_requests WHERE repository_id=?`).bind(id, repository.id, sameRepository ? null : sourceRepository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
+    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.created', subjectType: 'pull_request', subjectId: id, details: { sourceRepository: `${sourceOwner}/${sourceName}`, sourceBranch: body.sourceBranch, targetBranch: body.targetBranch, state } })
   ]);
   const created = await env.DB.prepare(`${pullSelect} WHERE pull_requests.id = ?`).bind(id).first<PullRow>();
   if (!created) return problem(500, 'pull_request_create_failed', 'Pull request creation did not persist.');
   const pinned = await preservePullRefs(env, repository, created);
   if (pinned) return pinned;
   return json({ pullRequest: created && summary(created) }, { status: 201 });
+}
+
+async function forkRoot(env: Env, repositoryId: string) {
+  const row = await env.DB.prepare('SELECT COALESCE(fork_root_repository_id,id) AS rootId FROM repositories WHERE id=?').bind(repositoryId).first<{ rootId: string }>();
+  return row?.rootId ?? '';
 }
 
 
@@ -260,13 +275,14 @@ export async function transitionPull(env: Env, principal: Principal, owner: stri
     return json({ state: 'closed', update });
   }
   if (pull.state !== 'closed') return problem(409, 'pull_request_not_closed', 'Only a closed pull request can be reopened.');
-  const branches = await env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (?,?)`).bind(repository.id, pull.sourceBranch, pull.targetBranch).all<{ name: string; commitId: string }>();
-  const source = branches.results.find((branch) => branch.name === pull.sourceBranch);
-  const target = branches.results.find((branch) => branch.name === pull.targetBranch);
+  const [source, target] = await Promise.all([
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch).first<{ name: string; commitId: string }>(),
+    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?').bind(repository.id, pull.targetBranch).first<{ name: string; commitId: string }>()
+  ]);
   if (!source || !target) return problem(409, 'branch_missing', 'Both pull request branches must exist before reopening.');
-  const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id=? AND source_branch=? AND target_branch=? AND state IN ('draft','open') AND id!=?`).bind(repository.id, pull.sourceBranch, pull.targetBranch, pull.id).first<{ number: number }>();
+  const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id=? AND COALESCE(source_repository_id,repository_id)=? AND source_branch=? AND target_branch=? AND state IN ('draft','open') AND id!=?`).bind(repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceBranch, pull.targetBranch, pull.id).first<{ number: number }>();
   if (duplicate) return problem(409, 'pull_request_exists', `Pull request #${duplicate.number} already proposes this branch.`);
-  const pinned = await pinPullRefs(env, { owner, repository: name, number, sourceCommitId: source.commitId, targetCommitId: target.commitId, expectedSourceCommitId: pull.sourceCommitId, expectedTargetCommitId: pull.targetCommitId });
+  const pinned = await pinPullRefs(env, { owner, repository: name, number, sourceCommitId: source.commitId, targetCommitId: target.commitId, expectedSourceCommitId: pull.sourceCommitId, expectedTargetCommitId: pull.targetCommitId, ...(pull.sourceRepositoryId ? { sourceOwner: pull.sourceOwner, sourceRepository: pull.sourceRepository, sourceRepositoryId: pull.sourceRepositoryId } : {}) });
   if (!pinned.ok) return problem(502, 'pull_ref_sync_failed', 'Pull request commits could not be preserved while reopening.');
   const event = createPullEvent(env, pull.id, principal, 'reopened');
   const pullPatch = { state: 'open', sourceCommitId: source.commitId, targetCommitId: target.commitId };
@@ -301,9 +317,9 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   const method = body?.method ?? 'merge';
   if (!['merge', 'squash', 'rebase'].includes(String(method))) return problem(422, 'invalid_merge_method', 'Choose merge, squash, or rebase.');
   const [source, target, checks, reviews, unresolvedThreads] = await Promise.all([
-    env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.sourceBranch).first<{ commitId: string }>(),
+    env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch).first<{ commitId: string }>(),
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.targetBranch).first<{ commitId: string }>(),
-    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id = ? AND commit_id = ?').bind(repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
+    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id = ? AND commit_id = ?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     env.DB.prepare(`SELECT author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? ORDER BY created_at`).bind(pull.id).all<{ authorId: string; state: string; commitId: string; createdAt: string }>(),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id = ? AND commit_id = ? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>()
   ]);

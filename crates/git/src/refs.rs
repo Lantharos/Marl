@@ -20,6 +20,8 @@ pub(crate) struct PinPullRequest {
     target_commit_id: String,
     expected_source_commit_id: Option<String>,
     expected_target_commit_id: Option<String>,
+    source_owner: Option<String>,
+    source_repository: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -73,6 +75,7 @@ async fn pin_pull_inner(state: &AppState, request: PinPullRequest) -> Result<Pin
         anyhow::bail!("invalid pull ref request")
     }
     let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
+    crate::cross_repository::import_commit(state, &repository, request.source_owner.as_deref(), request.source_repository.as_deref(), &request.source_commit_id).await?;
     verify_commit(&repository, &request.source_commit_id).await?;
     verify_commit(&repository, &request.target_commit_id).await?;
     let prefix = format!("refs/marl/pulls/{}", request.number);
