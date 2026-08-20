@@ -33,8 +33,8 @@ export async function search(env: Env, principal: Principal, url: URL): Promise<
   ]);
 
   const results: SearchResult[] = [
-    ...users.results.map((item) => ({ kind: 'user' as const, label: item.displayName, detail: `@${item.handle}${item.bio ? ` · ${item.bio}` : ''}`, href: `/user/${item.handle}` })),
-    ...organizations.results.map((item) => ({ kind: 'organization' as const, label: item.name, detail: `${item.slug}${item.description ? ` · ${item.description}` : ''}`, href: `/org/${item.slug}` })),
+    ...users.results.map((item) => ({ kind: 'user' as const, label: item.displayName, detail: `@${item.handle}${item.bio ? ` · ${item.bio}` : ''}`, href: `/${item.handle}` })),
+    ...organizations.results.map((item) => ({ kind: 'organization' as const, label: item.name, detail: `${item.slug}${item.description ? ` · ${item.description}` : ''}`, href: `/${item.slug}` })),
     ...repositories.results.map((item) => ({ kind: 'repository' as const, label: `${item.owner}/${item.name}`, detail: item.description || 'Repository', href: `/${item.owner}/${item.name}` })),
     ...files.results.map((item) => ({ kind: 'file' as const, label: item.path, detail: `${item.owner}/${item.repository} · ${item.branch}`, href: `/${item.owner}/${item.repository}/${item.kind === 'tree' ? 'tree' : 'blob'}/${encodeURIComponent(item.branch)}/${item.path.split('/').map(encodeURIComponent).join('/')}` })),
     ...commits.results.map((item) => ({ kind: 'commit' as const, label: item.title, detail: `${item.owner}/${item.repository} · ${item.id.slice(0, 7)} · ${item.author}`, href: `/${item.owner}/${item.repository}/commit/${item.id}` })),

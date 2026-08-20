@@ -3,12 +3,19 @@ import { json, problem } from './http';
 import type { Env } from './platform';
 
 type ContributionRow = { date: string; count: number };
+type UserRow = { id: string; handle: string; displayName: string; avatarUrl: string | null; bio: string; website: string | null; joinedAt: string; email: string | null };
 
 const publicRepositories = `repositories.visibility='public' AND repositories.deletion_scheduled_at IS NULL`;
 
-export async function getPublicUserProfile(env: Env, handle: string) {
+export async function getPublicIdentityProfile(env: Env, handle: string) {
+  if (!validSlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
+  const user = await env.DB.prepare('SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt,email FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<UserRow>();
+  return user ? getPublicUserProfile(env, handle, user) : getPublicOrganizationProfile(env, handle);
+}
+
+async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserRow) {
   if (!validSlug(handle)) return notFound('user');
-  const user = await env.DB.prepare('SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt,email FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<{ id: string; handle: string; displayName: string; avatarUrl: string | null; bio: string; website: string | null; joinedAt: string; email: string | null }>();
+  const user = loadedUser ?? await env.DB.prepare('SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt,email FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<UserRow>();
   if (!user) return notFound('user');
 
   const identity = `(commits.signature_signer_id=? OR (users.email IS NOT NULL AND users.email!='' AND commits.author_email=users.email COLLATE NOCASE))`;
@@ -32,7 +39,7 @@ export async function getPublicUserProfile(env: Env, handle: string) {
   });
 }
 
-export async function getPublicOrganizationProfile(env: Env, slug: string) {
+async function getPublicOrganizationProfile(env: Env, slug: string) {
   if (!validSlug(slug)) return notFound('organization');
   const organization = await env.DB.prepare('SELECT id,slug,name,avatar_url AS avatarUrl,description,website,kind,created_at AS createdAt FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; slug: string; name: string; avatarUrl: string | null; description: string; website: string | null; kind: 'personal' | 'team'; createdAt: string }>();
   if (!organization) return notFound('organization');

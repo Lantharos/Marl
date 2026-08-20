@@ -19,7 +19,7 @@
 
 {#snippet sidebar()}
     <a class="back" href="/organizations"><ArrowLeft size={15} />Back to organizations</a>
-    <a class="identity" href="/org/{slug}"><OrganizationAvatar name={name} src={avatarUrl} size={32} /><span><h1>{name}</h1><small>{slug}</small></span><ExternalLink size={12} /></a>
+    <a class="identity" href="/{slug}"><OrganizationAvatar name={name} src={avatarUrl} size={32} /><span><h1>{name}</h1><small>{slug}</small></span><ExternalLink size={12} /></a>
     <nav aria-label="Organization settings">
       <a class:active={active === 'profile'} href="/organizations/{slug}/settings/profile"><Building2 size={15} />Profile</a>
       <a class:active={active === 'access'} href="/organizations/{slug}/settings/access"><Users size={15} />People and teams</a>

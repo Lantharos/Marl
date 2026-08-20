@@ -1,5 +1,5 @@
 const slugPattern = /^[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$/;
-const reserved = new Set(['api', 'assets', 'health', 'new', 'pulls', 'repositories', 'runners', 'runs', 'settings']);
+const reserved = new Set(['api', 'assets', 'forgot-password', 'health', 'invitations', 'new', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
 
 export function validSlug(value: unknown): value is string {
   return typeof value === 'string' && slugPattern.test(value) && !reserved.has(value.toLowerCase());

@@ -68,6 +68,8 @@ export interface PublicOrganizationProfile {
   activity: Array<{ id: string; title: string; authoredAt: string; author: string | null; authorAvatarUrl: string | null; repository: string }>;
 }
 
+export type PublicIdentityProfile = PublicUserProfile | PublicOrganizationProfile;
+
 export interface BranchSummary {
   name: string;
   commit: string;

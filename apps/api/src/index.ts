@@ -15,7 +15,7 @@ import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
 import { search } from './search';
 import { organizationSecrets, repositorySecrets } from './secrets';
 import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys, signingKeys } from './ssh-keys';
-import { getPublicOrganizationProfile, getPublicUserProfile } from './public-profiles';
+import { getPublicIdentityProfile } from './public-profiles';
 import { readAvatar } from './profile';
 import { readOrganizationAvatar } from './organizations';
 
@@ -78,10 +78,8 @@ const worker = {
     if (avatar && request.method === 'GET') return readAvatar(_env, avatar[1], avatar[2]);
     const organizationAvatar = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
     if (organizationAvatar && request.method === 'GET') return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
-    const publicUser = url.pathname.match(/^\/api\/v1\/users\/([^/]+)$/);
-    if (publicUser && request.method === 'GET') return getPublicUserProfile(_env, decodeURIComponent(publicUser[1]));
-    const publicOrganization = url.pathname.match(/^\/api\/v1\/orgs\/([^/]+)$/);
-    if (publicOrganization && request.method === 'GET') return getPublicOrganizationProfile(_env, decodeURIComponent(publicOrganization[1]));
+    const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
+    if (publicIdentity && request.method === 'GET') return getPublicIdentityProfile(_env, decodeURIComponent(publicIdentity[1]));
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });

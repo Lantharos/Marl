@@ -4,6 +4,8 @@
   import { untrack } from 'svelte';
   import Archive from 'lucide-svelte/icons/archive';
   import ArrowRightLeft from 'lucide-svelte/icons/arrow-right-left';
+  import Globe2 from 'lucide-svelte/icons/globe-2';
+  import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
@@ -21,14 +23,16 @@
   const repo = $derived($page.params.repo ?? '');
   let description = $state(untrack(() => data.repository.description));
   let visibility = $state(untrack(() => data.repository.visibility));
+  let nextVisibility = $state(untrack(() => data.repository.visibility));
   let defaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
   let newName = $state($page.params.repo ?? '');
   let destination = $state(untrack(() => data.organizations.find((organization: Organization) => organization.slug !== ($page.params.owner ?? ''))?.slug ?? ($page.params.owner ?? '')));
   let deleteConfirmation = $state('');
   let archived = $state(untrack(() => Boolean(data.repository.archivedAt)));
-  let dialog = $state<'rename' | 'transfer' | 'archive' | 'delete' | null>(null);
+  let dialog = $state<'visibility' | 'rename' | 'transfer' | 'archive' | 'delete' | null>(null);
   let busy = $state('');
   let generalState = $state<'idle' | 'saving' | 'saved'>('idle');
+  let visibilityState = $state<'idle' | 'saved'>('idle');
   let error = $state('');
   const ownerOptions = $derived(data.organizations.map((organization: Organization) => ({ value: organization.slug, label: organization.slug, description: organization.name })));
   const branchOptions = $derived(data.branches.map((branch: BranchOption) => ({ value: branch.name, label: branch.name })));
@@ -45,12 +49,20 @@
   async function saveGeneral() {
     generalState = 'saving';
     await run('general', async () => {
-    await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ description, visibility, defaultBranch }) });
+    await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ description, defaultBranch }) });
     });
     if (error) { generalState = 'idle'; return; }
     generalState = 'saved';
     setTimeout(() => (generalState = 'idle'), 1800);
   }
+
+  function changeVisibility() { return run('visibility', async () => {
+    await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ visibility: nextVisibility }) });
+    visibility = nextVisibility;
+    visibilityState = 'saved';
+    dialog = null;
+    setTimeout(() => (visibilityState = 'idle'), 1800);
+  }); }
 
   function rename() { return run('rename', async () => {
     const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/settings/rename`, { method: 'POST', body: JSON.stringify({ name: newName }) });
@@ -85,7 +97,12 @@
 <section class="details">
   <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><SettingsAction state={generalState} onclick={saveGeneral} /></header>
   <label><span>Description</span><input bind:value={description} maxlength="280" placeholder="Describe this repository" /></label>
-  <div class="fields"><label><span>Visibility</span><Select bind:value={visibility} ariaLabel="Repository visibility" options={[{ value: 'private', label: 'Private', description: 'Only organization members can view it' }, { value: 'public', label: 'Public', description: 'Anyone can view the code' }]} /></label><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
+  <div class="fields single"><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
+</section>
+
+<section class="operations">
+  <header><h3>Repository visibility</h3><p>Control who can find and read this repository.</p></header>
+  <div class="operation"><span class="operation-icon">{#if visibility === 'public'}<Globe2 size={15} />{:else}<LockKeyhole size={15} />{/if}</span><div><strong>{visibility === 'public' ? 'Public repository' : 'Private repository'}</strong><small>{visibility === 'public' ? 'Anyone can view and clone this repository.' : 'Only people with access can view and clone this repository.'}</small></div><Button size="small" loading={busy === 'visibility'} onclick={() => { nextVisibility = visibility === 'public' ? 'private' : 'public'; dialog = 'visibility'; }}>{visibilityState === 'saved' ? 'Changed!' : 'Change visibility'}</Button></div>
 </section>
 
 <section class="operations">
@@ -105,6 +122,11 @@
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy === 'rename' || newName === repo || !newName.trim()} onclick={rename}>Rename repository</Button>{/snippet}
 </Modal>
 
+<Modal open={dialog === 'visibility'} title={`Make this repository ${nextVisibility}?`} description={nextVisibility === 'public' ? 'Anyone will be able to view and clone its code.' : 'Only people with access will be able to view and clone it.'} onClose={() => (dialog = null)}>
+  {#snippet children()}<div class="modal-summary">{#if nextVisibility === 'public'}<Globe2 size={18} />{:else}<LockKeyhole size={18} />{/if}<span><strong>{owner}/{repo}</strong><small>{nextVisibility === 'public' ? 'The repository will appear on public profiles and in public search.' : 'Public profile activity from this repository will no longer be shown.'}</small></span></div>{/snippet}
+  {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" loading={busy === 'visibility'} onclick={changeVisibility}>Make {nextVisibility}</Button>{/snippet}
+</Modal>
+
 <Modal open={dialog === 'transfer'} title="Transfer ownership" description="The repository, pull requests, settings, and Git storage move together." onClose={() => (dialog = null)}>
   {#snippet children()}<label class="modal-field"><span>Destination organization</span><Select bind:value={destination} ariaLabel="Destination organization" options={ownerOptions} /></label>{/snippet}
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy === 'transfer' || destination === owner} onclick={transfer}>Transfer repository</Button>{/snippet}
@@ -122,5 +144,6 @@
 
 <style>
   .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle);margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}
+  .fields.single{grid-template-columns:1fr}
   @media(max-width:580px){.fields{grid-template-columns:1fr}.details>header{align-items:flex-start}.operation{grid-template-columns:32px minmax(0,1fr)}.operation>:global(.button){grid-column:2;justify-self:start}}
 </style>

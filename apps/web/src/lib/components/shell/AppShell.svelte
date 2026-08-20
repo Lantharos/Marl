@@ -51,7 +51,7 @@
   const currentPath = $derived($page.url.pathname);
   const commands = $derived<Command[]>([
     { label: 'Home', detail: 'Your work across Marl', href: '/', keywords: 'dashboard overview', kind: 'home' },
-    { label: user.displayName, detail: `Your public profile · @${user.handle}`, href: `/user/${user.handle}`, keywords: 'user account profile activity contributions', kind: 'user' },
+    { label: user.displayName, detail: `Your public profile · @${user.handle}`, href: `/${user.handle}`, keywords: 'user account profile activity contributions', kind: 'user' },
     ...repositories.map((repository: RepositorySummary) => ({
       label: `${repository.owner}/${repository.name}`,
       detail: repository.description || 'Repository overview',
@@ -80,7 +80,7 @@
     ...organizations.flatMap((organization: ShellOrganization) => {
       const base = `/organizations/${organization.slug}/settings`;
       return [
-        { label: organization.name, detail: `Organization · ${organization.slug}`, href: `/org/${organization.slug}`, keywords: `organization public profile ${organization.slug}`, kind: 'organization' as const },
+        { label: organization.name, detail: `Organization · ${organization.slug}`, href: `/${organization.slug}`, keywords: `organization public profile ${organization.slug}`, kind: 'organization' as const },
         { label: `${organization.name} settings`, detail: 'Organization profile settings', href: `${base}/profile`, keywords: `organization settings profile ${organization.slug}`, kind: 'settings' as const },
         { label: `${organization.name} people and teams`, detail: 'Organization members and default access', href: `${base}/access`, keywords: `organization settings access ${organization.slug}`, kind: 'security' as const },
         ...(organization.role === 'member' ? [] : [{ label: `${organization.name} CI secrets`, detail: 'Organization workflow secrets', href: `${base}/secrets`, keywords: `organization settings ci ${organization.slug}`, kind: 'key' as const }])
@@ -204,7 +204,7 @@
       </div>
       <div class="menu-anchor" use:dismissable={() => (profileOpen = false)}>
         <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={28} /></button>
-        {#if profileOpen}<div class="popover profile-menu"><div><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={29} /><span><strong>{user.displayName}</strong><small>@{user.handle}</small></span></div><a href="/user/{user.handle}" onclick={() => (profileOpen = false)}><UserRound size={15} />Your profile</a><a href="/settings/account/profile" onclick={() => (profileOpen = false)}><Settings size={15} />Settings</a><a href="/organizations" onclick={() => (profileOpen = false)}><Building2 size={15} />Organizations</a><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button><button onclick={signOut}><LogOut size={15} />Sign out</button></div>{/if}
+        {#if profileOpen}<div class="popover profile-menu"><div><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={29} /><span><strong>{user.displayName}</strong><small>@{user.handle}</small></span></div><a href="/{user.handle}" onclick={() => (profileOpen = false)}><UserRound size={15} />Your profile</a><a href="/settings/account/profile" onclick={() => (profileOpen = false)}><Settings size={15} />Settings</a><a href="/organizations" onclick={() => (profileOpen = false)}><Building2 size={15} />Organizations</a><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button><button onclick={signOut}><LogOut size={15} />Sign out</button></div>{/if}
       </div>
       <button class="mobile-toggle" aria-label="Toggle navigation" onclick={() => (mobileOpen = !mobileOpen)}>{#if mobileOpen}<X size={18} />{:else}<Menu size={18} />{/if}</button>
     </div>
