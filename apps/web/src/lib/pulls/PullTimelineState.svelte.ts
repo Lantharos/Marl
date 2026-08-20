@@ -64,6 +64,19 @@ export class PullTimelineState {
     this.newestLoadedSequence = sequence - 1;
   }
 
+  remove(entries: unknown[]) {
+    const keys = [...new Set(entries.flatMap((entry) => {
+      const candidate = entry as { kind?: TimelineKind; id?: string };
+      return candidate.kind && candidate.id ? [timelineKey(candidate.kind, candidate.id)] : [];
+    }))];
+    if (!keys.length) return;
+    const removedLoaded = keys.filter((key) => this.items.delete(key)).length;
+    const removedHidden = Math.max(0, keys.length - removedLoaded);
+    this.order = this.order.filter((key) => this.items.has(key));
+    this.total = Math.max(0, this.total - keys.length);
+    this.hidden = Math.max(0, this.hidden - removedHidden);
+  }
+
   mergeOlder(window: PullTimelineWindow) {
     for (const item of window.items) this.items.set(timelineKey(item.kind, item.value.id), item);
     this.order = [...this.items.keys()].sort((left, right) => this.items.get(left)!.sequence - this.items.get(right)!.sequence);

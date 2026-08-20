@@ -178,7 +178,9 @@ try {
     (value) => value.pullRequest.sourceCommitId === timelineRewritten && value.pullRequest.events.some((event) => event.kind === 'force_pushed'),
     'Pull request did not preserve a force-push timeline event'
   );
-  assertCommitHistory(rewrittenDetail, [timelineFirst, timelineSecond, timelineFastForward, timelineRewritten]);
+  assertCommitHistory(rewrittenDetail, [timelineRewritten]);
+  const rewrittenUpdates = await client.request<{ updates: Array<{ kind: string; payload: { timelineRemoved?: unknown[] } }> }>(`${timelinePath}/updates?after=${fastForwardDetail.pullRequest.realtimeVersion}`);
+  assert(rewrittenUpdates.updates.some((update) => update.kind === 'pull.synchronized' && Array.isArray(update.payload.timelineRemoved) && update.payload.timelineRemoved.length > 0), 'Force-push realtime updates did not remove the rewritten commit history.');
   assert(rewrittenDetail.pullRequest.commits.length === 1 && rewrittenDetail.pullRequest.commits[0]?.id === timelineRewritten, 'Current pull request commits did not follow the rewritten head.');
   const rewrittenDiff = await client.request<{ files: unknown[] }>(`${timelinePath}/diff`);
   assert(rewrittenDiff.files.length > 0, 'Pull request diff was empty after a force push.');
@@ -283,6 +285,7 @@ type PullQualificationDetail = {
   pullRequest: {
     state: string;
     sourceCommitId: string;
+    realtimeVersion: number;
     commits: Array<{ id: string }>;
     events: Array<{ kind: string; details: Record<string, string> }>;
   };
@@ -296,7 +299,7 @@ function assertCommitHistory(detail: PullQualificationDetail, expected: string[]
       return commits.flatMap((commit) => typeof commit.id === 'string' ? [commit.id] : []);
     } catch { return []; }
   }));
-  assert(expected.every((commit) => recorded.has(commit)), 'Pull request timeline omitted one or more commits.');
+  assert(recorded.size === expected.length && expected.every((commit) => recorded.has(commit)), 'Pull request timeline does not match the current branch history.');
 }
 
 async function cleanupDockerJobs(ids: Set<string>) {

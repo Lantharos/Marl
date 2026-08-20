@@ -99,6 +99,7 @@
         timeline.patch('thread', change.threadId, { comments: exists ? thread.comments.map((comment) => comment.id === change.comment.id ? { ...comment, ...change.comment } : comment) : [...thread.comments, change.comment] });
       }
     }
+    if (Array.isArray(payload.timelineRemoved)) timeline.remove(payload.timelineRemoved);
     if (Array.isArray(payload.timeline)) timeline.append(payload.timeline);
     pull = { ...pull, realtimeVersion: update.version };
     if (pull.sourceCommitId !== previousSource || pull.targetCommitId !== previousTarget) {

@@ -46,20 +46,33 @@ export async function synchronizePullsForBranchUpdates(env: Env, repositoryId: s
     if (!pinned.ok) throw new Error(`Pull request #${pull.number} could not preserve its updated commits.`);
 
     const events = [];
+    const statements = [];
+    const timelineRemoved: Array<{ kind: 'event'; id: string }> = [];
     if (sourceCommitId !== pull.sourceCommitId) {
-      if (!await isAncestor(env, pull.sourceRepositoryId, pull.sourceCommitId, sourceCommitId)) {
+      const forcePushed = !await isAncestor(env, pull.sourceRepositoryId, pull.sourceCommitId, sourceCommitId);
+      if (forcePushed) {
+        const previousCommitEvents = await env.DB.prepare("SELECT id FROM pull_request_events WHERE pull_request_id=? AND kind='commits_added'").bind(pull.id).all<{ id: string }>();
+        timelineRemoved.push(...previousCommitEvents.results.map((event) => ({ kind: 'event' as const, id: event.id })));
+        statements.push(
+          env.DB.prepare("DELETE FROM pull_timeline WHERE pull_request_id=? AND kind='event' AND entity_id IN (SELECT id FROM pull_request_events WHERE pull_request_id=? AND kind='commits_added')").bind(pull.id, pull.id),
+          env.DB.prepare("DELETE FROM pull_request_events WHERE pull_request_id=? AND kind='commits_added'").bind(pull.id)
+        );
         events.push(createPullEvent(env, pull.id, actor, 'force_pushed', { branch: pull.sourceBranch, from: pull.sourceCommitId.slice(0, 7), to: sourceCommitId.slice(0, 7) }));
       }
-      const commits = await commitsIntroducedByHead(env, pull.sourceRepositoryId, sourceCommitId, pull.sourceCommitId);
+      const commits = forcePushed
+        ? await currentPullCommits(env, pull.sourceRepositoryId, sourceCommitId, pull.repositoryId, targetCommitId)
+        : await commitsIntroducedByHead(env, pull.sourceRepositoryId, sourceCommitId, pull.sourceCommitId);
       if (commits.length) events.push(createPullEvent(env, pull.id, actor, 'commits_added', { commits: JSON.stringify(commits), owner: pull.sourceOwner, repository: pull.sourceRepository }));
     }
     const pullPatch = { sourceCommitId, targetCommitId };
     await commitPullUpdate(env, pull.id, 'pull.synchronized', {
       pull: pullPatch,
+      timelineRemoved,
       timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })),
       refreshState: true
     }, [
       env.DB.prepare(`UPDATE pull_requests SET source_commit_id=?,target_commit_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND state IN ('draft','open')`).bind(sourceCommitId, targetCommitId, pull.id),
+      ...statements,
       ...events.map((event) => event.statement)
     ]);
   }
@@ -92,4 +105,8 @@ async function isAncestor(env: Env, repositoryId: string, ancestor: string, desc
 
 async function commitsIntroducedByHead(env: Env, repositoryId: string, head: string, previousHead: string) {
   return env.DB.prepare(`WITH RECURSIVE head_history(id) AS (SELECT ? UNION SELECT json_each.value FROM head_history JOIN commits ON commits.repository_id=? AND commits.id=head_history.id JOIN json_each(commits.parent_ids)),previous_history(id) AS (SELECT ? UNION SELECT json_each.value FROM previous_history JOIN commits ON commits.repository_id=? AND commits.id=previous_history.id JOIN json_each(commits.parent_ids)) SELECT commits.id,commits.title FROM commits JOIN head_history ON head_history.id=commits.id LEFT JOIN previous_history ON previous_history.id=commits.id WHERE commits.repository_id=? AND previous_history.id IS NULL ORDER BY commits.authored_at,commits.id`).bind(head, repositoryId, previousHead, repositoryId, repositoryId).all<{ id: string; title: string }>().then((result) => result.results);
+}
+
+async function currentPullCommits(env: Env, sourceRepositoryId: string, sourceHead: string, targetRepositoryId: string, targetHead: string) {
+  return env.DB.prepare(`WITH RECURSIVE source_history(id) AS (SELECT ? UNION SELECT json_each.value FROM source_history JOIN commits ON commits.repository_id=? AND commits.id=source_history.id JOIN json_each(commits.parent_ids)),target_history(id) AS (SELECT ? UNION SELECT json_each.value FROM target_history JOIN commits ON commits.repository_id=? AND commits.id=target_history.id JOIN json_each(commits.parent_ids)) SELECT commits.id,commits.title FROM commits JOIN source_history ON source_history.id=commits.id LEFT JOIN target_history ON target_history.id=commits.id WHERE commits.repository_id=? AND target_history.id IS NULL ORDER BY commits.authored_at,commits.id`).bind(sourceHead, sourceRepositoryId, targetHead, targetRepositoryId, sourceRepositoryId).all<{ id: string; title: string }>().then((result) => result.results);
 }
