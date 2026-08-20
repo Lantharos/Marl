@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import Check from 'lucide-svelte/icons/check';
+  import BookOpen from 'lucide-svelte/icons/book-open';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import Code2 from 'lucide-svelte/icons/code-2';
   import Copy from 'lucide-svelte/icons/copy';
@@ -24,7 +25,11 @@
   const cloneUrl = $derived(cloneProtocol === 'ssh' ? repository?.sshCloneUrl ?? '' : repository?.cloneUrl ?? '');
 
   async function copyCloneUrl() { if (!cloneUrl) return; await navigator.clipboard.writeText(cloneUrl); copied = true; setTimeout(() => (copied = false), 1600); }
-  function tabActive(tab: string) { if (tab === 'code') return path === base || path.startsWith(`${base}/tree`) || path.startsWith(`${base}/blob`) || path.startsWith(`${base}/commit`) || path.startsWith(`${base}/branches`); return path.startsWith(`${base}/${tab}`); }
+  function tabActive(tab: string) {
+    if (tab === 'overview') return path === base;
+    if (tab === 'code') return path === `${base}/code` || path.startsWith(`${base}/tree`) || path.startsWith(`${base}/blob`) || path.startsWith(`${base}/commit`) || path.startsWith(`${base}/branches`);
+    return path.startsWith(`${base}/${tab}`);
+  }
 </script>
 
 <section class="repo-bar">
@@ -32,7 +37,7 @@
     <div class="identity"><div class="crumb"><a href="/repositories">{owner}</a><span>/</span><a href={base}>{repo}</a>{#if repository?.visibility === 'private'}<span class="private"><Lock size={11} />Private</span>{/if}</div>{#if repository?.description}<p>{repository.description}</p>{/if}</div>
     <div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><button class="clone-button" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong>{#if repository?.sshCloneUrl}<div class="protocols"><button class:active={cloneProtocol === 'https'} onclick={() => { cloneProtocol = 'https'; copied = false; }}>HTTPS</button><button class:active={cloneProtocol === 'ssh'} onclick={() => { cloneProtocol = 'ssh'; copied = false; }}>SSH</button></div>{/if}<p>{cloneProtocol === 'ssh' ? 'Authenticate with an SSH key from Developer access.' : 'Authenticate with a Marl developer token.'}</p><div class="clone-value"><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div>
   </div>
-  <nav aria-label="Repository"><a class:active={tabActive('code')} href={base}><Code2 size={14} />Code</a><a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a><a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a><a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a></nav>
+  <nav aria-label="Repository"><a class:active={tabActive('overview')} href={base}><BookOpen size={14} />Overview</a><a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a><a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a><a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a><a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a></nav>
 </section>
 
 <div class="repository-content">{@render children()}</div>

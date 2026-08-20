@@ -52,7 +52,7 @@
     { label: 'Home', detail: 'Your work across Marl', href: '/', keywords: 'dashboard overview', kind: 'home' },
     ...repositories.map((repository: RepositorySummary) => ({
       label: `${repository.owner}/${repository.name}`,
-      detail: repository.description || 'Repository',
+      detail: repository.description || 'Repository overview',
       href: `/${repository.owner}/${repository.name}`,
       keywords: `repository code ${repository.visibility}`,
       kind: 'repository' as const
@@ -60,6 +60,7 @@
     ...repositories.flatMap((repository: RepositorySummary) => {
       const base = `/${repository.owner}/${repository.name}`;
       return [
+        { label: `${repository.owner}/${repository.name} code`, detail: 'Browse branches and files', href: `${base}/code`, keywords: 'repository source tree files', kind: 'repository' as const },
         { label: `${repository.owner}/${repository.name} pull requests`, detail: 'Repository pull requests', href: `${base}/pulls`, keywords: 'repository reviews merge', kind: 'pull' as const },
         { label: `${repository.owner}/${repository.name} runs`, detail: 'Repository workflow runs', href: `${base}/runs`, keywords: 'repository automation jobs checks', kind: 'run' as const },
         { label: `${repository.owner}/${repository.name} settings`, detail: 'Repository general settings', href: `${base}/settings`, keywords: 'repository settings general', kind: 'settings' as const },
