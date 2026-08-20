@@ -8,6 +8,7 @@ import { validSlug } from '../domain';
 import { sendTransactionalEmail } from '../email';
 import type { Env } from '../platform';
 import { authSchema } from './schema';
+import { stepUp } from './step-up';
 
 export function createAuth(env: Env, request: Request) {
   const publicOrigin = env.PUBLIC_URL || new URL(request.url).origin;
@@ -61,7 +62,8 @@ export function createAuth(env: Env, request: Request) {
         '/sign-in/email': { window: 60, max: 5 },
         '/sign-up/email': { window: 60, max: 5 },
         '/forget-password': { window: 300, max: 3 },
-        '/sign-in/passkey': { window: 60, max: 10 }
+        '/sign-in/passkey': { window: 60, max: 10 },
+        '/step-up/verify': { window: 60, max: 5 }
       }
     },
     account: {
@@ -80,6 +82,7 @@ export function createAuth(env: Env, request: Request) {
       passkey({ rpID: publicUrl.hostname, rpName: 'Marl', origin: publicUrl.origin }),
       twoFactor({ issuer: 'Marl', allowPasswordless: true }),
       username({ minUsernameLength: 2, maxUsernameLength: 39, usernameValidator: validSlug }),
+      stepUp(env),
       ...aveProvider(env)
     ]
   });
