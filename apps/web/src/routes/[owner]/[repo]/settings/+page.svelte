@@ -16,6 +16,7 @@
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
+  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
   import type { PageData } from './$types';
 
   type Organization = { slug: string; name: string };
@@ -41,6 +42,8 @@
   const confirmation = new IdentityConfirmation();
   const ownerOptions = $derived(data.organizations.map((organization: Organization) => ({ value: organization.slug, label: organization.slug, description: organization.name })));
   const branchOptions = $derived(data.branches.map((branch: BranchOption) => ({ value: branch.name, label: branch.name })));
+  const submittedNewName = $derived(completeRepositoryName(newName));
+  const newNameValid = $derived(validRepositoryName(submittedNewName));
 
   async function run(name: string, action: () => Promise<void>) {
     if (busy) return;
@@ -70,7 +73,7 @@
   }); }
 
   function rename() { return run('rename', async () => {
-    const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/settings/rename`, { method: 'POST', body: JSON.stringify({ name: newName }) });
+    const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/settings/rename`, { method: 'POST', body: JSON.stringify({ name: submittedNewName }) });
     dialog = null;
     await goto(`/${result.repository.owner}/${result.repository.name}/settings`, { replaceState: true });
   }); }
@@ -112,26 +115,26 @@
 </section>
 
 <section class="operations">
-  <header><h3>Repository visibility</h3><p>Control who can find and read this repository.</p></header>
+  <header><h3>Repository visibility</h3></header>
   <div class="operation"><span class="operation-icon">{#if visibility === 'public'}<Globe2 size={15} />{:else}<LockKeyhole size={15} />{/if}</span><div><strong>{visibility === 'public' ? 'Public repository' : 'Private repository'}</strong><small>{visibility === 'public' ? 'Anyone can view and clone this repository.' : 'Only people with access can view and clone this repository.'}</small></div><Button size="small" loading={busy === 'visibility'} onclick={() => { nextVisibility = visibility === 'public' ? 'private' : 'public'; dialog = 'visibility'; }}>{visibilityState === 'saved' ? 'Changed!' : 'Change visibility'}</Button></div>
 </section>
 
 <section class="operations">
-  <header><h3>Repository ownership</h3><p>Change the repository URL or move it to another organization.</p></header>
-  <div class="operation"><span class="operation-icon"><Pencil size={15} /></span><div><strong>Rename repository</strong><small>The current URL is <code>{owner}/{repo}</code>.</small></div><Button size="small" onclick={() => { newName = repo; dialog = 'rename'; }}>Rename</Button></div>
+  <header><h3>Repository ownership</h3></header>
+  <div class="operation"><span class="operation-icon"><Pencil size={15} /></span><div><strong>Rename repository</strong><small>The current URL is <code>{owner}/{repo}</code>.</small></div><Button size="small" onclick={() => { newName = repositoryName(repo); dialog = 'rename'; }}>Rename</Button></div>
   <div class="operation"><span class="operation-icon"><ArrowRightLeft size={15} /></span><div><strong>Transfer ownership</strong><small>Move this repository and its full history to another organization.</small></div><Button size="small" disabled={ownerOptions.length < 2} onclick={() => (dialog = 'transfer')}>Transfer</Button></div>
 </section>
 
 <section class="danger-zone">
-  <header><h3>Repository lifecycle</h3><p>These actions affect Git access and repository availability.</p></header>
+  <header><h3>Repository lifecycle</h3></header>
   {#if upstream}<div class="operation"><span class="operation-icon"><GitFork size={15} /></span><div><strong>Detach fork</strong><small>Remove the connection to {upstream.owner}/{upstream.name} while preserving this repository and its history.</small></div><Button size="small" onclick={() => (dialog = 'detach')}>Detach</Button></div>{/if}
   <div class="operation"><span class="operation-icon"><Archive size={15} /></span><div><strong>{archived ? 'Unarchive repository' : 'Archive repository'}</strong><small>{archived ? 'Restore pushes and normal repository activity.' : 'Make the repository read-only while preserving every object.'}</small></div><Button size="small" onclick={() => (dialog = 'archive')}>{archived ? 'Unarchive' : 'Archive'}</Button></div>
   <div class="operation delete"><span class="operation-icon"><Trash2 size={15} /></span><div><strong>Delete repository</strong><small>Hide it immediately and permanently purge it after 30 days.</small></div><Button size="small" variant="danger-soft" onclick={() => { deleteConfirmation = ''; dialog = 'delete'; }}>Delete</Button></div>
 </section>
 
 <Modal open={dialog === 'rename'} title="Rename repository" description="Links and clone URLs will change immediately." onClose={() => (dialog = null)}>
-  {#snippet children()}<label class="modal-field"><span>New repository name</span><input bind:value={newName} autocomplete="off" /></label>{/snippet}
-  {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy === 'rename' || newName === repo || !newName.trim()} onclick={rename}>Rename repository</Button>{/snippet}
+  {#snippet children()}<label class="modal-field"><span>New repository name</span><input bind:value={newName} oninput={() => (newName = repositoryName(newName))} onblur={() => (newName = submittedNewName)} maxlength="100" autocomplete="off" /></label>{/snippet}
+  {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy === 'rename' || submittedNewName === repo || !newNameValid} onclick={rename}>Rename repository</Button>{/snippet}
 </Modal>
 
 <Modal open={dialog === 'visibility'} title={`Make this repository ${nextVisibility}?`} description={nextVisibility === 'public' ? 'Anyone will be able to view and clone its code.' : 'Only people with access will be able to view and clone it.'} onClose={() => (dialog = null)}>

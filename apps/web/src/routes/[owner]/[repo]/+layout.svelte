@@ -14,6 +14,7 @@
   import Settings from 'lucide-svelte/icons/settings';
   import Star from 'lucide-svelte/icons/star';
   import { api, MarlApiError } from '$lib/api';
+  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
   import Button from '$lib/components/Button.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
@@ -38,6 +39,8 @@
   let forkOwner = $state(untrack(() => data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? ''));
   let forkName = $state($page.params.repo ?? '');
   let forkError = $state('');
+  const submittedForkName = $derived(completeRepositoryName(forkName));
+  const forkNameValid = $derived(validRepositoryName(submittedForkName));
   const cloneUrl = $derived(cloneProtocol === 'ssh' ? repository?.sshCloneUrl ?? '' : repository?.cloneUrl ?? '');
   const organizationOptions = $derived((data.shellOrganizations ?? [])
     .filter((organization: { role: string }) => organization.role !== 'member')
@@ -52,9 +55,9 @@
     finally { starring = false; }
   }
   async function createFork() {
-    if (forking || !forkOwner || !forkName.trim()) return;
+    if (forking || !forkOwner || !forkNameValid) return;
     forking = true; forkError = '';
-    try { const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/forks`, { method: 'POST', body: JSON.stringify({ owner: forkOwner, name: forkName }) }); await goto(`/${result.repository.owner}/${result.repository.name}`); }
+    try { const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/forks`, { method: 'POST', body: JSON.stringify({ owner: forkOwner, name: submittedForkName }) }); await goto(`/${result.repository.owner}/${result.repository.name}`); }
     catch (cause) { forkError = cause instanceof MarlApiError ? cause.message : 'Repository could not be forked.'; forking = false; }
   }
   function tabActive(tab: string) {
@@ -67,7 +70,7 @@
 <section class="repo-bar">
   <div class="repo-line">
     <div class="identity"><div class="crumb"><a href="/{owner}">{owner}</a><span>/</span><a href={base}>{repo}</a>{#if repository?.visibility === 'private'}<span class="private"><Lock size={11} />Private</span>{/if}</div>{#if repository?.upstream}<p class="upstream"><GitFork size={11} />Forked from <a href="/{repository.upstream.owner}/{repository.upstream.name}">{repository.upstream.owner}/{repository.upstream.name}</a></p>{:else if repository?.description}<p>{repository.description}</p>{/if}</div>
-    <div class="repo-actions"><Button size="small" loading={starring} aria-label={starred ? 'Unstar repository' : 'Star repository'} onclick={toggleStar}><Star size={14} fill={starred ? 'currentColor' : 'none'} />Star{#if starCount}<span class="count">{starCount}</span>{/if}</Button><Button size="small" disabled={!organizationOptions.length} onclick={() => { forkOwner = organizationOptions[0]?.value ?? ''; forkName = repo; forkError = ''; forkOpen = true; }}><GitFork size={14} />Fork{#if repository?.forkCount}<span class="count">{repository.forkCount}</span>{/if}</Button><div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><Button size="small" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></Button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong>{#if repository?.sshCloneUrl}<div class="protocols"><button class:active={cloneProtocol === 'https'} onclick={() => { cloneProtocol = 'https'; copied = false; }}>HTTPS</button><button class:active={cloneProtocol === 'ssh'} onclick={() => { cloneProtocol = 'ssh'; copied = false; }}>SSH</button></div>{/if}<p>{cloneProtocol === 'ssh' ? 'Authenticate with an SSH key from Developer access.' : 'Authenticate with a Marl developer token.'}</p><div class="clone-value"><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div></div>
+    <div class="repo-actions"><Button size="small" loading={starring} aria-label={starred ? 'Unstar repository' : 'Star repository'} onclick={toggleStar}><Star size={14} fill={starred ? 'currentColor' : 'none'} />Star{#if starCount}<span class="count">{starCount}</span>{/if}</Button><Button size="small" disabled={!organizationOptions.length} onclick={() => { forkOwner = organizationOptions[0]?.value ?? ''; forkName = repositoryName(repo); forkError = ''; forkOpen = true; }}><GitFork size={14} />Fork{#if repository?.forkCount}<span class="count">{repository.forkCount}</span>{/if}</Button><div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><Button size="small" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></Button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong>{#if repository?.sshCloneUrl}<div class="protocols"><button class:active={cloneProtocol === 'https'} onclick={() => { cloneProtocol = 'https'; copied = false; }}>HTTPS</button><button class:active={cloneProtocol === 'ssh'} onclick={() => { cloneProtocol = 'ssh'; copied = false; }}>SSH</button></div>{/if}<p>{cloneProtocol === 'ssh' ? 'Authenticate with an SSH key from Developer access.' : 'Authenticate with a Marl developer token.'}</p><div class="clone-value"><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div></div>
   </div>
   <nav aria-label="Repository"><a class:active={tabActive('overview')} href={base}><BookOpen size={14} />Overview</a><a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a><a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a><a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a><a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a></nav>
 </section>
@@ -75,8 +78,8 @@
 <div class="repository-content">{@render children()}</div>
 
 <Modal open={forkOpen} title="Fork repository" description="Create an independent working copy connected to this repository's fork network." onClose={() => (forkOpen = false)}>
-  {#snippet children()}<div class="fork-fields"><label><span>Owner</span><Select bind:value={forkOwner} options={organizationOptions} ariaLabel="Fork owner" /></label><label><span>Repository name</span><input bind:value={forkName} maxlength="100" /></label>{#if forkError}<p class="fork-error" role="alert">{forkError}</p>{/if}</div>{/snippet}
-  {#snippet actions()}<Button size="small" onclick={() => (forkOpen = false)}>Cancel</Button><Button size="small" variant="primary" loading={forking} disabled={!forkOwner || !forkName.trim()} onclick={createFork}>Create fork</Button>{/snippet}
+  {#snippet children()}<div class="fork-fields"><label><span>Owner</span><Select bind:value={forkOwner} options={organizationOptions} ariaLabel="Fork owner" /></label><label><span>Repository name</span><input bind:value={forkName} oninput={() => (forkName = repositoryName(forkName))} onblur={() => (forkName = submittedForkName)} maxlength="100" /></label>{#if forkError}<p class="fork-error" role="alert">{forkError}</p>{/if}</div>{/snippet}
+  {#snippet actions()}<Button size="small" onclick={() => (forkOpen = false)}>Cancel</Button><Button size="small" variant="primary" loading={forking} disabled={!forkOwner || !forkNameValid} onclick={createFork}>Create fork</Button>{/snippet}
 </Modal>
 
 <style>
