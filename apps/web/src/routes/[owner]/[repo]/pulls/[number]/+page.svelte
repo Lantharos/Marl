@@ -76,6 +76,8 @@
     if (!update || update.version <= pull.realtimeVersion) return;
     if (update.version !== pull.realtimeVersion + 1) { void catchUp(); return; }
     const payload = update.payload;
+    const previousSource = pull.sourceCommitId;
+    const previousTarget = pull.targetCommitId;
     if (payload.details) pull = { ...pull, ...(payload.details as Partial<PullRequestDetail>) };
     if (payload.pull) pull = { ...pull, ...(payload.pull as Partial<PullRequestDetail>) };
     if (payload.metadata) {
@@ -99,6 +101,10 @@
     }
     if (Array.isArray(payload.timeline)) timeline.append(payload.timeline);
     pull = { ...pull, realtimeVersion: update.version };
+    if (pull.sourceCommitId !== previousSource || pull.targetCommitId !== previousTarget) {
+      diff = null;
+      if (tab === 'changes') void selectTab('changes');
+    }
     if (payload.refreshState) scheduleStateRefresh();
   }
 
@@ -318,7 +324,7 @@
       </section><PullMetadata {pull} {busy} onUpdate={updateMetadata} /></aside>
     </div>
   {:else if tab === 'commits'}
-    <section class="commit-list">{#each pull.commits as commit}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{owner}/{repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={12} />Verified</i>{/if}</small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull request head.</p></div>{/each}</section>
+    <section class="commit-list">{#each pull.commits as commit}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{pull.sourceRepository?.owner ?? owner}/{pull.sourceRepository?.name ?? repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={12} />Verified</i>{/if}</small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull request head.</p></div>{/each}</section>
   {:else if tab === 'changes'}
     <section class="changes-head"><div><strong>Changes from {pull.sourceBranch}</strong><span>Review the current head <code>{pull.sourceCommitId.slice(0,7)}</code></span></div>{#if pull.state !== 'merged' && pull.state !== 'closed'}<div class="review-anchor" use:dismissable={() => (reviewOpen = false)}><button class="review-trigger" onclick={() => (reviewOpen = !reviewOpen)}><BadgeCheck size={14} />Review changes</button>{#if reviewOpen}<div class="review-popover"><header><strong>Finish your review</strong><button aria-label="Close review" onclick={() => (reviewOpen = false)}><X size={14} /></button></header><MarkdownComposer bind:value={reviewBody} placeholder="Leave a review summary (optional)" minHeight={100} /><div class="review-decisions"><button class:active={reviewState === 'commented'} onclick={() => (reviewState = 'commented')}><span></span><div><strong>Comment</strong><small>Submit feedback without approval.</small></div></button><button class:active={reviewState === 'approved'} onclick={() => (reviewState = 'approved')}><span></span><div><strong>Approve</strong><small>Approve the changes in this head.</small></div></button><button class:active={reviewState === 'changes_requested'} onclick={() => (reviewState = 'changes_requested')}><span></span><div><strong>Request changes</strong><small>Block merging until concerns are addressed.</small></div></button></div><footer><button onclick={() => (reviewOpen = false)}>Cancel</button><button class="primary" disabled={busy} onclick={submitReview}>{busy ? 'Submitting…' : 'Submit review'}</button></footer></div>{/if}</div>{/if}</section>
     {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer files={diff.files} threads={diff.threads ?? []} {busy} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}

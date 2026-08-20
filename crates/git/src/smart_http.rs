@@ -26,6 +26,7 @@ use tokio_util::io::{ReaderStream, StreamReader};
 struct Authorization {
     repository_id: String,
     write: bool,
+    actor_id: Option<String>,
 }
 
 #[derive(Debug)]
@@ -147,6 +148,7 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
                 authorization.repository_id.clone(),
                 git_path.owner.clone(),
                 git_path.repository.clone(),
+                authorization.actor_id.clone(),
             )
             .await
         {

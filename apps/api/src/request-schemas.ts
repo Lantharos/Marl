@@ -15,7 +15,7 @@ export const branchRuleBody = strictObject({
   allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3))
 });
 
-export const gitIndexBody = strictObject({ repositoryId: identifier, indexId: identifier, complete: optional(boolean()), defaultBranch: optional(branch), commits: array(unknown()), branches: array(unknown()), entries: array(unknown()), changes: array(unknown()) });
+export const gitIndexBody = strictObject({ repositoryId: identifier, indexId: identifier, actorId: optional(identifier), complete: optional(boolean()), defaultBranch: optional(branch), commits: array(unknown()), branches: array(unknown()), entries: array(unknown()), changes: array(unknown()) });
 export const createRepositoryBody = strictObject({ owner: identifier, name: identifier, description: optional(pipe(string(), maxLength(280))), visibility: optional(picklist(['public', 'private'])) });
 export const repositorySettingsBody = strictObject({ description: optional(pipe(string(), maxLength(280))), visibility: optional(picklist(['public', 'private'])), defaultBranch: optional(branch), archived: optional(boolean()) });
 export const repositoryOverviewBody = strictObject({ documents: pipe(array(pipe(string(), minLength(1), maxLength(4_096))), maxLength(12)) });

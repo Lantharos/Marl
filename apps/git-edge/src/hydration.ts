@@ -29,9 +29,9 @@ export async function hydrateRepository(container: ContainerStub, env: GitEdgeEn
   return snapshot.state;
 }
 
-export async function indexHydratedRepository(container: ContainerStub, env: GitEdgeEnv, repositoryId: string, owner: string, repository: string, generation: number, excludeCommits: string[]) {
+export async function indexHydratedRepository(container: ContainerStub, env: GitEdgeEnv, repositoryId: string, owner: string, repository: string, generation: number, excludeCommits: string[], actorId?: string) {
   const response = await expectContainer(container.fetch(internalRequest('http://container/_marl/index', env, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository, indexId: `generation_${generation}`, excludeCommits })
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository, indexId: `generation_${generation}`, excludeCommits, actorId })
   })));
   return response.json<{ heads: string[] }>();
 }

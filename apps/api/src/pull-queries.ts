@@ -104,17 +104,18 @@ export async function getPullState(env: Env, principal: Principal, owner: string
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? AND pull_requests.number=?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const [checks, reviews, unresolvedThreads, rule] = await Promise.all([
+  const [checks, reviews, unresolvedThreads, rule, commits] = await Promise.all([
     env.DB.prepare('SELECT name,state FROM checks WHERE repository_id=? AND commit_id=?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     latestReviews(env, pull.id),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
-    branchRuleFor(env, repository.id, pull.targetBranch)
+    branchRuleFor(env, repository.id, pull.targetBranch),
+    pullCommits(env, repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, pull.targetCommitId)
   ]);
   const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length, items: checks.results };
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, Number(unresolvedThreads?.count ?? 0));
   const pullSummary = summary(pull, checkSummary, reviewStatusFor(pull, rule, reviews.results), Number(unresolvedThreads?.count ?? 0));
   const state = pull.state === 'open' ? (requirements.ready ? 'mergeable' : 'blocked') : pullSummary.state;
-  return json({ state: { state, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, checkSummary, mergeRequirements: requirements, realtimeVersion: Number(pull.realtimeVersion) } });
+  return json({ state: { state, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, commits: commits.results, checkSummary, mergeRequirements: requirements, realtimeVersion: Number(pull.realtimeVersion) } });
 }
 
 export async function connectPullRealtime(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {

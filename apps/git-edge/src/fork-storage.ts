@@ -11,6 +11,7 @@ type ForkRequest = {
   destinationOrganizationId: string;
   destinationOwner: string;
   destinationRepository: string;
+  actorId: string;
 };
 
 export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
@@ -54,7 +55,7 @@ export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
     adjusted = true;
     for (const catalog of catalogs) for (let offset = 0; offset < catalog.objects.length; offset += 500) await destination.request('/catalog', { packId: catalog.packId, objects: catalog.objects.slice(offset, offset + 500) });
     await destination.request('/fork', { refs: source.state.refs, manifestKey, manifestHash, packs });
-    await scheduleRepositoryIndex(env, body.destinationOwner, body.destinationRepository, body.repositoryId, generation).catch((error) => console.error('fork indexing scheduling deferred', error));
+    await scheduleRepositoryIndex(env, body.destinationOwner, body.destinationRepository, body.repositoryId, generation, body.actorId).catch((error) => console.error('fork indexing scheduling deferred', error));
     return new Response(null, { status: 201 });
   } catch (error) {
     await Promise.allSettled(keys.map((key) => env.REPOSITORIES.delete(key)));
@@ -71,7 +72,7 @@ async function copy(bucket: R2Bucket, source: string, destination: string, conte
 }
 
 function valid(body: ForkRequest) {
-  return [body.repositoryId, body.sourceRepositoryId, body.destinationOrganizationId].every((value) => typeof value === 'string' && value.length > 0) && [body.sourceOwner, body.sourceRepository, body.destinationOwner, body.destinationRepository].every((value) => /^[a-zA-Z0-9._-]+$/.test(value));
+  return [body.repositoryId, body.sourceRepositoryId, body.destinationOrganizationId, body.actorId].every((value) => typeof value === 'string' && value.length > 0) && [body.sourceOwner, body.sourceRepository, body.destinationOwner, body.destinationRepository].every((value) => /^[a-zA-Z0-9._-]+$/.test(value));
 }
 
 async function sha256(value: string) {

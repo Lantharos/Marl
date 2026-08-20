@@ -11,6 +11,9 @@ type Capture = { refs: Record<string, string>; packBytes: number; hasPack: boole
 
 export async function handleCompatibilityPush(request: Request, container: ContainerStub, env: GitEdgeEnv, owner: string, name: string) {
   const authorization = await authorizeGit(request, env, owner, name, 'git-receive-pack');
+  const internalActorId = request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN
+    ? await request.clone().json<{ actorId?: unknown }>().then((body) => typeof body.actorId === 'string' && body.actorId.length > 0 && body.actorId.length <= 200 ? body.actorId : undefined).catch(() => undefined)
+    : undefined;
   const repository = authorization.storageKey;
   const repo = repositoryState(env, repository);
   const quota = organizationQuota(env, authorization.organizationId);
@@ -56,7 +59,7 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     const session = await uploads.request<UploadSnapshotResponse>('/snapshot');
     publicationStarted = true;
     const published = await finalizeUploadedPush(env, repository, authorization.organizationId, session.session);
-    await scheduleRepositoryIndex(env, owner, name, authorization.repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
+    await scheduleRepositoryIndex(env, owner, name, authorization.repositoryId, published.generation, authorization.actorId ?? internalActorId).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
     const forceCompaction = session.session.packs.length === 0 && published.storedBytes > 0;
     if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.repositoryId, authorization.organizationId, published.generation, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
     return new Response(body, response);

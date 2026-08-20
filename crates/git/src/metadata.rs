@@ -32,6 +32,8 @@ pub(crate) struct IndexRequest {
     index_id: String,
     #[serde(default)]
     exclude_commits: Vec<String>,
+    #[serde(default)]
+    actor_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -39,6 +41,8 @@ pub(crate) struct IndexRequest {
 struct GitIndexPage<'a> {
     repository_id: &'a str,
     index_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actor_id: Option<&'a str>,
     complete: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     default_branch: Option<&'a str>,
@@ -359,6 +363,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             GitIndexPage {
                 repository_id: &request.repository_id,
                 index_id: &index_id,
+                actor_id: request.actor_id.as_deref(),
                 complete: false,
                 default_branch: None,
                 commits: page,
@@ -391,6 +396,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             GitIndexPage {
                 repository_id: &request.repository_id,
                 index_id: &index_id,
+                actor_id: request.actor_id.as_deref(),
                 complete: false,
                 default_branch: None,
                 commits: &[],
@@ -408,6 +414,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             GitIndexPage {
                 repository_id: &request.repository_id,
                 index_id: &index_id,
+                actor_id: request.actor_id.as_deref(),
                 complete: false,
                 default_branch: None,
                 commits: &[],
@@ -424,6 +431,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             GitIndexPage {
                 repository_id: &request.repository_id,
                 index_id: &index_id,
+                actor_id: request.actor_id.as_deref(),
                 complete: false,
                 default_branch: None,
                 commits: &[],
@@ -439,6 +447,7 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
         GitIndexPage {
             repository_id: &request.repository_id,
             index_id: &index_id,
+            actor_id: request.actor_id.as_deref(),
             complete: true,
             default_branch: Some(&default_branch),
             commits: &[],
@@ -711,6 +720,7 @@ pub(crate) async fn index_local_repository(
     repository_id: String,
     owner: String,
     repository: String,
+    actor_id: Option<String>,
 ) -> Result<()> {
     index_inner(
         state,
@@ -720,6 +730,7 @@ pub(crate) async fn index_local_repository(
             repository,
             index_id: String::new(),
             exclude_commits: Vec::new(),
+            actor_id,
         },
     )
     .await

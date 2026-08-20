@@ -198,6 +198,8 @@ export type PullRequestEventKind =
   | 'closed'
   | 'reopened'
   | 'merged'
+  | 'commits_added'
+  | 'force_pushed'
   | 'thread_resolved'
   | 'thread_reopened';
 

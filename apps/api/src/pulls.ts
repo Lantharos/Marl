@@ -5,7 +5,7 @@ import { identifier, safeRepositoryPath, validBranchName } from './domain';
 import { pinPullRefs, requestGatewayWrite } from './git-writes';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
-import { canManageRepository as membership, createPullEvent, latestReviews, preservePullRefs, pullRepository as repo, pullSelect, pullSummary as summary, type PullRow } from './pull-context';
+import { canManageRepository as membership, createPullEvent, latestReviews, preservePullRefs, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
 import { commitPullUpdate } from './pull-realtime';
 import { commentBody, createPullBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
@@ -40,8 +40,11 @@ export async function createPull(request: Request, env: Env, principal: Principa
   }
   const id = identifier('pr');
   const state = body.draft === true ? 'draft' : 'open';
+  const commits = await pullCommits(env, repository.id, sourceRepository.id, source.commitId, target.commitId);
+  const commitEvent = commits.results.length ? createPullEvent(env, id, principal, 'commits_added', { commits: JSON.stringify(commits.results.map((commit) => ({ id: commit.id, title: commit.title }))), owner: sourceOwner, repository: sourceName }) : null;
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO pull_requests (id,repository_id,source_repository_id,number,title,body,author_id,source_branch,target_branch,source_commit_id,target_commit_id,state) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,?,?,?,? FROM pull_requests WHERE repository_id=?`).bind(id, repository.id, sameRepository ? null : sourceRepository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
+    ...(commitEvent ? [commitEvent.statement] : []),
     auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.created', subjectType: 'pull_request', subjectId: id, details: { sourceRepository: `${sourceOwner}/${sourceName}`, sourceBranch: body.sourceBranch, targetBranch: body.targetBranch, state } })
   ]);
   const created = await env.DB.prepare(`${pullSelect} WHERE pull_requests.id = ?`).bind(id).first<PullRow>();
@@ -329,7 +332,7 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   const checkSummary = { total: checks.results.length, passed: checks.results.filter((check) => check.state === 'success').length, failed: checks.results.filter((check) => ['failure', 'canceled'].includes(check.state)).length, running: checks.results.filter((check) => ['queued', 'running'].includes(check.state)).length, items: checks.results };
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, unresolvedThreads?.count ?? 0);
   if (!requirements.ready) return problem(409, 'merge_requirements_not_met', requirements.reasons[0] ?? 'Merge requirements are not met.', { reasons: requirements.reasons });
-  const gateway = await requestGatewayWrite(env, '/_marl/merge', { operationId: pull.id, method, repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, title: `${method === 'squash' ? 'Squash' : method === 'rebase' ? 'Rebase' : 'Merge'} pull request #${number}: ${pull.title}`, author: principal.handle });
+  const gateway = await requestGatewayWrite(env, '/_marl/merge', { operationId: pull.id, method, repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, title: `${method === 'squash' ? 'Squash' : method === 'rebase' ? 'Rebase' : 'Merge'} pull request #${number}: ${pull.title}`, author: principal.handle, actorId: principal.id });
   const result = await gateway.json().catch(() => null) as { commitId?: string; targetHeadId?: string; error?: string } | null;
   if (!gateway.ok || !result?.commitId) return problem(gateway.status === 409 ? 409 : 502, gateway.status === 409 ? 'merge_conflict' : 'merge_gateway_failed', result?.error ?? 'Git gateway could not merge this pull request.');
   const targetHeadId = result.targetHeadId ?? result.commitId;

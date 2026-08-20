@@ -3,13 +3,12 @@ import { auditStatement } from './audit';
 import { requireFreshSession, type Principal } from './auth';
 import { identifier, safeRepositoryPath, validBranchName, validSlug, validVisibility } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
-import { pinPullRefs } from './git-writes';
 import { requestGitGateway } from './git-gateway';
 import { json, problem, readJson } from './http';
 import { readListQuery } from './list-query';
 import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositoryOverviewBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
-import { commitPullUpdate } from './pull-realtime';
+import { synchronizePullsForBranchUpdates } from './pull-synchronization';
 import { queuePushWorkflows } from './workflows';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
@@ -27,7 +26,7 @@ export async function authorizeGit(env: Env, principal: Principal | null, owner:
   if (repo.deletionScheduledAt) return problem(404, 'repository_not_found', 'Repository not found.');
   if (repo.archivedAt && service === 'git-receive-pack') return problem(409, 'repository_archived', 'Archived repositories are read-only.');
   if (!read || (service === 'git-receive-pack' && !write)) return problem(principal ? 403 : 401, 'git_access_denied', 'You do not have access to this repository.');
-  return json({ repositoryId: repo.id, storageKey: repo.id, organizationId: repo.organizationId, visibility: repo.visibility, read, write });
+  return json({ repositoryId: repo.id, storageKey: repo.id, organizationId: repo.organizationId, actorId: principal?.id, visibility: repo.visibility, read, write });
 }
 
 export async function listPendingGitIndexes(env: Env): Promise<Response> {
@@ -45,12 +44,13 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const storedChanges = await queryInChunks(changeIds, 90, (chunk) => env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ commitId: string }>());
   const indexedChanges = new Set(storedChanges.map((commit) => commit.commitId));
   const statements = [];
+  const branchStatements = [];
   for (const value of body.commits) {
     if (!value || typeof value !== 'object') continue;
     const commit = value as Record<string, unknown>;
     if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string') || !Array.isArray(commit.parents) || !commit.parents.every((parent) => typeof parent === 'string' && /^[0-9a-f]{40,64}$/.test(parent))) continue;
     const authorEmail = typeof commit.authorEmail === 'string' && commit.authorEmail.length <= 320 ? commit.authorEmail : '';
-    const verified = gatewayTrusted && commit.signatureStatus === 'verified' && typeof commit.signatureSignerId === 'string' && /^usr_[a-z0-9]+$/.test(commit.signatureSignerId) && typeof commit.signatureKeyFingerprint === 'string' && commit.signatureKeyFingerprint.startsWith('SHA256:');
+    const verified = gatewayTrusted && commit.signatureStatus === 'verified' && typeof commit.signatureSignerId === 'string' && commit.signatureSignerId.length > 0 && commit.signatureSignerId.length <= 200 && typeof commit.signatureKeyFingerprint === 'string' && commit.signatureKeyFingerprint.startsWith('SHA256:');
     const signatureStatus = gatewayTrusted && commit.signatureStatus === 'invalid' ? 'invalid' : verified ? 'verified' : 'unverified';
     statements.push(env.DB.prepare(`INSERT INTO commits (repository_id,id,title,author_name,author_email,authored_at,tree_id,parent_ids,signature_status,signature_signer_id,signature_key_fingerprint) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(repository_id,id) DO UPDATE SET title=excluded.title,author_name=excluded.author_name,author_email=excluded.author_email,authored_at=excluded.authored_at,tree_id=excluded.tree_id,parent_ids=excluded.parent_ids,signature_status=excluded.signature_status,signature_signer_id=excluded.signature_signer_id,signature_key_fingerprint=excluded.signature_key_fingerprint`).bind(body.repositoryId, commit.id, commit.title, commit.author, authorEmail, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents), signatureStatus, verified ? commit.signatureSignerId : null, verified ? commit.signatureKeyFingerprint : null));
   }
@@ -76,9 +76,7 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     const branch = value as Record<string, unknown>;
     if (typeof branch.name !== 'string' || !validBranchName(branch.name) || typeof branch.commitId !== 'string' || !/^[0-9a-f]{40,64}$/.test(branch.commitId)) continue;
     indexedBranches.push({ name: branch.name, commitId: branch.commitId });
-    statements.push(env.DB.prepare(`INSERT INTO branches (repository_id, name, commit_id, index_version) VALUES (?, ?, ?, ?) ON CONFLICT(repository_id, name) DO UPDATE SET commit_id=excluded.commit_id,index_version=excluded.index_version,updated_at=CURRENT_TIMESTAMP`).bind(body.repositoryId, branch.name, branch.commitId, body.indexId));
-    statements.push(env.DB.prepare(`UPDATE pull_requests SET source_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE COALESCE(source_repository_id, repository_id) = ? AND source_branch = ? AND state IN ('draft', 'open') AND source_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
-    statements.push(env.DB.prepare(`UPDATE pull_requests SET target_commit_id = ?, updated_at = CURRENT_TIMESTAMP WHERE repository_id = ? AND target_branch = ? AND state IN ('draft', 'open') AND target_commit_id != ?`).bind(branch.commitId, body.repositoryId, branch.name, branch.commitId));
+    branchStatements.push(env.DB.prepare(`INSERT INTO branches (repository_id, name, commit_id, index_version) VALUES (?, ?, ?, ?) ON CONFLICT(repository_id, name) DO UPDATE SET commit_id=excluded.commit_id,index_version=excluded.index_version,updated_at=CURRENT_TIMESTAMP`).bind(body.repositoryId, branch.name, branch.commitId, body.indexId));
   }
   for (const value of body.entries) {
     if (!value || typeof value !== 'object') continue;
@@ -88,37 +86,17 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   }
   const previous = await queryInChunks(indexedBranches.map((branch) => branch.name), 90, (chunk) => env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ name: string; commitId: string }>());
   const previousHeads = new Map(previous.map((branch) => [branch.name, branch.commitId]));
-  const changedBranches = indexedBranches.filter((branch) => previousHeads.get(branch.name) !== branch.commitId);
-  const pullHeadUpdates: Array<{ id: string; sourceCommitId: string; targetCommitId: string }> = [];
-  if (changedBranches.length) {
-    const changedNames = changedBranches.map((branch) => branch.name);
-    const pullRows = await queryInChunks(changedNames, 45, (chunk) => env.DB.prepare(`SELECT pull_requests.id,pull_requests.number,pull_requests.repository_id AS repositoryId,COALESCE(pull_requests.source_repository_id,pull_requests.repository_id) AS sourceRepositoryId,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,organizations.slug AS owner,repositories.name AS repository,source_organizations.slug AS sourceOwner,source_repositories.name AS sourceRepository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN repositories AS source_repositories ON source_repositories.id=COALESCE(pull_requests.source_repository_id,pull_requests.repository_id) LEFT JOIN organizations AS source_organizations ON source_organizations.id=source_repositories.organization_id WHERE pull_requests.state IN ('draft','open') AND ((COALESCE(pull_requests.source_repository_id,pull_requests.repository_id)=? AND pull_requests.source_branch IN (${placeholders(chunk)})) OR (pull_requests.repository_id=? AND pull_requests.target_branch IN (${placeholders(chunk)})))`).bind(body.repositoryId, ...chunk, body.repositoryId, ...chunk).all<{ id: string; number: number; repositoryId: string; sourceRepositoryId: string; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; owner: string; repository: string; sourceOwner: string; sourceRepository: string }>());
-    const pulls = [...new Map(pullRows.map((pull) => [pull.id, pull])).values()];
-    const heads = new Map(indexedBranches.map((branch) => [branch.name, branch.commitId]));
-    for (const pull of pulls) {
-      const sourceCommitId = pull.sourceRepositoryId === body.repositoryId ? heads.get(pull.sourceBranch) ?? pull.sourceCommitId : pull.sourceCommitId;
-      const targetCommitId = pull.repositoryId === body.repositoryId ? heads.get(pull.targetBranch) ?? pull.targetCommitId : pull.targetCommitId;
-      if (sourceCommitId === pull.sourceCommitId && targetCommitId === pull.targetCommitId) continue;
-      const pinned = await pinPullRefs(env, {
-        owner: pull.owner,
-        repository: pull.repository,
-        number: pull.number,
-        sourceCommitId,
-        targetCommitId,
-        expectedSourceCommitId: pull.sourceCommitId,
-        expectedTargetCommitId: pull.targetCommitId,
-        sourceOwner: pull.sourceOwner,
-        sourceRepository: pull.sourceRepository
-      });
-      if (!pinned.ok) return problem(502, 'pull_ref_sync_failed', `Pull request #${pull.number} could not preserve its updated commits.`);
-      pullHeadUpdates.push({ id: pull.id, sourceCommitId, targetCommitId });
-    }
-  }
-  if (body.complete && typeof body.defaultBranch === 'string') statements.push(env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(body.defaultBranch, body.repositoryId));
   for (let offset = 0; offset < statements.length; offset += 100) await env.DB.batch(statements.slice(offset, offset + 100));
-  await Promise.all(pullHeadUpdates.map((pull) => commitPullUpdate(env, pull.id, 'pull.synchronized', { pull: { sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId }, refreshState: true }, [])));
+  let changedBranches;
+  try {
+    changedBranches = await synchronizePullsForBranchUpdates(env, body.repositoryId, indexedBranches, previousHeads, typeof body.actorId === 'string' ? body.actorId : principal?.id);
+  } catch (error) {
+    return problem(502, 'pull_ref_sync_failed', error instanceof Error ? error.message : 'Pull request commits could not be synchronized.');
+  }
+  for (let offset = 0; offset < branchStatements.length; offset += 100) await env.DB.batch(branchStatements.slice(offset, offset + 100));
+  if (body.complete && typeof body.defaultBranch === 'string') await env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(body.defaultBranch, body.repositoryId).run();
   if (body.complete) await env.DB.prepare('DELETE FROM branches WHERE repository_id=? AND index_version!=?').bind(body.repositoryId, body.indexId).run();
-  const actorId = principal?.id ?? (await env.DB.prepare('SELECT created_by AS createdBy FROM repositories WHERE id=?').bind(body.repositoryId).first<{ createdBy: string }>())?.createdBy ?? null;
+  const actorId = (gatewayTrusted ? body.actorId : principal?.id) ?? (await env.DB.prepare('SELECT created_by AS createdBy FROM repositories WHERE id=?').bind(body.repositoryId).first<{ createdBy: string }>())?.createdBy ?? null;
   if (changedBranches.length) {
     const auditRepository = await env.DB.prepare('SELECT organization_id AS organizationId FROM repositories WHERE id=?').bind(body.repositoryId).first<{ organizationId: string }>();
     if (auditRepository) await auditStatement(env, { organizationId: auditRepository.organizationId, repositoryId: body.repositoryId, actor: principal, action: 'repository.refs.indexed', subjectType: 'repository', subjectId: body.repositoryId, details: { refs: changedBranches.map((branch) => ({ name: branch.name, commitId: branch.commitId })) } }).run();
@@ -323,7 +301,7 @@ export async function forkRepository(request: Request, env: Env, principal: Prin
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
     throw error;
   }
-  const copied = await requestGitGateway(env, '/_marl/repositories/fork', { repositoryId: id, sourceRepositoryId: source.id, sourceOwner: owner, sourceRepository: name, destinationOrganizationId: destination.id, destinationOwner: body.owner, destinationRepository: body.name }, { attempts: 2, timeoutMs: 120_000 }).catch(() => new Response(null, { status: 502 }));
+  const copied = await requestGitGateway(env, '/_marl/repositories/fork', { repositoryId: id, sourceRepositoryId: source.id, sourceOwner: owner, sourceRepository: name, destinationOrganizationId: destination.id, destinationOwner: body.owner, destinationRepository: body.name, actorId: principal.id }, { attempts: 2, timeoutMs: 120_000 }).catch(() => new Response(null, { status: 502 }));
   if (!copied.ok) {
     await env.DB.prepare('DELETE FROM repositories WHERE id=?').bind(id).run();
     return problem(502, 'repository_fork_failed', 'Repository storage could not be forked safely.');

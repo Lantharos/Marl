@@ -6,7 +6,7 @@ import { hydrateRepository, indexHydratedRepository } from './hydration';
 import { parseStateBody, stateFailure } from './state-http';
 import { repositoryIndexTaskBody } from './state-schemas';
 
-type IndexTask = { owner: string; repository: string; repositoryId: string; generation: number };
+type IndexTask = { owner: string; repository: string; repositoryId: string; generation: number; actorId?: string };
 
 export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
   async fetch(request: Request) {
@@ -29,7 +29,7 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
       const container = getContainer(this.env.GIT_CONTAINERS, task.repositoryId);
       await hydrateRepository(container, this.env, task.owner, task.repository, task.repositoryId);
       const previousHeads = await this.ctx.storage.get<string[]>('indexed-heads') ?? [];
-      const indexed = await indexHydratedRepository(container, this.env, task.repositoryId, task.owner, task.repository, task.generation, previousHeads);
+      const indexed = await indexHydratedRepository(container, this.env, task.repositoryId, task.owner, task.repository, task.generation, previousHeads, task.actorId);
       await this.ctx.storage.put('indexed-heads', indexed.heads);
       await completeOperation(this.ctx.storage, operation.id);
     } catch (error) {
@@ -39,11 +39,11 @@ export class RepositoryIndexObject extends DurableObject<GitEdgeEnv> {
   }
 }
 
-export async function scheduleRepositoryIndex(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, generation: number) {
+export async function scheduleRepositoryIndex(env: GitEdgeEnv, owner: string, repository: string, repositoryId: string, generation: number, actorId?: string) {
   const stub = env.INDEXING.get(env.INDEXING.idFromName(repositoryId));
   const response = await stub.fetch('http://indexing/schedule', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-marl-storage-token': env.MARL_GIT_GATEWAY_TOKEN },
-    body: JSON.stringify({ owner, repository, repositoryId, generation })
+    body: JSON.stringify({ owner, repository, repositoryId, generation, actorId })
   });
   if (!response.ok) throw new Error(`Repository indexing schedule failed with ${response.status}.`);
 }

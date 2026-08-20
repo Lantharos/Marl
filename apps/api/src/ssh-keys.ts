@@ -85,5 +85,5 @@ export async function authorizeSsh(request: Request, env: Env) {
   const access = await authorizeRepository(env, principal, owner, repository, service === 'git-receive-pack' ? 'repository.push' : 'repository.read');
   if (!access) return problem(403, 'repository_access_denied', 'Repository access denied.');
   await env.DB.prepare('UPDATE ssh_keys SET last_used_at=CURRENT_TIMESTAMP WHERE id=?').bind(user.keyId).run();
-  return json({ repositoryId: access.id, write: service === 'git-receive-pack', handle: user.handle });
+  return json({ repositoryId: access.id, actorId: user.id, write: service === 'git-receive-pack', handle: user.handle });
 }

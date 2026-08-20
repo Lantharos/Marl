@@ -35,6 +35,7 @@ struct SshSession {
 struct Authorization {
     repository_id: String,
     write: bool,
+    actor_id: Option<String>,
 }
 
 struct GitCommand {
@@ -218,6 +219,7 @@ impl server::Handler for SshSession {
                         authorization.repository_id,
                         command.owner,
                         command.repository,
+                        authorization.actor_id,
                     )
                     .await
                 {

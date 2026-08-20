@@ -42,6 +42,7 @@ try {
   api = startApi();
   await waitForHttp(`${apiUrl}/health`, api);
   await client.authenticate({ name: 'Marl Qualification', username: qualificationOwner, email: 'qualification@marl.invalid', password: qualificationPassword });
+  await run(['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--persist-to', persistence, '--command', "UPDATE auth_user SET email_verified=1 WHERE email='qualification@marl.invalid'"], { cwd: apiRoot, timeoutMs: 120_000 });
   git = startGit();
   await waitForHttp(`${gitUrl}/health`, git);
   await run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', sshKey], { timeoutMs: 30_000 });
@@ -133,6 +134,55 @@ try {
   const logs = await readAllLogs(completedJob.id);
   assert(logs.includes('Verify checkout'), 'Persisted job logs are incomplete.');
   assert(logs.includes('***') && !logs.includes(qualificationSecret), 'A CI secret was not masked from persisted logs.');
+
+  stage('Exercise pull request synchronization and timeline history');
+  await client.git(['fetch', 'origin', 'main'], token);
+  await run(['git', 'switch', '-C', 'qualification/timeline', 'origin/main'], { cwd: source });
+  await commitMarker('timeline first commit');
+  const timelineFirst = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
+  await commitMarker('timeline second commit');
+  const timelineSecond = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
+  await client.git(['push', '--set-upstream', 'origin', 'qualification/timeline'], token);
+  const timelinePull = await client.request<{ pullRequest: { number: number } }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls`, {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Qualify pull synchronization', body: 'Exercises lifecycle, commit history, and rewritten heads.', sourceBranch: 'qualification/timeline', targetBranch: 'main', draft: true })
+  });
+  const timelinePath = `/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${timelinePull.pullRequest.number}`;
+  await client.request(`${timelinePath}/ready`, { method: 'POST' });
+  await client.request(`${timelinePath}/close`, { method: 'POST' });
+  await client.request(`${timelinePath}/reopen`, { method: 'POST' });
+  await client.request(`${timelinePath}/comments`, { method: 'POST', body: JSON.stringify({ body: 'Timeline synchronization review.' }) });
+  await client.request(`${timelinePath}/reviews`, { method: 'POST', body: JSON.stringify({ state: 'commented', body: 'Current head reviewed.' }) });
+  const initialTimeline = await client.request<PullQualificationDetail>(timelinePath);
+  assert(initialTimeline.pullRequest.state === 'mergeable', 'Reopened pull request was not mergeable.');
+  assert(initialTimeline.pullRequest.events.some((event) => event.kind === 'ready') && initialTimeline.pullRequest.events.some((event) => event.kind === 'closed') && initialTimeline.pullRequest.events.some((event) => event.kind === 'reopened'), 'Pull request lifecycle events are incomplete.');
+  assertCommitHistory(initialTimeline, [timelineFirst, timelineSecond]);
+
+  await commitMarker('timeline fast-forward commit');
+  const timelineFastForward = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
+  await client.git(['push', 'origin', 'qualification/timeline'], token);
+  const fastForwardDetail = await client.waitFor(
+    () => client.request<PullQualificationDetail>(timelinePath),
+    (value) => value.pullRequest.sourceCommitId === timelineFastForward,
+    'Pull request did not synchronize a fast-forward push'
+  );
+  assert(!fastForwardDetail.pullRequest.events.some((event) => event.kind === 'force_pushed'), 'A fast-forward push was recorded as a force push.');
+  assertCommitHistory(fastForwardDetail, [timelineFirst, timelineSecond, timelineFastForward]);
+
+  await run(['git', 'reset', '--hard', 'origin/main'], { cwd: source });
+  await commitMarker('timeline rewritten commit');
+  const timelineRewritten = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
+  await client.git(['push', '--force-with-lease', 'origin', 'qualification/timeline'], token);
+  const rewrittenDetail = await client.waitFor(
+    () => client.request<PullQualificationDetail>(timelinePath),
+    (value) => value.pullRequest.sourceCommitId === timelineRewritten && value.pullRequest.events.some((event) => event.kind === 'force_pushed'),
+    'Pull request did not preserve a force-push timeline event'
+  );
+  assertCommitHistory(rewrittenDetail, [timelineFirst, timelineSecond, timelineFastForward, timelineRewritten]);
+  assert(rewrittenDetail.pullRequest.commits.length === 1 && rewrittenDetail.pullRequest.commits[0]?.id === timelineRewritten, 'Current pull request commits did not follow the rewritten head.');
+  const rewrittenDiff = await client.request<{ files: unknown[] }>(`${timelinePath}/diff`);
+  assert(rewrittenDiff.files.length > 0, 'Pull request diff was empty after a force push.');
+  await client.request(`${timelinePath}/merge`, { method: 'POST', body: JSON.stringify({ method: 'merge' }) });
 
   stage('Exercise pull request publication');
   for (const method of ['merge', 'squash', 'rebase'] as const) {
@@ -227,6 +277,26 @@ async function commitMarker(message: string) {
   await Bun.write(marker, `${previous}${message}\n`);
   await run(['git', 'add', 'qualification-state.txt'], { cwd: source });
   await run(['git', 'commit', '-m', message], { cwd: source });
+}
+
+type PullQualificationDetail = {
+  pullRequest: {
+    state: string;
+    sourceCommitId: string;
+    commits: Array<{ id: string }>;
+    events: Array<{ kind: string; details: Record<string, string> }>;
+  };
+};
+
+function assertCommitHistory(detail: PullQualificationDetail, expected: string[]) {
+  const recorded = new Set(detail.pullRequest.events.flatMap((event) => {
+    if (event.kind !== 'commits_added') return [];
+    try {
+      const commits = JSON.parse(event.details.commits ?? '[]') as Array<{ id?: unknown }>;
+      return commits.flatMap((commit) => typeof commit.id === 'string' ? [commit.id] : []);
+    } catch { return []; }
+  }));
+  assert(expected.every((commit) => recorded.has(commit)), 'Pull request timeline omitted one or more commits.');
 }
 
 async function cleanupDockerJobs(ids: Set<string>) {

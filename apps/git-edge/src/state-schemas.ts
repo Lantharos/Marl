@@ -40,5 +40,5 @@ export const trackCleanupBody = union([strictObject({ key: identifier }), strict
 export const emptyBody = strictObject({});
 
 export const nativePushBody = strictObject({ expectedRefs, refs, packs: pipe(array(strictObject({ bytes: positiveInteger })), maxLength(4)) });
-export const repositoryIndexTaskBody = strictObject({ owner: identifier, repository: identifier, repositoryId: identifier, generation: nonNegativeInteger });
+export const repositoryIndexTaskBody = strictObject({ owner: identifier, repository: identifier, repositoryId: identifier, generation: nonNegativeInteger, actorId: optional(identifier) });
 export const compactionTaskBody = strictObject({ owner: identifier, repository: identifier, repositoryId: identifier, organizationId: identifier, generation: nonNegativeInteger, force: optional(boolean()) });

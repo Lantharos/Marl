@@ -23,6 +23,7 @@ pub(crate) struct ForkRequest {
     source_repository: String,
     destination_owner: String,
     destination_repository: String,
+    actor_id: String,
 }
 
 pub(crate) async fn fork_repository(
@@ -104,6 +105,7 @@ async fn fork_inner(state: &AppState, request: &ForkRequest) -> Result<()> {
             request.repository_id.clone(),
             request.destination_owner.clone(),
             request.destination_repository.clone(),
+            Some(request.actor_id.clone()),
         )
         .await?;
         Result::<()>::Ok(())

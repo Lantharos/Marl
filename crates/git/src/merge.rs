@@ -26,6 +26,7 @@ pub(crate) struct MergeRequest {
     pub(crate) target_commit_id: String,
     pub(crate) title: String,
     pub(crate) author: String,
+    pub(crate) actor_id: String,
     pub(crate) operation_id: String,
     #[serde(default)]
     method: MergeMethod,
@@ -112,6 +113,7 @@ async fn perform_merge(state: &AppState, request: MergeRequest) -> Result<MergeR
             request.repository_id,
             request.owner,
             request.repository,
+            Some(request.actor_id),
         )
         .await
     {
@@ -423,6 +425,7 @@ mod tests {
             target_commit_id: target.into(),
             title: "Merge test".into(),
             author: "tester".into(),
+            actor_id: "tester".into(),
             operation_id: operation_id.into(),
             method: MergeMethod::Merge,
         }

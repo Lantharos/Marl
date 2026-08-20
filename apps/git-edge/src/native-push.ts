@@ -44,7 +44,7 @@ export async function handleNativePush(request: Request, env: GitEdgeEnv, route:
     const session = await uploadSession(env, route.pushId!).request<UploadSnapshotResponse>('/snapshot');
     if (session.session.repository !== repository) return failure(404, 'push_not_found', 'Push not found.');
     if (route.action === 'part') return uploadPart(request, env, route, session.session);
-    return completePush(env, route.owner, route.repository, authorization.organizationId, authorization.repositoryId, session.session);
+    return completePush(env, route.owner, route.repository, authorization.organizationId, authorization.repositoryId, session.session, authorization.actorId);
   } catch (error) {
     if (error instanceof AuthorizationError) return failure(error.status, 'git_access_denied', error.message);
     if (error instanceof StateRequestError) return failure(error.status, error.code, error.message);
@@ -139,7 +139,7 @@ async function uploadPart(request: Request, env: GitEdgeEnv, route: PushRoute, s
   }
 }
 
-async function completePush(env: GitEdgeEnv, owner: string, name: string, organizationId: string, repositoryId: string, session: UploadSnapshotResponse['session']) {
+async function completePush(env: GitEdgeEnv, owner: string, name: string, organizationId: string, repositoryId: string, session: UploadSnapshotResponse['session'], actorId?: string) {
   const repository = repositoryId;
   const uploads = uploadSession(env, session.pushId);
   try {
@@ -154,7 +154,7 @@ async function completePush(env: GitEdgeEnv, owner: string, name: string, organi
   }
   const uploaded = await uploads.request<UploadSnapshotResponse>('/snapshot');
   const published = await finalizeUploadedPush(env, repository, organizationId, uploaded.session);
-  await scheduleRepositoryIndex(env, owner, name, repositoryId, published.generation).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
+  await scheduleRepositoryIndex(env, owner, name, repositoryId, published.generation, actorId).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
   const forceCompaction = uploaded.session.packs.length === 0 && published.storedBytes > 0;
   if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, repositoryId, organizationId, published.generation, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
   return Response.json({ repository: { generation: published.generation, refsVersion: published.refsVersion, refs: published.refs, manifest: published.manifestKey } });
