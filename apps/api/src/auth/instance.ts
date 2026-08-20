@@ -33,6 +33,23 @@ export function createAuth(env: Env, request: Request) {
         if (!validSlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
         const unavailable = await usernameUnavailable(env, candidate);
         if (unavailable) throw new APIError('BAD_REQUEST', { message: 'That username is unavailable.' });
+      }),
+      after: createAuthMiddleware(async (context) => {
+        const newSession = context.context.newSession;
+        if (!newSession) return;
+        const existingDeviceId = await context.getSignedCookie('marl_device', secret);
+        const deviceId = validDeviceId(existingDeviceId) ? existingDeviceId : crypto.randomUUID();
+        await context.setSignedCookie('marl_device', deviceId, secret, {
+          httpOnly: true,
+          sameSite: 'lax',
+          secure: env.ENVIRONMENT !== 'development',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 365
+        });
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM auth_session WHERE user_id=? AND device_id=? AND id<>?').bind(newSession.user.id, deviceId, newSession.session.id),
+          env.DB.prepare('UPDATE auth_session SET device_id=? WHERE id=? AND user_id=?').bind(deviceId, newSession.session.id, newSession.user.id)
+        ]);
       })
     },
     disabledPaths: ['/is-username-available'],
@@ -92,6 +109,10 @@ export function createAuth(env: Env, request: Request) {
       ...aveProvider(env)
     ]
   });
+}
+
+function validDeviceId(value: string | false | null): value is string {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
 function developmentOrigins(env: Env, configuredUrl: URL) {

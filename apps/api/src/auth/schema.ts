@@ -24,6 +24,7 @@ export const session = sqliteTable('auth_session', {
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  deviceId: text('device_id'),
   ...timestamps
 });
 

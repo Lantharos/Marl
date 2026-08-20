@@ -1,14 +1,14 @@
 <script lang="ts">
   import type { PublicProfileRepository } from '@marl/contracts';
-  import BookOpen from 'lucide-svelte/icons/book-open';
   import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
   import Time from '../Time.svelte';
+  import RepositoryIcon from '../RepositoryIcon.svelte';
   let { repositories, empty = 'No public repositories yet.' } = $props<{ repositories: PublicProfileRepository[]; empty?: string }>();
 </script>
 
 <div class="repositories">
   {#each repositories as repository}
-    <a href="/{repository.owner}/{repository.name}"><BookOpen size={16} /><span><strong>{repository.name}</strong><p>{repository.description || 'No description yet.'}</p><small>{repository.defaultBranch} · Updated <Time value={repository.updatedAt} /></small></span><ArrowUpRight size={14} /></a>
+    <a href="/{repository.owner}/{repository.name}"><RepositoryIcon name={repository.name} src={repository.iconUrl} size={24} /><span><strong>{repository.name}</strong><p>{repository.description || 'No description yet.'}</p><small>{repository.defaultBranch} · Updated <Time value={repository.updatedAt} /></small></span><ArrowUpRight size={14} /></a>
   {:else}<p class="empty">{empty}</p>{/each}
 </div>
 

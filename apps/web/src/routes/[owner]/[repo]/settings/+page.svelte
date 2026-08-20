@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import { untrack } from 'svelte';
   import Archive from 'lucide-svelte/icons/archive';
   import ArrowRightLeft from 'lucide-svelte/icons/arrow-right-left';
+  import Camera from 'lucide-svelte/icons/camera';
   import Globe2 from 'lucide-svelte/icons/globe-2';
   import GitFork from 'lucide-svelte/icons/git-fork';
   import LockKeyhole from 'lucide-svelte/icons/lock-keyhole';
@@ -14,6 +15,7 @@
   import Button from '$lib/components/Button.svelte';
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
   import Select from '$lib/components/Select.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
   import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
@@ -26,6 +28,9 @@
   const owner = $derived($page.params.owner ?? '');
   const repo = $derived($page.params.repo ?? '');
   let description = $state(untrack(() => data.repository.description));
+  let iconUrl = $state<string | null>(untrack(() => data.repository.iconUrl));
+  let iconState = $state<'idle' | 'saving' | 'saved'>('idle');
+  let iconInput: HTMLInputElement;
   let visibility = $state(untrack(() => data.repository.visibility));
   let nextVisibility = $state(untrack(() => data.repository.visibility));
   let defaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
@@ -62,6 +67,26 @@
     if (error) { generalState = 'idle'; return; }
     generalState = 'saved';
     setTimeout(() => (generalState = 'idle'), 1800);
+  }
+
+  async function uploadIcon(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || iconState === 'saving') return;
+    iconState = 'saving';
+    error = '';
+    try {
+      const result = await api<{ iconUrl: string }>(`/repositories/${owner}/${repo}/icon`, { method: 'PUT', headers: { 'content-type': file.type }, body: file });
+      iconUrl = result.iconUrl;
+      iconState = 'saved';
+      await invalidateAll();
+      setTimeout(() => (iconState = 'idle'), 1800);
+    } catch (cause) {
+      error = cause instanceof MarlApiError ? cause.message : 'Repository icon could not be updated.';
+      iconState = 'idle';
+    } finally {
+      input.value = '';
+    }
   }
 
   function changeVisibility() { return run('visibility', async () => {
@@ -110,6 +135,7 @@
 
 <section class="details">
   <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><SettingsAction state={generalState} onclick={saveGeneral} /></header>
+  <div class="icon-field"><RepositoryIcon name={repo} src={iconUrl} size={52} /><div><strong>Repository icon</strong><small>PNG, JPEG, or WebP up to 2 MB.</small></div><input bind:this={iconInput} type="file" accept="image/png,image/jpeg,image/webp" onchange={uploadIcon} /><Button size="small" loading={iconState === 'saving'} disabled={iconState === 'saved'} onclick={() => iconInput.click()}><Camera size={14} />{iconState === 'saved' ? 'Saved!' : 'Change icon'}</Button></div>
   <label><span>Description</span><input bind:value={description} maxlength="280" placeholder="Describe this repository" /></label>
   <div class="fields single"><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
 </section>
@@ -166,6 +192,6 @@
 
 <style>
   .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle);margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}
-  .fields.single{grid-template-columns:1fr}
+  .fields.single{grid-template-columns:1fr}.icon-field{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:12px;margin-bottom:18px}.icon-field>input{display:none}.icon-field strong,.icon-field small{display:block}.icon-field strong{color:var(--text-strong);font-size:12px}.icon-field small{margin-top:4px;color:var(--text-faint);font-size:10px}
   @media(max-width:580px){.fields{grid-template-columns:1fr}.details>header{align-items:flex-start}.operation{grid-template-columns:32px minmax(0,1fr)}.operation>:global(.button){grid-column:2;justify-self:start}}
 </style>

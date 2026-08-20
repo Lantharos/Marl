@@ -6,6 +6,7 @@
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import FileDiff from 'lucide-svelte/icons/file-diff';
   import Checkbox from '$lib/components/Checkbox.svelte';
+  import Button from '$lib/components/Button.svelte';
   import FormShell from '$lib/components/FormShell.svelte';
   import Select from '$lib/components/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
@@ -104,7 +105,7 @@
       <label class="field"><span>Title</span><input bind:value={title} maxlength="240" required placeholder="What changes, and why?" /></label>
       <label class="field"><span>Description</span><textarea bind:value={body} maxlength="100000" placeholder="Give reviewers the context they need."></textarea></label>
       <Checkbox bind:checked={draft} label="Open as draft" description="Mark this pull request as not ready to merge." />
-      <div class="form-actions"><a href="/pulls">Cancel</a><button type="submit" disabled={!comparison || !title.trim() || creating}>{creating ? 'Opening…' : draft ? 'Open draft' : 'Open pull request'}</button></div>
+      <div class="form-actions"><a href="/pulls">Cancel</a><Button type="submit" variant="primary" loading={creating} disabled={!comparison || !title.trim()}>{draft ? 'Open draft' : 'Open pull request'}</Button></div>
     </form>
   {/if}
 </FormShell>

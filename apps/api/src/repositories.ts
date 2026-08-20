@@ -13,10 +13,11 @@ import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
+import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 
 type RepositoryRow = RepositorySummary & { organizationId: string; defaultBranch: string; archivedAt: string | null; deletionScheduledAt: string | null };
 
-const selectRepository = `SELECT repositories.id, organizations.slug AS owner, repositories.name, repositories.description, repositories.visibility, repositories.default_branch AS defaultBranch, repositories.updated_at AS updatedAt, repositories.organization_id AS organizationId, repositories.archived_at AS archivedAt, repositories.deletion_scheduled_at AS deletionScheduledAt FROM repositories JOIN organizations ON organizations.id = repositories.organization_id`;
+const selectRepository = `SELECT repositories.id, organizations.slug AS owner, repositories.name, repositories.description, repositories.icon_url AS iconUrl, repositories.visibility, repositories.default_branch AS defaultBranch, repositories.updated_at AS updatedAt, repositories.organization_id AS organizationId, repositories.archived_at AS archivedAt, repositories.deletion_scheduled_at AS deletionScheduledAt FROM repositories JOIN organizations ON organizations.id = repositories.organization_id`;
 
 export async function authorizeGit(env: Env, principal: Principal | null, owner: string, name: string, service: string, gatewayTrusted = false): Promise<Response> {
   const repo = await lookupRepository(env, owner, name, principal);
@@ -181,7 +182,31 @@ export async function createRepository(request: Request, env: Env, principal: Pr
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
     throw error;
   }
-  return json({ repository: { id, owner, name, description, visibility, updatedAt: new Date().toISOString() } }, { status: 201 });
+  return json({ repository: { id, owner, name, description, iconUrl: null, visibility, updatedAt: new Date().toISOString() } }, { status: 201 });
+}
+
+export async function uploadRepositoryIcon(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  const image = await readImageUpload(request);
+  if (!image) return problem(422, 'invalid_repository_icon', 'Choose a valid PNG, JPEG, or WebP image under 2 MB.');
+  const key = `repository-icons/${repository.id}/${image.version}.${image.extension}`;
+  const iconUrl = `/api/v1/repository-icons/${repository.id}/${image.version}.${image.extension}`;
+  await env.OBJECTS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
+  try {
+    await env.DB.prepare('UPDATE repositories SET icon_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(iconUrl, repository.id).run();
+  } catch (error) {
+    await env.OBJECTS.delete(key);
+    throw error;
+  }
+  const previousKey = repository.iconUrl && storedImageKey(repository.iconUrl, 'repository-icons', repository.id);
+  if (previousKey) await env.OBJECTS.delete(previousKey);
+  return json({ iconUrl });
+}
+
+export async function readRepositoryIcon(env: Env, repositoryId: string, file: string): Promise<Response> {
+  if (!/^repo_[a-z0-9]+$/.test(repositoryId) || !/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(file)) return problem(404, 'repository_icon_not_found', 'Repository icon not found.');
+  return readImageAsset(env, `repository-icons/${repositoryId}/${file}`);
 }
 
 export async function getRepository(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -303,7 +328,7 @@ export async function forkRepository(request: Request, env: Env, principal: Prin
     await env.DB.prepare('DELETE FROM repositories WHERE id=?').bind(id).run();
     return problem(502, 'repository_fork_failed', 'Repository storage could not be forked safely.');
   }
-  return json({ repository: { id, owner: body.owner, name: body.name, description: source.description, visibility: source.visibility, defaultBranch: source.defaultBranch, upstream: { owner, name }, starred: false, starCount: 0, forkCount: 0, updatedAt: new Date().toISOString() } }, { status: 201 });
+  return json({ repository: { id, owner: body.owner, name: body.name, description: source.description, iconUrl: null, visibility: source.visibility, defaultBranch: source.defaultBranch, upstream: { owner, name }, starred: false, starCount: 0, forkCount: 0, updatedAt: new Date().toISOString() } }, { status: 201 });
 }
 
 export async function detachRepositoryFork(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {

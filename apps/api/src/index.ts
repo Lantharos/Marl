@@ -5,7 +5,7 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositoryOverview, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings } from './repositories';
+import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositoryOverview, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, readRepositoryIcon, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings, uploadRepositoryIcon } from './repositories';
 import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
@@ -78,6 +78,8 @@ const worker = {
     if (avatar && request.method === 'GET') return readAvatar(_env, avatar[1], avatar[2]);
     const organizationAvatar = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
     if (organizationAvatar && request.method === 'GET') return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
+    const repositoryIcon = url.pathname.match(/^\/api\/v1\/repository-icons\/([^/]+)\/([^/]+)$/);
+    if (repositoryIcon && request.method === 'GET') return readRepositoryIcon(_env, repositoryIcon[1], repositoryIcon[2]);
     const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
     if (publicIdentity && request.method === 'GET') return getPublicIdentityProfile(_env, decodeURIComponent(publicIdentity[1]));
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
@@ -177,6 +179,8 @@ const worker = {
       if (action === 'delete' && request.method === 'POST') return scheduleRepositoryDeletion(request, _env, principal, owner, repository);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
+    const repositoryIconRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/icon$/);
+    if (repositoryIconRoute && request.method === 'PUT') return uploadRepositoryIcon(request, _env, principal, decodeURIComponent(repositoryIconRoute[1]), decodeURIComponent(repositoryIconRoute[2]));
 
     const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|patch|threads|comments|metadata|ready|close|reopen|timeline|updates|live|state))?)?$/);
     if (pullRoute) {

@@ -24,6 +24,7 @@ export interface RepositorySummary {
   owner: string;
   name: string;
   description: string;
+  iconUrl: string | null;
   visibility: 'public' | 'private';
   updatedAt: string;
   defaultBranch?: string;
