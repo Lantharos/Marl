@@ -71,23 +71,31 @@
     if (tab === 'code') return path === `${base}/code` || path.startsWith(`${base}/tree`) || path.startsWith(`${base}/blob`) || path.startsWith(`${base}/commit`) || path.startsWith(`${base}/branches`);
     return path.startsWith(`${base}/${tab}`);
   }
-  function positionIsland() {
-    const active = repositoryNav?.querySelector<HTMLElement>('a.active');
-    if (!repositoryNav || !active) return;
-    const navBounds = repositoryNav.getBoundingClientRect();
+  function updateIsland(node: HTMLElement) {
+    const active = node.querySelector<HTMLElement>('a.active');
+    if (!active) return;
+    const navBounds = node.getBoundingClientRect();
     const activeBounds = active.getBoundingClientRect();
-    islandX = activeBounds.left - navBounds.left + repositoryNav.scrollLeft;
-    islandWidth = activeBounds.width;
+    const pixelRatio = window.devicePixelRatio || 1;
+    const left = Math.round(activeBounds.left * pixelRatio) / pixelRatio;
+    const right = Math.round(activeBounds.right * pixelRatio) / pixelRatio;
+    islandX = left - navBounds.left + node.scrollLeft;
+    islandWidth = right - left;
     if (!islandReady) requestAnimationFrame(() => (islandReady = true));
+  }
+  function positionIsland() {
+    if (repositoryNav) updateIsland(repositoryNav);
   }
   function trackRepositoryNav(node: HTMLElement) {
     repositoryNav = node;
-    const frame = requestAnimationFrame(positionIsland);
-    const observer = new ResizeObserver(positionIsland);
+    const frame = requestAnimationFrame(() => updateIsland(node));
+    const timer = window.setTimeout(() => updateIsland(node));
+    const observer = new ResizeObserver(() => updateIsland(node));
     observer.observe(node);
     return {
       destroy() {
         cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
         observer.disconnect();
         if (repositoryNav === node) repositoryNav = undefined;
       }
@@ -96,7 +104,10 @@
   $effect(() => {
     path;
     let frame = 0;
-    tick().then(() => (frame = requestAnimationFrame(positionIsland)));
+    tick().then(() => {
+      const node = repositoryNav;
+      if (node) frame = requestAnimationFrame(() => updateIsland(node));
+    });
     return () => cancelAnimationFrame(frame);
   });
 </script>
