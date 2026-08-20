@@ -9,7 +9,7 @@ import { decryptSecret, encryptSecret } from './secret-crypto';
 import { secretValueBody } from './request-schemas';
 
 type SecretRow = { id: string; organizationId: string; repositoryId: string | null; name: string; ciphertext: string; nonce: string; createdAt: string; updatedAt: string };
-type SecretScope = { organizationId: string; repositoryId: string | null };
+type SecretScope = { organizationId: string; repositoryId: string | null; organizationName?: string };
 
 function validName(name: string) {
   return /^[A-Z_][A-Z0-9_]{0,127}$/.test(name);
@@ -21,9 +21,9 @@ async function repositoryScope(env: Env, principal: Principal, owner: string, re
 }
 
 async function organizationScope(env: Env, principal: Principal, slug: string): Promise<SecretScope | null> {
-  const organization = await env.DB.prepare('SELECT id FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string }>();
+  const organization = await env.DB.prepare('SELECT id,name FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; name: string }>();
   if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'admin'))) return null;
-  return { organizationId: organization.id, repositoryId: null };
+  return { organizationId: organization.id, repositoryId: null, organizationName: organization.name };
 }
 
 export async function repositorySecrets(request: Request, env: Env, principal: Principal, owner: string, repository: string, name?: string) {
@@ -40,7 +40,7 @@ async function handleSecrets(request: Request, env: Env, principal: Principal, s
   if (!scope) return problem(404, 'secret_scope_not_found', 'Secret scope not found.');
   if (request.method === 'GET' && !requestedName) {
     const rows = await env.DB.prepare('SELECT id,name,created_at AS createdAt,updated_at AS updatedAt FROM ci_secrets WHERE organization_id=? AND repository_id IS ? ORDER BY name').bind(scope.organizationId, scope.repositoryId).all();
-    return json({ secrets: rows.results });
+    return json({ organizationName: scope.organizationName, secrets: rows.results });
   }
   if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity before changing secrets.');
   const name = requestedName ? decodeURIComponent(requestedName).toUpperCase() : '';
