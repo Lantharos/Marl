@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "bun scripts/dev.ts",
-    "dev:plan": "bun scripts/dev.ts --plan",
+    "dev:plan": "bun scripts/dev.ts plan",
     "dev:web": "bun scripts/dev.ts web",
     "dev:api": "bun scripts/dev.ts api",
     "dev:git": "bun scripts/dev.ts git",
