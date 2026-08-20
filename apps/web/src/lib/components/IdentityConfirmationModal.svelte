@@ -1,6 +1,7 @@
 <script lang="ts">
   import KeyRound from 'lucide-svelte/icons/key-round';
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
+  import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import { authClient } from '$lib/auth-client';
 
@@ -53,10 +54,10 @@
 </script>
 
 {#snippet actions()}
-  <button onclick={close} disabled={busy}>Cancel</button>
-  <button class="primary" disabled={busy || !method || (method !== 'passkey' && !value)} onclick={verify}>
+  <Button size="small" onclick={close} disabled={busy}>Cancel</Button>
+  <Button size="small" variant="primary" disabled={busy || !method || (method !== 'passkey' && !value)} onclick={verify}>
     {busy ? 'Confirming…' : method === 'passkey' ? 'Use passkey' : 'Confirm identity'}
-  </button>
+  </Button>
 {/snippet}
 
 <Modal {open} title="Confirm your identity" description="This protects changes to the keys trusted by your account." onClose={close} {actions}>
@@ -75,5 +76,5 @@
 </Modal>
 
 <style>
-  .confirmation{display:grid;gap:13px}.passkey,.loading{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface);color:var(--text-muted)}.passkey>:global(svg),.loading>:global(svg){flex:0 0 auto;color:var(--brand)}.passkey strong{display:block;color:var(--text-strong);font-size:11px}.passkey p{margin:4px 0 0;color:var(--text-muted);font-size:10px;line-height:1.45}.loading{font-size:10px}label{display:grid;gap:8px}label span{color:var(--text-strong);font-size:10px;font-weight:630}input{height:37px;padding:0 9px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font:inherit;font-size:12px}input:focus{border-color:var(--brand)}.error{margin:0;padding:9px 10px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:10px}:global(.modal>footer button){display:inline-flex;height:34px;align-items:center;justify-content:center;padding:0 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:10px;font-weight:630}:global(.modal>footer button.primary){border-color:var(--brand);background:var(--brand);color:white}:global(.modal>footer button:disabled){cursor:not-allowed;opacity:.5}
+  .confirmation{display:grid;gap:13px}.passkey,.loading{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface);color:var(--text-muted)}.passkey>:global(svg),.loading>:global(svg){flex:0 0 auto;color:var(--brand)}.passkey strong{display:block;color:var(--text-strong);font-size:11px}.passkey p{margin:4px 0 0;color:var(--text-muted);font-size:10px;line-height:1.45}.loading{font-size:10px}label{display:grid;gap:8px}label span{color:var(--text-strong);font-size:10px;font-weight:630}input{height:37px;padding:0 9px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font:inherit;font-size:12px}input:focus{border-color:var(--brand)}.error{margin:0;padding:9px 10px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:10px}
 </style>

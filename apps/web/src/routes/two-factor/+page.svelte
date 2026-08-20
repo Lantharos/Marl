@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
   import AuthShell from '$lib/components/AuthShell.svelte';
+  import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
 
   let code = $state('');
@@ -15,4 +16,4 @@
   }
 </script>
 
-<AuthShell title="Two-factor authentication" description="Enter the current six-digit code from your authenticator."><form class="auth-form" onsubmit={(event) => { event.preventDefault(); void verify(); }}>{#if error}<p class="auth-error">{error}</p>{/if}<label class="auth-field"><span>Authentication code</span><input inputmode="numeric" autocomplete="one-time-code" maxlength="6" bind:value={code} required /></label><button class="auth-submit" disabled={busy || code.length !== 6}>Verify</button></form></AuthShell>
+<AuthShell title="Two-factor authentication" description="Enter the current six-digit code from your authenticator."><form class="auth-form" onsubmit={(event) => { event.preventDefault(); void verify(); }}>{#if error}<p class="auth-error">{error}</p>{/if}<label class="auth-field"><span>Authentication code</span><input inputmode="numeric" autocomplete="one-time-code" maxlength="6" bind:value={code} required /></label><Button variant="primary" size="large" block disabled={busy || code.length !== 6}>Verify</Button></form></AuthShell>

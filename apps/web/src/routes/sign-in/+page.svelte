@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import KeyRound from 'lucide-svelte/icons/key-round';
   import AuthShell from '$lib/components/AuthShell.svelte';
+  import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
   import { api } from '$lib/api';
 
@@ -51,9 +52,9 @@
     {#if error}<p class="auth-error">{error}</p>{/if}
     <label class="auth-field"><span>Email or username</span><input autocomplete="username" bind:value={identity} required /></label>
     <label class="auth-field"><span>Password</span><input type="password" autocomplete="current-password" bind:value={password} required /></label><a class="auth-link recovery" href="/forgot-password">Forgot password?</a>
-    <button class="auth-submit" disabled={busy}>Sign in</button>
-    {#if methods.passkey}<div class="auth-divider">or</div><button class="auth-option" type="button" disabled={busy} onclick={usePasskey}><KeyRound size={15} />Use a passkey</button>{/if}
-    {#if methods.ave}<button class="auth-option" type="button" disabled={busy} onclick={useAve}>Continue with Ave</button>{/if}
+    <Button variant="primary" size="large" block disabled={busy}>Sign in</Button>
+    {#if methods.passkey}<div class="auth-divider">or</div><Button size="large" block disabled={busy} onclick={usePasskey}><KeyRound size={15} />Use a passkey</Button>{/if}
+    {#if methods.ave}<Button size="large" block disabled={busy} onclick={useAve}>Continue with Ave</Button>{/if}
   </form>
 </AuthShell>
 

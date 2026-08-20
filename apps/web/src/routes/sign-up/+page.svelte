@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
   import AuthShell from '$lib/components/AuthShell.svelte';
+  import Button from '$lib/components/Button.svelte';
   import { api } from '$lib/api';
   import { authClient } from '$lib/auth-client';
 
@@ -34,6 +35,6 @@
     <label class="auth-field"><span>Username</span><input autocomplete="username" minlength="2" maxlength="39" pattern="[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?" bind:value={username} oninput={() => (username = username.toLowerCase())} required /><small>Letters, numbers, dots, dashes, and underscores.</small></label>
     <label class="auth-field"><span>Email</span><input type="email" autocomplete="email" bind:value={email} required /></label>
     <label class="auth-field"><span>Password</span><input type="password" autocomplete="new-password" minlength="12" bind:value={password} required /><small>At least 12 characters.</small></label>
-    <button class="auth-submit" disabled={busy}>Create account</button>
+    <Button variant="primary" size="large" block disabled={busy}>Create account</Button>
   </form>{/if}
 </AuthShell>

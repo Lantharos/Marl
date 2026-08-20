@@ -3,7 +3,10 @@ const hour = 60 * minute;
 const day = 24 * hour;
 
 function parsed(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
+  const normalized = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  const date = normalized instanceof Date ? normalized : new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
