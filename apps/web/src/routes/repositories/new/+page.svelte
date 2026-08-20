@@ -3,6 +3,7 @@
   import { untrack } from 'svelte';
   import Button from '$lib/components/Button.svelte';
   import FormShell from '$lib/components/FormShell.svelte';
+  import LinkButton from '$lib/components/LinkButton.svelte';
   import Select from '$lib/components/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
   import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
@@ -28,7 +29,7 @@
     <label class="field"><span>Description <small>Optional</small></span><textarea bind:value={description} placeholder="What is this repository for?"></textarea></label>
     <label class="field"><span>Visibility</span><Select bind:value={visibility} ariaLabel="Repository visibility" options={[{ value: 'private', label: 'Private', description: 'Only people you invite' }, { value: 'public', label: 'Public', description: 'Visible to everyone' }]} /></label>
     {#if error}<p class="form-error" role="alert">{error}</p>{/if}
-    <div class="form-actions"><a href="/repositories">Cancel</a><Button type="submit" variant="primary" loading={submitting} disabled={!owner || !nameValid}>Create repository</Button></div>
+    <div class="form-actions"><LinkButton href="/repositories">Cancel</LinkButton><Button type="submit" variant="primary" loading={submitting} disabled={!owner || !nameValid}>Create repository</Button></div>
   </form>
 </FormShell>
 <style>.form-error{margin:0;padding:9px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:10px}</style>

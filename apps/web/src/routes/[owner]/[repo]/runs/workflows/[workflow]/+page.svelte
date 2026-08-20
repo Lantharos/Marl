@@ -14,6 +14,7 @@
   import Zap from 'lucide-svelte/icons/zap';
   import BackLink from '$lib/components/BackLink.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import Button from '$lib/components/Button.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
@@ -46,7 +47,7 @@
 
 <header class="workflow-head">
   <div><BackLink href="/{owner}/{repo}/runs" label="Workflows" /><div class="title"><span><Zap size={18} /></span><div><h1>{workflow.name}</h1><p><FileCode2 size={11} />{workflow.path}</p></div></div></div>
-  {#if manual}<button class="run" disabled={!workflow.active || workflow.status !== 'valid'} onclick={() => (dispatchOpen = true)}><Play size={13} />Run workflow</button>{/if}
+  {#if manual}<Button variant="primary" disabled={!workflow.active || workflow.status !== 'valid'} onclick={() => (dispatchOpen = true)}><Play size={13} />Run workflow</Button>{/if}
 </header>
 
 <div class="definition">
@@ -72,7 +73,7 @@
 
 <Modal open={dispatchOpen} title="Run {workflow.name}?" description="Marl will use the workflow definition at the current indexed head of {workflow.branch}." onClose={() => !busy && (dispatchOpen = false)}>
   {#snippet children()}<div class="dispatch-ref"><GitBranch size={13} /><span>{workflow.branch}</span><code>{workflow.commit.slice(0, 7)}</code></div>{/snippet}
-  {#snippet actions()}<button class="secondary" disabled={busy} onclick={() => (dispatchOpen = false)}>Cancel</button><button class="confirm" disabled={busy} onclick={dispatch}>{busy ? 'Starting…' : 'Run workflow'}</button>{/snippet}
+  {#snippet actions()}<Button disabled={busy} onclick={() => (dispatchOpen = false)}>Cancel</Button><Button variant="primary" loading={busy} onclick={dispatch}>Run workflow</Button>{/snippet}
 </Modal>
 
 <style>

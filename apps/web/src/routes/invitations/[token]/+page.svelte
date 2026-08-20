@@ -2,6 +2,8 @@
   import { page } from '$app/stores';
   import CheckCircle2 from 'lucide-svelte/icons/circle-check-big';
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
+  import Button from '$lib/components/Button.svelte';
+  import LinkButton from '$lib/components/LinkButton.svelte';
   import { api, MarlApiError } from '$lib/api';
 
   let busy = $state(false);
@@ -18,7 +20,7 @@
 </script>
 
 <AuthShell title={organization ? `Welcome to ${organization.name}` : 'Join an organization'} description={organization ? 'Your membership is active.' : 'Accept this invitation with the exact email address it was sent to.'}>
-  <div class="invitation">{#if organization}<CheckCircle2 size={28} /><a href={`/organizations/${organization.slug}/settings/access`}>Open {organization.name}</a>{:else}{#if error}<p>{error}</p>{/if}{#if needsSignIn}<a class="primary" href={`/sign-in?returnTo=${encodeURIComponent($page.url.pathname)}`}>Sign in to continue</a>{:else}<button class="primary" disabled={busy} onclick={accept}>Accept invitation</button>{/if}{/if}</div>
+  <div class="invitation">{#if organization}<CheckCircle2 size={28} /><LinkButton block variant="primary" href={`/organizations/${organization.slug}/settings/access`}>Open {organization.name}</LinkButton>{:else}{#if error}<p>{error}</p>{/if}{#if needsSignIn}<LinkButton block variant="primary" href={`/sign-in?returnTo=${encodeURIComponent($page.url.pathname)}`}>Sign in to continue</LinkButton>{:else}<Button block variant="primary" loading={busy} onclick={accept}>Accept invitation</Button>{/if}{/if}</div>
 </AuthShell>
 
-<style>.invitation{display:grid;justify-items:center;gap:14px;color:var(--success)}.invitation p{width:100%;padding:9px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:10px}.invitation button,.invitation a{display:flex;width:100%;height:38px;align-items:center;justify-content:center;border:1px solid var(--brand);border-radius:6px;background:var(--brand);color:#fff;cursor:pointer;font-size:11px;font-weight:650;text-decoration:none}</style>
+<style>.invitation{display:grid;justify-items:center;gap:14px;color:var(--success)}.invitation p{width:100%;padding:9px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:10px}</style>

@@ -3,6 +3,8 @@
   import ArrowLeft from 'lucide-svelte/icons/arrow-left';
   import BookOpen from 'lucide-svelte/icons/book-open';
   import RefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import Button from '$lib/components/Button.svelte';
+  import LinkButton from '$lib/components/LinkButton.svelte';
 
   const status = $derived($page.status);
   const copy = $derived.by(() => {
@@ -25,11 +27,11 @@
   <img class="illustration" src={copy.image} alt="" width="960" height="640" fetchpriority="high" />
   <h1>{copy.title}</h1>
   <div class="actions">
-    <button onclick={goBack}><ArrowLeft size={14} />Go back</button>
-    {#if status >= 500}<button onclick={() => location.reload()}><RefreshCw size={14} />Try again</button>{:else}<a href="/repositories"><BookOpen size={14} />Repositories</a>{/if}
+    <Button onclick={goBack}><ArrowLeft size={14} />Go back</Button>
+    {#if status >= 500}<Button onclick={() => location.reload()}><RefreshCw size={14} />Try again</Button>{:else}<LinkButton href="/repositories"><BookOpen size={14} />Repositories</LinkButton>{/if}
   </div>
 </section>
 
 <style>
-  .error-page{display:flex;min-height:calc(100vh - 52px);flex-direction:column;align-items:center;justify-content:center;padding:46px 24px 96px;text-align:center}.illustration{width:min(430px,88vw);height:auto;margin-bottom:-8px}h1{margin:0;color:var(--text-strong);font-size:26px;font-weight:660;letter-spacing:-.035em}.actions{display:flex;gap:7px;margin-top:24px}.actions button,.actions a{display:inline-flex;height:34px;align-items:center;gap:6px;padding:0 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:10px;font-weight:620;text-decoration:none}.actions button:hover,.actions a:hover{border-color:var(--border-strong);background:var(--surface-muted);color:var(--text-strong)}
+  .error-page{display:flex;min-height:calc(100vh - 52px);flex-direction:column;align-items:center;justify-content:center;padding:46px 24px 96px;text-align:center}.illustration{width:min(430px,88vw);height:auto;margin-bottom:-8px}h1{margin:0;color:var(--text-strong);font-size:26px;font-weight:660;letter-spacing:-.035em}.actions{display:flex;gap:7px;margin-top:24px}
 </style>

@@ -4,6 +4,7 @@
   import type { RepositorySummary } from '@marl/contracts';
   import Lock from 'lucide-svelte/icons/lock';
   import { api } from '$lib/api';
+  import Button from '$lib/components/Button.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import Time from '$lib/components/Time.svelte';
@@ -70,9 +71,9 @@
       </div>
     {/each}
   </section>
-  {#if nextCursor}<button class="load-more" disabled={loadingMore} onclick={loadMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>{/if}
+  {#if nextCursor}<Button class="load-more" loading={loadingMore} onclick={loadMore}>Load more</Button>{/if}
 </main>
 
 <style>
-  .page{width:min(1080px,calc(100% - 56px));margin:0 auto;padding:48px 0 72px}.row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:14px;min-height:88px;padding:12px 5px;border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none}.row:hover{background:var(--surface-hover)}.main{min-width:0}.main strong{display:inline-flex;align-items:center;gap:5px;color:var(--text-strong);font-size:14px;font-weight:650}.main strong i{color:var(--text-muted);font-style:normal;font-weight:500}.main strong :global(svg){color:var(--text-faint)}.main p{overflow:hidden;margin:5px 0;color:var(--text);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.row :global(time){font-size:12px}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.load-more{display:block;height:36px;margin:18px auto 0;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}}
+  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.list{display:grid;gap:4px}.row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:14px;min-height:82px;padding:10px 12px;border-radius:8px;color:inherit;text-decoration:none;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.main{min-width:0}.main strong{display:inline-flex;align-items:center;gap:5px;color:var(--text-strong);font-size:13px;font-weight:650}.main strong i{color:var(--text-muted);font-style:normal;font-weight:500}.main strong :global(svg){color:var(--text-faint)}.main p{overflow:hidden;margin:5px 0;color:var(--text);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.row :global(time){font-size:10px}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}.row{padding-inline:6px}}
 </style>

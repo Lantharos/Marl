@@ -13,6 +13,7 @@
   import Terminal from 'lucide-svelte/icons/terminal';
   import { api, apiTextCursor, MarlApiError } from '$lib/api';
   import Time from '$lib/components/Time.svelte';
+  import Button from '$lib/components/Button.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -153,9 +154,9 @@
     <div><h1>{run.name}</h1><p>Run #{run.number} · {run.trigger}{run.actor ? ` by ${run.actor}` : ''}</p></div>
   </div>
   {#if run.state === 'queued' || run.state === 'running'}
-    <button class="action" disabled={actionBusy} onclick={() => action('cancel')}><Square size={14} />Cancel</button>
+    <Button loading={actionBusy} onclick={() => action('cancel')}><Square size={14} />Cancel</Button>
   {:else}
-    <button class="action" disabled={actionBusy} onclick={() => action('retry')}><RotateCcw size={14} />Run again</button>
+    <Button loading={actionBusy} onclick={() => action('retry')}><RotateCcw size={14} />Run again</Button>
   {/if}
 </header>
 
