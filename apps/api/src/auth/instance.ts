@@ -52,7 +52,7 @@ export function createAuth(env: Env, request: Request) {
       freshAge: 60 * 15
     },
     rateLimit: {
-      enabled: true,
+      enabled: env.ENVIRONMENT !== 'development',
       storage: 'database',
       modelName: 'rateLimit',
       fields: { key: 'key', count: 'count', lastRequest: 'lastRequest' },
@@ -60,6 +60,7 @@ export function createAuth(env: Env, request: Request) {
       max: 100,
       customRules: {
         '/sign-in/email': { window: 60, max: 5 },
+        '/sign-in/username': { window: 60, max: 5 },
         '/sign-up/email': { window: 60, max: 5 },
         '/forget-password': { window: 300, max: 3 },
         '/sign-in/passkey': { window: 60, max: 10 },
@@ -76,7 +77,10 @@ export function createAuth(env: Env, request: Request) {
     },
     advanced: {
       cookiePrefix: 'marl',
-      useSecureCookies: env.ENVIRONMENT !== 'development'
+      useSecureCookies: env.ENVIRONMENT !== 'development',
+      ipAddress: {
+        ipAddressHeaders: env.ENVIRONMENT === 'development' ? ['x-forwarded-for'] : ['cf-connecting-ip']
+      }
     },
     plugins: [
       passkey({ rpID: publicUrl.hostname, rpName: 'Marl', origin: publicUrl.origin }),
