@@ -12,6 +12,7 @@ import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitInde
 import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
+import { commitAuthorIdSql } from './commit-authors';
 
 type RepositoryRow = RepositorySummary & { organizationId: string; defaultBranch: string; archivedAt: string | null; deletionScheduledAt: string | null };
 
@@ -426,7 +427,7 @@ export async function listCommits(env: Env, principal: Principal, owner: string,
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
   const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
   const values = cursor ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [resolved.id, repo.id, repo.id, limit + 1];
-  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ordered AS (SELECT commits.id,substr(commits.id,1,7) AS shortId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt,commits.signature_status AS signatureStatus,COALESCE((SELECT users.avatar_url FROM users WHERE commits.author_email!='' AND users.email=commits.author_email COLLATE NOCASE LIMIT 1),(SELECT users.avatar_url FROM users WHERE users.handle=commits.author_name COLLATE NOCASE OR users.display_name=commits.author_name COLLATE NOCASE LIMIT 1)) AS authorAvatarUrl,COUNT(*) OVER () AS total FROM commits JOIN history ON history.id=commits.id WHERE commits.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`).bind(...values).all<{ id: string; shortId: string; title: string; author: string; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string; total: number }>();
+  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,commit_rows.signature_status AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`).bind(...values).all<{ id: string; shortId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string; total: number }>();
   const total = result.results[0]?.total ?? 0;
   const page = pageResult(result.results, limit, (commit) => ({ value: commit.authoredAt, id: commit.id }));
   return json({ commits: page.items.map(({ total: _, ...commit }) => commit), total, nextCursor: page.nextCursor });
@@ -436,14 +437,13 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
-  const indexed = await env.DB.prepare('SELECT id,signature_status AS signatureStatus FROM commits WHERE repository_id=? AND id=?').bind(repo.id, commitId).first<{ id: string; signatureStatus: string }>();
+  const indexed = await env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=?) SELECT commit_row.id,commit_row.signature_status AS signatureStatus,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repo.id, commitId).first<{ id: string; signatureStatus: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null }>();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
   const response = await requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   const commit = await response.json().catch(() => null) as { author?: string; authorEmail?: string } | null;
   if (!commit || typeof commit.author !== 'string') return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
-  const user = await env.DB.prepare(`SELECT avatar_url AS avatarUrl FROM users WHERE (? != '' AND email=? COLLATE NOCASE) OR handle=? COLLATE NOCASE OR display_name=? COLLATE NOCASE ORDER BY CASE WHEN ? != '' AND email=? COLLATE NOCASE THEN 0 ELSE 1 END LIMIT 1`).bind(commit.authorEmail ?? '', commit.authorEmail ?? '', commit.author, commit.author, commit.authorEmail ?? '', commit.authorEmail ?? '').first<{ avatarUrl: string | null }>();
-  return json({ ...commit, signatureStatus: indexed.signatureStatus, authorAvatarUrl: user?.avatarUrl ?? null });
+  return json({ ...commit, signatureStatus: indexed.signatureStatus, authorHandle: indexed.authorHandle, authorDisplayName: indexed.authorDisplayName, authorAvatarUrl: indexed.authorAvatarUrl });
 }
 
 export async function readCommitPatch(env: Env, principal: Principal, owner: string, name: string, commitId: string, url: URL): Promise<Response> {
@@ -538,8 +538,8 @@ function contentType(path: string) {
   return 'application/octet-stream';
 }
 
-async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string } | null> {
-  return env.DB.prepare(`SELECT commits.id,commits.tree_id AS treeId,commits.title,commits.author_name AS author,commits.authored_at AS authoredAt,commits.signature_status AS signatureStatus,COALESCE((SELECT users.avatar_url FROM users WHERE commits.author_email!='' AND users.email=commits.author_email COLLATE NOCASE LIMIT 1),(SELECT users.avatar_url FROM users WHERE users.handle=commits.author_name COLLATE NOCASE OR users.display_name=commits.author_name COLLATE NOCASE LIMIT 1)) AS authorAvatarUrl FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string }>();
+async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string } | null> {
+  return env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)) SELECT commit_row.id,commit_row.tree_id AS treeId,commit_row.title,commit_row.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_row.authored_at AS authoredAt,commit_row.signature_status AS signatureStatus FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string }>();
 }
 
 function placeholders(values: readonly unknown[]) {

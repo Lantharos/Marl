@@ -110,7 +110,8 @@ export interface PullRequestSummary {
   repository: Pick<RepositorySummary, 'owner' | 'name'>;
   title: string;
   author: string;
-  authorAvatar?: string;
+  authorDisplayName: string;
+  authorAvatar?: string | null;
   sourceBranch: string;
   sourceRepository?: { owner: string; name: string };
   targetBranch: string;
@@ -143,7 +144,7 @@ export interface PullRequestDetail extends PullRequestSummary {
     conversationsPass: boolean;
     unresolvedConversations: number;
   };
-  commits: Array<{ id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }>;
+  commits: Array<{ id: string; shortId: string; title: string; author: string; authorHandle?: string | null; authorDisplayName?: string | null; authorAvatarUrl?: string | null; authoredAt: string; signatureStatus: string }>;
   comments: PullRequestComment[];
   reviews: PullRequestReview[];
   checks: CheckSummary[];
@@ -202,6 +203,7 @@ export type PullRequestEventKind =
 export interface PullRequestEvent {
   id: Identifier;
   actor: string;
+  actorDisplayName: string;
   kind: PullRequestEventKind;
   details: Record<string, string>;
   createdAt: string;
@@ -225,6 +227,7 @@ export interface PullRequestComment {
   id: Identifier;
   authorId: Identifier;
   author: string;
+  authorDisplayName: string;
   authorAvatarUrl?: string | null;
   body: string;
   createdAt: string;
@@ -236,6 +239,7 @@ export interface PullRequestComment {
 export interface PullRequestReview {
   id: Identifier;
   author: string;
+  authorDisplayName: string;
   authorAvatarUrl?: string | null;
   state: 'commented' | 'approved' | 'changes_requested';
   body: string;
@@ -254,7 +258,7 @@ export interface ReviewThread {
   createdAt: string;
   outdated: boolean;
   resolved: boolean;
-  comments: Array<{ id: Identifier; authorId: Identifier; author: string; authorAvatarUrl?: string | null; body: string; createdAt: string; updatedAt: string; deleted: boolean; canEdit: boolean }>;
+  comments: Array<{ id: Identifier; authorId: Identifier; author: string; authorDisplayName: string; authorAvatarUrl?: string | null; body: string; createdAt: string; updatedAt: string; deleted: boolean; canEdit: boolean }>;
 }
 
 export interface CheckSummary {

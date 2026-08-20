@@ -4,5 +4,5 @@ import { genericOAuthClient, twoFactorClient, usernameClient } from 'better-auth
 
 export const authClient = createAuthClient({
   basePath: '/api/auth',
-  plugins: [passkeyClient(), twoFactorClient({ twoFactorPage: '/two-factor' }), genericOAuthClient(), usernameClient()]
+  plugins: [passkeyClient(), twoFactorClient(), genericOAuthClient(), usernameClient()]
 });

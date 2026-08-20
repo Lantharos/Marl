@@ -26,9 +26,13 @@
     busy = true; error = '';
     try {
       const result = identity.includes('@')
-        ? await authClient.signIn.email({ email: identity, password, callbackURL: returnTo })
-        : await authClient.signIn.username({ username: identity, password, callbackURL: returnTo });
+        ? await authClient.signIn.email({ email: identity, password })
+        : await authClient.signIn.username({ username: identity, password });
       if (result.error) { error = result.error.message || 'Sign in failed.'; return; }
+      if (result.data && 'twoFactorRedirect' in result.data && result.data.twoFactorRedirect) {
+        await goto(`/two-factor?returnTo=${encodeURIComponent(returnTo)}`);
+        return;
+      }
       await finish();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Sign in failed.';

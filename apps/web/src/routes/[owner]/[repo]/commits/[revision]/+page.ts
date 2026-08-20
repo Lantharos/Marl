@@ -7,6 +7,8 @@ export type CommitSummary = {
   shortId: string;
   title: string;
   author: string;
+  authorHandle?: string | null;
+  authorDisplayName?: string | null;
   authorAvatarUrl?: string | null;
   authoredAt: string;
   signatureStatus: string;

@@ -8,6 +8,8 @@ export type CommitDetail = {
   title: string;
   body: string;
   author: string;
+  authorHandle?: string | null;
+  authorDisplayName?: string | null;
   authorEmail: string;
   authorAvatarUrl?: string | null;
   authoredAt: string;
