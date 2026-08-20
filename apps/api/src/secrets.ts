@@ -42,7 +42,7 @@ async function handleSecrets(request: Request, env: Env, principal: Principal, s
     const rows = await env.DB.prepare('SELECT id,name,created_at AS createdAt,updated_at AS updatedAt FROM ci_secrets WHERE organization_id=? AND repository_id IS ? ORDER BY name').bind(scope.organizationId, scope.repositoryId).all();
     return json({ organizationName: scope.organizationName, organizationAvatarUrl: scope.organizationAvatarUrl, secrets: rows.results });
   }
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity before changing secrets.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before changing secrets.');
   const name = requestedName ? decodeURIComponent(requestedName).toUpperCase() : '';
   if (!validName(name)) return problem(422, 'invalid_secret_name', 'Secret names must use uppercase letters, digits, and underscores.');
   if (request.method === 'PUT') {

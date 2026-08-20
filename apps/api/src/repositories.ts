@@ -335,7 +335,7 @@ export async function detachRepositoryFork(request: Request, env: Env, principal
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!repository.forkedFromRepositoryId) return problem(409, 'not_a_fork', 'This repository is not part of a fork network.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before detaching this fork.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before detaching this fork.');
   await env.DB.batch([
     env.DB.prepare(`WITH RECURSIVE descendants(id) AS (SELECT ? UNION ALL SELECT repositories.id FROM repositories JOIN descendants ON repositories.forked_from_repository_id=descendants.id) UPDATE repositories SET fork_root_repository_id=? WHERE id IN (SELECT id FROM descendants)`).bind(repository.id, repository.id),
     env.DB.prepare('UPDATE repositories SET forked_from_repository_id=NULL,fork_root_repository_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(repository.id),
@@ -376,7 +376,7 @@ export async function updateRepositorySettings(request: Request, env: Env, princ
 export async function renameRepository(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before renaming this repository.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before renaming this repository.');
   const body = await readJson(request, renameRepositoryBody);
   if (!body || !validSlug(body.name)) return problem(422, 'invalid_repository_name', 'Repository names must be URL-safe slugs.');
   const moved = await relocateStorage(env, owner, name, owner, body.name);
@@ -389,7 +389,7 @@ export async function renameRepository(request: Request, env: Env, principal: Pr
 export async function transferRepository(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before transferring this repository.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before transferring this repository.');
   const body = await readJson(request, transferRepositoryBody);
   if (!body || !validSlug(body.owner)) return problem(422, 'invalid_owner', 'Choose a valid destination owner.');
   const destination = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organizations.slug=? COLLATE NOCASE AND organization_members.user_id=? AND organization_members.role='owner'`).bind(body.owner, principal.id).first<{ id: string }>();
@@ -404,7 +404,7 @@ export async function transferRepository(request: Request, env: Env, principal: 
 export async function scheduleRepositoryDeletion(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const access = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before deleting this repository.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before deleting this repository.');
   const body = await readJson(request, deleteRepositoryBody);
   if (!body || body.confirmation !== `${owner}/${name}`) return problem(422, 'confirmation_mismatch', 'Type the full repository name to confirm deletion.');
   const deletionScheduledAt = new Date(Date.now() + 30 * 86400000).toISOString();

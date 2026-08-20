@@ -10,9 +10,7 @@
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
-  import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
   import Button from '$lib/components/Button.svelte';
-  import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import ImageUploadButton from '$lib/components/ImageUploadButton.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
@@ -44,7 +42,6 @@
   let generalState = $state<'idle' | 'saving' | 'saved'>('idle');
   let visibilityState = $state<'idle' | 'saved'>('idle');
   let error = $state('');
-  const confirmation = new IdentityConfirmation();
   const ownerOptions = $derived(data.organizations.map((organization: Organization) => ({ value: organization.slug, label: organization.slug, description: organization.name })));
   const branchOptions = $derived(data.branches.map((branch: BranchOption) => ({ value: branch.name, label: branch.name })));
   const submittedNewName = $derived(completeRepositoryName(newName));
@@ -180,7 +177,7 @@
 
 <Modal open={dialog === 'detach'} title="Detach this fork?" description="This repository will become the root of an independent fork network." onClose={() => (dialog = null)}>
   {#snippet children()}<div class="modal-summary"><GitFork size={18} /><span><strong>{owner}/{repo}</strong><small>Code, branches, stars, and repository history will be preserved.</small></span></div>{/snippet}
-  {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="danger-soft" loading={busy === 'detach' || confirmation.busy} onclick={() => confirmation.request(detachFork)}>Detach fork</Button>{/snippet}
+  {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="danger-soft" loading={busy === 'detach'} onclick={detachFork}>Detach fork</Button>{/snippet}
 </Modal>
 
 <Modal open={dialog === 'delete'} title="Delete repository?" description="This hides the repository immediately. Permanent deletion is scheduled for 30 days from now." onClose={() => (dialog = null)}>
@@ -188,7 +185,6 @@
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="danger" disabled={busy === 'delete' || deleteConfirmation !== `${owner}/${repo}`} onclick={scheduleDeletion}>Delete repository</Button>{/snippet}
 </Modal>
 
-<IdentityConfirmationModal open={confirmation.open} method={confirmation.method} description="Confirm that you want to detach this fork." onClose={confirmation.close} onVerified={confirmation.continue} />
 
 <style>
   .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle);margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}

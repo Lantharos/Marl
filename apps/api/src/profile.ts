@@ -22,7 +22,7 @@ export async function listSessions(env: Env, principal: Principal) {
 
 export async function updateProfile(request: Request, env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Profiles can only be managed from a browser session.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before changing your profile.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before changing your profile.');
   const body = await readJson(request, profileBody);
   if (!body) return problem(422, 'invalid_profile', 'Profile details are invalid.');
   const displayName = body.displayName.trim();

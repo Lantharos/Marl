@@ -5,36 +5,38 @@ export class IdentityConfirmation {
   method = $state<Method | null>(null);
   busy = $state(false);
   error = $state('');
-  private pendingAction: (() => Promise<void>) | null = null;
+  description = $state('Confirm this sensitive account change before continuing.');
+  private finish: ((confirmed: boolean) => void) | null = null;
 
-  request = async (action: () => Promise<void>) => {
-    if (this.busy) return;
+  confirm = async (description: string) => {
+    if (this.busy || this.open) return false;
     this.busy = true;
     this.error = '';
+    this.description = description;
     try {
       const response = await fetch('/api/auth/step-up/method', { headers: { accept: 'application/json' } });
       const result = await response.json().catch(() => null) as { method?: Method; message?: string } | null;
       if (!response.ok || !result?.method) throw new Error(result?.message || 'Identity confirmation is not available.');
       this.method = result.method;
-      this.pendingAction = action;
       this.open = true;
+      return await new Promise<boolean>((resolve) => (this.finish = resolve));
     } catch (cause) {
       this.error = cause instanceof Error ? cause.message : 'Identity confirmation is not available.';
+      return false;
     } finally {
       this.busy = false;
     }
   };
 
   close = () => {
+    this.finish?.(false);
+    this.finish = null;
     this.open = false;
     this.method = null;
-    this.pendingAction = null;
   };
 
-  continue = async () => {
-    const action = this.pendingAction;
-    this.pendingAction = null;
-    this.method = null;
-    if (action) await action();
+  continue = () => {
+    this.finish?.(true);
+    this.finish = null;
   };
 }

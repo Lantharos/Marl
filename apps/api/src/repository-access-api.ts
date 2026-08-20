@@ -20,7 +20,8 @@ export async function getRepositoryAccess(env: Env, principal: Principal, owner:
 
 export async function putRepositoryCollaborator(request: Request, env: Env, principal: Principal, owner: string, name: string) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
-  if (!repository || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity as a repository administrator.');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as a repository administrator.');
   const body = await readJson(request, repositoryCollaboratorBody);
   if (!body || body.userId === principal.id) return problem(422, 'invalid_collaborator', 'Collaborator settings are invalid.');
   const user = await env.DB.prepare('SELECT id,handle FROM users WHERE id=?').bind(body.userId).first<{ id: string; handle: string }>();
@@ -34,7 +35,8 @@ export async function putRepositoryCollaborator(request: Request, env: Env, prin
 
 export async function deleteRepositoryCollaborator(request: Request, env: Env, principal: Principal, owner: string, name: string, userId: string) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
-  if (!repository || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity as a repository administrator.');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as a repository administrator.');
   await env.DB.batch([
     env.DB.prepare('DELETE FROM repository_collaborators WHERE repository_id=? AND user_id=?').bind(repository.id, userId),
     auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.collaborator.removed', subjectType: 'user', subjectId: userId, details: {} })
@@ -44,7 +46,8 @@ export async function deleteRepositoryCollaborator(request: Request, env: Env, p
 
 export async function putRepositoryTeamGrant(request: Request, env: Env, principal: Principal, owner: string, name: string) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
-  if (!repository || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity as a repository administrator.');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as a repository administrator.');
   const body = await readJson(request, repositoryTeamGrantBody);
   if (!body) return problem(422, 'invalid_team_grant', 'Team access settings are invalid.');
   const team = await env.DB.prepare('SELECT id,name FROM teams WHERE id=? AND organization_id=?').bind(body.teamId, repository.organizationId).first<{ id: string; name: string }>();
@@ -58,7 +61,8 @@ export async function putRepositoryTeamGrant(request: Request, env: Env, princip
 
 export async function deleteRepositoryTeamGrant(request: Request, env: Env, principal: Principal, owner: string, name: string, teamId: string) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
-  if (!repository || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity as a repository administrator.');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as a repository administrator.');
   await env.DB.batch([
     env.DB.prepare('DELETE FROM repository_team_grants WHERE repository_id=? AND team_id=?').bind(repository.id, teamId),
     auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.team_access.removed', subjectType: 'team', subjectId: teamId, details: {} })

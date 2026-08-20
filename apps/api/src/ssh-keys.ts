@@ -34,7 +34,7 @@ export async function listSshKeys(env: Env, principal: Principal) {
 }
 
 export async function createSshKey(request: Request, env: Env, principal: Principal) {
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before adding an SSH key.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before adding an SSH key.');
   const body = await readJson(request, sshKeyBody);
   const key = body ? await normalizeKey(body.publicKey) : null;
   if (!body || !key) return problem(422, 'invalid_ssh_key', 'Use a valid OpenSSH public key.');
@@ -49,7 +49,7 @@ export async function createSshKey(request: Request, env: Env, principal: Princi
 }
 
 export async function deleteSshKey(request: Request, env: Env, principal: Principal, id: string) {
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before removing an SSH key.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before removing an SSH key.');
   const key = await env.DB.prepare('SELECT fingerprint FROM ssh_keys WHERE id=? AND user_id=?').bind(id, principal.id).first<{ fingerprint: string }>();
   if (!key) return problem(404, 'ssh_key_not_found', 'SSH key not found.');
   await env.DB.batch([

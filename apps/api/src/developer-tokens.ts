@@ -14,7 +14,7 @@ export async function listPersonalAccessTokens(env: Env, principal: Principal) {
 
 export async function createPersonalAccessToken(request: Request, env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Developer tokens can only be managed from a browser session.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before creating a developer token.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before creating a developer token.');
   const body = await readJson(request, personalAccessTokenBody);
   if (!body) return problem(422, 'invalid_token', 'Developer token settings are invalid.');
   const scopes = [...new Set(body.scopes)];
@@ -35,7 +35,7 @@ export async function createPersonalAccessToken(request: Request, env: Env, prin
 
 export async function revokePersonalAccessToken(request: Request, env: Env, principal: Principal, tokenId: string) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Developer tokens can only be managed from a browser session.');
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before revoking a developer token.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before revoking a developer token.');
   await env.DB.prepare('UPDATE personal_access_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND revoked_at IS NULL').bind(tokenId, principal.id).run();
   return json({ revoked: true });
 }

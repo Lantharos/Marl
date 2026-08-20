@@ -60,7 +60,8 @@ export async function getOrganizationAccess(env: Env, principal: Principal, slug
 
 export async function updateOrganization(request: Request, env: Env, principal: Principal, slug: string) {
   const organization = await organizationBySlug(env, slug);
-  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner')) || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_owner_session_required', 'Confirm your identity as an organization owner.');
+  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner'))) return problem(404, 'organization_not_found', 'Organization not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as an organization owner.');
   const body = await readJson(request, organizationSettingsBody);
   if (!body) return problem(422, 'invalid_organization', 'Organization settings are invalid.');
   const name = body.name?.trim() ?? organization.name;
@@ -136,7 +137,8 @@ export async function acceptOrganizationInvitation(request: Request, env: Env, p
 
 export async function updateOrganizationMember(request: Request, env: Env, principal: Principal, slug: string, userId: string) {
   const organization = await organizationBySlug(env, slug);
-  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner')) || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_owner_session_required', 'Confirm your identity as an organization owner.');
+  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner'))) return problem(404, 'organization_not_found', 'Organization not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as an organization owner.');
   const body = await readJson(request, organizationMemberBody);
   if (!body) return problem(422, 'invalid_member_role', 'Member role is invalid.');
   await env.DB.batch([
@@ -148,7 +150,8 @@ export async function updateOrganizationMember(request: Request, env: Env, princ
 
 export async function removeOrganizationMember(request: Request, env: Env, principal: Principal, slug: string, userId: string) {
   const organization = await organizationBySlug(env, slug);
-  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner')) || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_owner_session_required', 'Confirm your identity as an organization owner.');
+  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner'))) return problem(404, 'organization_not_found', 'Organization not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as an organization owner.');
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM organization_members WHERE organization_id=? AND user_id=? AND role!='owner'`).bind(organization.id, userId),
     auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.member.removed', subjectType: 'user', subjectId: userId, details: {} })
@@ -158,7 +161,8 @@ export async function removeOrganizationMember(request: Request, env: Env, princ
 
 export async function revokeOrganizationInvitation(request: Request, env: Env, principal: Principal, slug: string, invitationId: string) {
   const organization = await organizationBySlug(env, slug);
-  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'admin')) || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity as an organization administrator.');
+  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'admin'))) return problem(404, 'organization_not_found', 'Organization not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as an organization administrator.');
   await env.DB.batch([
     env.DB.prepare('UPDATE organization_invitations SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND organization_id=? AND accepted_at IS NULL AND revoked_at IS NULL').bind(invitationId, organization.id),
     auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.invitation.revoked', subjectType: 'invitation', subjectId: invitationId, details: {} })
@@ -206,7 +210,8 @@ export async function removeTeamMember(request: Request, env: Env, principal: Pr
 
 export async function deleteTeam(request: Request, env: Env, principal: Principal, slug: string, teamId: string) {
   const organization = await organizationBySlug(env, slug);
-  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'admin')) || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity as an organization administrator.');
+  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'admin'))) return problem(404, 'organization_not_found', 'Organization not found.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as an organization administrator.');
   const team = await env.DB.prepare('SELECT id,slug FROM teams WHERE id=? AND organization_id=?').bind(teamId, organization.id).first<{ id: string; slug: string }>();
   if (!team) return problem(404, 'team_not_found', 'Team not found.');
   await env.DB.batch([

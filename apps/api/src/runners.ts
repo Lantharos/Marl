@@ -31,7 +31,7 @@ export async function authenticateRunner(request: Request, env: Env): Promise<Ru
 }
 
 export async function createEnrollment(request: Request, env: Env, principal: Principal): Promise<Response> {
-  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_admin_session_required', 'Confirm your identity before connecting a runner.');
+  if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before connecting a runner.');
   const body = await readJson(request, runnerEnrollmentBody);
   if (!body || typeof body.organization !== 'string') return problem(422, 'organization_required', 'Choose an organization for this runner.');
   const organization = await env.DB.prepare(`SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role IN ('owner','admin')`).bind(body.organization, principal.id).first<{ id: string }>();

@@ -4,9 +4,7 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/Button.svelte';
-  import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import Time from '$lib/components/Time.svelte';
-  import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
   import type { PageData } from './$types';
 
   type SshKey = { id: string; name: string; fingerprint: string; lastUsedAt: string | null; createdAt: string };
@@ -16,7 +14,6 @@
   let publicKey = $state('');
   let busy = $state(false);
   let error = $state('');
-  const confirmation = new IdentityConfirmation();
 
   async function addKey() {
     if (busy || !name.trim() || !publicKey.trim()) return;
@@ -52,18 +49,17 @@
 
 <svelte:head><title>SSH keys · Marl</title></svelte:head>
 <header class="page-head"><h2>SSH keys</h2><p>Use public keys to clone, push, and verify commits signed with your Marl identity.</p></header>
-<form onsubmit={(event) => { event.preventDefault(); void confirmation.request(addKey); }}>
+<form onsubmit={(event) => { event.preventDefault(); void addKey(); }}>
   <label><span>Name</span><input bind:value={name} placeholder="Work laptop" autocomplete="off" /></label>
   <label><span>Public key</span><textarea bind:value={publicKey} placeholder="ssh-ed25519 AAAA…" rows="3"></textarea></label>
   <Button type="submit" variant="primary" disabled={busy || !name.trim() || !publicKey.trim()}>{busy ? 'Adding…' : 'Add SSH key'}</Button>
 </form>
-{#if error || confirmation.error}<p class="error" role="alert">{error || confirmation.error}</p>{/if}
+{#if error}<p class="error" role="alert">{error}</p>{/if}
 <div class="key-list">
   {#each sshKeys as key}
-    <article><span class="key-icon"><KeyRound size={17} /></span><div><strong>{key.name}</strong><code>{key.fingerprint}</code><small>Added <Time value={key.createdAt} />{#if key.lastUsedAt} · last used <Time value={key.lastUsedAt} />{:else} · never used{/if}</small></div><Button variant="danger-soft" icon aria-label={`Remove ${key.name}`} onclick={() => confirmation.request(() => removeKey(key))}><Trash2 size={15} /></Button></article>
+    <article><span class="key-icon"><KeyRound size={17} /></span><div><strong>{key.name}</strong><code>{key.fingerprint}</code><small>Added <Time value={key.createdAt} />{#if key.lastUsedAt} · last used <Time value={key.lastUsedAt} />{:else} · never used{/if}</small></div><Button variant="danger-soft" icon aria-label={`Remove ${key.name}`} onclick={() => removeKey(key)}><Trash2 size={15} /></Button></article>
   {:else}<div class="empty"><KeyRound size={24} /><strong>No SSH keys</strong><p>Add a public key to use the SSH clone URL shown on repositories.</p></div>{/each}
 </div>
-<IdentityConfirmationModal open={confirmation.open} method={confirmation.method} onClose={confirmation.close} onVerified={confirmation.continue} />
 
 <style>
   .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle)}h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}form{display:grid;gap:15px;padding:24px 0;border-bottom:1px solid var(--border-subtle)}label{display:grid;gap:7px}label span{color:var(--text-strong);font-size:12px;font-weight:630}input,textarea{box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font:inherit;font-size:13px}input{height:38px}textarea{min-height:78px;resize:vertical;font-family:var(--font-mono)}input:focus,textarea:focus{border-color:var(--brand)}form :global(.button){justify-self:start}.error{padding:10px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:12px}.key-list article{display:grid;grid-template-columns:38px minmax(0,1fr) 38px;align-items:center;gap:11px;min-height:78px;border-bottom:1px solid var(--border-subtle)}.key-icon{display:grid;width:34px;height:34px;color:var(--text-muted);place-items:center}.key-list strong,.key-list code,.key-list small{display:block}.key-list strong{color:var(--text-strong);font-size:13px}.key-list code{overflow:hidden;margin-top:4px;color:var(--text);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.key-list small{margin-top:4px;color:var(--text-muted);font-size:11px}.empty{padding:52px 0;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:8px;color:var(--text-strong);font-size:14px}.empty p{font-size:12px}
