@@ -10,7 +10,7 @@ import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositoryOverviewBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { synchronizePullsForBranchUpdates } from './pull-synchronization';
 import { queuePushWorkflows } from './workflows';
-import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
+import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter, repositoryPermissions } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
 import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 
@@ -195,6 +195,7 @@ export async function getRepository(env: Env, principal: Principal, owner: strin
   const social = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred,upstream_organizations.slug AS upstreamOwner,upstream.name AS upstreamName FROM repositories LEFT JOIN repositories AS upstream ON upstream.id=repositories.forked_from_repository_id LEFT JOIN organizations AS upstream_organizations ON upstream_organizations.id=upstream.organization_id WHERE repositories.id=?`).bind(principal.id, repo.id).first<{ starCount: number; forkCount: number; starred: number; upstreamOwner: string | null; upstreamName: string | null }>();
   return json({ repository: {
     ...visible,
+    permissions: repositoryPermissions(repo.role, true),
     starred: Boolean(social?.starred),
     starCount: Number(social?.starCount ?? 0),
     forkCount: Number(social?.forkCount ?? 0),

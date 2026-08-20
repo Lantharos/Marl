@@ -1,3 +1,4 @@
+import type { RepositoryPermissions } from '@marl/contracts';
 import type { Principal } from './auth';
 import type { Env } from './platform';
 
@@ -99,6 +100,11 @@ function resolvedAccess(row: RepositoryRow): RepositoryAccess {
 
 function roleWeight(role: RepositoryRole | null) {
   return role ? ['read', 'triage', 'write', 'maintain', 'admin'].indexOf(role) + 1 : 0;
+}
+
+export function repositoryPermissions(role: RepositoryRole | null, read = Boolean(role)): RepositoryPermissions {
+  const weight = roleWeight(role);
+  return { read, triage: weight >= 2, push: weight >= 3, maintain: weight >= 4, admin: weight >= 5 };
 }
 
 function roleFromWeight(weight: number): RepositoryRole | null {

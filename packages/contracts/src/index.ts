@@ -35,6 +35,15 @@ export interface RepositorySummary {
   starCount?: number;
   forkCount?: number;
   upstream?: { owner: string; name: string } | null;
+  permissions?: RepositoryPermissions;
+}
+
+export interface RepositoryPermissions {
+  read: boolean;
+  triage: boolean;
+  push: boolean;
+  maintain: boolean;
+  admin: boolean;
 }
 
 export interface PublicProfileRepository extends RepositorySummary {
