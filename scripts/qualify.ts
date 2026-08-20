@@ -35,6 +35,7 @@ try {
   await mkdir(repositories, { recursive: true });
   await run(['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local', '--persist-to', persistence], { cwd: apiRoot, timeoutMs: 120_000 });
   await run(['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--persist-to', persistence, '--file=seed.sql'], { cwd: apiRoot, timeoutMs: 120_000 });
+  await run(['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--persist-to', persistence, '--command', "INSERT INTO auth_user (id,name,email,email_verified,created_at,updated_at) VALUES ('auth_qualification','Marl Qualification','qualification@marl.invalid',1,0,0); UPDATE users SET email='qualification@marl.invalid',auth_user_id='auth_qualification' WHERE id='usr_local';"], { cwd: apiRoot, timeoutMs: 120_000 });
   await run(['cargo', 'build', '-p', 'git', '-p', 'cli'], { cwd: root, env: { CARGO_TARGET_DIR: cargoTarget }, timeoutMs: 180_000 });
 
   api = startApi();
@@ -67,6 +68,10 @@ try {
   await run(['git', 'clone', '--quiet', '--no-hardlinks', root, source], { timeoutMs: 120_000 });
   await run(['git', 'config', 'user.name', 'Marl Qualification'], { cwd: source });
   await run(['git', 'config', 'user.email', 'qualification@marl.invalid'], { cwd: source });
+  await run(['git', 'config', 'gpg.format', 'ssh'], { cwd: source });
+  await run(['git', 'config', 'gpg.ssh.program', 'ssh-keygen'], { cwd: source });
+  await run(['git', 'config', 'user.signingkey', sshKey], { cwd: source });
+  await run(['git', 'config', 'commit.gpgsign', 'true'], { cwd: source });
   await run(['git', 'switch', '-C', 'main'], { cwd: source });
   await mkdir(join(source, '.marl', 'workflows'), { recursive: true });
   await Bun.write(join(source, '.marl', 'workflows', 'qualification.yml'), workflowFile());
@@ -74,6 +79,9 @@ try {
   await run(['git', 'commit', '-m', 'Add qualification workflow'], { cwd: source });
   await run(['git', 'remote', 'set-url', 'origin', remote], { cwd: source });
   await client.git(['push', '--set-upstream', 'origin', 'main'], token);
+  const signedCommit = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
+  const signedCommitDetail = await client.request<{ signatureStatus: string }>(`/api/v1/repositories/lantharos/${repositoryName}/commits/${signedCommit}`);
+  assert(signedCommitDetail.signatureStatus === 'verified', 'A commit signed by the account SSH key was not verified.');
 
   stage('Authenticate and push through SSH');
   await run(['git', 'tag', 'qualification-ssh'], { cwd: source });
@@ -179,7 +187,7 @@ try {
 
   stage('Run deterministic publication crash boundaries');
   await run(['bun', 'test', 'apps/git-edge/src/reliability-harness.test.ts', 'apps/git-edge/src/reconciliation.test.ts', 'apps/git-edge/src/canonical.test.ts'], { cwd: root, timeoutMs: 120_000 });
-  console.log('\nMarl qualification passed. Git history, PR publication, runner execution, supersession, restart recovery, and strict clone integrity are healthy.');
+  console.log('\nMarl qualification passed. Git history, SSH commit signing, PR publication, runner execution, supersession, restart recovery, and strict clone integrity are healthy.');
   console.log(`Cloudflare state and repositories were isolated under ${temporary} and have been removed.`);
 } catch (error) {
   await Promise.allSettled([api?.stop(), git?.stop()].filter(Boolean) as Promise<void>[]);

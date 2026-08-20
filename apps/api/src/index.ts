@@ -14,7 +14,7 @@ import { connectRunRealtime } from './run-realtime';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
 import { search } from './search';
 import { organizationSecrets, repositorySecrets } from './secrets';
-import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys } from './ssh-keys';
+import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys, signingKeys } from './ssh-keys';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -67,6 +67,10 @@ const worker = {
       return indexGit(request, _env, principal, gatewayTrusted);
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
+    if (request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') {
+      if (!gatewayTrusted) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
+      return signingKeys(request, _env);
+    }
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });

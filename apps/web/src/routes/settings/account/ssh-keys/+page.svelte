@@ -46,7 +46,7 @@
 </script>
 
 <svelte:head><title>SSH keys · Marl</title></svelte:head>
-<header class="page-head"><h2>SSH keys</h2><p>Use public keys to clone and push without entering a developer token.</p></header>
+<header class="page-head"><h2>SSH keys</h2><p>Use public keys to clone, push, and verify commits signed with your Marl identity.</p></header>
 <form onsubmit={(event) => { event.preventDefault(); void addKey(); }}>
   <label><span>Name</span><input bind:value={name} placeholder="Work laptop" autocomplete="off" /></label>
   <label><span>Public key</span><textarea bind:value={publicKey} placeholder="ssh-ed25519 AAAA…" rows="3"></textarea></label>

@@ -100,7 +100,7 @@ export interface PullRequestDetail extends PullRequestSummary {
     conversationsPass: boolean;
     unresolvedConversations: number;
   };
-  commits: Array<{ id: string; shortId: string; title: string; author: string; authoredAt: string }>;
+  commits: Array<{ id: string; shortId: string; title: string; author: string; authoredAt: string; signatureStatus: string }>;
   comments: PullRequestComment[];
   reviews: PullRequestReview[];
   checks: CheckSummary[];

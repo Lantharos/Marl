@@ -4,7 +4,7 @@ import { identifier } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { authorizeRepository } from './repository-access';
-import { sshKeyBody } from './request-schemas';
+import { signingKeysBody, sshKeyBody } from './request-schemas';
 
 const keyTypes = new Set(['ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-rsa']);
 
@@ -50,9 +50,23 @@ export async function createSshKey(request: Request, env: Env, principal: Princi
 
 export async function deleteSshKey(request: Request, env: Env, principal: Principal, id: string) {
   if (!(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_session_required', 'Confirm your identity before removing an SSH key.');
-  const result = await env.DB.prepare('DELETE FROM ssh_keys WHERE id=? AND user_id=?').bind(id, principal.id).run();
-  if (result.meta?.changes !== 1) return problem(404, 'ssh_key_not_found', 'SSH key not found.');
+  const key = await env.DB.prepare('SELECT fingerprint FROM ssh_keys WHERE id=? AND user_id=?').bind(id, principal.id).first<{ fingerprint: string }>();
+  if (!key) return problem(404, 'ssh_key_not_found', 'SSH key not found.');
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM ssh_keys WHERE id=? AND user_id=?').bind(id, principal.id),
+    env.DB.prepare("UPDATE commits SET signature_status='unverified',signature_signer_id=NULL,signature_key_fingerprint=NULL WHERE signature_signer_id=? AND signature_key_fingerprint=?").bind(principal.id, key.fingerprint)
+  ]);
   return new Response(null, { status: 204 });
+}
+
+export async function signingKeys(request: Request, env: Env) {
+  const body = await readJson(request, signingKeysBody);
+  if (!body) return problem(422, 'invalid_signing_key_lookup', 'Signing key lookup is invalid.');
+  const emails = [...new Set(body.emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+  if (!emails.length) return json({ signingKeys: [] });
+  const placeholders = emails.map(() => '?').join(',');
+  const rows = await env.DB.prepare(`SELECT users.id AS userId,users.email,ssh_keys.public_key AS publicKey,ssh_keys.fingerprint FROM ssh_keys JOIN users ON users.id=ssh_keys.user_id JOIN auth_user ON auth_user.id=users.auth_user_id AND auth_user.email=users.email COLLATE NOCASE WHERE auth_user.email_verified=1 AND lower(users.email) IN (${placeholders}) ORDER BY users.id,ssh_keys.created_at`).bind(...emails).all();
+  return json({ signingKeys: rows.results });
 }
 
 export async function authorizeSsh(request: Request, env: Env) {

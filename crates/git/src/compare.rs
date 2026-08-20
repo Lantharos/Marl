@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::Path, process::Stdio, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -225,15 +225,6 @@ async fn perform_commit(state: &AppState, request: CommitRequest) -> Result<Comm
         .map(String::as_str)
         .unwrap_or("4b825dc642cb6eb9a060e54bf8d69288fbee4904");
     let files = diff_files(&repository, &format!("{base}..{}", request.commit_id)).await?;
-    let verified = Command::new("git")
-        .args(["-C"])
-        .arg(&repository)
-        .args(["verify-commit", &request.commit_id])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|status| status.success());
     Ok(CommitResponse {
         id: fields[0].into(),
         parents,
@@ -242,7 +233,7 @@ async fn perform_commit(state: &AppState, request: CommitRequest) -> Result<Comm
         author: fields[4].into(),
         author_email: fields[5].into(),
         authored_at: fields[6].trim().into(),
-        signature_status: if verified { "verified" } else { "unverified" }.into(),
+        signature_status: "unverified".into(),
         files,
     })
 }

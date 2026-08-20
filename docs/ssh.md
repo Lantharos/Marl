@@ -13,6 +13,23 @@ and token-independent user permissions. It does not provide an interactive shell
 commands. The host key is generated once under the Git data directory; set `MARL_SSH_HOST_KEY`
 to keep it at an explicit persistent path.
 
+## Commit signing
+
+The same registered SSH keys can sign commits. Configure Git with the public key path:
+
+```powershell
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+```
+
+Marl shows **Verified** only after the signature is cryptographically valid, the signing key is
+still linked to a Marl account, and the commit author email matches that account's verified email.
+Removing the key removes its verification from indexed commits.
+
+The public-key path works when the matching private key is loaded in your SSH agent. Otherwise,
+set `user.signingkey` to the private-key path instead.
+
 ## Development
 
 The local Git gateway listens on `127.0.0.1:42621` for SSH and `127.0.0.1:42619` for Smart HTTP.

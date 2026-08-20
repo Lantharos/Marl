@@ -171,7 +171,7 @@
       </div>
       <div class="menu-anchor" use:dismissable={() => (profileOpen = false)}>
         <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={28} /></button>
-        {#if profileOpen}<div class="popover profile-menu"><div><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={29} /><span><strong>{user.displayName}</strong><small>@{user.handle}</small></span></div><a href="/settings/account/profile" onclick={() => (profileOpen = false)}><Settings size={15} />Settings</a><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button><button onclick={signOut}><LogOut size={15} />Sign out</button></div>{/if}
+        {#if profileOpen}<div class="popover profile-menu"><div><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={29} /><span><strong>{user.displayName}</strong><small>@{user.handle}</small></span></div><a href="/settings/account/profile" onclick={() => (profileOpen = false)}><Settings size={15} />Settings</a><a href="/organizations" onclick={() => (profileOpen = false)}><Building2 size={15} />Organizations</a><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button><button onclick={signOut}><LogOut size={15} />Sign out</button></div>{/if}
       </div>
       <button class="mobile-toggle" aria-label="Toggle navigation" onclick={() => (mobileOpen = !mobileOpen)}>{#if mobileOpen}<X size={18} />{:else}<Menu size={18} />{/if}</button>
     </div>

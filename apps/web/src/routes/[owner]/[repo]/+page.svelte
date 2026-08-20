@@ -3,6 +3,7 @@
   import { tick, untrack } from 'svelte';
   import { onDestroy } from 'svelte';
   import BookOpen from 'lucide-svelte/icons/book-open';
+  import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import File from 'lucide-svelte/icons/file';
@@ -145,6 +146,7 @@
       {#if latestCommit}<header class="latest-commit">
         <UserAvatar name={latestCommit.author} src={latestCommit.authorAvatarUrl} size={25} />
           <span class="commit-copy"><strong>{latestCommit.author}</strong><span>{latestCommit.title}</span></span>
+          {#if latestCommit.verified}<span class="verified"><BadgeCheck size={13} />Verified</span>{/if}
           <a class="commit-id" href="/{owner}/{repo}/commit/{latestCommit.id}">{latestCommit.shortId}</a>
         <a class="history" href="/{owner}/{repo}/commits/{revisionPath}"><History size={14} />History</a>
       </header>{/if}
@@ -198,11 +200,12 @@
   .code-layout { display: block; }
   .code-main { min-width: 0; }
   .file-browser, .readme { overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); box-shadow: var(--shadow-subtle); }
-  .latest-commit { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto auto; min-height: 48px; align-items: center; gap: 9px; padding: 7px 11px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
+  .latest-commit { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto auto auto; min-height: 48px; align-items: center; gap: 9px; padding: 7px 11px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
   .commit-copy { display: flex; min-width: 0; gap: 5px; overflow: hidden; font-size: 11px; white-space: nowrap; }
   .commit-copy strong { color: var(--text-strong); font-weight: 630; }
   .commit-copy span { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; }
   .commit-id { color: var(--text-faint); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; text-decoration: none; }
+  .verified{display:inline-flex;align-items:center;gap:4px;color:var(--success);font-size:10px;font-weight:650}
   .history { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 10px; text-decoration: none; }
   .file-row { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(0, 1.3fr); min-height: 39px; align-items: center; gap: 14px; padding: 0 11px; border-top: 1px solid var(--border-subtle); color: inherit; text-decoration: none; }
   .file-row:first-child { border-top: 0; }
@@ -230,7 +233,7 @@
   @media (max-width: 680px) {
     .branch-group a { width: 34px; justify-content: center; padding: 0; }
     .branch-group a span { display: none; }
-    .latest-commit { grid-template-columns: 27px minmax(0, 1fr) auto; }
+    .latest-commit { grid-template-columns: 27px minmax(0, 1fr) auto auto; }
     .commit-id { display: none; }
     .file-row { grid-template-columns: minmax(0, 1fr) auto; }
     .file-message { display: none; }

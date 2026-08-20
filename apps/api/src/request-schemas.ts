@@ -37,6 +37,7 @@ export const completeJobBody = strictObject({ state: picklist(['success', 'failu
 export const artifactUploadBody = strictObject({ name: pipe(string(), minLength(1), maxLength(160)), byteSize: pipe(number(), integer(), minValue(0), maxValue(2 * 1024 * 1024 * 1024)), contentType: optional(pipe(string(), minLength(1), maxLength(200))) });
 export const secretValueBody = strictObject({ value: pipe(string(), minLength(1), maxLength(64_000)) });
 export const sshKeyBody = strictObject({ name: pipe(string(), minLength(1), maxLength(80)), publicKey: pipe(string(), minLength(32), maxLength(16_000)) });
+export const signingKeysBody = strictObject({ emails: pipe(array(pipe(string(), minLength(3), maxLength(320))), maxLength(250)) });
 export const pullRealtimeUpdateBody = strictObject({ id: identifier, pullId: identifier, version: pipe(number(), integer(), minValue(1)), kind: identifier, payload: record(string(), unknown()), createdAt: identifier });
 
 const organizationRole = picklist(['admin', 'member']);

@@ -48,7 +48,9 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     const commit = value as Record<string, unknown>;
     if (![commit.id, commit.title, commit.author, commit.authoredAt, commit.treeId].every((field) => typeof field === 'string') || !Array.isArray(commit.parents) || !commit.parents.every((parent) => typeof parent === 'string' && /^[0-9a-f]{40,64}$/.test(parent))) continue;
     const authorEmail = typeof commit.authorEmail === 'string' && commit.authorEmail.length <= 320 ? commit.authorEmail : '';
-    statements.push(env.DB.prepare(`INSERT INTO commits (repository_id, id, title, author_name, author_email, authored_at, tree_id, parent_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, id) DO UPDATE SET title=excluded.title, author_name=excluded.author_name,author_email=excluded.author_email,authored_at=excluded.authored_at,tree_id=excluded.tree_id,parent_ids=excluded.parent_ids`).bind(body.repositoryId, commit.id, commit.title, commit.author, authorEmail, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents)));
+    const verified = gatewayTrusted && commit.signatureStatus === 'verified' && typeof commit.signatureSignerId === 'string' && /^usr_[a-z0-9]+$/.test(commit.signatureSignerId) && typeof commit.signatureKeyFingerprint === 'string' && commit.signatureKeyFingerprint.startsWith('SHA256:');
+    const signatureStatus = gatewayTrusted && commit.signatureStatus === 'invalid' ? 'invalid' : verified ? 'verified' : 'unverified';
+    statements.push(env.DB.prepare(`INSERT INTO commits (repository_id,id,title,author_name,author_email,authored_at,tree_id,parent_ids,signature_status,signature_signer_id,signature_key_fingerprint) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(repository_id,id) DO UPDATE SET title=excluded.title,author_name=excluded.author_name,author_email=excluded.author_email,authored_at=excluded.authored_at,tree_id=excluded.tree_id,parent_ids=excluded.parent_ids,signature_status=excluded.signature_status,signature_signer_id=excluded.signature_signer_id,signature_key_fingerprint=excluded.signature_key_fingerprint`).bind(body.repositoryId, commit.id, commit.title, commit.author, authorEmail, commit.authoredAt, commit.treeId, JSON.stringify(commit.parents), signatureStatus, verified ? commit.signatureSignerId : null, verified ? commit.signatureKeyFingerprint : null));
   }
   let indexedPaths = 0;
   for (const value of body.changes) {
@@ -292,14 +294,14 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
-  const indexed = await env.DB.prepare('SELECT id FROM commits WHERE repository_id=? AND id=?').bind(repo.id, commitId).first();
+  const indexed = await env.DB.prepare('SELECT id,signature_status AS signatureStatus FROM commits WHERE repository_id=? AND id=?').bind(repo.id, commitId).first<{ id: string; signatureStatus: string }>();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
   const response = await requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   const commit = await response.json().catch(() => null) as { author?: string; authorEmail?: string } | null;
   if (!commit || typeof commit.author !== 'string') return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
   const user = await env.DB.prepare(`SELECT avatar_url AS avatarUrl FROM users WHERE (? != '' AND email=? COLLATE NOCASE) OR handle=? COLLATE NOCASE OR display_name=? COLLATE NOCASE ORDER BY CASE WHEN ? != '' AND email=? COLLATE NOCASE THEN 0 ELSE 1 END LIMIT 1`).bind(commit.authorEmail ?? '', commit.authorEmail ?? '', commit.author, commit.author, commit.authorEmail ?? '', commit.authorEmail ?? '').first<{ avatarUrl: string | null }>();
-  return json({ ...commit, authorAvatarUrl: user?.avatarUrl ?? null });
+  return json({ ...commit, signatureStatus: indexed.signatureStatus, authorAvatarUrl: user?.avatarUrl ?? null });
 }
 
 export async function readCommitPatch(env: Env, principal: Principal, owner: string, name: string, commitId: string, url: URL): Promise<Response> {
