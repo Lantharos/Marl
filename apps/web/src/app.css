@@ -70,7 +70,7 @@ body { color: var(--text); font-size: 14px; line-height: 1.45; }
 button, input, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-button { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease, transform 80ms ease; }
-button:active:not(:disabled) { transform: translateY(1px); }
+button { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease; }
+button:active:not(:disabled) { filter: brightness(.94); }
 button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }

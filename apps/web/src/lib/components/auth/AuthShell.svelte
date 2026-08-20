@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BrandMark from './BrandMark.svelte';
+  import BrandMark from '../BrandMark.svelte';
   let { title, description, children, footer }: { title: string; description: string; children: import('svelte').Snippet; footer?: import('svelte').Snippet } = $props();
 </script>
 

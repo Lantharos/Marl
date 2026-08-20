@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import AuthShell from '$lib/components/AuthShell.svelte';
+  import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
 

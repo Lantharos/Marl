@@ -10,28 +10,32 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import GitCommit from 'lucide-svelte/icons/git-commit-horizontal';
+  import GitBranch from 'lucide-svelte/icons/git-branch';
   import FileCode from 'lucide-svelte/icons/file-code-2';
   import Home from 'lucide-svelte/icons/house';
+  import KeyRound from 'lucide-svelte/icons/key-round';
   import LogOut from 'lucide-svelte/icons/log-out';
   import Menu from 'lucide-svelte/icons/menu';
   import Moon from 'lucide-svelte/icons/moon';
   import Plus from 'lucide-svelte/icons/plus';
   import Search from 'lucide-svelte/icons/search';
   import Server from 'lucide-svelte/icons/server';
+  import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Settings from 'lucide-svelte/icons/settings';
   import Sun from 'lucide-svelte/icons/sun';
   import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
-  import BrandMark from './BrandMark.svelte';
-  import UserAvatar from './UserAvatar.svelte';
+  import BrandMark from '../BrandMark.svelte';
+  import UserAvatar from '../UserAvatar.svelte';
   import { authClient } from '$lib/auth-client';
   import { api } from '$lib/api';
 
-  type CommandKind = 'home' | 'repository' | 'organization' | 'commit' | 'file' | 'pull' | 'run' | 'runner' | 'create';
+  type CommandKind = 'home' | 'repository' | 'organization' | 'commit' | 'file' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
   type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
-  let { repositories, user, children } = $props<{ repositories: RepositorySummary[]; user: ShellUser; children: import('svelte').Snippet }>();
+  type ShellOrganization = { slug: string; name: string; avatarUrl: string | null; role: string };
+  let { repositories, organizations, user, children } = $props<{ repositories: RepositorySummary[]; organizations: ShellOrganization[]; user: ShellUser; children: import('svelte').Snippet }>();
   let theme = $state<'light' | 'dark'>('dark');
   let searchOpen = $state(false);
   let mobileOpen = $state(false);
@@ -53,6 +57,31 @@
       keywords: `repository code ${repository.visibility}`,
       kind: 'repository' as const
     })),
+    ...repositories.flatMap((repository: RepositorySummary) => {
+      const base = `/${repository.owner}/${repository.name}`;
+      return [
+        { label: `${repository.owner}/${repository.name} pull requests`, detail: 'Repository pull requests', href: `${base}/pulls`, keywords: 'repository reviews merge', kind: 'pull' as const },
+        { label: `${repository.owner}/${repository.name} runs`, detail: 'Repository workflow runs', href: `${base}/runs`, keywords: 'repository automation jobs checks', kind: 'run' as const },
+        { label: `${repository.owner}/${repository.name} settings`, detail: 'Repository general settings', href: `${base}/settings`, keywords: 'repository settings general', kind: 'settings' as const },
+        { label: `${repository.owner}/${repository.name} branch rules`, detail: 'Protected branches and merge requirements', href: `${base}/settings/branches`, keywords: 'repository settings branches protection', kind: 'branch' as const },
+        { label: `${repository.owner}/${repository.name} access`, detail: 'Collaborators and team access', href: `${base}/settings/access`, keywords: 'repository settings people teams permissions', kind: 'security' as const },
+        { label: `${repository.owner}/${repository.name} secrets`, detail: 'Repository CI secrets', href: `${base}/settings/secrets`, keywords: 'repository settings ci environment', kind: 'key' as const }
+      ];
+    }),
+    { label: 'Settings', detail: 'Your profile and account', href: '/settings/account/profile', keywords: 'account preferences profile', kind: 'settings' },
+    { label: 'Sign-in and security', detail: 'Password, passkeys, and two-factor authentication', href: '/settings/account', keywords: 'settings account authentication', kind: 'security' },
+    { label: 'Sessions', detail: 'Devices signed in to your account', href: '/settings/account/sessions', keywords: 'settings account devices', kind: 'security' },
+    { label: 'Developer access', detail: 'Personal access tokens', href: '/settings/account/tokens', keywords: 'settings account api tokens', kind: 'key' },
+    { label: 'SSH keys', detail: 'Git authentication and commit signing', href: '/settings/account/ssh-keys', keywords: 'settings developer git signing', kind: 'key' },
+    { label: 'Organizations', detail: 'Every organization you belong to', href: '/organizations', keywords: 'teams workspaces settings', kind: 'organization' },
+    ...organizations.flatMap((organization: ShellOrganization) => {
+      const base = `/organizations/${organization.slug}/settings`;
+      return [
+        { label: organization.name, detail: `Organization · ${organization.slug}`, href: `${base}/profile`, keywords: `organization profile ${organization.slug}`, kind: 'organization' as const },
+        { label: `${organization.name} people and teams`, detail: 'Organization members and default access', href: `${base}/access`, keywords: `organization settings access ${organization.slug}`, kind: 'security' as const },
+        ...(organization.role === 'member' ? [] : [{ label: `${organization.name} CI secrets`, detail: 'Organization workflow secrets', href: `${base}/secrets`, keywords: `organization settings ci ${organization.slug}`, kind: 'key' as const }])
+      ];
+    }),
     { label: 'Pull requests', detail: 'Your review queue', href: '/pulls', keywords: 'reviews merge changes', kind: 'pull' },
     { label: 'Runs', detail: 'Automation across your code', href: '/runs', keywords: 'workflows jobs checks', kind: 'run' },
     { label: 'Repositories', detail: 'Browse every project', href: '/repositories', keywords: 'code projects', kind: 'repository' },
@@ -187,7 +216,7 @@
         <p>{query ? (searchLoading ? 'Searching Marl…' : `${results.length} results`) : 'Jump to'}</p>
         {#each results as command, index}
           <button data-command={index} class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else}<Plus size={16} />{/if}
+            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>
           </button>
         {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, commit, pull request, or run.</span></div>{/if}{/each}

@@ -4,13 +4,13 @@
   import { untrack } from 'svelte';
   import Archive from 'lucide-svelte/icons/archive';
   import ArrowRightLeft from 'lucide-svelte/icons/arrow-right-left';
-  import Check from 'lucide-svelte/icons/check';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/Button.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
+  import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
   import type { PageData } from './$types';
 
   type Organization = { slug: string; name: string };
@@ -28,7 +28,7 @@
   let archived = $state(untrack(() => Boolean(data.repository.archivedAt)));
   let dialog = $state<'rename' | 'transfer' | 'archive' | 'delete' | null>(null);
   let busy = $state('');
-  let notice = $state('');
+  let generalState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
   const ownerOptions = $derived(data.organizations.map((organization: Organization) => ({ value: organization.slug, label: organization.slug, description: organization.name })));
   const branchOptions = $derived(data.branches.map((branch: BranchOption) => ({ value: branch.name, label: branch.name })));
@@ -36,17 +36,21 @@
   async function run(name: string, action: () => Promise<void>) {
     if (busy) return;
     busy = name;
-    notice = '';
     error = '';
     try { await action(); }
     catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Repository settings could not be updated.'; }
     finally { busy = ''; }
   }
 
-  function saveGeneral() { return run('general', async () => {
+  async function saveGeneral() {
+    generalState = 'saving';
+    await run('general', async () => {
     await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ description, visibility, defaultBranch }) });
-    notice = 'Repository details saved.';
-  }); }
+    });
+    if (error) { generalState = 'idle'; return; }
+    generalState = 'saved';
+    setTimeout(() => (generalState = 'idle'), 1800);
+  }
 
   function rename() { return run('rename', async () => {
     const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/settings/rename`, { method: 'POST', body: JSON.stringify({ name: newName }) });
@@ -65,7 +69,6 @@
     await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ archived: next }) });
     archived = next;
     dialog = null;
-    notice = next ? 'Repository archived. Git pushes are now blocked.' : 'Repository restored.';
   }); }
 
   function scheduleDeletion() { return run('delete', async () => {
@@ -77,11 +80,10 @@
 <svelte:head><title>Settings · {owner}/{repo} · Marl</title></svelte:head>
 
 <header class="page-head"><h2>General</h2><p>Repository identity, access, and lifecycle.</p></header>
-{#if notice}<p class="notice"><Check size={13} />{notice}</p>{/if}
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 
 <section class="details">
-  <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><Button size="small" variant="primary" disabled={busy === 'general'} onclick={saveGeneral}>{busy === 'general' ? 'Saving…' : 'Save changes'}</Button></header>
+  <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><SettingsAction state={generalState} onclick={saveGeneral} /></header>
   <label><span>Description</span><input bind:value={description} maxlength="280" placeholder="Describe this repository" /></label>
   <div class="fields"><label><span>Visibility</span><Select bind:value={visibility} ariaLabel="Repository visibility" options={[{ value: 'private', label: 'Private', description: 'Only organization members can view it' }, { value: 'public', label: 'Public', description: 'Anyone can view the code' }]} /></label><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
 </section>
@@ -119,6 +121,6 @@
 </Modal>
 
 <style>
-  .page-head{margin-bottom:22px}.page-head h2{margin:0;color:var(--text-strong);font-size:21px}.page-head p,section header p{margin:5px 0 0;color:var(--text-faint);font-size:10px}.notice,.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;font-size:10px}.notice{color:var(--success)}.error{color:var(--danger)}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:9px;font-weight:620}.details input,.modal-field input{width:100%;height:37px;padding:0 10px;border:1px solid var(--border);border-radius:7px;outline:0;background:var(--surface);color:var(--text-strong);font-size:11px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:10px}.operation small{margin-top:4px;color:var(--text-faint);font-size:9px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}
+  .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle);margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;border-bottom:1px solid var(--border-subtle)}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.operations>header,.danger-zone>header{margin:0;padding:15px 16px;background:var(--surface-muted)}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:11px 14px;border-top:1px solid var(--border-subtle)}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.danger-zone{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:9px}
   @media(max-width:580px){.fields{grid-template-columns:1fr}.details>header{align-items:flex-start}.operation{grid-template-columns:32px minmax(0,1fr)}.operation>:global(.button){grid-column:2;justify-self:start}}
 </style>

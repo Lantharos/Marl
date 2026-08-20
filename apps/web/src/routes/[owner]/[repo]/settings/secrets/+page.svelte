@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import SecretSettings from '$lib/components/SecretSettings.svelte';
+  import SecretSettings from '$lib/components/settings/SecretSettings.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
 </script>

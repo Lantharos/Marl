@@ -1,6 +1,6 @@
 import type { Principal } from './auth';
 import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAccessToken } from './developer-tokens';
-import { acceptOrganizationInvitation, addTeamMember, createOrganization, createTeam, deleteTeam, getOrganizationAccess, inviteOrganizationMember, listOrganizations, removeOrganizationMember, removeTeamMember, revokeOrganizationInvitation, updateOrganization, updateOrganizationMember } from './organizations';
+import { acceptOrganizationInvitation, addTeamMember, createOrganization, createTeam, deleteTeam, getOrganization, getOrganizationAccess, inviteOrganizationMember, listOrganizations, readOrganizationAvatar, removeOrganizationMember, removeTeamMember, revokeOrganizationInvitation, updateOrganization, updateOrganizationMember, uploadOrganizationAvatar } from './organizations';
 import type { Env } from './platform';
 import { getProfile, listSessions, readAvatar, updateProfile, uploadAvatar } from './profile';
 import { deleteRepositoryCollaborator, deleteRepositoryTeamGrant, getRepositoryAccess, putRepositoryCollaborator, putRepositoryTeamGrant } from './repository-access-api';
@@ -14,6 +14,8 @@ export async function handleAccessRoute(request: Request, env: Env, principal: P
   if (url.pathname === '/api/v1/sessions' && request.method === 'GET') return listSessions(env, principal);
   const avatar = url.pathname.match(/^\/api\/v1\/avatars\/([^/]+)\/([^/]+)$/);
   if (avatar && request.method === 'GET') return readAvatar(env, avatar[1], avatar[2]);
+  const organizationAvatarAsset = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
+  if (organizationAvatarAsset && request.method === 'GET') return readOrganizationAvatar(env, organizationAvatarAsset[1], organizationAvatarAsset[2]);
 
   if (url.pathname === '/api/v1/organizations') {
     if (request.method === 'GET') return listOrganizations(env, principal);
@@ -21,7 +23,13 @@ export async function handleAccessRoute(request: Request, env: Env, principal: P
   }
 
   const organizationSettings = url.pathname.match(/^\/api\/v1\/organizations\/([^/]+)$/);
-  if (organizationSettings && request.method === 'PATCH') return updateOrganization(request, env, principal, decodeURIComponent(organizationSettings[1]));
+  if (organizationSettings) {
+    const slug = decodeURIComponent(organizationSettings[1]);
+    if (request.method === 'GET') return getOrganization(env, principal, slug);
+    if (request.method === 'PATCH') return updateOrganization(request, env, principal, slug);
+  }
+  const organizationAvatar = url.pathname.match(/^\/api\/v1\/organizations\/([^/]+)\/avatar$/);
+  if (organizationAvatar && request.method === 'PUT') return uploadOrganizationAvatar(request, env, principal, decodeURIComponent(organizationAvatar[1]));
 
   const invitationAccept = url.pathname.match(/^\/api\/v1\/invitations\/([^/]+)\/accept$/);
   if (invitationAccept && request.method === 'POST') return acceptOrganizationInvitation(request, env, principal, invitationAccept[1]);

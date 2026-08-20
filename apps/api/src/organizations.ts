@@ -7,10 +7,11 @@ import type { Env } from './platform';
 import { createOrganizationBody, createTeamBody, organizationInvitationBody, organizationMemberBody, organizationSettingsBody, teamMemberBody } from './request-schemas';
 import { organizationRole, requireOrganizationRole } from './repository-access';
 import { sendTransactionalEmail } from './email';
+import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 
 export async function listOrganizations(env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Organizations can only be managed from a browser session.');
-  const rows = await env.DB.prepare(`SELECT organizations.id,organizations.slug,organizations.name,organizations.kind,organizations.base_repository_role AS baseRepositoryRole,organization_members.role,(SELECT COUNT(*) FROM organization_members AS members WHERE members.organization_id=organizations.id) AS members,(SELECT COUNT(*) FROM repositories WHERE repositories.organization_id=organizations.id AND repositories.deletion_scheduled_at IS NULL) AS repositories FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? ORDER BY organizations.kind,organizations.name`).bind(principal.id).all();
+  const rows = await env.DB.prepare(`SELECT organizations.id,organizations.slug,organizations.name,organizations.avatar_url AS avatarUrl,organizations.kind,organizations.base_repository_role AS baseRepositoryRole,organization_members.role,(SELECT COUNT(*) FROM organization_members AS members WHERE members.organization_id=organizations.id) AS members,(SELECT COUNT(*) FROM repositories WHERE repositories.organization_id=organizations.id AND repositories.deletion_scheduled_at IS NULL) AS repositories FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? ORDER BY organizations.kind,organizations.name`).bind(principal.id).all();
   return json({ organizations: rows.results });
 }
 
@@ -29,7 +30,15 @@ export async function createOrganization(request: Request, env: Env, principal: 
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'organization_exists', 'That organization name is already in use.');
     throw error;
   }
-  return json({ organization: { id, slug: body.slug, name: body.name, kind: 'team', baseRepositoryRole: body.baseRepositoryRole ?? 'read', role: 'owner' } }, { status: 201 });
+  return json({ organization: { id, slug: body.slug, name: body.name, avatarUrl: null, kind: 'team', baseRepositoryRole: body.baseRepositoryRole ?? 'read', role: 'owner' } }, { status: 201 });
+}
+
+export async function getOrganization(env: Env, principal: Principal, slug: string) {
+  if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Organizations can only be managed from a browser session.');
+  const organization = await organizationBySlug(env, slug);
+  if (!organization) return problem(404, 'organization_not_found', 'Organization not found.');
+  const viewerRole = await organizationRole(env, principal, organization.id);
+  return viewerRole ? json({ organization, viewerRole }) : problem(404, 'organization_not_found', 'Organization not found.');
 }
 
 export async function getOrganizationAccess(env: Env, principal: Principal, slug: string) {
@@ -54,12 +63,37 @@ export async function updateOrganization(request: Request, env: Env, principal: 
   if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner')) || !(await requireFreshSession(request, env, principal))) return problem(403, 'fresh_owner_session_required', 'Confirm your identity as an organization owner.');
   const body = await readJson(request, organizationSettingsBody);
   if (!body) return problem(422, 'invalid_organization', 'Organization settings are invalid.');
-  const baseRole = organization.kind === 'personal' ? null : body.baseRepositoryRole ?? 'read';
+  const name = body.name?.trim() ?? organization.name;
+  const baseRole = organization.kind === 'personal' ? null : body.baseRepositoryRole ?? organization.baseRepositoryRole ?? 'read';
   await env.DB.batch([
-    env.DB.prepare('UPDATE organizations SET name=?,base_repository_role=? WHERE id=?').bind(body.name, baseRole, organization.id),
-    auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.settings.updated', subjectType: 'organization', subjectId: organization.id, details: { name: body.name, baseRepositoryRole: baseRole } })
+    env.DB.prepare('UPDATE organizations SET name=?,base_repository_role=? WHERE id=?').bind(name, baseRole, organization.id),
+    auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.settings.updated', subjectType: 'organization', subjectId: organization.id, details: { name, baseRepositoryRole: baseRole } })
   ]);
-  return json({ organization: { ...organization, name: body.name, baseRepositoryRole: baseRole } });
+  return json({ organization: { ...organization, name, baseRepositoryRole: baseRole } });
+}
+
+export async function uploadOrganizationAvatar(request: Request, env: Env, principal: Principal, slug: string) {
+  const organization = await organizationBySlug(env, slug);
+  if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner'))) return problem(404, 'organization_not_found', 'Organization not found.');
+  const image = await readImageUpload(request);
+  if (!image) return problem(422, 'invalid_avatar', 'Choose a valid PNG, JPEG, or WebP image under 2 MB.');
+  const key = `organization-avatars/${organization.id}/${image.version}.${image.extension}`;
+  const avatarUrl = `/api/v1/organization-avatars/${organization.id}/${image.version}.${image.extension}`;
+  await env.OBJECTS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
+  try {
+    await env.DB.prepare('UPDATE organizations SET avatar_url=? WHERE id=?').bind(avatarUrl, organization.id).run();
+  } catch (error) {
+    await env.OBJECTS.delete(key);
+    throw error;
+  }
+  const previousKey = organization.avatarUrl && storedImageKey(organization.avatarUrl, 'organization-avatars', organization.id);
+  if (previousKey) await env.OBJECTS.delete(previousKey);
+  return json({ avatarUrl });
+}
+
+export async function readOrganizationAvatar(env: Env, organizationId: string, file: string) {
+  if (!/^org_[a-z0-9]+$/.test(organizationId) || !/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(file)) return problem(404, 'avatar_not_found', 'Avatar not found.');
+  return readImageAsset(env, `organization-avatars/${organizationId}/${file}`);
 }
 
 export async function inviteOrganizationMember(request: Request, env: Env, principal: Principal, slug: string) {
@@ -180,7 +214,7 @@ export async function deleteTeam(request: Request, env: Env, principal: Principa
 }
 
 async function organizationBySlug(env: Env, slug: string) {
-  return env.DB.prepare('SELECT id,slug,name,kind,base_repository_role AS baseRepositoryRole FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; slug: string; name: string; kind: 'personal' | 'team'; baseRepositoryRole: string | null }>();
+  return env.DB.prepare('SELECT id,slug,name,avatar_url AS avatarUrl,kind,base_repository_role AS baseRepositoryRole FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; baseRepositoryRole: string | null }>();
 }
 
 function randomToken() {

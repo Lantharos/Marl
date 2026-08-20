@@ -3,8 +3,8 @@
   import KeyRound from 'lucide-svelte/icons/key-round';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
-  import Button from './Button.svelte';
-  import Time from './Time.svelte';
+  import Button from '../Button.svelte';
+  import Time from '../Time.svelte';
 
   type Secret = { id: string; name: string; createdAt: string; updatedAt: string };
   let { initialSecrets, endpoint, scope }: { initialSecrets: Secret[]; endpoint: string; scope: 'repository' | 'organization' } = $props();
@@ -12,6 +12,7 @@
   let name = $state('');
   let value = $state('');
   let busy = $state(false);
+  let saved = $state(false);
   let error = $state('');
 
   async function save() {
@@ -26,6 +27,8 @@
       secrets = existing ? secrets.map((secret) => secret.name === normalized ? { ...secret, updatedAt: now } : secret) : [...secrets, { id: normalized, name: normalized, createdAt: now, updatedAt: now }].sort((a, b) => a.name.localeCompare(b.name));
       name = '';
       value = '';
+      saved = true;
+      setTimeout(() => (saved = false), 1800);
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'The secret could not be saved.';
     } finally { busy = false; }
@@ -48,7 +51,7 @@
 <form onsubmit={(event) => { event.preventDefault(); void save(); }}>
   <label><span>Name</span><input bind:value={name} oninput={() => (name = name.toUpperCase().replace(/[^A-Z0-9_]/g, ''))} placeholder="DEPLOY_TOKEN" autocomplete="off" /></label>
   <label><span>Value</span><input bind:value={value} type="password" placeholder="Secret value" autocomplete="new-password" /></label>
-  <Button type="submit" variant="primary" size="large" disabled={busy || !name || !value}>{busy ? 'Saving…' : 'Add secret'}</Button>
+  <Button type="submit" variant="primary" size="large" loading={busy} disabled={busy || saved || !name || !value}>{saved ? 'Added!' : busy ? 'Saving' : 'Add secret'}</Button>
 </form>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 <section>

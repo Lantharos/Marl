@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import AuthShell from '$lib/components/AuthShell.svelte';
+  import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
   let password = $state(''); let confirm = $state(''); let busy = $state(false); let complete = $state(false); let error = $state('');

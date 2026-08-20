@@ -11,11 +11,15 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
   } catch {
     if (!isAuthRoute) redirect(303, `/sign-in?returnTo=${encodeURIComponent(url.pathname + url.search)}`);
   }
-  if (isAuthRoute) return { shellUser: null, shellRepositories: [] as RepositorySummary[], shellRepositoriesUnavailable: false };
-  try {
-    const { repositories } = await apiWith<{ repositories: RepositorySummary[] }>(fetch, '/repositories');
-    return { shellUser, shellRepositories: repositories, shellRepositoriesUnavailable: false };
-  } catch {
-    return { shellUser, shellRepositories: [] as RepositorySummary[], shellRepositoriesUnavailable: true };
-  }
+  if (isAuthRoute) return { shellUser: null, shellRepositories: [] as RepositorySummary[], shellOrganizations: [], shellRepositoriesUnavailable: false };
+  const [repositoryResult, organizationResult] = await Promise.allSettled([
+    apiWith<{ repositories: RepositorySummary[] }>(fetch, '/repositories'),
+    apiWith<{ organizations: Array<{ slug: string; name: string; avatarUrl: string | null; role: string }> }>(fetch, '/organizations')
+  ]);
+  return {
+    shellUser,
+    shellRepositories: repositoryResult.status === 'fulfilled' ? repositoryResult.value.repositories : [],
+    shellOrganizations: organizationResult.status === 'fulfilled' ? organizationResult.value.organizations : [],
+    shellRepositoriesUnavailable: repositoryResult.status === 'rejected'
+  };
 };

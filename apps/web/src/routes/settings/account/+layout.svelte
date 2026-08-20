@@ -1,6 +1,6 @@
 <script lang="ts">
-  import SettingsShell from '$lib/components/SettingsShell.svelte';
+  import AccountSettingsShell from '$lib/components/settings/AccountSettingsShell.svelte';
   let { children } = $props<{ children: import('svelte').Snippet }>();
 </script>
 
-<SettingsShell>{@render children()}</SettingsShell>
+<AccountSettingsShell>{@render children()}</AccountSettingsShell>

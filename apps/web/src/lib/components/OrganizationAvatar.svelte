@@ -1,0 +1,12 @@
+<script lang="ts">
+  let { name, src = null, size = 32, label = '' } = $props<{ name: string; src?: string | null; size?: number; label?: string }>();
+  const initials = $derived(name.trim().split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || '?');
+</script>
+
+<span class="organization-avatar" style:width={`${size}px`} style:height={`${size}px`} style:font-size={`${Math.max(8, Math.round(size * .3))}px`} aria-label={label || undefined}>
+  {#if src}<img {src} alt="" />{:else}{initials}{/if}
+</span>
+
+<style>
+  .organization-avatar{display:inline-grid;flex:0 0 auto;overflow:hidden;place-items:center;border-radius:7px;background:var(--brand-soft);color:var(--brand-strong);font-weight:750;line-height:1}.organization-avatar img{width:100%;height:100%;object-fit:cover}
+</style>

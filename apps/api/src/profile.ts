@@ -4,12 +4,7 @@ import { validSlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { profileBody } from './request-schemas';
-
-const avatarTypes = new Map([
-  ['image/png', 'png'],
-  ['image/jpeg', 'jpg'],
-  ['image/webp', 'webp']
-]);
+import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 
 export async function getProfile(env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Profiles can only be managed from a browser session.');
@@ -54,17 +49,11 @@ export async function updateProfile(request: Request, env: Env, principal: Princ
 
 export async function uploadAvatar(request: Request, env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Profiles can only be managed from a browser session.');
-  const contentType = request.headers.get('content-type')?.split(';')[0].toLowerCase() ?? '';
-  const extension = avatarTypes.get(contentType);
-  const declaredSize = Number(request.headers.get('content-length') ?? 0);
-  if (!extension || (declaredSize && declaredSize > 2 * 1024 * 1024)) return problem(422, 'invalid_avatar', 'Choose a PNG, JPEG, or WebP image under 2 MB.');
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (!bytes.length || bytes.length > 2 * 1024 * 1024 || !matchesImageSignature(contentType, bytes)) return problem(422, 'invalid_avatar', 'Choose a valid PNG, JPEG, or WebP image under 2 MB.');
-
-  const version = crypto.randomUUID().replaceAll('-', '');
-  const key = `avatars/${principal.id}/${version}.${extension}`;
-  const avatarUrl = `/api/v1/avatars/${principal.id}/${version}.${extension}`;
-  await env.OBJECTS.put(key, bytes, { httpMetadata: { contentType } });
+  const image = await readImageUpload(request);
+  if (!image) return problem(422, 'invalid_avatar', 'Choose a valid PNG, JPEG, or WebP image under 2 MB.');
+  const key = `avatars/${principal.id}/${image.version}.${image.extension}`;
+  const avatarUrl = `/api/v1/avatars/${principal.id}/${image.version}.${image.extension}`;
+  await env.OBJECTS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
   const previous = await env.DB.prepare('SELECT avatar_url AS avatarUrl FROM users WHERE id=?').bind(principal.id).first<{ avatarUrl: string | null }>();
   try {
     await env.DB.prepare('UPDATE users SET avatar_url=? WHERE id=?').bind(avatarUrl, principal.id).run();
@@ -79,9 +68,7 @@ export async function uploadAvatar(request: Request, env: Env, principal: Princi
 
 export async function readAvatar(env: Env, userId: string, file: string) {
   if (!/^usr_[a-z0-9]+$|^[A-Za-z0-9_-]{8,}$/.test(userId) || !/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(file)) return problem(404, 'avatar_not_found', 'Avatar not found.');
-  const object = await env.OBJECTS.get(`avatars/${userId}/${file}`);
-  if (!object) return problem(404, 'avatar_not_found', 'Avatar not found.');
-  return new Response(object.body, { headers: { 'content-type': object.httpMetadata?.contentType ?? 'application/octet-stream', 'cache-control': 'public, max-age=31536000, immutable', etag: object.httpEtag, 'x-content-type-options': 'nosniff' } });
+  return readImageAsset(env, `avatars/${userId}/${file}`);
 }
 
 async function usernameTaken(env: Env, userId: string, username: string) {
@@ -94,12 +81,5 @@ function validWebsite(value: string) {
 }
 
 function avatarKey(value: string, userId: string) {
-  const match = value.match(new RegExp(`^/api/v1/avatars/${userId}/([a-f0-9]{32}\\.(?:png|jpg|webp))$`));
-  return match ? `avatars/${userId}/${match[1]}` : null;
-}
-
-function matchesImageSignature(contentType: string, bytes: Uint8Array) {
-  if (contentType === 'image/png') return bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte);
-  if (contentType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-  return bytes.length >= 12 && new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
+  return storedImageKey(value, 'avatars', userId);
 }

@@ -1,14 +1,15 @@
 <script lang="ts">
   import KeyRound from 'lucide-svelte/icons/key-round';
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
-  import Button from './Button.svelte';
-  import Modal from './Modal.svelte';
+  import Button from '../Button.svelte';
+  import Modal from '../Modal.svelte';
   import { authClient } from '$lib/auth-client';
 
   type Method = 'passkey' | 'totp' | 'password';
-  let { open, method, onClose, onVerified } = $props<{
+  let { open, method, description = 'Confirm this sensitive account change before continuing.', onClose, onVerified } = $props<{
     open: boolean;
     method: Method | null;
+    description?: string;
     onClose: () => void;
     onVerified: () => void | Promise<void>;
   }>();
@@ -60,7 +61,7 @@
   </Button>
 {/snippet}
 
-<Modal {open} title="Confirm your identity" description="This protects changes to the keys trusted by your account." onClose={close} {actions}>
+<Modal {open} title="Confirm your identity" {description} onClose={close} {actions}>
   <div class="confirmation">
     {#if method === 'passkey'}
       <div class="passkey"><KeyRound size={19} /><div><strong>Use your passkey</strong><p>Continue with your device, fingerprint, face, or security key.</p></div></div>

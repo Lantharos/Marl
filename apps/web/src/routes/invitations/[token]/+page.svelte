@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import CheckCircle2 from 'lucide-svelte/icons/circle-check-big';
-  import AuthShell from '$lib/components/AuthShell.svelte';
+  import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import { api, MarlApiError } from '$lib/api';
 
   let busy = $state(false);
