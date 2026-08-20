@@ -72,6 +72,11 @@ R2; replacing an avatar publishes the new reference before removing the previous
 changes update the linked authentication identity and any owned personal-organization slug in the
 same D1 batch.
 
+Public user and organization profile projections contain only public repositories and activity.
+Commit attribution prefers a verified signing identity and otherwise matches the account's email
+inside D1 without returning that email to profile clients. Organization descriptions and websites
+share the same settings-owned identity record used by the public profile.
+
 Verification, recovery, and organization invitation email is sent directly by the API Worker
 through a sender-restricted Cloudflare Email Service binding. Local development writes action URLs
 to the API log instead of delivering mail.

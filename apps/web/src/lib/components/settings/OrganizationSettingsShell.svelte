@@ -3,6 +3,7 @@
   import Building2 from 'lucide-svelte/icons/building-2';
   import KeyRound from 'lucide-svelte/icons/key-round';
   import Users from 'lucide-svelte/icons/users';
+  import ExternalLink from 'lucide-svelte/icons/external-link';
   import OrganizationAvatar from '../OrganizationAvatar.svelte';
   import SettingsLayout from './SettingsLayout.svelte';
 
@@ -18,7 +19,7 @@
 
 {#snippet sidebar()}
     <a class="back" href="/organizations"><ArrowLeft size={15} />Back to organizations</a>
-    <div class="identity"><OrganizationAvatar name={name} src={avatarUrl} size={32} /><span><h1>{name}</h1><small>{slug}</small></span></div>
+    <a class="identity" href="/org/{slug}"><OrganizationAvatar name={name} src={avatarUrl} size={32} /><span><h1>{name}</h1><small>{slug}</small></span><ExternalLink size={12} /></a>
     <nav aria-label="Organization settings">
       <a class:active={active === 'profile'} href="/organizations/{slug}/settings/profile"><Building2 size={15} />Profile</a>
       <a class:active={active === 'access'} href="/organizations/{slug}/settings/access"><Users size={15} />People and teams</a>
@@ -28,5 +29,5 @@
 <SettingsLayout {sidebar} content={children} />
 
 <style>
-  .back{display:inline-flex;min-height:34px;align-items:center;gap:7px;margin:0 0 22px;padding:0 8px;border-radius:6px;color:var(--text-muted);font-size:12px;text-decoration:none}.back:hover{background:var(--surface-muted);color:var(--text-strong)}.identity{display:flex;align-items:center;gap:9px;margin:0 0 14px;padding:0 8px}.identity h1{margin:0;color:var(--text-strong);font-size:13px;font-weight:650}.identity small{display:block;margin-top:2px;color:var(--text-faint);font-size:10px}nav{display:grid;gap:2px}nav a{display:flex;min-height:38px;align-items:center;gap:9px;padding:0 10px;border-radius:6px;color:var(--text-muted);font-size:12px;text-decoration:none}nav a.active,nav a:hover{background:var(--brand-soft);color:var(--text-strong)}@media(max-width:720px){nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .back{display:inline-flex;min-height:34px;align-items:center;gap:7px;margin:0 0 22px;padding:0 8px;border-radius:6px;color:var(--text-muted);font-size:12px;text-decoration:none}.back:hover{background:var(--surface-muted);color:var(--text-strong)}.identity{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;align-items:center;gap:9px;margin:0 0 14px;padding:7px 8px;border-radius:6px;color:var(--text-faint);text-decoration:none}.identity:hover{background:var(--surface-muted);color:var(--text-muted)}.identity h1{margin:0;color:var(--text-strong);font-size:13px;font-weight:650}.identity small{display:block;margin-top:2px;color:var(--text-faint);font-size:10px}nav{display:grid;gap:2px}nav a{display:flex;min-height:38px;align-items:center;gap:9px;padding:0 10px;border-radius:6px;color:var(--text-muted);font-size:12px;text-decoration:none}nav a.active,nav a:hover{background:var(--brand-soft);color:var(--text-strong)}@media(max-width:720px){nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

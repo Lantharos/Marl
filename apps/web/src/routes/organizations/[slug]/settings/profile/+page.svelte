@@ -15,6 +15,8 @@
   const slug = $derived($page.params.slug ?? '');
   const canEdit = $derived(data.viewerRole === 'owner');
   let name = $state(untrack(() => data.organization.name as string));
+  let description = $state(untrack(() => data.organization.description as string ?? ''));
+  let website = $state(untrack(() => data.organization.website as string ?? ''));
   let avatarUrl = $state<string | null>(untrack(() => data.organization.avatarUrl as string | null));
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let avatarState = $state<'idle' | 'saving' | 'saved'>('idle');
@@ -29,7 +31,7 @@
   async function save() {
     saveState = 'saving'; error = '';
     try {
-      await api(`/organizations/${slug}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+      await api(`/organizations/${slug}`, { method: 'PATCH', body: JSON.stringify({ name, description, website }) });
       saveState = 'saved'; reset('save');
     } catch (cause) {
       saveState = 'idle'; error = cause instanceof MarlApiError ? cause.message : 'Organization profile could not be saved.';
@@ -53,10 +55,10 @@
 <OrganizationSettingsShell {name} {slug} {avatarUrl} active="profile" showSecrets={data.viewerRole !== 'member'}>
   <header class="page-head"><h2>Profile</h2><p>The identity shown for this organization across Marl.</p></header>
   <section class="avatar-section"><OrganizationAvatar name={name} src={avatarUrl} size={72} /><div><strong>Organization avatar</strong><p>PNG, JPEG, or WebP. Up to 2 MB.</p>{#if canEdit}<input bind:this={avatarInput} type="file" accept="image/png,image/jpeg,image/webp" onchange={chooseAvatar} /><Button loading={avatarState === 'saving'} disabled={avatarState !== 'idle'} onclick={() => avatarInput?.click()}><Camera size={14} />{avatarState === 'saved' ? 'Updated!' : avatarState === 'saving' ? 'Uploading' : 'Change avatar'}</Button>{/if}</div></section>
-  <section class="profile-form"><label><span>Organization name</span><input bind:value={name} disabled={!canEdit} maxlength="120" /></label>{#if canEdit}<SettingsAction state={saveState} disabled={!name.trim() || confirmation.busy} onclick={() => confirmation.request(save)} />{/if}{#if error || confirmation.error}<p class="error" role="alert">{error || confirmation.error}</p>{/if}</section>
+  <section class="profile-form"><label><span>Organization name</span><input bind:value={name} disabled={!canEdit} maxlength="120" /></label><label><span>Description</span><textarea bind:value={description} disabled={!canEdit} maxlength="280" rows="4" placeholder="What does this organization build?"></textarea></label><label><span>Website</span><input bind:value={website} disabled={!canEdit} type="url" maxlength="200" placeholder="https://example.com" /></label>{#if canEdit}<footer><SettingsAction state={saveState} disabled={!name.trim() || confirmation.busy} onclick={() => confirmation.request(save)} /></footer>{/if}{#if error || confirmation.error}<p class="error" role="alert">{error || confirmation.error}</p>{/if}</section>
 </OrganizationSettingsShell>
 <IdentityConfirmationModal open={confirmation.open} method={confirmation.method} description="Confirm this organization profile change before continuing." onClose={confirmation.close} onVerified={confirmation.continue} />
 
 <style>
-  .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle)}h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,.avatar-section p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}section{padding:24px 0;border-bottom:1px solid var(--border-subtle)}.avatar-section{display:flex;align-items:center;gap:18px}.avatar-section strong{display:block;color:var(--text-strong);font-size:13px}.avatar-section p{margin:4px 0 10px;font-size:11px}.avatar-section input{display:none}.profile-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:12px}.profile-form label{display:grid;gap:7px}.profile-form label span{color:var(--text-strong);font-size:12px;font-weight:630}.profile-form input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.profile-form input:focus{border-color:var(--brand)}.profile-form input:disabled{opacity:.65}.error{grid-column:1/-1;margin:0;color:var(--danger);font-size:12px}@media(max-width:620px){.profile-form{grid-template-columns:1fr}.avatar-section{align-items:flex-start}}
+  .page-head{padding-bottom:24px;border-bottom:1px solid var(--border-subtle)}h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,.avatar-section p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}section{padding:24px 0;border-bottom:1px solid var(--border-subtle)}.avatar-section{display:flex;align-items:center;gap:18px}.avatar-section strong{display:block;color:var(--text-strong);font-size:13px}.avatar-section p{margin:4px 0 10px;font-size:11px}.avatar-section input{display:none}.profile-form{display:grid;gap:18px}.profile-form label{display:grid;gap:7px}.profile-form label span{color:var(--text-strong);font-size:12px;font-weight:630}.profile-form input,.profile-form textarea{width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.profile-form input{height:38px}.profile-form textarea{resize:vertical;line-height:1.5}.profile-form input:focus,.profile-form textarea:focus{border-color:var(--brand)}.profile-form input:disabled,.profile-form textarea:disabled{opacity:.65}.profile-form footer{display:flex;justify-content:flex-end;padding-top:14px;border-top:1px solid var(--border-subtle)}.error{margin:0;color:var(--danger);font-size:12px}@media(max-width:620px){.avatar-section{align-items:flex-start}}
 </style>

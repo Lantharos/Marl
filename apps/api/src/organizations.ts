@@ -30,7 +30,7 @@ export async function createOrganization(request: Request, env: Env, principal: 
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'organization_exists', 'That organization name is already in use.');
     throw error;
   }
-  return json({ organization: { id, slug: body.slug, name: body.name, avatarUrl: null, kind: 'team', baseRepositoryRole: body.baseRepositoryRole ?? 'read', role: 'owner' } }, { status: 201 });
+  return json({ organization: { id, slug: body.slug, name: body.name, avatarUrl: null, description: '', website: null, kind: 'team', baseRepositoryRole: body.baseRepositoryRole ?? 'read', role: 'owner' } }, { status: 201 });
 }
 
 export async function getOrganization(env: Env, principal: Principal, slug: string) {
@@ -64,12 +64,15 @@ export async function updateOrganization(request: Request, env: Env, principal: 
   const body = await readJson(request, organizationSettingsBody);
   if (!body) return problem(422, 'invalid_organization', 'Organization settings are invalid.');
   const name = body.name?.trim() ?? organization.name;
+  const description = body.description?.trim() ?? organization.description;
+  const website = body.website?.trim() ?? organization.website ?? '';
+  if (!validWebsite(website)) return problem(422, 'invalid_organization_website', 'Use a valid HTTP or HTTPS website address.');
   const baseRole = organization.kind === 'personal' ? null : body.baseRepositoryRole ?? organization.baseRepositoryRole ?? 'read';
   await env.DB.batch([
-    env.DB.prepare('UPDATE organizations SET name=?,base_repository_role=? WHERE id=?').bind(name, baseRole, organization.id),
-    auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.settings.updated', subjectType: 'organization', subjectId: organization.id, details: { name, baseRepositoryRole: baseRole } })
+    env.DB.prepare('UPDATE organizations SET name=?,description=?,website=?,base_repository_role=? WHERE id=?').bind(name, description, website || null, baseRole, organization.id),
+    auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.settings.updated', subjectType: 'organization', subjectId: organization.id, details: { name, description, website: website || null, baseRepositoryRole: baseRole } })
   ]);
-  return json({ organization: { ...organization, name, baseRepositoryRole: baseRole } });
+  return json({ organization: { ...organization, name, description, website: website || null, baseRepositoryRole: baseRole } });
 }
 
 export async function uploadOrganizationAvatar(request: Request, env: Env, principal: Principal, slug: string) {
@@ -214,7 +217,12 @@ export async function deleteTeam(request: Request, env: Env, principal: Principa
 }
 
 async function organizationBySlug(env: Env, slug: string) {
-  return env.DB.prepare('SELECT id,slug,name,avatar_url AS avatarUrl,kind,base_repository_role AS baseRepositoryRole FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; baseRepositoryRole: string | null }>();
+  return env.DB.prepare('SELECT id,slug,name,avatar_url AS avatarUrl,description,website,kind,base_repository_role AS baseRepositoryRole FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; slug: string; name: string; avatarUrl: string | null; description: string; website: string | null; kind: 'personal' | 'team'; baseRepositoryRole: string | null }>();
+}
+
+function validWebsite(value: string) {
+  if (!value) return true;
+  try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
 }
 
 function randomToken() {

@@ -32,6 +32,42 @@ export interface RepositorySummary {
   language?: string;
 }
 
+export interface PublicProfileRepository extends RepositorySummary {
+  defaultBranch: string;
+}
+
+export interface PublicUserProfile {
+  profile: {
+    handle: string;
+    displayName: string;
+    avatarUrl: string | null;
+    bio: string;
+    website: string | null;
+    joinedAt: string;
+  };
+  stats: { repositories: number; contributions: number; pullRequests: number };
+  contributions: Array<{ date: string; count: number }>;
+  repositories: PublicProfileRepository[];
+  organizations: Array<{ slug: string; name: string; avatarUrl: string | null; description: string }>;
+  activity: Array<{ id: string; title: string; authoredAt: string; owner: string; repository: string }>;
+}
+
+export interface PublicOrganizationProfile {
+  organization: {
+    slug: string;
+    name: string;
+    avatarUrl: string | null;
+    description: string;
+    website: string | null;
+    kind: 'personal' | 'team';
+    createdAt: string;
+  };
+  stats: { repositories: number; members: number; contributions: number };
+  repositories: PublicProfileRepository[];
+  members: Array<{ handle: string; displayName: string; avatarUrl: string | null; role: string }>;
+  activity: Array<{ id: string; title: string; authoredAt: string; author: string | null; authorAvatarUrl: string | null; repository: string }>;
+}
+
 export interface BranchSummary {
   name: string;
   commit: string;

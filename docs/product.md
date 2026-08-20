@@ -62,6 +62,11 @@ A repository contains:
 
 Settings is administrative. It must never become a bucket for primary workflows.
 
+User and organization names open public profile pages. Profiles make identity, public
+repositories, organization membership, and recent public work legible without exposing account
+or organization administration. User profiles include a year of public contribution activity;
+organization profiles emphasize their public repositories and the people maintaining them.
+
 ## Home
 
 Home answers one question: what needs my attention?
@@ -112,8 +117,6 @@ planned.
 - Leaves
 - Gallery and screenshots
 - Social following
-- Contribution graphs
-- Public discovery
 - Project appearance customization
 - Components and monorepo dashboards
 - Releases and package registries
