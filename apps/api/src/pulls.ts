@@ -8,7 +8,7 @@ import type { Env } from './platform';
 import { canManageRepository as membership, createPullEvent, latestReviews, preservePullRefs, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
 import { commitPullUpdate } from './pull-realtime';
-import { commentBody, createPullBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
+import { commentBody, createPullBody, createPullLabelBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
 import { authorizeRepository, authorizeRepositoryId } from './repository-access';
 
 export async function createPull(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -141,6 +141,43 @@ export async function updatePullMetadata(request: Request, env: Env, principal: 
   const locked = body.locked === undefined ? Boolean(pull.lockedAt) : body.locked;
   const update = await commitPullUpdate(env, pull.id, 'metadata.updated', { metadata: { assigneeIds, labelIds, locked }, timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })) }, statements);
   return json({ updated: true, metadata: { assigneeIds, labelIds, locked }, update });
+}
+
+const labelColors = ['#e16f73', '#d58b5f', '#d3a45f', '#77a86b', '#68a7b8', '#668fc7', '#8c7ad8', '#bd6f9c'];
+
+function colorForLabel(name: string) {
+  let hash = 0;
+  for (const character of name) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+  return labelColors[Math.abs(hash) % labelColors.length];
+}
+
+export async function createPullLabel(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
+  const repository = await repo(env, owner, name);
+  if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string }>();
+  if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
+  const body = await readJson(request, createPullLabelBody);
+  const labelName = body?.name.trim().replace(/\s+/g, ' ') ?? '';
+  if (!labelName || /[\u0000-\u001f\u007f]/.test(labelName)) return problem(422, 'invalid_label', 'Enter a valid label name.');
+
+  const existing = await env.DB.prepare('SELECT id,name,color,description FROM repository_labels WHERE repository_id=? AND name=? COLLATE NOCASE').bind(repository.id, labelName).first<{ id: string; name: string; color: string; description: string }>();
+  const label = existing ?? { id: identifier('label'), name: labelName, color: colorForLabel(labelName), description: '' };
+  const current = await env.DB.prepare('SELECT label_id AS id FROM pull_request_labels WHERE pull_request_id=?').bind(pull.id).all<{ id: string }>();
+  if (current.results.some((item) => item.id === label.id)) return json({ label, applied: false });
+  if (current.results.length >= 20) return problem(422, 'too_many_labels', 'A pull request can have up to twenty labels.');
+
+  const labelIds = [...current.results.map((item) => item.id), label.id];
+  const event = createPullEvent(env, pull.id, principal, 'label_added', { label: label.name });
+  const statements = [
+    ...(!existing ? [
+      env.DB.prepare('INSERT INTO repository_labels (id,repository_id,name,color,description) VALUES (?,?,?,?,?)').bind(label.id, repository.id, label.name, label.color, label.description),
+      auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.label_created', subjectType: 'repository_label', subjectId: label.id, details: { name: label.name } })
+    ] : []),
+    env.DB.prepare('INSERT INTO pull_request_labels (pull_request_id,label_id) VALUES (?,?)').bind(pull.id, label.id),
+    event.statement
+  ];
+  const update = await commitPullUpdate(env, pull.id, 'label.created', { label, metadata: { labelIds }, timeline: [{ kind: 'event', value: event.value, createdAt: event.value.createdAt }] }, statements);
+  return json({ label, applied: true, update }, { status: existing ? 200 : 201 });
 }
 
 export async function addPullComment(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {

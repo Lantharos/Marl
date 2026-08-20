@@ -118,6 +118,7 @@ export interface PullRequestSummary {
   targetBranch: string;
   state: PullRequestState;
   reviewStatus: 'none' | 'requested' | 'approved' | 'changes_requested';
+  labels: PullRequestLabel[];
   checkSummary: {
     total: number;
     passed: number;
@@ -152,7 +153,6 @@ export interface PullRequestDetail extends PullRequestSummary {
   threads: ReviewThread[];
   events: PullRequestEvent[];
   assignees: PullRequestPerson[];
-  labels: PullRequestLabel[];
   availableAssignees: PullRequestPerson[];
   availableLabels: PullRequestLabel[];
   locked: boolean;

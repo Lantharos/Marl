@@ -27,6 +27,7 @@ export const forkRepositoryBody = strictObject({ owner: identifier, name: identi
 export const createPullBody = strictObject({ title: pipe(string(), minLength(1), maxLength(240)), body: optional(bodyString), sourceBranch: branch, sourceRepository: optional(identifier), targetBranch: branch, draft: optional(boolean()) });
 export const updatePullBody = strictObject({ title: optional(pipe(string(), maxLength(240))), body: optional(bodyString) });
 export const pullMetadataBody = strictObject({ assigneeIds: optional(pipe(array(identifier), maxLength(10))), labelIds: optional(pipe(array(identifier), maxLength(20))), locked: optional(boolean()) });
+export const createPullLabelBody = strictObject({ name: pipe(string(), minLength(1), maxLength(50)) });
 export const commentBody = strictObject({ body: pipe(string(), minLength(1), maxLength(50_000)) });
 export const reviewThreadBody = strictObject({ path: pipe(string(), minLength(1), maxLength(4_096)), side: picklist(['old', 'new']), line: pipe(number(), integer(), minValue(1)), startSide: optional(picklist(['old', 'new'])), startLine: optional(pipe(number(), integer(), minValue(1))), body: pipe(string(), minLength(1), maxLength(20_000)) });
 export const resolveThreadBody = strictObject({ resolved: optional(boolean()) });

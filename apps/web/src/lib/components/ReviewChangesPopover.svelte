@@ -3,6 +3,7 @@
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
+  import { positionFloatingPanel } from '$lib/ui/floating';
   import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
 
@@ -30,7 +31,6 @@
 
   let anchor: HTMLDivElement;
   let panel = $state<HTMLDivElement>();
-  let panelStyle = $state('');
   let frame = 0;
 
   function positionPanel() {
@@ -38,24 +38,7 @@
     frame = requestAnimationFrame(() => {
       if (!open || !anchor || !panel) return;
 
-      const viewportMargin = 12;
-      const workbarBottom = 64;
-      const gap = 8;
-      const anchorRect = anchor.getBoundingClientRect();
-      const width = Math.min(430, window.innerWidth - viewportMargin * 2);
-      const left = Math.max(viewportMargin, Math.min(anchorRect.right - width, window.innerWidth - width - viewportMargin));
-      const spaceBelow = Math.max(0, window.innerHeight - anchorRect.bottom - gap - viewportMargin);
-      const spaceAbove = Math.max(0, anchorRect.top - gap - workbarBottom);
-
-      panelStyle = `left:${left}px;top:${anchorRect.bottom + gap}px;width:${width}px;max-height:none`;
-      requestAnimationFrame(() => {
-        if (!panel) return;
-        const desiredHeight = panel.scrollHeight;
-        const placeAbove = desiredHeight > spaceBelow && desiredHeight <= spaceAbove;
-        const availableHeight = placeAbove ? spaceAbove : spaceBelow;
-        const top = placeAbove ? anchorRect.top - gap - Math.min(desiredHeight, availableHeight) : anchorRect.bottom + gap;
-        panelStyle = `left:${left}px;top:${Math.max(workbarBottom, top)}px;width:${width}px;max-height:${availableHeight}px`;
-      });
+      positionFloatingPanel(anchor, panel, 430);
     });
   }
 
@@ -87,7 +70,7 @@
   </Button>
 
   {#if open}
-    <div class="review-popover" bind:this={panel} style={panelStyle} role="dialog" aria-label="Review changes">
+    <div class="review-popover" bind:this={panel} role="dialog" aria-label="Review changes">
       <header>
         <div><strong>Finish your review</strong><span>Share a summary and choose an outcome.</span></div>
         <Button icon size="small" variant="ghost" aria-label="Close review" onclick={() => (open = false)}><X size={14} /></Button>

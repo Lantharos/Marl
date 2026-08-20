@@ -21,9 +21,9 @@ export async function listAllPulls(env: Env, principal: Principal, url: URL): Pr
   const state = url.searchParams.get('state') ?? 'open';
   if (!['open', 'merged', 'closed', 'all'].includes(state)) return problem(422, 'invalid_pull_state', 'Pull request state is invalid.');
   const stateSql = state === 'open' ? "AND pull_requests.state IN ('draft','open')" : state === 'all' ? '' : 'AND pull_requests.state=?';
-  const querySql = search.query ? `AND (pull_requests.title LIKE ? ESCAPE '\\' OR users.handle LIKE ? ESCAPE '\\' OR pull_requests.source_branch LIKE ? ESCAPE '\\' OR pull_requests.target_branch LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')` : '';
+  const querySql = search.query ? `AND (pull_requests.title LIKE ? ESCAPE '\\' OR users.handle LIKE ? ESCAPE '\\' OR pull_requests.source_branch LIKE ? ESCAPE '\\' OR pull_requests.target_branch LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM pull_request_labels JOIN repository_labels ON repository_labels.id=pull_request_labels.label_id WHERE pull_request_labels.pull_request_id=pull_requests.id AND repository_labels.name LIKE ? ESCAPE '\\'))` : '';
   const after = cursor ? 'AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))' : '';
-  const filters = [...access.values, ...(state !== 'open' && state !== 'all' ? [state] : []), ...(search.query ? [search.like, search.like, search.like, search.like, search.like] : [])];
+  const filters = [...access.values, ...(state !== 'open' && state !== 'all' ? [state] : []), ...(search.query ? [search.like, search.like, search.like, search.like, search.like, search.like] : [])];
   const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
   const rows = await env.DB.prepare(`${pullSelect} WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));

@@ -10,6 +10,7 @@
   import ShieldAlert from 'lucide-svelte/icons/shield-alert';
   import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
+  import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
   import UserAvatar from './UserAvatar.svelte';
 
@@ -106,18 +107,18 @@
     <footer>
       {#if locked}<span>Unlock the conversation to comment.</span>{/if}
       <div class="actions" use:dismissable={() => (open = false)}>
-        <button class="primary {selected?.tone ?? 'brand'}" disabled={submitDisabled} onclick={submit}>
+        <Button class={`primary-action ${selected?.tone ?? 'brand'}`} size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} loading={busy} disabled={submitDisabled} onclick={submit}>
           {#if selected?.action === 'approve'}<BadgeCheck size={13} />{:else if selected?.action === 'request_changes'}<ShieldAlert size={13} />{:else if selected?.action === 'merge'}<GitMerge size={13} />{:else if selected?.action === 'close'}<X size={13} />{:else if selected?.action === 'reopen'}<RotateCcw size={13} />{:else if selected?.action === 'ready'}<GitPullRequest size={13} />{:else}<MessageSquare size={13} />{/if}
           {primaryLabel}
-        </button>
-        <button class="more {selected?.tone ?? 'brand'}" aria-label="Choose pull request action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={14} /></button>
+        </Button>
+        <Button class={`more-action ${selected?.tone ?? 'brand'}`} icon size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} aria-label="Choose pull request action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={14} /></Button>
         {#if open}<div class="menu" role="menu">
           {#each selections as selection}
-            <button class:danger={selection.tone === 'danger'} role="menuitemradio" aria-checked={selection.key === selected?.key} onclick={() => choose(selection)}>
+            <Button class={`menu-option${selection.tone === 'danger' ? ' danger' : ''}`} variant="ghost" block role="menuitemradio" aria-checked={selection.key === selected?.key} onclick={() => choose(selection)}>
               <span class="option-icon">{#if selection.action === 'approve'}<BadgeCheck size={14} />{:else if selection.action === 'request_changes'}<ShieldAlert size={14} />{:else if selection.action === 'merge'}<GitMerge size={14} />{:else if selection.action === 'close'}<X size={14} />{:else if selection.action === 'reopen'}<RotateCcw size={14} />{:else if selection.action === 'ready'}<GitPullRequest size={14} />{:else}<MessageSquare size={14} />{/if}</span>
               <span><strong>{selection.label}</strong><small>{selection.description}</small></span>
               <span class="selected">{#if selection.key === selected?.key}<Check size={14} />{/if}</span>
-            </button>
+            </Button>
           {/each}
         </div>{/if}
       </div>
@@ -126,5 +127,5 @@
 </div>
 
 <style>
-  .composer-shell{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:start;gap:10px}.avatar{display:grid;width:30px;height:30px;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-size:9px;font-weight:740}.composer{min-width:0}.composer>footer{display:flex;align-items:center;gap:12px;margin-top:8px}.composer>footer>span{color:var(--text-faint);font-size:9px}.actions{position:relative;display:flex;margin-left:auto}.actions>button{display:flex;height:31px;align-items:center;justify-content:center;border:1px solid var(--brand);background:var(--brand);color:white;cursor:pointer;font-size:9px;font-weight:650}.actions>button:disabled{cursor:not-allowed;opacity:.45}.primary{gap:5px;padding:0 10px;border-radius:6px 0 0 6px}.more{width:31px;padding:0;border-left-color:rgb(255 255 255/.22)!important;border-radius:0 6px 6px 0}.actions>button.success{border-color:var(--success);background:var(--success);color:#0d1812}.actions>button.danger{border-color:var(--danger);background:var(--danger);color:#1b0c0e}.menu{position:absolute;right:0;bottom:38px;z-index:45;width:310px;padding:5px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.menu button{display:grid;width:100%;grid-template-columns:22px minmax(0,1fr) 18px;align-items:center;gap:6px;padding:8px;border:0;border-radius:5px;background:transparent;color:var(--text-muted);cursor:pointer;text-align:left}.menu button:hover{background:var(--surface-hover);color:var(--text-strong)}.menu button.danger{color:var(--danger)}.menu strong,.menu small{display:block}.menu strong{color:inherit;font-size:10px}.menu small{margin-top:2px;color:var(--text-faint);font-size:8px;line-height:1.35}.option-icon,.selected{display:grid;place-items:center}.selected{color:var(--brand)}
+  .composer-shell{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:start;gap:10px}.composer{min-width:0}.composer>footer{display:flex;align-items:center;gap:12px;margin-top:8px}.composer>footer>span{color:var(--text-faint);font-size:9px}.actions{position:relative;display:flex;margin-left:auto}.actions :global(.primary-action.button){border-radius:6px 0 0 6px}.actions :global(.more-action.button){border-left-color:rgb(255 255 255/.22);border-radius:0 6px 6px 0}.actions :global(.button.success){border-color:var(--success);background:var(--success);color:#0d1812}.actions :global(.button.success:hover:not(:disabled)){border-color:color-mix(in srgb,var(--success) 84%,white);background:color-mix(in srgb,var(--success) 84%,white)}.menu{position:absolute;right:0;bottom:38px;z-index:45;width:310px;padding:5px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.menu :global(.menu-option.button){height:auto;min-height:48px;display:grid;grid-template-columns:22px minmax(0,1fr) 18px;gap:6px;padding:8px;text-align:left;white-space:normal}.menu :global(.menu-option.button.danger){color:var(--danger)}.menu strong,.menu small{display:block}.menu strong{color:inherit;font-size:10px}.menu small{margin-top:2px;color:var(--text-faint);font-size:8px;line-height:1.35}.option-icon,.selected{display:grid;place-items:center}.selected{color:var(--brand)}
 </style>

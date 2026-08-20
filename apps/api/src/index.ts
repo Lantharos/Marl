@@ -6,7 +6,7 @@ import { json, problem } from './http';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
 import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositoryOverview, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, readRepositoryIcon, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings, uploadRepositoryIcon } from './repositories';
-import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
+import { addPullComment, addThreadComment, createPull, createPullLabel, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
 import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
@@ -182,7 +182,7 @@ const worker = {
     const repositoryIconRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/icon$/);
     if (repositoryIconRoute && request.method === 'PUT') return uploadRepositoryIcon(request, _env, principal, decodeURIComponent(repositoryIconRoute[1]), decodeURIComponent(repositoryIconRoute[2]));
 
-    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|patch|threads|comments|metadata|ready|close|reopen|timeline|updates|live|state))?)?$/);
+    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|patch|threads|comments|metadata|labels|ready|close|reopen|timeline|updates|live|state))?)?$/);
     if (pullRoute) {
       const owner = decodeURIComponent(pullRoute[1]);
       const repository = decodeURIComponent(pullRoute[2]);
@@ -203,6 +203,7 @@ const worker = {
       if (number !== null && action === 'threads' && request.method === 'POST') return createThread(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'comments' && request.method === 'POST') return addPullComment(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'metadata' && request.method === 'PATCH') return updatePullMetadata(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'labels' && request.method === 'POST') return createPullLabel(request, _env, principal, owner, repository, number);
       if (number !== null && ['ready', 'close', 'reopen'].includes(action ?? '') && request.method === 'POST') return transitionPull(_env, principal, owner, repository, number, action as 'ready' | 'close' | 'reopen');
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
