@@ -24,7 +24,7 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
   if (isAuthRoute || !shellUser) return { shellUser: null, shellRepositories: [] as RepositorySummary[], shellOrganizations: [], shellRepositoriesUnavailable: false };
   const [repositoryResult, organizationResult] = await Promise.allSettled([
     apiWith<{ repositories: RepositorySummary[] }>(fetch, '/repositories'),
-    apiWith<{ organizations: Array<{ slug: string; name: string; avatarUrl: string | null; role: string }> }>(fetch, '/organizations')
+    apiWith<{ organizations: Array<{ slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string }> }>(fetch, '/organizations')
   ]);
   return {
     shellUser,

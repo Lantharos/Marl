@@ -35,11 +35,14 @@
   let starring = $state(false);
   let forkOpen = $state(false);
   let forking = $state(false);
-  let forkOwner = $state(untrack(() => data.shellOrganizations?.[0]?.slug ?? ''));
+  let forkOwner = $state(untrack(() => data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? ''));
   let forkName = $state($page.params.repo ?? '');
   let forkError = $state('');
   const cloneUrl = $derived(cloneProtocol === 'ssh' ? repository?.sshCloneUrl ?? '' : repository?.cloneUrl ?? '');
-  const organizationOptions = $derived((data.shellOrganizations ?? []).filter((organization: { role: string }) => organization.role !== 'member').map((organization: { slug: string; name: string }) => ({ value: organization.slug, label: organization.slug, description: organization.name })));
+  const organizationOptions = $derived((data.shellOrganizations ?? [])
+    .filter((organization: { role: string }) => organization.role !== 'member')
+    .toSorted((left: { kind: string; name: string }, right: { kind: string; name: string }) => Number(right.kind === 'personal') - Number(left.kind === 'personal') || left.name.localeCompare(right.name))
+    .map((organization: { slug: string; name: string; kind: string }) => ({ value: organization.slug, label: organization.kind === 'personal' ? data.shellUser.displayName : organization.name, description: organization.kind === 'personal' ? `@${organization.slug} · Personal account` : `@${organization.slug} · Organization` })));
 
   async function copyCloneUrl() { if (!cloneUrl) return; await navigator.clipboard.writeText(cloneUrl); copied = true; setTimeout(() => (copied = false), 1600); }
   async function toggleStar() {
