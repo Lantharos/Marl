@@ -16,7 +16,7 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
     command: ['bun', 'run', '--cwd', 'apps/api', 'dev']
   },
   git: {
-    label: `git       http://127.0.0.1:${ports.git}`,
+    label: `git       http://127.0.0.1:${ports.git}  ssh://git@127.0.0.1:42621`,
     command: ['cargo', 'run', '-p', 'git']
   }
 };

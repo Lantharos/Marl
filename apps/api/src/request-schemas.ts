@@ -9,7 +9,7 @@ const mergeMethod = picklist(['merge', 'squash', 'rebase']);
 export const branchRuleBody = strictObject({
   pattern: branch,
   requiredApprovals: pipe(number(), integer(), minValue(0), maxValue(10)),
-  requireChecks: boolean(),
+  requiredChecks: pipe(array(pipe(string(), minLength(1), maxLength(160))), maxLength(32)),
   requireConversations: boolean(),
   dismissStaleReviews: boolean(),
   allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3))
@@ -35,6 +35,8 @@ export const runnerEnrollmentBody = strictObject({ organization: identifier, exp
 export const runnerRegistrationBody = strictObject({ enrollmentToken: identifier, name: identifier, labels: optional(pipe(array(shortString), maxLength(64))), platform: shortString, architecture: shortString, version: shortString, concurrency: optional(pipe(number(), integer(), minValue(1), maxValue(32))) });
 export const completeJobBody = strictObject({ state: picklist(['success', 'failure', 'canceled']), exitCode: pipe(number(), integer()), summary: optional(shortString) });
 export const artifactUploadBody = strictObject({ name: pipe(string(), minLength(1), maxLength(160)), byteSize: pipe(number(), integer(), minValue(0), maxValue(2 * 1024 * 1024 * 1024)), contentType: optional(pipe(string(), minLength(1), maxLength(200))) });
+export const secretValueBody = strictObject({ value: pipe(string(), minLength(1), maxLength(64_000)) });
+export const sshKeyBody = strictObject({ name: pipe(string(), minLength(1), maxLength(80)), publicKey: pipe(string(), minLength(32), maxLength(16_000)) });
 export const pullRealtimeUpdateBody = strictObject({ id: identifier, pullId: identifier, version: pipe(number(), integer(), minValue(1)), kind: identifier, payload: record(string(), unknown()), createdAt: identifier });
 
 const organizationRole = picklist(['admin', 'member']);

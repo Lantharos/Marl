@@ -54,6 +54,8 @@ pub struct JobLease {
     #[serde(default)]
     pub environment: BTreeMap<String, String>,
     #[serde(default)]
+    pub mask_values: Vec<String>,
+    #[serde(default)]
     pub artifact_paths: Vec<String>,
     pub runtime: JobRuntime,
 }

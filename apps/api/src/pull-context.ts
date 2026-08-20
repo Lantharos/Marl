@@ -53,12 +53,23 @@ export async function summarizePullRows(env: Env, rows: PullRow[]) {
   const placeholders = rows.map(() => '?').join(',');
   const ids = rows.map((row) => row.id);
   const [checkRows, reviewRows, threadRows, rules] = await Promise.all([
-    env.DB.prepare(`SELECT pull_requests.id AS pullId, COUNT(checks.id) AS total, COALESCE(SUM(checks.state = 'success'), 0) AS passed, COALESCE(SUM(checks.state IN ('failure', 'canceled')), 0) AS failed, COALESCE(SUM(checks.state IN ('queued', 'running')), 0) AS running FROM pull_requests LEFT JOIN checks ON checks.repository_id = pull_requests.repository_id AND checks.commit_id = pull_requests.source_commit_id WHERE pull_requests.id IN (${placeholders}) GROUP BY pull_requests.id`).bind(...ids).all<{ pullId: string; total: number; passed: number; failed: number; running: number }>(),
+    env.DB.prepare(`SELECT pull_requests.id AS pullId,checks.name,checks.state FROM pull_requests LEFT JOIN checks ON checks.repository_id=pull_requests.repository_id AND checks.commit_id=pull_requests.source_commit_id WHERE pull_requests.id IN (${placeholders})`).bind(...ids).all<{ pullId: string; name: string | null; state: string | null }>(),
     env.DB.prepare(`SELECT pullId,authorId,state,commitId FROM (SELECT pull_request_id AS pullId,author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt,ROW_NUMBER() OVER (PARTITION BY pull_request_id,author_id,commit_id ORDER BY created_at DESC,id DESC) AS rank FROM pull_request_reviews WHERE pull_request_id IN (${placeholders})) WHERE rank=1 ORDER BY createdAt`).bind(...ids).all<{ pullId: string; authorId: string; state: 'commented' | 'approved' | 'changes_requested'; commitId: string }>(),
     env.DB.prepare(`SELECT review_threads.pull_request_id AS pullId, COUNT(*) AS unresolved FROM review_threads JOIN pull_requests ON pull_requests.id = review_threads.pull_request_id AND pull_requests.source_commit_id = review_threads.commit_id WHERE review_threads.pull_request_id IN (${placeholders}) AND review_threads.resolved_at IS NULL GROUP BY review_threads.pull_request_id`).bind(...ids).all<{ pullId: string; unresolved: number }>(),
     branchRulesFor(env, rows.map((row) => ({ repositoryId: row.repositoryId, branch: row.targetBranch })))
   ]);
-  const checks = new Map(checkRows.results.map((item) => [item.pullId, { total: Number(item.total), passed: Number(item.passed), failed: Number(item.failed), running: Number(item.running) }]));
+  const checks = new Map<string, CheckCounts>();
+  for (const row of checkRows.results) {
+    const counts = checks.get(row.pullId) ?? { total: 0, passed: 0, failed: 0, running: 0, items: [] };
+    if (row.name && row.state) {
+      counts.total += 1;
+      if (row.state === 'success') counts.passed += 1;
+      else if (row.state === 'failure' || row.state === 'canceled') counts.failed += 1;
+      else counts.running += 1;
+      counts.items!.push({ name: row.name, state: row.state });
+    }
+    checks.set(row.pullId, counts);
+  }
   const reviews = new Map<string, Array<{ authorId: string; state: string; commitId: string }>>();
   for (const review of reviewRows.results) {
     const items = reviews.get(review.pullId) ?? [];
@@ -67,7 +78,7 @@ export async function summarizePullRows(env: Env, rows: PullRow[]) {
   }
   const threads = new Map(threadRows.results.map((item) => [item.pullId, Number(item.unresolved)]));
   return rows.map((row) => {
-    const rule = rules.get(`${row.repositoryId}:${row.targetBranch}`) ?? { pattern: row.targetBranch, requiredApprovals: 0, requireChecks: false, requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge', 'squash', 'rebase'] as MergeMethod[] };
+    const rule = rules.get(`${row.repositoryId}:${row.targetBranch}`) ?? { pattern: row.targetBranch, requiredApprovals: 0, requiredChecks: [], requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge', 'squash', 'rebase'] as MergeMethod[] };
     const rowReviews = reviews.get(row.id) ?? [];
     const reviewStatus = reviewStatusFor(row, rule, rowReviews);
     const counts = checks.get(row.id) ?? { total: 0, passed: 0, failed: 0, running: 0 };

@@ -9,6 +9,8 @@
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
+  import GitCommit from 'lucide-svelte/icons/git-commit-horizontal';
+  import FileCode from 'lucide-svelte/icons/file-code-2';
   import Home from 'lucide-svelte/icons/house';
   import LogOut from 'lucide-svelte/icons/log-out';
   import Menu from 'lucide-svelte/icons/menu';
@@ -23,8 +25,9 @@
   import BrandMark from './BrandMark.svelte';
   import UserAvatar from './UserAvatar.svelte';
   import { authClient } from '$lib/auth-client';
+  import { api } from '$lib/api';
 
-  type CommandKind = 'home' | 'repository' | 'organization' | 'pull' | 'run' | 'runner' | 'create';
+  type CommandKind = 'home' | 'repository' | 'organization' | 'commit' | 'file' | 'pull' | 'run' | 'runner' | 'create';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
   type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
@@ -37,6 +40,8 @@
   let searchInput = $state<HTMLInputElement>();
   let commandList = $state<HTMLElement>();
   let query = $state('');
+  let remoteResults = $state<Command[]>([]);
+  let searchLoading = $state(false);
   let selectedIndex = $state(0);
   const currentPath = $derived($page.url.pathname);
   const commands = $derived<Command[]>([
@@ -60,10 +65,30 @@
   const results = $derived.by(() => {
     const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
     if (!terms.length) return commands;
-    return commands.filter((command) => {
+    const local = commands.filter((command) => {
       const haystack = `${command.label} ${command.detail} ${command.keywords}`.toLowerCase();
       return terms.every((term) => haystack.includes(term));
     });
+    return [...local, ...remoteResults.filter((remote) => !local.some((command) => command.href === remote.href))];
+  });
+
+  $effect(() => {
+    const value = query.trim();
+    remoteResults = [];
+    searchLoading = value.length >= 2;
+    if (value.length < 2) return;
+    let canceled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await api<{ results: Command[] }>(`/search?q=${encodeURIComponent(value)}`);
+        if (!canceled) remoteResults = response.results.map((result) => ({ ...result, keywords: result.detail }));
+      } catch {
+        if (!canceled) remoteResults = [];
+      } finally {
+        if (!canceled) searchLoading = false;
+      }
+    }, 140);
+    return () => { canceled = true; clearTimeout(timer); };
   });
 
   onMount(() => {
@@ -159,13 +184,13 @@
     <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Search Marl">
       <header><Search size={18} /><input bind:this={searchInput} bind:value={query} oninput={() => (selectedIndex = 0)} onkeydown={commandKeydown} placeholder="Repositories, pull requests, runs..." /><kbd>Esc</kbd></header>
       <section bind:this={commandList} aria-label="Commands">
-        <p>{query ? `${results.length} results` : 'Jump to'}</p>
+        <p>{query ? (searchLoading ? 'Searching Marl…' : `${results.length} results`) : 'Jump to'}</p>
         {#each results as command, index}
           <button data-command={index} class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={15} />{:else if command.kind === 'repository'}<BookOpen size={15} />{:else if command.kind === 'organization'}<Building2 size={15} />{:else if command.kind === 'pull'}<GitPullRequest size={15} />{:else if command.kind === 'run'}<CircleDot size={15} />{:else if command.kind === 'runner'}<Server size={15} />{:else}<Plus size={15} />{/if}
+            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else}<Plus size={16} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>
           </button>
-        {:else}<div class="no-results"><strong>Nothing found</strong><span>Try a repository name or an action.</span></div>{/each}
+        {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, commit, pull request, or run.</span></div>{/if}{/each}
       </section>
     </div>
   </div>

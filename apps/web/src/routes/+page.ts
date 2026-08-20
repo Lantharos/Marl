@@ -9,6 +9,7 @@ export const load: PageLoad = async ({ fetch, parent }) => {
     repositories: layout.shellRepositories,
     runs: dashboard?.runs ?? [],
     runners: dashboard?.runners ?? [],
+    user: layout.shellUser,
     unavailable: layout.shellRepositoriesUnavailable || !dashboard
   };
 };

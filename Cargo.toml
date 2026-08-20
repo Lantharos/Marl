@@ -25,6 +25,8 @@ bytes = "1.11.1"
 futures-util = "0.3.34"
 glob = "0.3.4"
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "stream"] }
+russh = "0.62.5"
+rand = "0.10.2"
 tokio = { version = "1.52.1", features = ["full"] }
 tokio-util = { version = "0.7.18", features = ["io"] }
 runner = { path = "crates/runner" }

@@ -18,13 +18,14 @@
   const failedRuns = $derived(runs.filter((run) => run.state === 'failure'));
   const offlineRunners = $derived(runners.filter((runner) => runner.state === 'offline'));
   const attentionCount = $derived(blockedPulls.length + failedRuns.length + offlineRunners.length);
+  const firstName = $derived((data.user?.displayName || data.user?.handle || 'there').trim().split(/\s+/)[0]);
 
 </script>
 
 <svelte:head><title>Home · Marl</title><meta name="description" content="Your work in Marl." /></svelte:head>
 
 <main class="page">
-  <header class="hello"><div><h1>Hey, Kristof.</h1><p>{#if attentionCount > 0}{attentionCount} {attentionCount === 1 ? 'thing needs' : 'things need'} you.{:else}You’re clear for now.{/if}</p></div></header>
+  <header class="hello"><div><h1>Hey, {firstName}.</h1><p>{#if attentionCount > 0}{attentionCount} {attentionCount === 1 ? 'thing needs' : 'things need'} you.{:else}You’re clear for now.{/if}</p></div></header>
   {#if unavailable}<p class="unavailable">Some live data couldn’t be reached. What loaded is still shown below.</p>{/if}
 
   <div class="workspace">

@@ -6,6 +6,8 @@ import type { Env } from './platform';
 import { artifactUploadBody, completeJobBody, runnerEnrollmentBody, runnerRegistrationBody } from './request-schemas';
 import { notifyPullsForCommit } from './pull-realtime';
 import { publishRunLog } from './run-realtime';
+import { auditStatement } from './audit';
+import { jobSecrets } from './secrets';
 
 type Runner = { id: string; organizationId: string; name: string; labelsJson: string; concurrency: number; platform: string; architecture: string; version: string };
 const runnerSelect = `SELECT runners.id,runners.name,runners.labels_json AS labelsJson,runners.active_jobs AS activeJobs,runners.concurrency,runners.platform,runners.architecture,runners.version,runners.last_seen_at AS lastSeenAt,CASE WHEN runners.disabled_at IS NOT NULL OR runners.last_seen_at < datetime('now','-90 seconds') THEN 'offline' WHEN runners.active_jobs > 0 THEN 'busy' ELSE 'idle' END AS state FROM runners JOIN organization_members ON organization_members.organization_id=runners.organization_id`;
@@ -101,13 +103,22 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
     break;
   }
   if (!job) return new Response(null, { status: 204 });
+  let secrets: Record<string, string>;
+  try {
+    secrets = await jobSecrets(env, runner.organizationId, job.repositoryId);
+  } catch {
+    await env.DB.prepare(`UPDATE jobs SET state='queued',runner_id=NULL,lease_token_hash=NULL,lease_expires_at=NULL WHERE id=? AND runner_id=?`).bind(job.id, runner.id).run();
+    return problem(503, 'secret_decryption_unavailable', 'Job secrets could not be decrypted.');
+  }
+  const secretNames = Object.keys(secrets);
   await env.DB.batch([
     env.DB.prepare(`UPDATE runners SET active_jobs=active_jobs+1,last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
     env.DB.prepare(`UPDATE runs SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued'`).bind(job.runId),
-    env.DB.prepare(`UPDATE checks SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE repository_id=(SELECT repository_id FROM runs WHERE id=?) AND commit_id=? AND name=(SELECT check_name FROM jobs WHERE id=?)`).bind(job.runId, job.commitId, job.id)
+    env.DB.prepare(`UPDATE checks SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE repository_id=(SELECT repository_id FROM runs WHERE id=?) AND commit_id=? AND name=(SELECT check_name FROM jobs WHERE id=?)`).bind(job.runId, job.commitId, job.id),
+    ...(secretNames.length ? [auditStatement(env, { organizationId: runner.organizationId, repositoryId: job.repositoryId, action: 'ci.secrets.delivered', subjectType: 'job', subjectId: job.id, details: { runnerId: runner.id, names: secretNames } })] : [])
   ]);
   await notifyPullsForCommit(env, job.repositoryId, job.commitId);
-  return json({ job: { id: job.id, leaseToken, run: { id: job.runId, number: job.runNumber, name: job.runName }, repository: { owner: job.owner, name: job.repository, cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${job.owner}/${job.repository}.git` }, branch: job.branch, commitId: job.commitId, steps: JSON.parse(job.stepsJson), environment: JSON.parse(job.environmentJson), artifactPaths: JSON.parse(job.artifactPathsJson), runtime: JSON.parse(job.runtimeJson), leaseExpiresAt: job.leaseExpiresAt } });
+  return json({ job: { id: job.id, leaseToken, run: { id: job.runId, number: job.runNumber, name: job.runName }, repository: { owner: job.owner, name: job.repository, cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${job.owner}/${job.repository}.git` }, branch: job.branch, commitId: job.commitId, steps: JSON.parse(job.stepsJson), environment: { ...JSON.parse(job.environmentJson), ...secrets }, maskValues: Object.values(secrets), artifactPaths: JSON.parse(job.artifactPathsJson), runtime: JSON.parse(job.runtimeJson), leaseExpiresAt: job.leaseExpiresAt } });
 }
 
 async function ownsLease(env: Env, runner: Runner, jobId: string, leaseToken: string | null) {

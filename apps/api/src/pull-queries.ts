@@ -4,6 +4,7 @@ import { pageResult, pageSize, readCursor } from './cursor';
 import { safeRepositoryPath, validBranchName } from './domain';
 import { requestGitGateway } from './git-gateway';
 import { json, problem } from './http';
+import { readListQuery } from './list-query';
 import type { Env } from './platform';
 import { canManageRepository as membership, latestReviews, preservePullRefs, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, reviewStatusFor, summarizePullRows as summarizeRows, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
@@ -12,12 +13,19 @@ import { allPullThreads, initialPullTimeline, olderPullTimeline } from './pull-t
 import { authorizeRepository, repositoryListFilter } from './repository-access';
 
 export async function listAllPulls(env: Env, principal: Principal, url: URL): Promise<Response> {
+  const search = readListQuery(url);
+  if ('error' in search) return search.error;
   const limit = pageSize(url);
   const cursor = readCursor(url);
   const access = repositoryListFilter(principal);
+  const state = url.searchParams.get('state') ?? 'open';
+  if (!['open', 'merged', 'closed', 'all'].includes(state)) return problem(422, 'invalid_pull_state', 'Pull request state is invalid.');
+  const stateSql = state === 'open' ? "AND pull_requests.state IN ('draft','open')" : state === 'all' ? '' : 'AND pull_requests.state=?';
+  const querySql = search.query ? `AND (pull_requests.title LIKE ? ESCAPE '\\' OR users.handle LIKE ? ESCAPE '\\' OR pull_requests.source_branch LIKE ? ESCAPE '\\' OR pull_requests.target_branch LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')` : '';
   const after = cursor ? 'AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))' : '';
-  const values = cursor ? [...access.values, cursor.value, cursor.value, cursor.id, limit + 1] : [...access.values, limit + 1];
-  const rows = await env.DB.prepare(`${pullSelect} WHERE ${access.sql} AND pull_requests.state IN ('draft','open') ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
+  const filters = [...access.values, ...(state !== 'open' && state !== 'all' ? [state] : []), ...(search.query ? [search.like, search.like, search.like, search.like, search.like] : [])];
+  const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
+  const rows = await env.DB.prepare(`${pullSelect} WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
   return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor });
 }
@@ -27,11 +35,14 @@ export async function listPulls(env: Env, principal: Principal, owner: string, n
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const limit = pageSize(url);
   const cursor = readCursor(url);
-  const rank = `CASE pull_requests.state WHEN 'open' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END`;
-  const after = cursor?.rank === undefined ? '' : `AND (${rank}>? OR (${rank}=? AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))))`;
-  const values = cursor?.rank === undefined ? [repository.id, limit + 1] : [repository.id, cursor.rank, cursor.rank, cursor.value, cursor.value, cursor.id, limit + 1];
-  const rows = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? ${after} ORDER BY ${rank},pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
-  const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id, rank: row.state === 'open' ? 0 : row.state === 'draft' ? 1 : 2 }));
+  const state = url.searchParams.get('state') ?? 'all';
+  if (!['open', 'merged', 'closed', 'all'].includes(state)) return problem(422, 'invalid_pull_state', 'Pull request state is invalid.');
+  const stateSql = state === 'open' ? "AND pull_requests.state IN ('draft','open')" : state === 'all' ? '' : 'AND pull_requests.state=?';
+  const after = cursor ? 'AND (pull_requests.updated_at<? OR (pull_requests.updated_at=? AND pull_requests.id<?))' : '';
+  const filters = [repository.id, ...(state !== 'open' && state !== 'all' ? [state] : [])];
+  const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
+  const rows = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? ${stateSql} ${after} ORDER BY pull_requests.updated_at DESC,pull_requests.id DESC LIMIT ?`).bind(...values).all<PullRow>();
+  const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
   return json({ pullRequests: await summarizeRows(env, page.items), nextCursor: page.nextCursor });
 }
 
@@ -43,7 +54,7 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [reviews, checks, unresolvedThreads, rule, commits, labels, availableLabels, assignees, availableAssignees, timeline] = await Promise.all([
     latestReviews(env, pull.id),
-    env.DB.prepare(`SELECT id, name, state, summary, details_url AS detailsUrl, updated_at AS updatedAt FROM checks WHERE repository_id = ? AND commit_id = ? ORDER BY name`).bind(repository.id, pull.sourceCommitId).all<{ state: string }>(),
+    env.DB.prepare(`SELECT id, name, state, summary, details_url AS detailsUrl, updated_at AS updatedAt FROM checks WHERE repository_id = ? AND commit_id = ? ORDER BY name`).bind(repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
     branchRuleFor(env, repository.id, pull.targetBranch),
     pullCommits(env, repository.id, pull.sourceCommitId, pull.targetCommitId),
@@ -53,7 +64,7 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
     env.DB.prepare(`SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle`).bind(repository.organizationId).all(),
     initialPullTimeline(env, principal, pull.id)
   ]);
-  const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length };
+  const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length, items: checks.results.map(({ name: checkName, state: checkState }) => ({ name: checkName, state: checkState })) };
   const reviewStatus = reviewStatusFor(pull, rule, reviews.results);
   const unresolved = Number(unresolvedThreads?.count ?? 0);
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, unresolved);
@@ -94,12 +105,12 @@ export async function getPullState(env: Env, principal: Principal, owner: string
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? AND pull_requests.number=?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [checks, reviews, unresolvedThreads, rule] = await Promise.all([
-    env.DB.prepare('SELECT state FROM checks WHERE repository_id=? AND commit_id=?').bind(repository.id, pull.sourceCommitId).all<{ state: string }>(),
+    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id=? AND commit_id=?').bind(repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     latestReviews(env, pull.id),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
     branchRuleFor(env, repository.id, pull.targetBranch)
   ]);
-  const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length };
+  const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length, items: checks.results };
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, Number(unresolvedThreads?.count ?? 0));
   const pullSummary = summary(pull, checkSummary, reviewStatusFor(pull, rule, reviews.results), Number(unresolvedThreads?.count ?? 0));
   const state = pull.state === 'open' ? (requirements.ready ? 'mergeable' : 'blocked') : pullSummary.state;

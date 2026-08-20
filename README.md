@@ -10,6 +10,8 @@ Runner registration, repository workflows, service installation, labels, logs, a
 artifacts are documented in [`docs/runners.md`](docs/runners.md).
 The repository acknowledgement and recovery contract is documented in
 [`docs/repository-reliability.md`](docs/repository-reliability.md).
+SSH key authentication and the production TCP topology are documented in
+[`docs/ssh.md`](docs/ssh.md).
 
 ## Development
 
@@ -19,9 +21,13 @@ Install JavaScript dependencies once:
 bun install
 ```
 
-Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECRET` before
+Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECRET` and
+`SECRET_ENCRYPTION_KEY` before
 creating an account. Ave credentials are optional; local password and passkey sign-in work without
 them.
+
+Generate the 32-byte encryption key with
+`bun -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"`.
 
 Production authentication email is sent directly through Cloudflare Email Service. Onboard
 `marl.sh` for Email Sending and keep the `EMAIL` binding restricted to `noreply@marl.sh`.
@@ -38,6 +44,7 @@ Marl uses a dedicated local port range so it can run alongside other projects:
 - API: `http://127.0.0.1:42618`
 - Git: `http://127.0.0.1:42619`
 - Worker inspector: `42620`
+- SSH Git: `ssh://git@127.0.0.1:42621`
 
 The development supervisor owns every service process tree. Pressing Ctrl+C stops Vite,
 Wrangler, the Rust Git gateway, and their descendants together. If one service fails, the

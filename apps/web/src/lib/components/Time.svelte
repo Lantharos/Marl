@@ -7,5 +7,5 @@
 <time class={className} datetime={value} title={formatAbsoluteTime(value)}>{formatTimestamp(value)}</time>
 
 <style>
-  time{color:var(--text-faint);font-size:9px}.end{margin-left:auto}.right{text-align:right}
+  time{color:var(--text-muted);font-size:11px}.end{margin-left:auto}.right{text-align:right}
 </style>

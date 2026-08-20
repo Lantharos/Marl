@@ -4,6 +4,6 @@ import { routeLoad } from '$lib/load';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ fetch, params }) => {
-  const result = await routeLoad(apiWith<{ repository: RepositorySummary & { cloneUrl: string } }>(fetch, `/repositories/${params.owner}/${params.repo}`));
+  const result = await routeLoad(apiWith<{ repository: RepositorySummary & { cloneUrl: string; sshCloneUrl: string | null } }>(fetch, `/repositories/${params.owner}/${params.repo}`));
   return { repository: result.repository };
 };

@@ -12,6 +12,9 @@ import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, 
 import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 import { connectRunRealtime } from './run-realtime';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
+import { search } from './search';
+import { organizationSecrets, repositorySecrets } from './secrets';
+import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys } from './ssh-keys';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -63,13 +66,21 @@ const worker = {
       if (!principal && !gatewayTrusted) return problem(401, 'authentication_required', 'Authenticate the Git gateway.');
       return indexGit(request, _env, principal, gatewayTrusted);
     }
+    if (request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });
+    if (url.pathname === '/api/v1/ssh-keys') {
+      if (request.method === 'GET') return listSshKeys(_env, principal);
+      if (request.method === 'POST') return createSshKey(request, _env, principal);
+    }
+    const sshKeyRoute = url.pathname.match(/^\/api\/v1\/ssh-keys\/(sshkey_[a-z0-9]+)$/);
+    if (sshKeyRoute && request.method === 'DELETE') return deleteSshKey(request, _env, principal, sshKeyRoute[1]);
     const accessRoute = await handleAccessRoute(request, _env, principal, url);
     if (accessRoute) return accessRoute;
 
     if (request.method === 'GET' && url.pathname === '/api/v1/dashboard') return getDashboard(_env, principal);
+    if (request.method === 'GET' && url.pathname === '/api/v1/search') return search(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/runners') return listRunners(_env, principal);
     const runnerDetail = url.pathname.match(/^\/api\/v1\/runners\/(runner_[a-z0-9]+)$/);
@@ -110,6 +121,11 @@ const worker = {
       if (request.method === 'POST') return createRepository(request, _env, principal);
       return problem(405, 'method_not_allowed', 'This method is not allowed.', { allow: ['GET', 'POST'] });
     }
+
+    const repositorySecretsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/secrets(?:\/([^/]+))?$/);
+    if (repositorySecretsRoute) return repositorySecrets(request, _env, principal, decodeURIComponent(repositorySecretsRoute[1]), decodeURIComponent(repositorySecretsRoute[2]), repositorySecretsRoute[3]);
+    const organizationSecretsRoute = url.pathname.match(/^\/api\/v1\/organizations\/([^/]+)\/secrets(?:\/([^/]+))?$/);
+    if (organizationSecretsRoute) return organizationSecrets(request, _env, principal, decodeURIComponent(organizationSecretsRoute[1]), organizationSecretsRoute[2]);
 
     const branchRulesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/branch-rules$/);
     if (branchRulesRoute) {

@@ -3,7 +3,7 @@ import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
-type BranchRule = { pattern: string; requiredApprovals: number; requireChecks: boolean; requireConversations: boolean; dismissStaleReviews: boolean; allowedMergeMethods: MergeMethod[] };
+type BranchRule = { pattern: string; requiredApprovals: number; requiredChecks: string[]; requireConversations: boolean; dismissStaleReviews: boolean; allowedMergeMethods: MergeMethod[] };
 
 export const load: PageLoad = async ({ fetch, params }) => {
   const base = `/repositories/${params.owner}/${params.repo}`;

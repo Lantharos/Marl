@@ -3,6 +3,7 @@
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import Settings from 'lucide-svelte/icons/settings';
   import Users from 'lucide-svelte/icons/users';
+  import KeyRound from 'lucide-svelte/icons/key-round';
 
   let { children } = $props<{ children: import('svelte').Snippet }>();
   const base = $derived(`/${$page.params.owner}/${$page.params.repo}/settings`);
@@ -15,6 +16,7 @@
       <a class:active={$page.url.pathname === base} href={base}><Settings size={14} />General</a>
       <a class:active={$page.url.pathname.startsWith(`${base}/branches`)} href="{base}/branches"><GitBranch size={14} />Branches</a>
       <a class:active={$page.url.pathname.startsWith(`${base}/access`)} href="{base}/access"><Users size={14} />Access</a>
+      <a class:active={$page.url.pathname.startsWith(`${base}/secrets`)} href="{base}/secrets"><KeyRound size={14} />Secrets</a>
     </nav>
   </aside>
   <main>{@render children()}</main>

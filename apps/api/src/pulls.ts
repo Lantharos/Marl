@@ -303,14 +303,14 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   const [source, target, checks, reviews, unresolvedThreads] = await Promise.all([
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.sourceBranch).first<{ commitId: string }>(),
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.targetBranch).first<{ commitId: string }>(),
-    env.DB.prepare('SELECT state FROM checks WHERE repository_id = ? AND commit_id = ?').bind(repository.id, pull.sourceCommitId).all<{ state: string }>(),
+    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id = ? AND commit_id = ?').bind(repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     env.DB.prepare(`SELECT author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? ORDER BY created_at`).bind(pull.id).all<{ authorId: string; state: string; commitId: string; createdAt: string }>(),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id = ? AND commit_id = ? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>()
   ]);
   if (!source || !target) return problem(409, 'branch_missing', 'Source or target branch no longer exists.');
   const rule = await branchRuleFor(env, repository.id, pull.targetBranch);
   if (!rule.allowedMergeMethods.includes(method as MergeMethod)) return problem(409, 'merge_method_not_allowed', `${method} is not allowed for ${pull.targetBranch}.`);
-  const checkSummary = { total: checks.results.length, passed: checks.results.filter((check) => check.state === 'success').length, failed: checks.results.filter((check) => ['failure', 'canceled'].includes(check.state)).length, running: checks.results.filter((check) => ['queued', 'running'].includes(check.state)).length };
+  const checkSummary = { total: checks.results.length, passed: checks.results.filter((check) => check.state === 'success').length, failed: checks.results.filter((check) => ['failure', 'canceled'].includes(check.state)).length, running: checks.results.filter((check) => ['queued', 'running'].includes(check.state)).length, items: checks.results };
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, unresolvedThreads?.count ?? 0);
   if (!requirements.ready) return problem(409, 'merge_requirements_not_met', requirements.reasons[0] ?? 'Merge requirements are not met.', { reasons: requirements.reasons });
   const gateway = await requestGatewayWrite(env, '/_marl/merge', { operationId: pull.id, method, repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, title: `${method === 'squash' ? 'Squash' : method === 'rebase' ? 'Rebase' : 'Merge'} pull request #${number}: ${pull.title}`, author: principal.handle });

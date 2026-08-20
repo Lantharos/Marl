@@ -14,9 +14,12 @@ const clone = join(temporary, 'clone');
 const runnerConfig = join(temporary, 'runner.json');
 const runnerWork = join(temporary, 'runner-work');
 const cargoTarget = join(root, 'target', 'qualification');
-const [apiPort, gitPort, inspectorPort] = reservePorts(3);
+const [apiPort, gitPort, sshPort, inspectorPort] = reservePorts(4);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const gitUrl = `http://127.0.0.1:${gitPort}`;
+const sshUrl = `ssh://git@127.0.0.1:${sshPort}`;
+const sshKey = join(temporary, 'qualification_ed25519');
+const qualificationSecret = `marl-qualification-secret-${Date.now().toString(36)}`;
 const client = new MarlClient(apiUrl, gitUrl, source);
 let api: ManagedService | undefined;
 let git: ManagedService | undefined;
@@ -38,6 +41,11 @@ try {
   await waitForHttp(`${apiUrl}/health`, api);
   git = startGit();
   await waitForHttp(`${gitUrl}/health`, git);
+  await run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', sshKey], { timeoutMs: 30_000 });
+  await client.request('/api/v1/ssh-keys', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Qualification', publicKey: await Bun.file(`${sshKey}.pub`).text() })
+  });
 
   stage('Push Marl through Smart HTTP');
   const repositoryName = `qualification-${Date.now().toString(36)}`;
@@ -51,6 +59,11 @@ try {
   });
   const token = tokenResponse.token.value;
   const remote = `${gitUrl}/lantharos/${repositoryName}.git`;
+  const sshRemote = `${sshUrl}/lantharos/${repositoryName}.git`;
+  await client.request(`/api/v1/repositories/lantharos/${repositoryName}/secrets/QUALIFICATION_SECRET`, {
+    method: 'PUT',
+    body: JSON.stringify({ value: qualificationSecret })
+  });
   await run(['git', 'clone', '--quiet', '--no-hardlinks', root, source], { timeoutMs: 120_000 });
   await run(['git', 'config', 'user.name', 'Marl Qualification'], { cwd: source });
   await run(['git', 'config', 'user.email', 'qualification@marl.invalid'], { cwd: source });
@@ -61,6 +74,12 @@ try {
   await run(['git', 'commit', '-m', 'Add qualification workflow'], { cwd: source });
   await run(['git', 'remote', 'set-url', 'origin', remote], { cwd: source });
   await client.git(['push', '--set-upstream', 'origin', 'main'], token);
+
+  stage('Authenticate and push through SSH');
+  await run(['git', 'tag', 'qualification-ssh'], { cwd: source });
+  await run(['git', 'push', sshRemote, 'refs/tags/qualification-ssh'], { cwd: source, timeoutMs: 120_000, env: sshEnvironment() });
+  const sshRefs = await run(['git', 'ls-remote', sshRemote, 'refs/tags/qualification-ssh'], { cwd: source, timeoutMs: 120_000, env: sshEnvironment() });
+  assert(sshRefs.stdout.includes('refs/tags/qualification-ssh'), 'SSH Git did not return the pushed reference.');
 
   const workflows = await client.waitFor(
     () => client.request<{ workflows: Array<{ id: string; status: string }> }>(`/api/v1/repositories/lantharos/${repositoryName}/workflows`),
@@ -101,8 +120,9 @@ try {
   assert(completedJob.artifacts.some((artifact) => artifact.name === 'qualification/result.txt'), 'The qualification artifact was not published.');
   const artifact = completedJob.artifacts.find((item) => item.name === 'qualification/result.txt')!;
   assert((await client.text(`/api/v1/artifacts/${artifact.id}`)).trim() === 'passed', 'The stored artifact contents are incorrect.');
-  const logs = await client.text(`/api/v1/jobs/${completedJob.id}/logs`);
+  const logs = await readAllLogs(completedJob.id);
   assert(logs.includes('Verify checkout'), 'Persisted job logs are incomplete.');
+  assert(logs.includes('***') && !logs.includes(qualificationSecret), 'A CI secret was not masked from persisted logs.');
 
   stage('Exercise pull request publication');
   for (const method of ['merge', 'squash', 'rebase'] as const) {
@@ -179,14 +199,15 @@ function startApi() {
   return new ManagedService([
     'bunx', 'wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(apiPort), '--inspector-port', String(inspectorPort),
     '--persist-to', persistence, '--var', 'ENVIRONMENT:development', '--var', `GIT_GATEWAY_URL:${gitUrl}`,
-    '--var', `GIT_PUBLIC_URL:${gitUrl}`, '--var', 'EMAIL_FROM:noreply@marl.sh'
+    '--var', `GIT_PUBLIC_URL:${gitUrl}`, '--var', `GIT_SSH_PUBLIC_URL:${sshUrl}`,
+    '--var', 'SECRET_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', '--var', 'EMAIL_FROM:noreply@marl.sh'
   ], { cwd: apiRoot });
 }
 
 function startGit() {
   return new ManagedService([executable('git-gateway')], {
     cwd: root,
-    env: { MARL_GIT_ROOT: repositories, MARL_API_URL: apiUrl, MARL_GIT_LISTEN: `127.0.0.1:${gitPort}`, MARL_GIT_LOCAL: '1', MARL_GIT_GATEWAY_TOKEN: 'marl-local' }
+    env: { MARL_GIT_ROOT: repositories, MARL_API_URL: apiUrl, MARL_GIT_LISTEN: `127.0.0.1:${gitPort}`, MARL_SSH_LISTEN: `127.0.0.1:${sshPort}`, MARL_GIT_LOCAL: '1', MARL_GIT_GATEWAY_TOKEN: 'marl-local' }
   });
 }
 
@@ -220,6 +241,26 @@ function executable(name: string) {
   return join(cargoTarget, 'debug', `${name}${process.platform === 'win32' ? '.exe' : ''}`);
 }
 
+function sshEnvironment() {
+  const knownHosts = process.platform === 'win32' ? 'NUL' : '/dev/null';
+  return {
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_SSH_COMMAND: `ssh -i "${sshKey}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=${knownHosts}`
+  };
+}
+
+async function readAllLogs(jobId: string) {
+  let cursor = -1;
+  let logs = '';
+  for (;;) {
+    const response = await fetch(`${apiUrl}/api/v1/jobs/${jobId}/logs?after=${cursor}`, { headers: { 'x-marl-dev-user': 'kristof' } });
+    assert(response.ok, `Persisted logs could not be read (${response.status}).`);
+    logs += await response.text();
+    cursor = Number(response.headers.get('x-marl-log-cursor') ?? cursor);
+    if (response.headers.get('x-marl-log-more') !== 'true') return logs;
+  }
+}
+
 function workflowFile() {
   return `name: Qualification
 on:
@@ -235,7 +276,7 @@ jobs:
     steps:
       - name: Verify checkout
         shell: sh
-        run: test -f README.md && mkdir -p qualification && printf 'passed\\n' > qualification/result.txt
+        run: test -f README.md && test -n "$QUALIFICATION_SECRET" && printf '%s\\n' "$QUALIFICATION_SECRET" && mkdir -p qualification && printf 'passed\\n' > qualification/result.txt
     artifacts: [qualification/result.txt]
 `;
 }

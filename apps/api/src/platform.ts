@@ -50,9 +50,11 @@ export interface Env {
   ENVIRONMENT: string;
   GIT_GATEWAY_URL: string;
   GIT_PUBLIC_URL?: string;
+  GIT_SSH_PUBLIC_URL?: string;
   GIT_GATEWAY_TOKEN?: string;
   PUBLIC_URL?: string;
   AUTH_SECRET?: string;
+  SECRET_ENCRYPTION_KEY?: string;
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
   AVE_CLIENT_ID?: string;

@@ -11,6 +11,7 @@ mod relocate;
 mod repository_files;
 mod repository_storage;
 mod smart_http;
+mod ssh;
 mod state;
 
 use anyhow::{Context, Result};
@@ -47,6 +48,7 @@ async fn main() -> Result<()> {
     if state.local_storage {
         tokio::spawn(metadata::backfill_pending_repositories(state.clone()));
     }
+    let ssh_address = std::env::var("MARL_SSH_LISTEN").unwrap_or_else(|_| "127.0.0.1:42621".into());
     let app = Router::new()
         .route("/health", axum::routing::get(|| async { "ok\n" }))
         .route(
@@ -111,9 +113,12 @@ async fn main() -> Result<()> {
             axum::routing::post(compare::compare_request),
         )
         .route("/_marl/patch", axum::routing::post(compare::patch_request))
-        .route("/_marl/commit", axum::routing::post(compare::commit_request))
+        .route(
+            "/_marl/commit",
+            axum::routing::post(compare::commit_request),
+        )
         .route("/{*path}", any(smart_http::git_request))
-        .with_state(state);
+        .with_state(state.clone());
     let address = std::env::var("MARL_GIT_LISTEN").unwrap_or_else(|_| "127.0.0.1:42619".into());
     let listener = tokio::net::TcpListener::bind(&address)
         .await
@@ -122,8 +127,11 @@ async fn main() -> Result<()> {
         "Marl Git gateway listening on http://{address} with repositories at {}",
         repository_root
     );
-    axum::serve(listener, app)
-        .await
-        .context("serve Git gateway")?;
+    let http = async {
+        axum::serve(listener, app)
+            .await
+            .context("serve Git gateway")
+    };
+    tokio::try_join!(http, ssh::serve(state, ssh_address))?;
     Ok(())
 }

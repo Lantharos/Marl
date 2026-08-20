@@ -82,6 +82,7 @@ impl RunnerClient {
     }
 
     pub async fn log(&self, job: &JobLease, sequence: u64, bytes: Vec<u8>) -> Result<()> {
+        let bytes = redact(bytes, &job.mask_values);
         self.lease(
             self.http.put(format!(
                 "{}/api/v1/runner/jobs/{}/logs/{sequence}",
@@ -229,6 +230,22 @@ impl RunnerClient {
     }
 }
 
+fn redact(bytes: Vec<u8>, values: &[String]) -> Vec<u8> {
+    if values.is_empty() {
+        return bytes;
+    }
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    let mut ordered = values
+        .iter()
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    ordered.sort_by_key(|value| std::cmp::Reverse(value.len()));
+    for value in ordered {
+        text = text.replace(value, "***");
+    }
+    text.into_bytes()
+}
+
 async fn response_json<T: serde::de::DeserializeOwned>(
     response: reqwest::Response,
     operation: &str,
@@ -242,4 +259,18 @@ async fn response_json<T: serde::de::DeserializeOwned>(
         .json()
         .await
         .with_context(|| format!("{operation} returned an invalid response"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact;
+
+    #[test]
+    fn masks_overlapping_secret_values_before_upload() {
+        let output = redact(
+            b"token=secret-value short=secret".to_vec(),
+            &["secret".into(), "secret-value".into()],
+        );
+        assert_eq!(String::from_utf8(output).unwrap(), "token=*** short=***");
+    }
 }

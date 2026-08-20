@@ -8,6 +8,7 @@
     "ENVIRONMENT": "development",
     "GIT_GATEWAY_URL": "http://127.0.0.1:42619",
     "GIT_PUBLIC_URL": "http://127.0.0.1:42619",
+    "GIT_SSH_PUBLIC_URL": "ssh://git@127.0.0.1:42621",
     "EMAIL_FROM": "noreply@marl.sh"
   },
   "send_email": [

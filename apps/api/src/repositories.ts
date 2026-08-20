@@ -6,6 +6,7 @@ import { pageResult, pageSize, readCursor } from './cursor';
 import { pinPullRefs } from './git-writes';
 import { requestGitGateway } from './git-gateway';
 import { json, problem, readJson } from './http';
+import { readListQuery } from './list-query';
 import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { commitPullUpdate } from './pull-realtime';
@@ -132,12 +133,19 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
 }
 
 export async function listRepositories(env: Env, principal: Principal, url: URL): Promise<Response> {
+  const search = readListQuery(url);
+  if ('error' in search) return search.error;
   const limit = pageSize(url);
   const cursor = readCursor(url);
   const access = repositoryListFilter(principal);
+  const visibility = url.searchParams.get('visibility') ?? 'all';
+  if (!['all', 'public', 'private'].includes(visibility)) return problem(422, 'invalid_visibility', 'Repository visibility is invalid.');
+  const visibilitySql = visibility === 'all' ? '' : 'AND repositories.visibility=?';
+  const querySql = search.query ? `AND (repositories.name LIKE ? ESCAPE '\\' OR organizations.slug LIKE ? ESCAPE '\\' OR repositories.description LIKE ? ESCAPE '\\')` : '';
   const after = cursor ? 'AND (repositories.updated_at<? OR (repositories.updated_at=? AND repositories.id<?))' : '';
-  const values = cursor ? [...access.values, cursor.value, cursor.value, cursor.id, limit + 1] : [...access.values, limit + 1];
-  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`).bind(...values).all<RepositoryRow>();
+  const filters = [...access.values, ...(visibility === 'all' ? [] : [visibility]), ...(search.query ? [search.like, search.like, search.like] : [])];
+  const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
+  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ${visibilitySql} ${querySql} ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`).bind(...values).all<RepositoryRow>();
   const page = pageResult(result.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
   return json({ repositories: page.items.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo), nextCursor: page.nextCursor });
 }
@@ -175,7 +183,12 @@ export async function getRepository(env: Env, principal: Principal, owner: strin
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const { organizationId: _, role: __, ...visible } = repo;
-  return json({ repository: { ...visible, cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git` } });
+  const sshBase = env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
+  return json({ repository: {
+    ...visible,
+    cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git`,
+    sshCloneUrl: sshBase ? `${sshBase.replace(/\/$/, '')}/${owner}/${name}.git` : null
+  } });
 }
 
 export async function getRepositorySettings(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {

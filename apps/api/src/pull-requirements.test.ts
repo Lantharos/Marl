@@ -3,8 +3,8 @@ import type { BranchRule } from './branch-rules';
 import { mergeRequirements } from './pull-requirements';
 
 const pull = { authorId: 'author', sourceCommitId: 'head-2', state: 'open' as const };
-const checks = { total: 1, passed: 1, failed: 0, running: 0 };
-const rule: BranchRule = { pattern: 'main', requiredApprovals: 1, requireChecks: true, requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge'] };
+const checks = { total: 1, passed: 1, failed: 0, running: 0, items: [{ name: 'Project checks / Check repository', state: 'success' }] };
+const rule: BranchRule = { pattern: 'main', requiredApprovals: 1, requiredChecks: ['Project checks / Check repository'], requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge'] };
 
 describe('pull merge requirements', () => {
   test('requires a non-author approval, successful checks, and resolved conversations', () => {
@@ -28,7 +28,12 @@ describe('pull merge requirements', () => {
   });
 
   test('blocks pending or absent required checks', () => {
-    expect(mergeRequirements(pull, rule, { total: 0, passed: 0, failed: 0, running: 0 }, [], 0).checksPass).toBe(false);
-    expect(mergeRequirements(pull, rule, { total: 1, passed: 0, failed: 0, running: 1 }, [], 0).checksPass).toBe(false);
+    expect(mergeRequirements(pull, rule, { total: 0, passed: 0, failed: 0, running: 0, items: [] }, [], 0).checksPass).toBe(false);
+    expect(mergeRequirements(pull, rule, { total: 1, passed: 0, failed: 0, running: 1, items: [{ name: 'Project checks / Check repository', state: 'running' }] }, [], 0).checksPass).toBe(false);
+  });
+
+  test('does not block on optional failing checks', () => {
+    const result = mergeRequirements(pull, { ...rule, requiredApprovals: 0 }, { total: 2, passed: 1, failed: 1, running: 0, items: [...checks.items, { name: 'Optional preview', state: 'failure' }] }, [], 0);
+    expect(result.ready).toBe(true);
   });
 });

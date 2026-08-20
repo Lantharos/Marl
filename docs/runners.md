@@ -91,8 +91,16 @@ environments, timeouts, working directories, continue-on-error, `actions/checkou
 `uses:` actions are rejected with a workflow warning; Marl never reports an unsupported
 action as successful.
 
-Environment values in workflow files are ordinary repository content. Secret storage and
-secret injection are not implemented yet, so credentials must not be committed there.
+Environment values in workflow files are ordinary repository content and must not contain
+credentials. Organization administrators can define shared CI secrets, and repository
+administrators can define repository-specific values. Repository values override organization
+values with the same name. Marl encrypts every value with AES-256-GCM, binds its ciphertext to
+the owning scope and name, and only decrypts it when a runner successfully leases a job.
+
+Secrets are injected as environment variables. The runner masks their exact values before every
+log upload, including live frames and persisted chunks. Values are never returned by list APIs or
+shown again in settings. Changing or deleting a secret requires a fresh administrator session and
+is written to the audit log.
 
 ## Execution model
 

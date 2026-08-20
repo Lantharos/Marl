@@ -2,6 +2,7 @@ import type { Principal } from './auth';
 import { identifier } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
 import { json, problem } from './http';
+import { readListQuery } from './list-query';
 import type { Env } from './platform';
 import { notifyPullsForCommit } from './pull-realtime';
 import { authorizeRepository, authorizeRepositoryId, repositoryListFilter, type RepositoryCapability } from './repository-access';
@@ -26,12 +27,19 @@ export function summarizeRun(row: Record<string, unknown>) {
 }
 
 export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
+  const search = readListQuery(url);
+  if ('error' in search) return search.error;
   const limit = pageSize(url);
   const cursor = readCursor(url);
   const access = repositoryListFilter(principal);
+  const state = url.searchParams.get('state') ?? 'all';
+  if (!['all', 'active', 'success', 'failure', 'canceled'].includes(state)) return problem(422, 'invalid_run_state', 'Run state is invalid.');
+  const stateSql = state === 'active' ? "AND runs.state IN ('queued','running')" : state === 'all' ? '' : 'AND runs.state=?';
+  const querySql = search.query ? `AND (runs.name LIKE ? ESCAPE '\\' OR runs.branch LIKE ? ESCAPE '\\' OR runs.commit_id LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')` : '';
   const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
-  const values = cursor ? [...access.values, cursor.value, cursor.value, cursor.id, limit + 1] : [...access.values, limit + 1];
-  const rows = await env.DB.prepare(runSelect(`WHERE ${access.sql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const filters = [...access.values, ...(state !== 'all' && state !== 'active' ? [state] : []), ...(search.query ? [search.like, search.like, search.like, search.like] : [])];
+  const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
+  const rows = await env.DB.prepare(runSelect(`WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
   const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
   return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
 }
@@ -206,8 +214,9 @@ export async function readJobLogs(env: Env, principal: Principal, jobId: string,
   const visible = chunks.results.slice(0, 4);
   const streams = await Promise.all(visible.map(async (chunk) => {
     const object = await env.OBJECTS.get(chunk.objectKey);
-    return object ? new Response(object.body).text() : '';
+    return object ? new Response(object.body).text() : null;
   }));
+  if (streams.some((stream) => stream === null)) return problem(502, 'log_chunk_missing', 'One or more persisted log chunks are unavailable.');
   const cursor = visible.at(-1)?.sequence ?? after;
   return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-marl-log-cursor': String(cursor), 'x-marl-log-more': String(chunks.results.length > visible.length) } });
 }

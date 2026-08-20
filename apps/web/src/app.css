@@ -15,8 +15,8 @@
   --border-strong: #3a3a3f;
   --text-strong: #f1f0ed;
   --text: #d0cfcb;
-  --text-muted: #9a9995;
-  --text-faint: #6f6e6b;
+  --text-muted: #aaa9a4;
+  --text-faint: #85847f;
   --brand: #df7557;
   --brand-hover: #ec8667;
   --brand-strong: #f09a7e;
@@ -65,7 +65,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--canvas); }
-body { color: var(--text); }
+body { color: var(--text); font-size: 14px; line-height: 1.45; }
 ::selection { background: var(--brand-soft-strong); color: var(--text-strong); }
 button, input, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
