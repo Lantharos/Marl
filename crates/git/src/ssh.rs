@@ -1,6 +1,7 @@
 use crate::{
+    metadata::index_local_repository,
     process::Command,
-    repository_files::ensure_bare_repository,
+    repository_files::{ensure_bare_repository, repair_head},
     state::{AppState, repository_path, safe_segment},
 };
 use anyhow::{Context, Result};
@@ -12,6 +13,7 @@ use russh::{
 use serde::Deserialize;
 use std::{collections::HashMap, path::Path, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
+    fs,
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::ChildStdin,
     sync::Mutex,
@@ -31,6 +33,7 @@ struct SshSession {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Authorization {
+    repository_id: String,
     write: bool,
 }
 
@@ -181,8 +184,12 @@ impl server::Handler for SshSession {
             &command.repository,
         )?;
         ensure_bare_repository(&repository).await?;
+        let receives_pack = command.service == "git-receive-pack";
+        if receives_pack {
+            let _ = fs::remove_file(repository.join("marl-generation")).await;
+        }
         let mut child = Command::new(command.service)
-            .arg(repository)
+            .arg(&repository)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .stdin(Stdio::piped())
@@ -198,12 +205,29 @@ impl server::Handler for SshSession {
         let handle = session.handle();
         tokio::spawn(copy_output(stdout, handle.clone(), channel, false));
         tokio::spawn(copy_output(stderr, handle.clone(), channel, true));
+        let state = self.state.clone();
         tokio::spawn(async move {
-            let status = child.wait().await.ok();
+            let status = child.wait().await;
+            if receives_pack && status.as_ref().is_ok_and(|status| status.success()) {
+                if let Err(error) = repair_head(&repository).await {
+                    eprintln!("SSH Git push HEAD repair failed: {error:#}");
+                }
+                if state.local_storage
+                    && let Err(error) = index_local_repository(
+                        &state,
+                        authorization.repository_id,
+                        command.owner,
+                        command.repository,
+                    )
+                    .await
+                {
+                    eprintln!("local SSH Git push indexing failed: {error:#}");
+                }
+            }
             let _ = handle
                 .exit_status_request(
                     channel,
-                    status.and_then(|value| value.code()).unwrap_or(1) as u32,
+                    status.ok().and_then(|value| value.code()).unwrap_or(1) as u32,
                 )
                 .await;
             let _ = handle.eof(channel).await;
