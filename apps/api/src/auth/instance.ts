@@ -11,8 +11,10 @@ import { authSchema } from './schema';
 import { stepUp } from './step-up';
 
 export function createAuth(env: Env, request: Request) {
-  const publicOrigin = env.PUBLIC_URL || new URL(request.url).origin;
-  const publicUrl = new URL(publicOrigin);
+  const configuredUrl = new URL(env.PUBLIC_URL || new URL(request.url).origin);
+  const trustedOrigins = developmentOrigins(env, configuredUrl);
+  const requestOrigin = request.headers.get('origin');
+  const publicUrl = requestOrigin && trustedOrigins.includes(requestOrigin) ? new URL(requestOrigin) : configuredUrl;
   const secret = env.AUTH_SECRET;
   if (!secret) throw new Error('AUTH_SECRET is required.');
 
@@ -22,7 +24,7 @@ export function createAuth(env: Env, request: Request) {
     basePath: '/api/auth',
     secret,
     database: drizzleAdapter(drizzle(env.DB as unknown as D1Database), { provider: 'sqlite', schema: authSchema }),
-    trustedOrigins: [publicUrl.origin],
+    trustedOrigins,
     hooks: {
       before: createAuthMiddleware(async (context) => {
         if (context.path === '/update-user' && context.body?.username !== undefined) throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
@@ -90,6 +92,19 @@ export function createAuth(env: Env, request: Request) {
       ...aveProvider(env)
     ]
   });
+}
+
+function developmentOrigins(env: Env, configuredUrl: URL) {
+  if (env.ENVIRONMENT !== 'development' || configuredUrl.protocol !== 'http:' || !isLoopbackHost(configuredUrl.hostname)) return [configuredUrl.origin];
+  return ['127.0.0.1', 'localhost', '[::1]'].map((hostname) => {
+    const origin = new URL(configuredUrl);
+    origin.hostname = hostname;
+    return origin.origin;
+  });
+}
+
+function isLoopbackHost(hostname: string) {
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
 }
 
 async function usernameUnavailable(env: Env, candidate: string) {

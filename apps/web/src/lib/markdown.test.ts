@@ -23,4 +23,11 @@ describe('GitHub Flavored Markdown', () => {
     expect(html).not.toContain('<script');
     expect(html).not.toContain('javascript:');
   });
+
+  test('renders plain text without interpreting indentation as code', () => {
+    const html = renderMarkdown('License heading\n\n    Indented license text\nhttps://fsf.org/', undefined, 'plain');
+    expect(html).toContain('<pre class="plain-text">License heading\n\n    Indented license text');
+    expect(html).toContain('<a href="https://fsf.org/"');
+    expect(html).not.toContain('<code>');
+  });
 });

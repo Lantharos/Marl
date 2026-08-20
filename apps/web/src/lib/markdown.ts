@@ -8,9 +8,16 @@ export type MarkdownContext = {
   path: string;
 };
 
-export function renderMarkdown(source: string, context?: MarkdownContext) {
+export type MarkdownFormat = 'markdown' | 'plain';
+
+export function renderMarkdown(source: string, context?: MarkdownContext, format: MarkdownFormat = 'markdown') {
+  const normalized = source.replaceAll('\0', '\uFFFD');
+  if (format === 'plain') return sanitize(`<pre class="plain-text">${linkifyPlainText(normalized)}</pre>`);
   const markdown = new Marked({ gfm: true, breaks: false, renderer: markdownRenderer(context) });
-  const rendered = markdown.parse(source.replaceAll('\0', '\uFFFD'), { async: false }) as string;
+  return sanitize(markdown.parse(normalized, { async: false }) as string);
+}
+
+function sanitize(rendered: string) {
   return sanitizeHtml(rendered, {
     allowedTags: [
       'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em',
@@ -21,7 +28,7 @@ export function renderMarkdown(source: string, context?: MarkdownContext) {
     allowedAttributes: {
       a: ['href', 'title', 'target', 'rel'], blockquote: ['class'], col: ['align'], colgroup: ['align'], details: ['open'], div: ['class'],
       h1: ['id'], h2: ['id'], h3: ['id'], h4: ['id'], h5: ['id'], h6: ['id'], img: ['src', 'alt', 'title', 'width', 'height', 'align'],
-      input: ['type', 'checked', 'disabled'], li: ['class'], ol: ['start'], span: ['class'], table: ['align'], td: ['align'], th: ['align'], tr: ['align'], ul: ['class']
+      input: ['type', 'checked', 'disabled'], li: ['class'], ol: ['start'], pre: ['class'], span: ['class'], table: ['align'], td: ['align'], th: ['align'], tr: ['align'], ul: ['class']
     },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: false,
@@ -88,4 +95,21 @@ function externalLinkAttributes(attributes: Record<string, string>) {
 
 function escapeAttribute(value: string) {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function escapeHtml(value: string) {
+  return escapeAttribute(value).replaceAll("'", '&#39;');
+}
+
+function linkifyPlainText(value: string) {
+  let rendered = '';
+  let offset = 0;
+  for (const match of value.matchAll(/https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)]/g)) {
+    const index = match.index ?? 0;
+    const url = match[0];
+    rendered += escapeHtml(value.slice(offset, index));
+    rendered += `<a href="${escapeAttribute(url)}" target="_blank" rel="nofollow noopener noreferrer">${escapeHtml(url)}</a>`;
+    offset = index + url.length;
+  }
+  return rendered + escapeHtml(value.slice(offset));
 }
