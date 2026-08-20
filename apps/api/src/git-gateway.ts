@@ -21,8 +21,8 @@ export interface GitGatewayRequestMap {
 export type GitGatewayPath = keyof GitGatewayRequestMap;
 
 function gatewayToken(env: Env) {
-  const token = env.GIT_GATEWAY_TOKEN ?? (env.ENVIRONMENT === 'development' ? 'marl-local' : undefined);
-  if (!token) throw new Error('GIT_GATEWAY_TOKEN is required outside development.');
+  const token = env.GIT_GATEWAY_TOKEN;
+  if (!token) throw new Error('GIT_GATEWAY_TOKEN is required.');
   return token;
 }
 

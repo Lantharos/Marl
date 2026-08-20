@@ -8,7 +8,7 @@ import { requestGitGateway } from './git-gateway';
 import { json, problem, readJson } from './http';
 import { readListQuery } from './list-query';
 import type { D1Result, Env } from './platform';
-import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
+import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositoryOverviewBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { commitPullUpdate } from './pull-realtime';
 import { queuePushWorkflows } from './workflows';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter } from './repository-access';
@@ -186,7 +186,7 @@ export async function createRepository(request: Request, env: Env, principal: Pr
 export async function getRepository(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const { organizationId: _, role: __, ...visible } = repo;
+  const { organizationId: _, ...visible } = repo;
   const sshBase = env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
   const social = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred,upstream_organizations.slug AS upstreamOwner,upstream.name AS upstreamName FROM repositories LEFT JOIN repositories AS upstream ON upstream.id=repositories.forked_from_repository_id LEFT JOIN organizations AS upstream_organizations ON upstream_organizations.id=upstream.organization_id WHERE repositories.id=?`).bind(principal.id, repo.id).first<{ starCount: number; forkCount: number; starred: number; upstreamOwner: string | null; upstreamName: string | null }>();
   return json({ repository: {
@@ -198,6 +198,71 @@ export async function getRepository(env: Env, principal: Principal, owner: strin
     cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git`,
     sshCloneUrl: sshBase ? `${sshBase.replace(/\/$/, '')}/${owner}/${name}.git` : null
   } });
+}
+
+type OverviewDocument = { path: string; label: string };
+
+const overviewNames = [
+  [/^readme(?:\.(?:md|markdown|txt))?$/i, 'README'],
+  [/^(?:license|copying)(?:\.(?:md|markdown|txt))?$/i, 'License'],
+  [/^contributing(?:\.(?:md|markdown|txt))?$/i, 'Contributing'],
+  [/^code[_-]of[_-]conduct(?:\.(?:md|markdown|txt))?$/i, 'Code of conduct'],
+  [/^security(?:\.(?:md|markdown|txt))?$/i, 'Security'],
+  [/^support(?:\.(?:md|markdown|txt))?$/i, 'Support']
+] as const;
+
+export async function getRepositoryOverview(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  const available = await overviewCandidates(env, repository.id, repository.defaultBranch);
+  const stored = await env.DB.prepare('SELECT overview_documents_json AS documentsJson FROM repositories WHERE id=?').bind(repository.id).first<{ documentsJson: string | null }>();
+  const selected = stored?.documentsJson === null || stored?.documentsJson === undefined
+    ? automaticOverviewDocuments(available)
+    : selectedOverviewDocuments(available, stored.documentsJson);
+  return json({ documents: selected, availableDocuments: available, canManage: repository.role === 'maintain' || repository.role === 'admin' });
+}
+
+export async function updateRepositoryOverview(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.maintain');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  const body = await readJson(request, repositoryOverviewBody);
+  if (!body) return problem(400, 'invalid_json', 'Expected a valid overview document list.');
+  const paths = [...new Set(body.documents)];
+  if (paths.length !== body.documents.length || paths.some((path) => !safeRepositoryPath(path))) return problem(422, 'invalid_overview_documents', 'Overview documents must be unique repository paths.');
+  const available = await overviewCandidates(env, repository.id, repository.defaultBranch);
+  const availablePaths = new Set(available.map((document) => document.path));
+  if (paths.some((path) => !availablePaths.has(path))) return problem(422, 'overview_document_not_found', 'Every overview document must exist on the default branch and use Markdown or plain text.');
+  await env.DB.batch([
+    env.DB.prepare('UPDATE repositories SET overview_documents_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(JSON.stringify(paths), repository.id),
+    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.overview.updated', subjectType: 'repository', subjectId: repository.id, details: { documents: paths } })
+  ]);
+  return json({ documents: paths.map((path) => available.find((document) => document.path === path)!) });
+}
+
+async function overviewCandidates(env: Env, repositoryId: string, defaultBranch: string): Promise<OverviewDocument[]> {
+  const rows = await env.DB.prepare(`SELECT repository_entries.path,repository_entries.name FROM branches JOIN commits ON commits.repository_id=branches.repository_id AND commits.id=branches.commit_id JOIN repository_entries ON repository_entries.repository_id=branches.repository_id AND repository_entries.tree_id=commits.tree_id WHERE branches.repository_id=? AND branches.name=? AND repository_entries.kind='blob' AND (lower(repository_entries.name) LIKE '%.md' OR lower(repository_entries.name) LIKE '%.markdown' OR lower(repository_entries.name) LIKE '%.txt' OR instr(repository_entries.name,'.')=0) ORDER BY repository_entries.path COLLATE NOCASE LIMIT 500`).bind(repositoryId, defaultBranch).all<{ path: string; name: string }>();
+  return rows.results.map((entry) => ({ path: entry.path, label: overviewLabel(entry.name) }));
+}
+
+function automaticOverviewDocuments(available: OverviewDocument[]) {
+  return overviewNames.flatMap(([pattern, label]) => {
+    const document = available.find((candidate) => !candidate.path.includes('/') && pattern.test(candidate.path));
+    return document ? [{ ...document, label }] : [];
+  });
+}
+
+function selectedOverviewDocuments(available: OverviewDocument[], value: string) {
+  let paths: unknown;
+  try { paths = JSON.parse(value); } catch { return automaticOverviewDocuments(available); }
+  if (!Array.isArray(paths)) return automaticOverviewDocuments(available);
+  const documents = new Map(available.map((document) => [document.path, document]));
+  return paths.flatMap((path) => typeof path === 'string' && documents.has(path) ? [documents.get(path)!] : []);
+}
+
+function overviewLabel(name: string) {
+  const known = overviewNames.find(([pattern]) => pattern.test(name));
+  if (known) return known[1];
+  return name.replace(/\.(?:md|markdown|txt)$/i, '').replaceAll(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export async function setRepositoryStar(env: Env, principal: Principal, owner: string, name: string, starred: boolean): Promise<Response> {
@@ -447,7 +512,7 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
   const response = await (env.ENVIRONMENT === 'development'
     ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 })
     : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 })).catch(() => null);
-  if (!response?.ok || !response.body || (env.ENVIRONMENT !== 'development' && response.headers.get('x-marl-git-object-type') !== 'blob')) return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
+  if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob') return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
   const result = new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
   if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
   return result;

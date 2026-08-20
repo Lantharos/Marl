@@ -70,7 +70,7 @@ export async function signingKeys(request: Request, env: Env) {
 }
 
 export async function authorizeSsh(request: Request, env: Env) {
-  if (request.headers.get('x-marl-gateway-token') !== (env.GIT_GATEWAY_TOKEN ?? (env.ENVIRONMENT === 'development' ? 'marl-local' : ''))) return problem(404, 'not_found', 'Route not found.');
+  if (!env.GIT_GATEWAY_TOKEN || request.headers.get('x-marl-gateway-token') !== env.GIT_GATEWAY_TOKEN) return problem(404, 'not_found', 'Route not found.');
   const url = new URL(request.url);
   const fingerprint = url.searchParams.get('fingerprint');
   const owner = url.searchParams.get('owner');

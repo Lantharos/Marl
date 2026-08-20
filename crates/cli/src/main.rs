@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use repository::Repository;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use repository::Repository;
 
 #[derive(Parser)]
 #[command(

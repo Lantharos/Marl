@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|_| "http://127.0.0.1:42618".into()),
         client: reqwest::Client::new(),
         gateway_token: std::env::var("MARL_GIT_GATEWAY_TOKEN")
-            .unwrap_or_else(|_| "marl-local".into()),
+            .expect("MARL_GIT_GATEWAY_TOKEN is required"),
         local_storage,
     });
     let repository_root = state.repositories.display().to_string();
@@ -104,7 +104,10 @@ async fn main() -> Result<()> {
             "/_marl/repositories/relocate",
             axum::routing::post(relocate::relocate_repository),
         )
-        .route("/_marl/repositories/fork", axum::routing::post(fork::fork_repository))
+        .route(
+            "/_marl/repositories/fork",
+            axum::routing::post(fork::fork_repository),
+        )
         .route("/_marl/blob", axum::routing::post(blob::read_blob))
         .route("/_marl/tree", axum::routing::post(metadata::read_tree))
         .route(

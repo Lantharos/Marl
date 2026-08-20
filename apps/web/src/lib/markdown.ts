@@ -1,32 +1,91 @@
 import { Marked, Renderer } from 'marked';
+import sanitizeHtml from 'sanitize-html';
 
-function escapeHtml(value: string) {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-}
-
-function safeUrl(value: string) {
-  if (value.startsWith('/') || value.startsWith('#')) return value;
-  try {
-    const url = new URL(value);
-    return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? value : '#';
-  } catch {
-    return '#';
-  }
-}
-
-const renderer = new Renderer();
-renderer.html = ({ text }) => escapeHtml(text);
-renderer.link = function ({ href, title, tokens }) {
-  const label = this.parser.parseInline(tokens);
-  const safe = escapeHtml(safeUrl(href));
-  const labelTitle = title ? ` title="${escapeHtml(title)}"` : '';
-  const external = safe.startsWith('http') ? ' target="_blank" rel="nofollow noopener noreferrer"' : '';
-  return `<a href="${safe}"${labelTitle}${external}>${label}</a>`;
+export type MarkdownContext = {
+  owner: string;
+  repository: string;
+  revision: string;
+  path: string;
 };
-renderer.image = ({ href, text }) => `<a href="${escapeHtml(safeUrl(href))}" target="_blank" rel="nofollow noopener noreferrer">${escapeHtml(text || 'Image')}</a>`;
 
-const markdown = new Marked({ gfm: true, breaks: true, renderer });
+export function renderMarkdown(source: string, context?: MarkdownContext) {
+  const markdown = new Marked({ gfm: true, breaks: false, renderer: markdownRenderer(context) });
+  const rendered = markdown.parse(source.replaceAll('\0', '\uFFFD'), { async: false }) as string;
+  return sanitizeHtml(rendered, {
+    allowedTags: [
+      'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em',
+      'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'input', 'ins', 'kbd', 'li',
+      'mark', 'ol', 'p', 'pre', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody',
+      'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul', 'var'
+    ],
+    allowedAttributes: {
+      a: ['href', 'title', 'target', 'rel'], blockquote: ['class'], col: ['align'], colgroup: ['align'], details: ['open'], div: ['class'],
+      h1: ['id'], h2: ['id'], h3: ['id'], h4: ['id'], h5: ['id'], h6: ['id'], img: ['src', 'alt', 'title', 'width', 'height', 'align'],
+      input: ['type', 'checked', 'disabled'], li: ['class'], ol: ['start'], span: ['class'], table: ['align'], td: ['align'], th: ['align'], tr: ['align'], ul: ['class']
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
+    transformTags: {
+      a: (_tag, attributes) => ({ tagName: 'a', attribs: externalLinkAttributes(attributes) }),
+      input: (_tag, attributes) => ({ tagName: 'input', attribs: { type: 'checkbox', ...(attributes.checked !== undefined ? { checked: '' } : {}), disabled: '' } }),
+      '*': (tagName, attributes) => ({ tagName, attribs: attributes.id ? { ...attributes, id: `user-content-${attributes.id.replace(/^user-content-/, '')}` } : attributes })
+    }
+  });
+}
 
-export function renderMarkdown(source: string) {
-  return markdown.parse(source || '', { async: false }) as string;
+function markdownRenderer(context?: MarkdownContext) {
+  const renderer = new Renderer();
+  const headings = new Map<string, number>();
+  renderer.heading = function ({ tokens, depth }) {
+    const content = this.parser.parseInline(tokens);
+    const text = tokens.map((token) => 'text' in token && typeof token.text === 'string' ? token.text : '').join(' ');
+    const base = text.toLowerCase().trim().replace(/<[^>]*>/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-') || 'section';
+    const occurrence = headings.get(base) ?? 0;
+    headings.set(base, occurrence + 1);
+    return `<h${depth} id="${occurrence ? `${base}-${occurrence}` : base}">${content}</h${depth}>`;
+  };
+  renderer.link = function ({ href, title, tokens }) {
+    const resolved = resolveMarkdownUrl(href, context, false);
+    const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : '';
+    const external = /^https?:/i.test(resolved) ? ' target="_blank" rel="nofollow noopener noreferrer"' : '';
+    return `<a href="${escapeAttribute(resolved)}"${titleAttribute}${external}>${this.parser.parseInline(tokens)}</a>`;
+  };
+  renderer.image = ({ href, title, text }) => {
+    const resolved = resolveMarkdownUrl(href, context, true);
+    const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : '';
+    return `<img src="${escapeAttribute(resolved)}" alt="${escapeAttribute(text)}"${titleAttribute}>`;
+  };
+  return renderer;
+}
+
+function resolveMarkdownUrl(value: string, context: MarkdownContext | undefined, image: boolean) {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('#') || trimmed.startsWith('/')) return trimmed;
+  try {
+    const absolute = new URL(trimmed);
+    return ['http:', 'https:', 'mailto:'].includes(absolute.protocol) && (!image || absolute.protocol !== 'mailto:') ? trimmed : '#';
+  } catch {}
+  if (!context) return '#';
+  const [relativePath, fragment = ''] = trimmed.split('#', 2);
+  const resolved: string[] = [];
+  for (const segment of [...context.path.split('/').slice(0, -1), ...relativePath.split('/')]) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') resolved.pop();
+    else resolved.push(segment);
+  }
+  if (!resolved.length) return fragment ? `#${fragment}` : '#';
+  const path = resolved.map(encodeURIComponent).join('/');
+  const base = `${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repository)}`;
+  const target = image
+    ? `/api/v1/repositories/${base}/blob/${encodeURIComponent(context.revision)}/${path}`
+    : `/${base}/blob/${encodeURIComponent(context.revision)}/${path}`;
+  return fragment ? `${target}#${encodeURIComponent(fragment)}` : target;
+}
+
+function externalLinkAttributes(attributes: Record<string, string>) {
+  return /^https?:/i.test(attributes.href ?? '') ? { ...attributes, target: '_blank', rel: 'nofollow noopener noreferrer' } : attributes;
+}
+
+function escapeAttribute(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }

@@ -182,7 +182,14 @@ async fn perform_compare(state: &AppState, request: CompareRequest) -> Result<Co
         anyhow::bail!("invalid comparison")
     }
     let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
-    crate::cross_repository::import_commit(state, &repository, request.source_owner.as_deref(), request.source_repository.as_deref(), &request.head).await?;
+    crate::cross_repository::import_commit(
+        state,
+        &repository,
+        request.source_owner.as_deref(),
+        request.source_repository.as_deref(),
+        &request.head,
+    )
+    .await?;
     let merge_base = git_output(&repository, &["merge-base", &request.base, &request.head])
         .await?
         .trim()

@@ -1,17 +1,34 @@
 import { run, type CommandResult } from './process';
 
 export class MarlClient {
+  private cookie = '';
+
   constructor(
     readonly apiUrl: string,
     readonly gitUrl: string,
     readonly workspace: string
   ) {}
 
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async authenticate(account: { name: string; username: string; email: string; password: string }) {
+    const response = await fetch(`${this.apiUrl}/api/auth/sign-up/email`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(account)
+    });
+    if (!response.ok) throw new Error(`Qualification sign-up failed (${response.status}): ${await response.text()}`);
+    this.cookie = response.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
+    if (!this.cookie) throw new Error('Qualification sign-up did not establish a session.');
+  }
+
+  async response(path: string, init: RequestInit = {}) {
     const headers = new Headers(init.headers);
-    headers.set('x-marl-dev-user', 'kristof');
+    if (this.cookie) headers.set('cookie', this.cookie);
     if (init.body) headers.set('content-type', 'application/json');
-    const response = await fetch(`${this.apiUrl}${path}`, { ...init, headers });
+    return fetch(`${this.apiUrl}${path}`, { ...init, headers });
+  }
+
+  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.response(path, init);
     if (!response.ok) {
       throw new Error(`${init.method ?? 'GET'} ${path} failed (${response.status}): ${await response.text()}`);
     }
@@ -19,7 +36,7 @@ export class MarlClient {
   }
 
   async text(path: string) {
-    const response = await fetch(`${this.apiUrl}${path}`, { headers: { 'x-marl-dev-user': 'kristof' } });
+    const response = await this.response(path);
     if (!response.ok) throw new Error(`GET ${path} failed (${response.status}): ${await response.text()}`);
     return response.text();
   }

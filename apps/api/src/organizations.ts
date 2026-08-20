@@ -119,7 +119,7 @@ export async function inviteOrganizationMember(request: Request, env: Env, princ
       await env.DB.prepare('UPDATE organization_invitations SET revoked_at=CURRENT_TIMESTAMP WHERE id=?').bind(invitationId).run();
       return problem(502, 'invitation_delivery_failed', 'The invitation could not be delivered. Try again in a moment.');
   }
-  return json({ invitation: { id: invitationId, email: body.email.toLowerCase(), role: body.role, expiresAt }, ...(env.ENVIRONMENT === 'development' ? { invitationUrl } : {}) }, { status: 201 });
+  return json({ invitation: { id: invitationId, email: body.email.toLowerCase(), role: body.role, expiresAt } }, { status: 201 });
 }
 
 export async function acceptOrganizationInvitation(request: Request, env: Env, principal: Principal, token: string) {

@@ -5,7 +5,7 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositorySettings } from './repositories';
+import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositoryOverview, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings } from './repositories';
 import { addPullComment, addThreadComment, createPull, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
@@ -31,7 +31,7 @@ const worker = {
 
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/methods') return json({ password: true, passkey: true, ave: Boolean(_env.AVE_CLIENT_ID && _env.AVE_CLIENT_SECRET), emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
-    const gatewayTrusted = request.headers.get('x-marl-gateway-token') === (_env.GIT_GATEWAY_TOKEN ?? (_env.ENVIRONMENT === 'development' ? 'marl-local' : ''));
+    const gatewayTrusted = Boolean(_env.GIT_GATEWAY_TOKEN && request.headers.get('x-marl-gateway-token') === _env.GIT_GATEWAY_TOKEN);
     const principal = await authenticate(request, _env);
     const runner = await authenticateRunner(request, _env);
     if (!gatewayTrusted) {
@@ -157,6 +157,14 @@ const worker = {
     }
     const pullSourcesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pull-sources$/);
     if (pullSourcesRoute && request.method === 'GET') return listPullSources(_env, principal, decodeURIComponent(pullSourcesRoute[1]), decodeURIComponent(pullSourcesRoute[2]));
+
+    const overviewRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/overview$/);
+    if (overviewRoute) {
+      const owner = decodeURIComponent(overviewRoute[1]); const repository = decodeURIComponent(overviewRoute[2]);
+      if (request.method === 'GET') return getRepositoryOverview(_env, principal, owner, repository);
+      if (request.method === 'PUT') return updateRepositoryOverview(request, _env, principal, owner, repository);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
 
     const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|detach-fork|delete))?$/);
     if (settingsRoute) {

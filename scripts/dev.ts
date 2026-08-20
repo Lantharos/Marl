@@ -3,6 +3,7 @@ const ports = {
   api: 42618,
   git: 42619
 } as const;
+const gatewayToken = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
 
 type ServiceName = keyof typeof ports;
 type ManagedProcess = ReturnType<typeof Bun.spawn>;
@@ -14,7 +15,7 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
   },
   api: {
     label: `api       http://127.0.0.1:${ports.api}`,
-    command: ['bun', 'run', '--cwd', 'apps/api', 'dev']
+    command: ['bun', 'run', '--cwd', 'apps/api', 'dev', '--', '--var', `GIT_GATEWAY_TOKEN:${gatewayToken}`]
   },
   git: {
     label: `git       http://127.0.0.1:${ports.git}  ssh://git@127.0.0.1:42621`,
@@ -126,8 +127,7 @@ process.on('exit', () => killChildren('SIGKILL'));
 if (selected.includes('api')) {
   console.log('  data      preparing local D1');
   const commands = [
-    ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local'],
-    ['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--file=seed.sql']
+    ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local']
   ];
   for (const command of commands) {
     const preparation = spawn('data', command, { ...process.env, CI: 'true' }, `${workspace}/apps/api`);
@@ -138,7 +138,8 @@ if (selected.includes('api')) {
 }
 
 for (const name of selected) {
-  const child = spawn(name, services[name].command);
+  const env = name === 'git' ? { ...process.env, MARL_GIT_GATEWAY_TOKEN: gatewayToken } : process.env;
+  const child = spawn(name, services[name].command, env);
   void child.exited.then((exitCode) => {
     if (stopping) return;
     if (exitCode !== 0) console.error(`${name} exited with code ${exitCode}; stopping Marl.`);

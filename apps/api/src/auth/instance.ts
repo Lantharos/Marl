@@ -99,7 +99,7 @@ async function usernameUnavailable(env: Env, candidate: string) {
   ]);
   if (organization) return true;
   if (!user) return false;
-  return env.ENVIRONMENT !== 'development' || user.email !== null || user.authUserId !== null;
+  return user.email !== null || user.authUserId !== null;
 }
 
 function aveProvider(env: Env) {

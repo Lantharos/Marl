@@ -18,6 +18,7 @@ export const branchRuleBody = strictObject({
 export const gitIndexBody = strictObject({ repositoryId: identifier, indexId: identifier, complete: optional(boolean()), defaultBranch: optional(branch), commits: array(unknown()), branches: array(unknown()), entries: array(unknown()), changes: array(unknown()) });
 export const createRepositoryBody = strictObject({ owner: identifier, name: identifier, description: optional(pipe(string(), maxLength(280))), visibility: optional(picklist(['public', 'private'])) });
 export const repositorySettingsBody = strictObject({ description: optional(pipe(string(), maxLength(280))), visibility: optional(picklist(['public', 'private'])), defaultBranch: optional(branch), archived: optional(boolean()) });
+export const repositoryOverviewBody = strictObject({ documents: pipe(array(pipe(string(), minLength(1), maxLength(4_096))), maxLength(12)) });
 export const renameRepositoryBody = strictObject({ name: identifier });
 export const transferRepositoryBody = strictObject({ owner: identifier });
 export const deleteRepositoryBody = strictObject({ confirmation: pipe(string(), maxLength(500)) });

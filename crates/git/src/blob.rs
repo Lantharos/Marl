@@ -80,6 +80,7 @@ pub(crate) async fn read_blob(
     Response::builder()
         .header("content-type", "application/octet-stream")
         .header("content-length", size)
+        .header("x-marl-git-object-type", "blob")
         .body(Body::from_stream(ReaderStream::new(stdout)))
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

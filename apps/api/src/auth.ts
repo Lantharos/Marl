@@ -8,7 +8,7 @@ export interface Principal {
   email: string | null;
   avatarUrl: string | null;
   twoFactorEnabled?: boolean;
-  authType: 'session' | 'token' | 'development';
+  authType: 'session' | 'token';
   tokenScopes?: string[];
   tokenRepositoryIds?: string[] | null;
 }
@@ -19,12 +19,6 @@ export async function sha256(value: string): Promise<string> {
 }
 
 export async function authenticate(request: Request, env: Env): Promise<Principal | null> {
-  if (env.ENVIRONMENT === 'development' && request.headers.has('x-marl-dev-user')) {
-    const handle = request.headers.get('x-marl-dev-user')!;
-    const user = await applicationUserByHandle(env, handle);
-    return user ? { ...user, authType: 'development' } : null;
-  }
-
   const token = authorizationToken(request.headers.get('authorization'));
   if (token?.startsWith('marl_pat_')) return authenticatePersonalToken(env, token);
 
@@ -35,7 +29,6 @@ export async function authenticate(request: Request, env: Env): Promise<Principa
 }
 
 export async function requireFreshSession(request: Request, env: Env, principal: Principal) {
-  if (principal.authType === 'development') return env.ENVIRONMENT === 'development';
   if (principal.authType !== 'session') return false;
   const result = await createAuth(env, request).api.getSession({ headers: request.headers, query: { disableCookieCache: true } });
   return Boolean(result && Date.now() - new Date(result.session.createdAt).getTime() <= 15 * 60_000);
@@ -73,23 +66,11 @@ function authorizationToken(authorization: string | null) {
   }
 }
 
-async function applicationUserByHandle(env: Env, handle: string) {
-  return env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null }>();
-}
-
 async function ensureApplicationUser(env: Env, authUser: { id: string; name: string; email: string; image?: string | null; username?: string | null }) {
   const existing = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE').bind(authUser.id, authUser.email).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null; authUserId: string | null }>();
   if (existing) {
     if (!existing.authUserId) await env.DB.prepare('UPDATE users SET auth_user_id=?,avatar_url=COALESCE(avatar_url,?) WHERE id=? AND auth_user_id IS NULL').bind(authUser.id, authUser.image ?? null, existing.id).run();
     return { id: existing.id, handle: existing.handle, displayName: existing.displayName, email: existing.email, avatarUrl: existing.avatarUrl ?? authUser.image ?? null };
-  }
-  if (env.ENVIRONMENT === 'development') {
-    const legacyHandle = authUser.username ?? authUser.email.split('@')[0].toLowerCase();
-    const legacy = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl FROM users WHERE handle=? COLLATE NOCASE AND email IS NULL').bind(legacyHandle).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null }>();
-    if (legacy) {
-      await env.DB.prepare('UPDATE users SET auth_user_id=?,email=?,avatar_url=COALESCE(?,avatar_url) WHERE id=?').bind(authUser.id, authUser.email, authUser.image ?? null, legacy.id).run();
-      return { ...legacy, email: authUser.email, avatarUrl: authUser.image ?? legacy.avatarUrl };
-    }
   }
   const handle = authUser.username ?? await availableHandle(env, authUser.email.split('@')[0] || authUser.name);
   const organizationId = `org_${crypto.randomUUID().replaceAll('-', '')}`;

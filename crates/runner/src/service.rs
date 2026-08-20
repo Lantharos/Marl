@@ -83,7 +83,11 @@ pub fn status() -> Result<()> {
     #[cfg(windows)]
     return run(standard_command("sc.exe").args(["query", SERVICE_NAME]));
     #[cfg(target_os = "linux")]
-    return run(standard_command("systemctl").args(["status", "marl-runner.service", "--no-pager"]));
+    return run(standard_command("systemctl").args([
+        "status",
+        "marl-runner.service",
+        "--no-pager",
+    ]));
     #[cfg(not(any(windows, target_os = "linux")))]
     bail!("service installation is currently supported on Windows and Linux")
 }
