@@ -12,7 +12,8 @@
   let busy = $state(false);
   let error = $state('');
   let methods = $state({ ave: false, passkey: true });
-  const returnTo = $derived($page.url.searchParams.get('returnTo') || '/');
+  const requestedReturnTo = $derived($page.url.searchParams.get('returnTo'));
+  const returnTo = $derived(requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//') ? requestedReturnTo : '/');
 
   $effect(() => { void api<{ ave: boolean; passkey: boolean }>('/auth/methods').then((value) => (methods = value)).catch(() => undefined); });
 
@@ -23,12 +24,17 @@
 
   async function signIn() {
     busy = true; error = '';
-    const result = identity.includes('@')
-      ? await authClient.signIn.email({ email: identity, password, callbackURL: returnTo })
-      : await authClient.signIn.username({ username: identity, password, callbackURL: returnTo });
-    busy = false;
-    if (result.error) { error = result.error.message || 'Sign in failed.'; return; }
-    await finish();
+    try {
+      const result = identity.includes('@')
+        ? await authClient.signIn.email({ email: identity, password, callbackURL: returnTo })
+        : await authClient.signIn.username({ username: identity, password, callbackURL: returnTo });
+      if (result.error) { error = result.error.message || 'Sign in failed.'; return; }
+      await finish();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Sign in failed.';
+    } finally {
+      busy = false;
+    }
   }
 
   async function usePasskey() {
@@ -52,7 +58,7 @@
     {#if error}<p class="auth-error">{error}</p>{/if}
     <label class="auth-field"><span>Email or username</span><input autocomplete="username" bind:value={identity} required /></label>
     <label class="auth-field"><span>Password</span><input type="password" autocomplete="current-password" bind:value={password} required /></label><a class="auth-link recovery" href="/forgot-password">Forgot password?</a>
-    <Button variant="primary" size="large" block disabled={busy}>Sign in</Button>
+    <Button type="submit" variant="primary" size="large" block loading={busy}>Sign in</Button>
     {#if methods.passkey}<div class="auth-divider">or</div><Button size="large" block disabled={busy} onclick={usePasskey}><KeyRound size={15} />Use a passkey</Button>{/if}
     {#if methods.ave}<Button size="large" block disabled={busy} onclick={useAve}>Continue with Ave</Button>{/if}
   </form>

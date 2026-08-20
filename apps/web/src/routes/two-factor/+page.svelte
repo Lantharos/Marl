@@ -9,11 +9,16 @@
   let busy = $state(false);
   async function verify() {
     busy = true; error = '';
-    const result = await authClient.twoFactor.verifyTotp({ code, trustDevice: true });
-    busy = false;
-    if (result.error) { error = result.error.message || 'That code is not valid.'; return; }
-    await invalidateAll(); await goto('/');
+    try {
+      const result = await authClient.twoFactor.verifyTotp({ code, trustDevice: true });
+      if (result.error) { error = result.error.message || 'That code is not valid.'; return; }
+      await invalidateAll(); await goto('/');
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'That code is not valid.';
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
-<AuthShell title="Two-factor authentication" description="Enter the current six-digit code from your authenticator."><form class="auth-form" onsubmit={(event) => { event.preventDefault(); void verify(); }}>{#if error}<p class="auth-error">{error}</p>{/if}<label class="auth-field"><span>Authentication code</span><input inputmode="numeric" autocomplete="one-time-code" maxlength="6" bind:value={code} required /></label><Button variant="primary" size="large" block disabled={busy || code.length !== 6}>Verify</Button></form></AuthShell>
+<AuthShell title="Two-factor authentication" description="Enter the current six-digit code from your authenticator."><form class="auth-form" onsubmit={(event) => { event.preventDefault(); void verify(); }}>{#if error}<p class="auth-error">{error}</p>{/if}<label class="auth-field"><span>Authentication code</span><input inputmode="numeric" autocomplete="one-time-code" maxlength="6" bind:value={code} required /></label><Button type="submit" variant="primary" size="large" block loading={busy} disabled={code.length !== 6}>Verify</Button></form></AuthShell>

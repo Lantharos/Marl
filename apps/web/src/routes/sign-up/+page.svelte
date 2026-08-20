@@ -18,12 +18,17 @@
 
   async function signUp() {
     busy = true; error = '';
-    const result = await authClient.signUp.email({ name, username, email, password, callbackURL: '/' });
-    busy = false;
-    if (result.error) { error = result.error.message || 'Your account could not be created.'; return; }
-    if (emailVerificationRequired) { awaitingVerification = true; return; }
-    await invalidateAll();
-    await goto('/');
+    try {
+      const result = await authClient.signUp.email({ name, username, email, password, callbackURL: '/' });
+      if (result.error) { error = result.error.message || 'Your account could not be created.'; return; }
+      if (emailVerificationRequired) { awaitingVerification = true; return; }
+      await invalidateAll();
+      await goto('/');
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Your account could not be created.';
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
@@ -35,6 +40,6 @@
     <label class="auth-field"><span>Username</span><input autocomplete="username" minlength="2" maxlength="39" pattern="[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?" bind:value={username} oninput={() => (username = username.toLowerCase())} required /><small>Letters, numbers, dots, dashes, and underscores.</small></label>
     <label class="auth-field"><span>Email</span><input type="email" autocomplete="email" bind:value={email} required /></label>
     <label class="auth-field"><span>Password</span><input type="password" autocomplete="new-password" minlength="12" bind:value={password} required /><small>At least 12 characters.</small></label>
-    <Button variant="primary" size="large" block disabled={busy}>Create account</Button>
+    <Button type="submit" variant="primary" size="large" block loading={busy}>Create account</Button>
   </form>{/if}
 </AuthShell>
