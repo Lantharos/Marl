@@ -25,8 +25,8 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
 
 const requested = process.argv[2];
 const selected: ServiceName[] = requested && requested !== 'plan'
-  ? [requested as ServiceName]
-  : ['web', 'api', 'git'];
+  ? requested === 'api' ? ['git', 'api'] : [requested as ServiceName]
+  : ['git', 'api', 'web'];
 
 if (selected.some((name) => !(name in services))) {
   console.error(`Unknown service "${requested}". Use web, api, or git.`);
@@ -137,7 +137,7 @@ if (selected.includes('api')) {
   }
 }
 
-for (const name of selected) {
+function startService(name: ServiceName) {
   const env = name === 'git' ? { ...process.env, MARL_GIT_GATEWAY_TOKEN: gatewayToken } : process.env;
   const child = spawn(name, services[name].command, env);
   void child.exited.then((exitCode) => {
@@ -145,4 +145,24 @@ for (const name of selected) {
     if (exitCode !== 0) console.error(`${name} exited with code ${exitCode}; stopping Marl.`);
     void stop(exitCode);
   });
+}
+
+async function waitForGitGateway() {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${ports.git}/health`, { signal: AbortSignal.timeout(500) });
+      if (response.ok) return;
+    } catch {}
+    await Bun.sleep(75);
+  }
+  throw new Error('Git gateway did not become ready within 30 seconds.');
+}
+
+if (selected.includes('git')) {
+  startService('git');
+  if (selected.includes('api')) await waitForGitGateway();
+}
+for (const name of selected) {
+  if (name !== 'git') startService(name);
 }

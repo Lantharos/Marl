@@ -51,6 +51,7 @@ CREATE TABLE auth_account (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE,
   account_id TEXT NOT NULL,
+  issuer TEXT NOT NULL,
   provider_id TEXT NOT NULL,
   access_token TEXT,
   refresh_token TEXT,
@@ -61,7 +62,7 @@ CREATE TABLE auth_account (
   password TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  UNIQUE (provider_id, account_id)
+  UNIQUE (issuer, account_id)
 );
 
 CREATE TABLE auth_passkey (

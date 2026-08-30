@@ -22,9 +22,7 @@ bun install
 ```
 
 Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECRET` and
-`SECRET_ENCRYPTION_KEY` before
-creating an account. Ave credentials are optional; local password and passkey sign-in work without
-them. Register `${PUBLIC_URL}/api/auth/callback/ave` as the Ave OAuth callback URL.
+`SECRET_ENCRYPTION_KEY` before creating an account. Marl supports password and passkey sign-in.
 
 Generate the 32-byte encryption key with
 `bun -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"`.
@@ -50,13 +48,15 @@ The development supervisor owns every service process tree. Pressing Ctrl+C stop
 Wrangler, the Rust Git gateway, and their descendants together. If one service fails, the
 others are stopped as well so a partial Marl stack is not left running.
 
-Or run a surface independently:
+Or run a smaller surface:
 
 ```powershell
 bun dev:web
 bun dev:api
 bun dev:git
 ```
+
+`bun dev:api` also starts and waits for the Git gateway because repository API routes depend on it.
 
 Production Git hosting is packaged by `apps/git-edge` and `Dockerfile.git` as a Cloudflare
 Worker backed by immutable Git packs in R2, repository and organization Durable Objects,

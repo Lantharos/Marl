@@ -3,7 +3,6 @@
   import QRCode from 'qrcode';
   import Check from 'lucide-svelte/icons/check';
   import KeyRound from 'lucide-svelte/icons/key-round';
-  import Link from 'lucide-svelte/icons/link';
   import Modal from '$lib/components/Modal.svelte';
   import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
@@ -30,13 +29,6 @@
     if (result.error) { passkeyState = 'idle'; error = result.error.message || 'The passkey could not be added.'; return; }
     passkeyState = 'saved';
     setTimeout(() => (passkeyState = 'idle'), 1800);
-  }
-
-  async function linkAve() {
-    busy = 'ave'; error = '';
-    const result = await authClient.linkSocial({ provider: 'ave', callbackURL: '/settings/account' });
-    busy = '';
-    if (result.error) error = result.error.message || 'Ave could not be linked.';
   }
 
   async function beginTwoFactor() {
@@ -72,7 +64,6 @@
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 <section><div><h3>Passkeys</h3><p>Use your device or security key without entering a password.</p></div><Button loading={passkeyState === 'saving'} onclick={addPasskey} disabled={passkeyState !== 'idle'}>{#if passkeyState === 'saved'}<Check size={14} />Added!{:else}<KeyRound size={14} />{passkeyState === 'saving' ? 'Adding' : 'Add passkey'}{/if}</Button></section>
 <section><div><h3>Two-factor authentication</h3><p>{twoFactorEnabled ? 'Your password is protected by a second factor.' : 'Require an authenticator code after password sign-in.'}</p></div><Button variant={twoFactorEnabled ? 'danger-soft' : 'secondary'} onclick={() => { disablingTwoFactor = twoFactorEnabled; twoFactorConfirmed = false; twoFactorDialog = true; twoFactorPassword = ''; twoFactorCode = ''; totpUri = ''; backupCodes = []; }}>{twoFactorEnabled ? 'Disable' : 'Set up'}</Button></section>
-{#if data.methods.ave}<section><div><h3>Ave</h3><p>Use your Ave identity as an additional way to sign in.</p></div><Button onclick={linkAve} disabled={busy === 'ave'}><Link size={14} />Link Ave</Button></section>{/if}
 
 {#snippet twoFactorActions()}{#if disablingTwoFactor}<Button size="small" onclick={() => (twoFactorDialog = false)}>Cancel</Button><Button size="small" variant="danger" disabled={!twoFactorPassword || busy === 'two-factor'} onclick={disableTwoFactor}>Disable two-factor</Button>{:else if twoFactorConfirmed}<Button size="small" variant="primary" onclick={() => (twoFactorDialog = false)}>Done</Button>{:else if !totpUri}<Button size="small" onclick={() => (twoFactorDialog = false)}>Cancel</Button><Button size="small" variant="primary" disabled={!twoFactorPassword || busy === 'two-factor'} onclick={beginTwoFactor}>Continue</Button>{:else}<Button size="small" variant="primary" disabled={twoFactorCode.length !== 6 || busy === 'two-factor'} onclick={confirmTwoFactor}>Verify and enable</Button>{/if}{/snippet}
 <Modal open={twoFactorDialog} title={disablingTwoFactor ? 'Disable two-factor authentication?' : 'Set up two-factor authentication'} description={disablingTwoFactor ? 'Your account will return to password and passkey protection.' : 'Enter your Marl password before changing account security.'} onClose={() => (twoFactorDialog = false)} actions={twoFactorActions}>{#if disablingTwoFactor || !totpUri}<label class="security-field"><span>Password</span><input type="password" autocomplete="current-password" bind:value={twoFactorPassword} /></label>{:else}<div class="totp-setup"><img src={totpQr} alt="Authenticator setup QR code" /><p>{twoFactorConfirmed ? 'Two-factor authentication is active. Save these recovery codes now.' : 'Scan this with your authenticator, then enter the six-digit code.'}</p>{#if !twoFactorConfirmed}<label class="security-field"><span>Authentication code</span><input inputmode="numeric" maxlength="6" autocomplete="one-time-code" bind:value={twoFactorCode} /></label>{/if}<details open={twoFactorConfirmed}><summary>Recovery codes</summary><div class="backup-codes">{#each backupCodes as code (code)}<code>{code}</code>{/each}</div></details></div>{/if}</Modal>

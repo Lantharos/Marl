@@ -2,26 +2,24 @@
   import { goto, invalidateAll } from '$app/navigation';
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/Button.svelte';
-  import { api } from '$lib/api';
   import { authClient } from '$lib/auth-client';
+  import type { PageData } from './$types';
 
+  let { data } = $props<{ data: PageData }>();
   let name = $state('');
   let username = $state('');
   let email = $state('');
   let password = $state('');
   let busy = $state(false);
   let error = $state('');
-  let emailVerificationRequired = $state(false);
   let awaitingVerification = $state(false);
-
-  $effect(() => { void api<{ emailVerificationRequired: boolean }>('/auth/methods').then((methods) => (emailVerificationRequired = methods.emailVerificationRequired)).catch(() => undefined); });
 
   async function signUp() {
     busy = true; error = '';
     try {
       const result = await authClient.signUp.email({ name, username, email, password, callbackURL: '/' });
       if (result.error) { error = result.error.message || 'Your account could not be created.'; return; }
-      if (emailVerificationRequired) { awaitingVerification = true; return; }
+      if (data.emailVerificationRequired) { awaitingVerification = true; return; }
       await invalidateAll();
       await goto('/');
     } catch (cause) {

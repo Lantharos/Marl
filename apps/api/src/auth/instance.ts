@@ -2,7 +2,7 @@ import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { genericOAuth, twoFactor, username } from 'better-auth/plugins';
+import { twoFactor, username } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/d1';
 import { validSlug } from '../domain';
 import { sendTransactionalEmail } from '../email';
@@ -86,15 +86,6 @@ export function createAuth(env: Env, request: Request) {
         '/step-up/verify': { window: 60, max: 5 }
       }
     },
-    account: {
-      identityStrategy: 'provider-id',
-      accountLinking: {
-        enabled: true,
-        trustedProviders: ['ave'],
-        allowDifferentEmails: false,
-        disableImplicitLinking: true
-      }
-    },
     advanced: {
       cookiePrefix: 'marl',
       useSecureCookies: env.ENVIRONMENT !== 'development',
@@ -106,8 +97,7 @@ export function createAuth(env: Env, request: Request) {
       passkey({ rpID: publicUrl.hostname, rpName: 'Marl', origin: publicUrl.origin }),
       twoFactor({ issuer: 'Marl', allowPasswordless: true }),
       username({ minUsernameLength: 2, maxUsernameLength: 39, usernameValidator: validSlug }),
-      stepUp(env),
-      ...aveProvider(env)
+      stepUp(env)
     ]
   });
 }
@@ -137,20 +127,6 @@ async function usernameUnavailable(env: Env, candidate: string) {
   if (organization) return true;
   if (!user) return false;
   return user.email !== null || user.authUserId !== null;
-}
-
-function aveProvider(env: Env) {
-  if (!env.AVE_CLIENT_ID || !env.AVE_CLIENT_SECRET) return [];
-  return [genericOAuth({
-    config: [{
-      providerId: 'ave',
-      discoveryUrl: 'https://aveid.net/.well-known/openid-configuration',
-      clientId: env.AVE_CLIENT_ID,
-      clientSecret: env.AVE_CLIENT_SECRET,
-      scopes: ['openid', 'profile', 'email'],
-      disableImplicitSignUp: true
-    }]
-  })];
 }
 
 async function sendAuthEmail(env: Env, recipient: string, subject: string, actionUrl: string) {

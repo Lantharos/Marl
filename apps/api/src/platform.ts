@@ -57,8 +57,6 @@ export interface Env {
   SECRET_ENCRYPTION_KEY?: string;
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
-  AVE_CLIENT_ID?: string;
-  AVE_CLIENT_SECRET?: string;
   GIT_EDGE: Fetcher;
   PULL_ROOMS: DurableObjectNamespace;
   RUN_ROOMS: DurableObjectNamespace;

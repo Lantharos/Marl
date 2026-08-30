@@ -56,9 +56,7 @@ run reaches a terminal state.
 
 Marl owns its identity database and sessions. Email and password are the recovery-capable root
 credential, while passkeys and authenticator-based two-factor authentication strengthen the same
-account. Ave is an optional, explicitly linked OpenID Connect identity; it cannot create a Marl
-account or implicitly attach itself by matching an email address. An Ave outage therefore cannot
-prevent local account recovery or create a dependency cycle when Ave itself is hosted on Marl.
+account. Marl does not delegate sign-in to external identity providers.
 
 Browser sessions use secure, HTTP-only cookies. Sensitive changes such as repository deletion,
 ownership transfer, organization role changes, runner enrollment, and developer-token management

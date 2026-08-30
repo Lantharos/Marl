@@ -31,7 +31,7 @@ const worker = {
     if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) return handleAuth(request, _env);
 
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
-    if (request.method === 'GET' && url.pathname === '/api/v1/auth/methods') return json({ password: true, passkey: true, ave: Boolean(_env.AVE_CLIENT_ID && _env.AVE_CLIENT_SECRET), emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
+    if (request.method === 'GET' && url.pathname === '/api/v1/auth/config') return json({ emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
     const gatewayTrusted = Boolean(_env.GIT_GATEWAY_TOKEN && request.headers.get('x-marl-gateway-token') === _env.GIT_GATEWAY_TOKEN);
     const principal = await authenticate(request, _env);
     const runner = await authenticateRunner(request, _env);
