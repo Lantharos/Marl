@@ -37,9 +37,10 @@
   let { data } = $props<{ data: PageData }>();
 
   type Tab = 'conversation' | 'commits' | 'changes' | 'checks';
-  const owner = $derived($page.params.owner);
-  const repo = $derived($page.params.repo);
+  const owner = $derived($page.params.owner ?? '');
+  const repo = $derived($page.params.repo ?? '');
   const number = $derived(Number($page.params.number));
+  const markdownContext = $derived({ owner, repository: repo });
   let pull = $state<PullRequestDetail>(untrack(() => data.pull));
   const timeline = new PullTimelineState(untrack(() => data.pull.timeline));
   let diff = $state<PullRequestDiff | null>(null);
@@ -303,13 +304,13 @@
 
 </script>
 
-<svelte:head><title>{pull?.title ?? `Pull request #${number}`} · {owner}/{repo} · Marl</title></svelte:head>
+<svelte:head><title>{pull?.title ?? `Pull request !${number}`} · {owner}/{repo} · Marl</title></svelte:head>
 
 {#if !pull}
   <div class="fatal"><CircleAlert size={24} /><strong>Pull request unavailable</strong><p>{error}</p><a href="/{owner}/{repo}/pulls">Back to pull requests</a></div>
 {:else}
   <header class="pr-header">
-    <div class="title-row"><span class="state {pull.state}">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}{pull.state}</span><h1>{pull.title} <small>#{pull.number}</small></h1>{#if pull.canManage}<div class="lifecycle"><Button size="small" disabled={busy} onclick={openDetailsEditor}><Pencil size={13} />Edit</Button></div>{/if}</div>
+    <div class="title-row"><span class="state {pull.state}">{#if pull.state === 'merged'}<GitMerge size={17} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />{:else}<GitPullRequest size={17} />{/if}{pull.state}</span><h1>{pull.title} <small>!{pull.number}</small></h1>{#if pull.canManage}<div class="lifecycle"><Button size="small" disabled={busy} onclick={openDetailsEditor}><Pencil size={13} />Edit</Button></div>{/if}</div>
     <p><UserProfileLink handle={pull.author} displayName={pull.authorDisplayName} avatar={false} /> wants to merge <b>{pull.sourceBranch}</b> into <b>{pull.targetBranch}</b></p>
     <div class="head-meta"><code>{pull.sourceCommitId.slice(0,7)}</code><ArrowRight size={12} /><code>{pull.targetCommitId.slice(0,7)}</code>{#if diff}<span>·</span><span>{diff.files.length} changed files</span>{/if}</div>
   </header>
@@ -325,7 +326,7 @@
   {#if tab === 'conversation'}
     <div class="conversation-layout">
       <main class="timeline">
-        <article class="comment"><header><UserProfileLink handle={pull.author} displayName={pull.authorDisplayName} avatarUrl={pull.authorAvatar} size={25} /><span>opened this pull request</span><Time class="end" value={pull.createdAt} /></header><div><MarkdownBody source={pull.body || 'No description was provided.'} /></div></article>
+        <article class="comment"><header><UserProfileLink handle={pull.author} displayName={pull.authorDisplayName} avatarUrl={pull.authorAvatar} size={25} /><span>opened this pull request</span><Time class="end" value={pull.createdAt} /></header><div><MarkdownBody source={pull.body || 'No description was provided.'} context={markdownContext} /></div></article>
         {#each timeline.order as key, index (key)}
           {@const item = timeline.items.get(key)}
           {#if item}
@@ -333,37 +334,37 @@
           {#if item.kind === 'event'}
             <PullTimelineEvent event={item.value} />
           {:else if item.kind === 'review'}
-            <article class="event"><span class="event-icon {item.value.state}">{#if item.value.state === 'approved'}<CircleCheck size={15} />{:else if item.value.state === 'changes_requested'}<CircleAlert size={15} />{:else}<MessageSquare size={15} />{/if}</span><div><p><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatar={false} /> {item.value.state === 'approved' ? 'approved these changes' : item.value.state === 'changes_requested' ? 'requested changes' : 'reviewed this pull request'} <Time class="end" value={item.value.createdAt} /></p>{#if item.value.body}<div class="event-body"><MarkdownBody source={item.value.body} /></div>{/if}</div></article>
+            <article class="event"><span class="event-icon {item.value.state}">{#if item.value.state === 'approved'}<CircleCheck size={15} />{:else if item.value.state === 'changes_requested'}<CircleAlert size={15} />{:else}<MessageSquare size={15} />{/if}</span><div><p><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatar={false} /> {item.value.state === 'approved' ? 'approved these changes' : item.value.state === 'changes_requested' ? 'requested changes' : 'reviewed this pull request'} <Time class="end" value={item.value.createdAt} /></p>{#if item.value.body}<div class="event-body"><MarkdownBody source={item.value.body} context={markdownContext} /></div>{/if}</div></article>
           {:else if item.kind === 'thread'}
-            <ReviewThread thread={item.value} {busy} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
+            <ReviewThread thread={item.value} {busy} context={markdownContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
           {:else}
-            <article class="comment"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} minHeight={90} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} />{/if}</div></article>
+            <article class="comment"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} context={markdownContext} minHeight={90} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}</div></article>
           {/if}
           {/if}
         {/each}
-        <PullActionComposer bind:value={commentBody} bind:mergeMethod pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser?.displayName ?? pull.author} avatarUrl={data.shellUser?.avatarUrl} onComment={addPullComment} onAction={composerAction} />
+        <PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser?.displayName ?? pull.author} avatarUrl={data.shellUser?.avatarUrl} onComment={addPullComment} onAction={composerAction} />
       </main>
       <aside class="sidebar"><section class="merge-panel">
         <header>{#if pull.state === 'merged'}<span class="merge-icon merged"><GitMerge size={18} /></span><div><strong>Merged</strong><p>Commit <code>{pull.mergedCommitId?.slice(0,7)}</code> is on {pull.targetBranch}.</p></div>{:else}<span class="merge-icon"><GitMerge size={18} /></span><div><strong>{pull.state === 'mergeable' ? 'Ready to merge' : 'Merge requirements'}</strong><p>Review the current head before merging.</p></div>{/if}</header>
         {#if pull.state !== 'merged'}
           <ul><li class:passed={pull.mergeRequirements.checksPass}><Check size={13} />{pull.checkSummary.total ? `${pull.checkSummary.passed} of ${pull.checkSummary.total} checks passed` : 'No checks reported'}</li><li class:passed={pull.mergeRequirements.approvals >= pull.mergeRequirements.requiredApprovals}><Check size={13} />{pull.mergeRequirements.approvals} of {pull.mergeRequirements.requiredApprovals} required approvals</li><li class:passed={pull.mergeRequirements.conversationsPass}><Check size={13} />{openCurrentThreads()} unresolved current conversations</li></ul>
-          {#if pull.mergeRequirements.reasons.length}<div class="requirement-reasons">{#each pull.mergeRequirements.reasons as reason}<p><CircleAlert size={12} />{reason}</p>{/each}</div>{/if}
+          {#if pull.mergeRequirements.reasons.length}<div class="requirement-reasons">{#each pull.mergeRequirements.reasons as reason (reason)}<p><CircleAlert size={12} />{reason}</p>{/each}</div>{/if}
         {/if}
       </section><PullMetadata {pull} {busy} onUpdate={updateMetadata} onCreateLabel={createLabel} /></aside>
     </div>
   {:else if tab === 'commits'}
-    <section class="commit-list">{#each pull.commits as commit}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{pull.sourceRepository?.owner ?? owner}/{pull.sourceRepository?.name ?? repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={12} />Verified</i>{/if}</small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull request head.</p></div>{/each}</section>
+    <section class="commit-list">{#each pull.commits as commit (commit.id)}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{pull.sourceRepository?.owner ?? owner}/{pull.sourceRepository?.name ?? repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={12} />Verified</i>{/if}</small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull request head.</p></div>{/each}</section>
   {:else if tab === 'changes'}
     <section class="changes-view" bind:this={changesView}>
-      <header class="changes-head"><div><strong>Changes from {pull.sourceBranch}</strong><span>Review the current head <code>{pull.sourceCommitId.slice(0,7)}</code></span></div>{#if pull.state !== 'merged' && pull.state !== 'closed'}<ReviewChangesPopover bind:open={reviewOpen} bind:reviewState bind:body={reviewBody} {busy} onSubmit={submitReview} />{/if}</header>
-      {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer files={diff.files} threads={diff.threads ?? []} {busy} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
+      <header class="changes-head"><div><strong>Changes from {pull.sourceBranch}</strong><span>Review the current head <code>{pull.sourceCommitId.slice(0,7)}</code></span></div>{#if pull.state !== 'merged' && pull.state !== 'closed'}<ReviewChangesPopover bind:open={reviewOpen} bind:reviewState bind:body={reviewBody} context={markdownContext} {busy} onSubmit={submitReview} />{/if}</header>
+      {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer files={diff.files} threads={diff.threads ?? []} context={markdownContext} {busy} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
     </section>
   {:else}
-    <section class="checks-page"><header><h2>Checks for <code>{pull.sourceCommitId.slice(0,7)}</code></h2><p>Required checks must pass on the latest commit.</p></header>{#each pull.checks as check}<article><span class="check-icon {check.state}">{#if check.state === 'success'}<CircleCheck size={17} />{:else if check.state === 'failure'}<CircleAlert size={17} />{:else}<CircleDot size={17} />{/if}</span><div><strong>{check.name}</strong><p>{check.summary}</p></div><span>{check.state}</span></article>{:else}<div class="empty-checks"><CircleDot size={22} /><strong>No checks reported</strong><p>Push a workflow or attach a self-hosted runner to report checks.</p></div>{/each}</section>
+    <section class="checks-page"><header><h2>Checks for <code>{pull.sourceCommitId.slice(0,7)}</code></h2><p>Required checks must pass on the latest commit.</p></header>{#each pull.checks as check (check.id)}<article><span class="check-icon {check.state}">{#if check.state === 'success'}<CircleCheck size={17} />{:else if check.state === 'failure'}<CircleAlert size={17} />{:else}<CircleDot size={17} />{/if}</span><div><strong>{check.name}</strong><p>{check.summary}</p></div><span>{check.state}</span></article>{:else}<div class="empty-checks"><CircleDot size={22} /><strong>No checks reported</strong><p>Push a workflow or attach a self-hosted runner to report checks.</p></div>{/each}</section>
   {/if}
 
   <Modal open={editingDetails} title="Edit pull request" description="Changes are recorded in the conversation timeline." onClose={() => (editingDetails = false)}>
-    {#snippet children()}<div class="details-editor"><label><span>Title</span><input bind:value={editedTitle} maxlength="240" /></label><label><span>Description</span><MarkdownComposer bind:value={editedBody} minHeight={160} /></label></div>{/snippet}
+    {#snippet children()}<div class="details-editor"><label><span>Title</span><input bind:value={editedTitle} maxlength="240" /></label><label><span>Description</span><MarkdownComposer bind:value={editedBody} context={markdownContext} minHeight={160} /></label></div>{/snippet}
     {#snippet actions()}<Button size="small" onclick={() => (editingDetails = false)}>Cancel</Button><Button size="small" variant="primary" loading={busy} disabled={editedTitle.trim().length < 3} onclick={saveDetails}>Save changes</Button>{/snippet}
   </Modal>
 {/if}

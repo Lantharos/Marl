@@ -34,6 +34,11 @@ export const resolveThreadBody = strictObject({ resolved: optional(boolean()) })
 export const reviewBody = strictObject({ state: picklist(['commented', 'approved', 'changes_requested']), body: optional(pipe(string(), maxLength(20_000))) });
 export const mergeBody = strictObject({ method: optional(mergeMethod) });
 
+export const createIssueBody = strictObject({ title: pipe(string(), minLength(1), maxLength(240)), body: optional(bodyString) });
+export const updateIssueBody = strictObject({ title: optional(pipe(string(), maxLength(240))), body: optional(bodyString) });
+export const issueMetadataBody = strictObject({ assigneeIds: optional(pipe(array(identifier), maxLength(10))), labelIds: optional(pipe(array(identifier), maxLength(20))), locked: optional(boolean()) });
+export const issueStateBody = strictObject({ state: picklist(['open', 'closed']) });
+
 export const runnerEnrollmentBody = strictObject({ organization: identifier, expiresMinutes: optional(pipe(number(), integer(), minValue(5), maxValue(60))) });
 export const runnerRegistrationBody = strictObject({ enrollmentToken: identifier, name: identifier, labels: optional(pipe(array(shortString), maxLength(64))), platform: shortString, architecture: shortString, version: shortString, concurrency: optional(pipe(number(), integer(), minValue(1), maxValue(32))) });
 export const completeJobBody = strictObject({ state: picklist(['success', 'failure', 'canceled']), exitCode: pipe(number(), integer()), summary: optional(shortString) });

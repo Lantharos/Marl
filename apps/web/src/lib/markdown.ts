@@ -4,8 +4,8 @@ import sanitizeHtml from 'sanitize-html';
 export type MarkdownContext = {
   owner: string;
   repository: string;
-  revision: string;
-  path: string;
+  revision?: string;
+  path?: string;
 };
 
 export type MarkdownFormat = 'markdown' | 'plain';
@@ -14,6 +14,7 @@ export function renderMarkdown(source: string, context?: MarkdownContext, format
   const normalized = source.replaceAll('\0', '\uFFFD');
   if (format === 'plain') return sanitize(`<pre class="plain-text">${linkifyPlainText(normalized)}</pre>`);
   const markdown = new Marked({ gfm: true, breaks: false, renderer: markdownRenderer(context) });
+  if (context) markdown.use({ extensions: [referenceExtension(context)] });
   return sanitize(markdown.parse(normalized, { async: false }) as string);
 }
 
@@ -65,6 +66,24 @@ function markdownRenderer(context?: MarkdownContext) {
   return renderer;
 }
 
+function referenceExtension(context: MarkdownContext) {
+  return {
+    name: 'marlReference',
+    level: 'inline' as const,
+    start(source: string) { return source.search(/[#!]\d+\b/); },
+    tokenizer(source: string) {
+      const match = /^([#!])(\d+)\b/.exec(source);
+      if (!match) return;
+      return { type: 'marlReference', raw: match[0], marker: match[1], number: match[2] };
+    },
+    renderer(token: { marker: string; number: string }) {
+      const collection = token.marker === '#' ? 'issues' : 'pulls';
+      const reference = `${token.marker}${token.number}`;
+      return `<a class="reference" href="/${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repository)}/${collection}/${token.number}">${reference}</a>`;
+    }
+  };
+}
+
 function resolveMarkdownUrl(value: string, context: MarkdownContext | undefined, image: boolean) {
   const trimmed = value.trim();
   if (trimmed.startsWith('#') || trimmed.startsWith('/')) return trimmed;
@@ -72,7 +91,7 @@ function resolveMarkdownUrl(value: string, context: MarkdownContext | undefined,
     const absolute = new URL(trimmed);
     return ['http:', 'https:', 'mailto:'].includes(absolute.protocol) && (!image || absolute.protocol !== 'mailto:') ? trimmed : '#';
   } catch {}
-  if (!context) return '#';
+  if (!context?.revision || !context.path) return '#';
   const [relativePath, fragment = ''] = trimmed.split('#', 2);
   const resolved: string[] = [];
   for (const segment of [...context.path.split('/').slice(0, -1), ...relativePath.split('/')]) {

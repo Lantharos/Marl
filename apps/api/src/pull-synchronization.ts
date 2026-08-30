@@ -43,7 +43,7 @@ export async function synchronizePullsForBranchUpdates(env: Env, repositoryId: s
       sourceRepository: pull.sourceRepository,
       sourceRepositoryId: pull.sourceRepositoryId
     });
-    if (!pinned.ok) throw new Error(`Pull request #${pull.number} could not preserve its updated commits.`);
+    if (!pinned.ok) throw new Error(`Pull request !${pull.number} could not preserve its updated commits.`);
 
     const events = [];
     const statements = [];

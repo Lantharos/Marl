@@ -13,6 +13,7 @@
   import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
   import UserAvatar from './UserAvatar.svelte';
+  import type { MarkdownContext } from '$lib/markdown';
 
   export type PullComposerAction = 'approve' | 'request_changes' | 'close' | 'reopen' | 'ready' | 'merge';
   type Selection = {
@@ -26,7 +27,7 @@
 
   let {
     value = $bindable(''), pullState, ready, locked, busy, allowedMergeMethods, avatarName, avatarUrl,
-    mergeMethod = $bindable<MergeMethod>('merge'), onComment, onAction
+    mergeMethod = $bindable<MergeMethod>('merge'), onComment, onAction, context
   } = $props<{
     value?: string;
     pullState: PullRequestState;
@@ -39,6 +40,7 @@
     mergeMethod?: MergeMethod;
     onComment: () => Promise<void>;
     onAction: (action: PullComposerAction) => Promise<void>;
+    context?: MarkdownContext;
   }>();
 
   let open = $state(false);
@@ -103,7 +105,7 @@
 <div class="composer-shell">
   <UserAvatar name={avatarName} src={avatarUrl} size={30} />
   <div class="composer">
-    <MarkdownComposer bind:value placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={108} />
+    <MarkdownComposer bind:value {context} placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={108} />
     <footer>
       {#if locked}<span>Unlock the conversation to comment.</span>{/if}
       <div class="actions" use:dismissable={() => (open = false)}>
@@ -113,7 +115,7 @@
         </Button>
         <Button class={`more-action ${selected?.tone ?? 'brand'}`} icon size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} aria-label="Choose pull request action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={14} /></Button>
         {#if open}<div class="menu" role="menu">
-          {#each selections as selection}
+          {#each selections as selection (selection.key)}
             <Button class={`menu-option${selection.tone === 'danger' ? ' danger' : ''}`} variant="ghost" block role="menuitemradio" aria-checked={selection.key === selected?.key} onclick={() => choose(selection)}>
               <span class="option-icon">{#if selection.action === 'approve'}<BadgeCheck size={14} />{:else if selection.action === 'request_changes'}<ShieldAlert size={14} />{:else if selection.action === 'merge'}<GitMerge size={14} />{:else if selection.action === 'close'}<X size={14} />{:else if selection.action === 'reopen'}<RotateCcw size={14} />{:else if selection.action === 'ready'}<GitPullRequest size={14} />{:else}<MessageSquare size={14} />{/if}</span>
               <span><strong>{selection.label}</strong><small>{selection.description}</small></span>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
+  import type { MarkdownContext } from '$lib/markdown';
 
   let {
     value = $bindable(''),
@@ -10,7 +11,8 @@
     minHeight = 110,
     busy = false,
     onSubmit,
-    onCancel
+    onCancel,
+    context
   } = $props<{
     value?: string;
     placeholder?: string;
@@ -20,13 +22,14 @@
     busy?: boolean;
     onSubmit: () => void | Promise<void>;
     onCancel?: () => void;
+    context?: MarkdownContext;
   }>();
 </script>
 
 <div class="comment-composer" class:with-avatar={Boolean(avatar)}>
   {#if avatar}<span class="avatar">{avatar}</span>{/if}
   <div class="editor">
-    <MarkdownComposer bind:value {placeholder} {minHeight} />
+    <MarkdownComposer bind:value {context} {placeholder} {minHeight} />
     <footer>
       {#if onCancel}<Button size="small" onclick={onCancel}>Cancel</Button>{/if}
       <Button size="small" variant="primary" disabled={busy || !value.trim()} onclick={onSubmit}>{submitLabel}</Button>

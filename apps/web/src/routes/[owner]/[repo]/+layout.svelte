@@ -6,6 +6,7 @@
   import BookOpen from 'lucide-svelte/icons/book-open';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import Code2 from 'lucide-svelte/icons/code-2';
+  import CircleDot from 'lucide-svelte/icons/circle-dot';
   import Copy from 'lucide-svelte/icons/copy';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import GitFork from 'lucide-svelte/icons/git-fork';
@@ -157,6 +158,7 @@
     <span class="active-island" style={`--island-x:${islandX}px`} aria-hidden="true"><svg viewBox="0 0 1 43" preserveAspectRatio="none"><path class="island-fill" d={islandFill}></path><path class="island-outline" d={islandBoundary} stroke-width={islandStrokeWidth}></path></svg></span>
     <a class:active={tabActive('overview')} href={base}><BookOpen size={14} />Overview</a>
     <a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a>
+    <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
     <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a>
     <a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a>
     {#if canManageSettings}<a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a>{/if}

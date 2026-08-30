@@ -14,6 +14,7 @@ export interface HealthResponse {
 }
 
 export type PullRequestState = 'draft' | 'open' | 'blocked' | 'mergeable' | 'merged' | 'closed';
+export type IssueState = 'open' | 'closed';
 export type MergeMethod = 'merge' | 'squash' | 'rebase';
 export type RunState = 'queued' | 'running' | 'success' | 'failure' | 'canceled';
 export type RunCancellationReason = 'developer' | 'superseded';
@@ -135,6 +136,81 @@ export interface PullRequestSummary {
     running: number;
   };
   updatedAt: string;
+}
+
+export interface IssuePerson {
+  id: Identifier;
+  handle: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
+export interface IssueLabel {
+  id: Identifier;
+  name: string;
+  color: string;
+  description: string;
+}
+
+export interface IssueSummary {
+  id: Identifier;
+  number: number;
+  repository: Pick<RepositorySummary, 'owner' | 'name'>;
+  title: string;
+  author: string;
+  authorDisplayName: string;
+  authorAvatarUrl?: string | null;
+  state: IssueState;
+  labels: IssueLabel[];
+  assignees: IssuePerson[];
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IssueComment {
+  id: Identifier;
+  authorId: Identifier;
+  author: string;
+  authorDisplayName: string;
+  authorAvatarUrl?: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+  canEdit: boolean;
+}
+
+export interface IssueEvent {
+  id: Identifier;
+  actor: string;
+  actorDisplayName: string;
+  kind: 'title_changed' | 'description_changed' | 'assigned' | 'unassigned' | 'label_added' | 'label_removed' | 'locked' | 'unlocked' | 'closed' | 'reopened';
+  details: Record<string, string>;
+  createdAt: string;
+}
+
+export type IssueTimelineItem =
+  | { sequence: number; kind: 'comment'; createdAt: string; value: IssueComment }
+  | { sequence: number; kind: 'event'; createdAt: string; value: IssueEvent };
+
+export interface IssueTimelineWindow {
+  items: IssueTimelineItem[];
+  total: number;
+  hidden: number;
+  loadBeforeSequence?: number;
+  firstBoundarySequence?: number;
+}
+
+export interface IssueDetail extends IssueSummary {
+  body: string;
+  authorId: Identifier;
+  locked: boolean;
+  canEdit: boolean;
+  canManage: boolean;
+  availableAssignees: IssuePerson[];
+  availableLabels: IssueLabel[];
+  timeline: IssueTimelineWindow;
 }
 
 export interface PullRequestDetail extends PullRequestSummary {

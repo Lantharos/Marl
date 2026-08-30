@@ -33,7 +33,7 @@ export async function createPull(request: Request, env: Env, principal: Principa
   const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id=? AND COALESCE(source_repository_id,repository_id)=? AND source_branch=? AND target_branch=? AND state IN ('draft','open')`).bind(repository.id, sourceRepository.id, body.sourceBranch, body.targetBranch).first<{ number: number }>();
   if (duplicate) {
     const existing = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, duplicate.number).first<PullRow>();
-    if (!existing) return problem(409, 'pull_request_exists', `Pull request #${duplicate.number} already proposes this branch.`);
+    if (!existing) return problem(409, 'pull_request_exists', `Pull request !${duplicate.number} already proposes this branch.`);
     const pinned = await preservePullRefs(env, repository, existing);
     if (pinned) return pinned;
     return json({ pullRequest: summary(existing) });
@@ -321,7 +321,7 @@ export async function transitionPull(env: Env, principal: Principal, owner: stri
   ]);
   if (!source || !target) return problem(409, 'branch_missing', 'Both pull request branches must exist before reopening.');
   const duplicate = await env.DB.prepare(`SELECT number FROM pull_requests WHERE repository_id=? AND COALESCE(source_repository_id,repository_id)=? AND source_branch=? AND target_branch=? AND state IN ('draft','open') AND id!=?`).bind(repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceBranch, pull.targetBranch, pull.id).first<{ number: number }>();
-  if (duplicate) return problem(409, 'pull_request_exists', `Pull request #${duplicate.number} already proposes this branch.`);
+  if (duplicate) return problem(409, 'pull_request_exists', `Pull request !${duplicate.number} already proposes this branch.`);
   const pinned = await pinPullRefs(env, { owner, repository: name, number, sourceCommitId: source.commitId, targetCommitId: target.commitId, expectedSourceCommitId: pull.sourceCommitId, expectedTargetCommitId: pull.targetCommitId, ...(pull.sourceRepositoryId ? { sourceOwner: pull.sourceOwner, sourceRepository: pull.sourceRepository, sourceRepositoryId: pull.sourceRepositoryId } : {}) });
   if (!pinned.ok) return problem(502, 'pull_ref_sync_failed', 'Pull request commits could not be preserved while reopening.');
   const event = createPullEvent(env, pull.id, principal, 'reopened');
@@ -369,7 +369,7 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   const checkSummary = { total: checks.results.length, passed: checks.results.filter((check) => check.state === 'success').length, failed: checks.results.filter((check) => ['failure', 'canceled'].includes(check.state)).length, running: checks.results.filter((check) => ['queued', 'running'].includes(check.state)).length, items: checks.results };
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, unresolvedThreads?.count ?? 0);
   if (!requirements.ready) return problem(409, 'merge_requirements_not_met', requirements.reasons[0] ?? 'Merge requirements are not met.', { reasons: requirements.reasons });
-  const gateway = await requestGatewayWrite(env, '/_marl/merge', { operationId: pull.id, method, repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, title: `${method === 'squash' ? 'Squash' : method === 'rebase' ? 'Rebase' : 'Merge'} pull request #${number}: ${pull.title}`, author: principal.handle, actorId: principal.id });
+  const gateway = await requestGatewayWrite(env, '/_marl/merge', { operationId: pull.id, method, repositoryId: repository.id, owner, repository: name, sourceBranch: pull.sourceBranch, targetBranch: pull.targetBranch, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, title: `${method === 'squash' ? 'Squash' : method === 'rebase' ? 'Rebase' : 'Merge'} pull request !${number}: ${pull.title}`, author: principal.handle, actorId: principal.id });
   const result = await gateway.json().catch(() => null) as { commitId?: string; targetHeadId?: string; error?: string } | null;
   if (!gateway.ok || !result?.commitId) return problem(gateway.status === 409 ? 409 : 502, gateway.status === 409 ? 'merge_conflict' : 'merge_gateway_failed', result?.error ?? 'Git gateway could not merge this pull request.');
   const targetHeadId = result.targetHeadId ?? result.commitId;

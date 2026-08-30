@@ -8,8 +8,9 @@
   import Quote from 'lucide-svelte/icons/quote';
   import Button from './Button.svelte';
   import MarkdownBody from './MarkdownBody.svelte';
+  import type { MarkdownContext } from '$lib/markdown';
 
-  let { value = $bindable(''), placeholder = 'Leave a comment', minHeight = 120 } = $props<{ value?: string; placeholder?: string; minHeight?: number }>();
+  let { value = $bindable(''), placeholder = 'Leave a comment', minHeight = 120, context } = $props<{ value?: string; placeholder?: string; minHeight?: number; context?: MarkdownContext }>();
   let mode = $state<'write' | 'preview'>('write');
   let textarea = $state<HTMLTextAreaElement>();
 
@@ -31,7 +32,7 @@
 
 <div class="composer">
   <header><div class="modes"><Button class={`mode${mode === 'write' ? ' active' : ''}`} size="small" variant="ghost" onclick={() => (mode = 'write')}>Write</Button><Button class={`mode${mode === 'preview' ? ' active' : ''}`} size="small" variant="ghost" onclick={() => (mode = 'preview')}>Preview</Button></div>{#if mode === 'write'}<div class="tools"><Button icon size="small" variant="ghost" aria-label="Bold" onclick={() => wrap('**')}><Bold size={14} /></Button><Button icon size="small" variant="ghost" aria-label="Italic" onclick={() => wrap('_')}><Italic size={14} /></Button><Button icon size="small" variant="ghost" aria-label="Quote" onclick={() => line('> ')}><Quote size={14} /></Button><Button icon size="small" variant="ghost" aria-label="Inline code" onclick={() => wrap('`')}><Code size={14} /></Button><Button icon size="small" variant="ghost" aria-label="Link" onclick={() => wrap('[', '](https://)', 'label')}><Link size={14} /></Button><Button icon size="small" variant="ghost" aria-label="Bulleted list" onclick={() => line('- ')}><List size={14} /></Button><Button icon size="small" variant="ghost" aria-label="Numbered list" onclick={() => line('1. ')}><ListOrdered size={14} /></Button></div>{/if}</header>
-  {#if mode === 'write'}<textarea bind:this={textarea} bind:value {placeholder} style:min-height={`${minHeight}px`}></textarea>{:else}<div class="preview" style:min-height={`${minHeight}px`}>{#if value.trim()}<MarkdownBody source={value} />{:else}<p>Nothing to preview</p>{/if}</div>{/if}
+  {#if mode === 'write'}<textarea bind:this={textarea} bind:value {placeholder} style:min-height={`${minHeight}px`}></textarea>{:else}<div class="preview" style:min-height={`${minHeight}px`}>{#if value.trim()}<MarkdownBody source={value} {context} />{:else}<p>Nothing to preview</p>{/if}</div>{/if}
   <footer><span>Markdown supported</span></footer>
 </div>
 

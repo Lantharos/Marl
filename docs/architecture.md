@@ -41,6 +41,7 @@ The TypeScript API begins with a new database schema. It owns:
 
 - identities, organizations, repositories, and membership;
 - derived branch, commit, and tree metadata;
+- issues, issue comments, assignment, labels, and immutable issue timeline events;
 - pull requests, reviews, threads, checks, immutable timeline events, and merge state;
 - runs, jobs, runner registrations, leases, logs, and artifacts.
 
@@ -177,7 +178,7 @@ being overwritten.
 HTTP request bodies and internal Worker-to-Durable-Object messages are size-bounded and
 runtime-validated before domain logic sees them. Repository access is decided by one capability
 model for public reads, organization membership, writable repositories, and owner administration.
-Sensitive repository, branch-rule, pull-request, merge, and ref-index mutations append immutable
+Sensitive repository, issue-triage, branch-rule, pull-request, merge, and ref-index mutations append immutable
 audit events, with state and audit writes sharing a D1 batch whenever they share a transaction.
 
 Pull-request mutations write their state change, timeline event, and monotonic realtime cursor in
@@ -193,7 +194,14 @@ Diffs and their review threads load only when the Changes tab is opened. Local m
 returned entities directly and request the small merge-state projection only when an action can
 change merge eligibility.
 
-Repository routes use SvelteKit's Cloudflare adapter and load repository, pull-request, run,
+Issues use their own repository-local number sequence instead of sharing pull-request numbers.
+Issue detail follows the same bounded timeline shape: the first two and latest thirty entries are
+server-rendered, with the exact middle window loaded backward by sequence cursor. List queries use
+keyset pagination and indexed repository, state, and update-time predicates. Metadata changes are
+batched with their actor-attributed timeline events, while permission checks reuse the repository
+capability resolver rather than duplicating access rules.
+
+Repository routes use SvelteKit's Cloudflare adapter and load repository, issue, pull-request, run,
 runner, and settings data through route loaders so the initial response is server-rendered. The
 root loader supplies the repository list to both the shell and child routes without a second
 browser fetch. Client requests are reserved for user-driven changes, cursor pagination, and narrow

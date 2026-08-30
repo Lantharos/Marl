@@ -30,4 +30,11 @@ describe('GitHub Flavored Markdown', () => {
     expect(html).toContain('<a href="https://fsf.org/"');
     expect(html).not.toContain('<code>');
   });
+
+  test('links repository issue and pull references without touching code', () => {
+    const html = renderMarkdown('Fixes #12 after !7. Keep `#99` literal.', { owner: 'lantharos', repository: 'marl' });
+    expect(html).toContain('href="/lantharos/marl/issues/12"');
+    expect(html).toContain('href="/lantharos/marl/pulls/7"');
+    expect(html).toContain('<code>#99</code>');
+  });
 });

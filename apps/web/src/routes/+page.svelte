@@ -33,13 +33,13 @@
     <section class="attention">
       <header><h2>Needs you</h2><a href="/pulls">Open review queue <ArrowUpRight size={13} /></a></header>
       <div class="feed">
-        {#each blockedPulls as pull}
-          <a href="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}"><span class="signal danger"><GitPullRequest size={16} /></span><span><strong>{pull.title}</strong><small>{pull.repository.owner}/{pull.repository.name} · #{pull.number} · changes requested</small></span><ArrowUpRight size={14} /></a>
+        {#each blockedPulls as pull (pull.id)}
+          <a href="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}"><span class="signal danger"><GitPullRequest size={16} /></span><span><strong>{pull.title}</strong><small>{pull.repository.owner}/{pull.repository.name} · !{pull.number} · changes requested</small></span><ArrowUpRight size={14} /></a>
         {/each}
-        {#each failedRuns as run}
+        {#each failedRuns as run (run.id)}
           <a href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"><span class="signal danger"><CircleAlert size={16} /></span><span><strong>{run.name} failed</strong><small>{run.repository.owner}/{run.repository.name} · {run.branch} · {run.commit.slice(0,7)}</small></span><ArrowUpRight size={14} /></a>
         {/each}
-        {#each offlineRunners as runner}
+        {#each offlineRunners as runner (runner.id)}
           <a href="/runners"><span class="signal warning"><ServerOff size={16} /></span><span><strong>{runner.name} is offline</strong><small>Last seen <Time value={runner.lastSeenAt} /> · {runner.labels.join(', ')}</small></span><ArrowUpRight size={14} /></a>
         {/each}
         {#if attentionCount === 0}<div class="clear"><span><CircleCheck size={18} /></span><div><strong>Nothing is blocked.</strong><p>Failed runs, requested changes, and unhealthy runners will land here.</p></div></div>{/if}
@@ -47,13 +47,13 @@
 
       <header class="recent-title"><h2>Recent runs</h2><a href="/runs">See every run <ArrowUpRight size={13} /></a></header>
       <div class="runs">
-        {#each runs.slice(0,5) as run}<a href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"><span class="run-state {run.state}">{#if run.state === 'success'}<CircleCheck size={15} />{:else if run.state === 'failure'}<CircleAlert size={15} />{:else}<CircleDot size={15} />{/if}</span><span><strong>{run.name}</strong><small>{run.repository.name} · {run.branch}</small></span><code>{run.commit.slice(0,7)}</code></a>{:else}<p class="quiet">No runs yet. Your first self-hosted workflow will show up here.</p>{/each}
+        {#each runs.slice(0,5) as run (run.id)}<a href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"><span class="run-state {run.state}">{#if run.state === 'success'}<CircleCheck size={15} />{:else if run.state === 'failure'}<CircleAlert size={15} />{:else}<CircleDot size={15} />{/if}</span><span><strong>{run.name}</strong><small>{run.repository.name} · {run.branch}</small></span><code>{run.commit.slice(0,7)}</code></a>{:else}<p class="quiet">No runs yet. Your first self-hosted workflow will show up here.</p>{/each}
       </div>
     </section>
 
     <aside>
       <header><h2>Your places</h2><a href="/repositories">All repositories</a></header>
-      <div class="repo-list">{#each repositories.slice(0,7) as repository}<a href="/{repository.owner}/{repository.name}"><RepositoryIcon name={repository.name} src={repository.iconUrl} size={25} /><span><strong>{repository.name}</strong><small>{repository.owner}</small></span><ArrowUpRight size={13} /></a>{:else}<div class="no-repos"><p>No repositories yet.</p><a href="/repositories/new">Create the first one</a></div>{/each}</div>
+      <div class="repo-list">{#each repositories.slice(0,7) as repository (repository.id)}<a href="/{repository.owner}/{repository.name}"><RepositoryIcon name={repository.name} src={repository.iconUrl} size={25} /><span><strong>{repository.name}</strong><small>{repository.owner}</small></span><ArrowUpRight size={13} /></a>{:else}<div class="no-repos"><p>No repositories yet.</p><a href="/repositories/new">Create the first one</a></div>{/each}</div>
     </aside>
   </div>
 </main>

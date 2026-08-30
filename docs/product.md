@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Marl is the daily workspace for hosting code, reviewing changes, and running checks on
+Marl is the daily workspace for hosting code, tracking work, reviewing changes, and running checks on
 self-hosted machines. It should be comfortable enough to remain open all day and precise
 enough that developers can understand the state of their work without reconstructing it
 from several pages.
@@ -15,12 +15,13 @@ are implementation parts of Marl, not separately branded products.
 Every product decision must improve this loop:
 
 1. Create or switch to a line of work.
-2. Save a meaningful revision.
-3. Push it to Marl.
-4. Open a pull request.
-5. Review code and discuss specific lines.
-6. Run required checks on self-hosted runners.
-7. Resolve blockers and merge.
+2. Capture and discuss work in an issue when it needs durable ownership or triage.
+3. Save a meaningful revision.
+4. Push it to Marl.
+5. Open a pull request.
+6. Review code and discuss specific lines.
+7. Run required checks on self-hosted runners.
+8. Resolve blockers and merge.
 
 If a feature does not materially improve this loop, it does not belong in the initial
 product.
@@ -34,6 +35,7 @@ The public vocabulary is deliberately familiar:
 | Repository | One codebase and its revision history. |
 | Branch | A named line of work. |
 | Commit | A saved revision. |
+| Issue | A tracked unit of repository work or discussion. |
 | Pull request | A proposed merge from one branch into another. |
 | Review | An approval, request for changes, or review comment. |
 | Check | One result attached to a commit or pull request. |
@@ -48,6 +50,7 @@ a concrete capability that cannot be explained with these terms.
 The global application contains:
 
 - Home
+- Issues
 - Pull requests
 - Runs
 - Repositories
@@ -56,6 +59,7 @@ The global application contains:
 A repository contains:
 
 - Code
+- Issues
 - Pull requests
 - Runs
 - Settings
@@ -80,6 +84,17 @@ belong here.
 Code browsing must preserve repository context while moving through branches, directories,
 files, and commits. The file tree, current branch, latest commit, path, and related pull
 request state should remain easy to reach.
+
+## Issues
+
+Issues are repository-scoped work and discussion with numbering independent from pull requests.
+`#12` refers to issue 12 and `!12` refers to pull request 12 in the current repository, so both
+can exist without ambiguity. Issues support open and closed states, editable descriptions and
+comments, durable deletion tombstones, assignees, repository labels, conversation locking, and a
+complete actor-attributed timeline. Global Issues provides one searchable queue across every
+repository the current user can read; repository Issues preserves label filtering and repository
+context. Only repository triage roles manage assignment, labels, and locks, while issue authors
+can edit and close their own work.
 
 ## Pull requests
 
@@ -113,7 +128,6 @@ planned.
 
 ## Explicitly deferred
 
-- Issues
 - Leaves
 - Gallery and screenshots
 - Social following

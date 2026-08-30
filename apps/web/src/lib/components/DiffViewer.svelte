@@ -10,8 +10,9 @@
   import Button from './Button.svelte';
   import CommentComposer from './CommentComposer.svelte';
   import ReviewThread from './ReviewThread.svelte';
+  import type { MarkdownContext } from '$lib/markdown';
 
-  type PatchLine = { kind: 'hunk' | 'context' | 'added' | 'removed'; text: string; oldLine: number | null; newLine: number | null; side: 'old' | 'new' | null; line: number | null };
+  type PatchLine = { key: number; kind: 'hunk' | 'context' | 'added' | 'removed'; text: string; oldLine: number | null; newLine: number | null; side: 'old' | 'new' | null; line: number | null };
   type Draft = { path: string; side: 'old' | 'new'; startLine: number; line: number };
   type DiffFile = PullRequestDiff['files'][number];
   type CollapseReason = 'deleted' | 'large' | 'lazy' | null;
@@ -19,8 +20,9 @@
   const LARGE_DIFF_LINES = 1_000;
   const LARGE_DIFF_BYTES = 200_000;
 
-  let { files, threads = [], busy = false, reviewable = true, onLoadPatch = async (file: DiffFile) => file.patch, onCreate = async () => {}, onReply = async () => {}, onResolve = async () => {}, onEdit = async () => {}, onDelete = async () => {} } = $props<{
+  let { files, threads = [], busy = false, reviewable = true, context, onLoadPatch = async (file: DiffFile) => file.patch, onCreate = async () => {}, onReply = async () => {}, onResolve = async () => {}, onEdit = async () => {}, onDelete = async () => {} } = $props<{
     files: PullRequestDiff['files']; threads?: ReviewThreadType[]; busy?: boolean; reviewable?: boolean;
+    context?: MarkdownContext;
     onLoadPatch?: (file: DiffFile) => Promise<string>;
     onCreate?: (draft: Draft, body: string) => Promise<void>; onReply?: (threadId: string, body: string) => Promise<void>;
     onResolve?: (threadId: string, resolved: boolean) => Promise<void>; onEdit?: (commentId: string, body: string) => Promise<void>; onDelete?: (commentId: string) => Promise<void>;
@@ -46,15 +48,15 @@
       const hunk = text.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)/);
       if (hunk) {
         oldLine = Number(hunk[1]); newLine = Number(hunk[2]);
-        output.push({ kind: 'hunk', text, oldLine: null, newLine: null, side: null, line: null });
+        output.push({ key: output.length, kind: 'hunk', text, oldLine: null, newLine: null, side: null, line: null });
       } else if (text.startsWith('diff ') || text.startsWith('index ') || text.startsWith('---') || text.startsWith('+++') || text.startsWith('new file ') || text.startsWith('deleted file ')) {
         continue;
       } else if (text.startsWith('+')) {
-        output.push({ kind: 'added', text, oldLine: null, newLine, side: 'new', line: newLine++ });
+        output.push({ key: output.length, kind: 'added', text, oldLine: null, newLine, side: 'new', line: newLine++ });
       } else if (text.startsWith('-')) {
-        output.push({ kind: 'removed', text, oldLine, newLine: null, side: 'old', line: oldLine++ });
+        output.push({ key: output.length, kind: 'removed', text, oldLine, newLine: null, side: 'old', line: oldLine++ });
       } else {
-        output.push({ kind: 'context', text, oldLine, newLine, side: 'new', line: newLine }); oldLine++; newLine++;
+        output.push({ key: output.length, kind: 'context', text, oldLine, newLine, side: 'new', line: newLine }); oldLine++; newLine++;
       }
     }
     return output;
@@ -146,7 +148,7 @@
 <div class="diff-viewer">
   <div class="diff-toolbar">
     <div class="summary"><Files size={15} /><strong>{files.length} changed {files.length === 1 ? 'file' : 'files'}</strong><span><b>+{additions}</b><i>−{deletions}</i></span></div>
-    {#if files.length > 1}<div class="navigator" use:dismissable={() => (navigatorOpen = false)}><Button class="navigator-trigger" size="small" aria-expanded={navigatorOpen} onclick={() => (navigatorOpen = !navigatorOpen)}>Jump to file <ChevronDown size={13} /></Button>{#if navigatorOpen}<div class="navigator-menu"><label><Search size={13} /><input bind:value={fileQuery} placeholder="Find a changed file" /></label><div class="navigator-list">{#each matchingFiles as file}<Button class="file-choice" variant="ghost" block onclick={() => goToFile(file)}><span>{file.path}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small></Button>{:else}<p>No matching files</p>{/each}</div></div>{/if}</div>{/if}
+    {#if files.length > 1}<div class="navigator" use:dismissable={() => (navigatorOpen = false)}><Button class="navigator-trigger" size="small" aria-expanded={navigatorOpen} onclick={() => (navigatorOpen = !navigatorOpen)}>Jump to file <ChevronDown size={13} /></Button>{#if navigatorOpen}<div class="navigator-menu"><label><Search size={13} /><input bind:value={fileQuery} placeholder="Find a changed file" /></label><div class="navigator-list">{#each matchingFiles as file (file.path)}<Button class="file-choice" variant="ghost" block onclick={() => goToFile(file)}><span>{file.path}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small></Button>{:else}<p>No matching files</p>{/each}</div></div>{/if}</div>{/if}
   </div>
   <main class="diffs">
     {#each parsedFiles as file, index (file.path)}
@@ -157,11 +159,11 @@
             <div class="collapsed-patch"><FileWarning size={18} /><div><strong>{file.reason === 'deleted' ? 'Deleted file hidden' : file.reason === 'large' ? 'Large diff hidden' : 'Loading diff'}</strong><p>{file.failed ? 'The file diff could not be loaded. Try again.' : file.reason === 'deleted' ? 'Expand this file to inspect its previous contents.' : file.reason === 'large' ? `This diff changes ${(file.additions + file.deletions).toLocaleString()} lines and is collapsed to keep the page responsive.` : 'The patch loads when this file approaches the viewport.'}</p></div><Button size="small" loading={file.loading} onclick={() => expandFile(file)}>{file.failed ? 'Try again' : file.reason === 'deleted' ? 'Show deleted file' : 'Load diff'}</Button></div>
           {:else}
             {#if file.lines.length === 0}<div class="empty-patch">No textual diff is available for this file.</div>{/if}
-            {#each file.lines as line}
+            {#each file.lines as line (`${file.path}:${line.key}`)}
               <div class="line {line.kind}" class:selected={selected(file.path, line)} role="group" onpointerenter={() => extendRange(file.path, line)}><div class="gutter">{#if line.line !== null}<span>{line.line}</span>{#if reviewable}<Button class="line-comment" icon size="small" variant="primary" aria-label="Comment on line {line.line}; drag to select a range" onpointerdown={(event) => beginRange(event, file.path, line)} onclick={() => openSingle(file.path, line)}><MessageSquarePlus size={14} /></Button>{/if}{/if}</div><pre>{line.text || ' '}</pre></div>
-              {#if reviewable}{#each threadsAt(file.path, line) as thread}<ReviewThread {thread} {busy} inline onReply={onReply} onResolve={onResolve} onEdit={onEdit} onDelete={onDelete} />{/each}{/if}
+              {#if reviewable}{#each threadsAt(file.path, line) as thread (thread.id)}<ReviewThread {thread} {busy} {context} inline onReply={onReply} onResolve={onResolve} onEdit={onEdit} onDelete={onDelete} />{/each}{/if}
               {@const activeDraft = draftAt(file.path, line)}
-              {#if activeDraft}<div class="draft"><div class="range-label">Commenting on {activeDraft.startLine === activeDraft.line ? `line ${activeDraft.line}` : `lines ${activeDraft.startLine}–${activeDraft.line}`}</div><CommentComposer bind:value={body} placeholder="Leave a review comment" submitLabel="Add review comment" minHeight={92} {busy} onSubmit={submit} onCancel={() => { draft = null; body = ''; }} /></div>{/if}
+              {#if activeDraft}<div class="draft"><div class="range-label">Commenting on {activeDraft.startLine === activeDraft.line ? `line ${activeDraft.line}` : `lines ${activeDraft.startLine}–${activeDraft.line}`}</div><CommentComposer bind:value={body} {context} placeholder="Leave a review comment" submitLabel="Add review comment" minHeight={92} {busy} onSubmit={submit} onCancel={() => { draft = null; body = ''; }} /></div>{/if}
             {/each}
           {/if}
         </div>

@@ -706,3 +706,86 @@ BEGIN
   SET signature_status = 'unverified', signature_signer_id = NULL, signature_key_fingerprint = NULL
   WHERE signature_signer_id = OLD.user_id AND signature_key_fingerprint = OLD.fingerprint;
 END;
+
+CREATE INDEX repositories_by_recency
+ON repositories(updated_at DESC, id DESC)
+WHERE deletion_scheduled_at IS NULL;
+
+CREATE TABLE issues (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+  number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  author_id TEXT NOT NULL REFERENCES users(id),
+  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'closed')),
+  closed_by TEXT REFERENCES users(id),
+  closed_at TEXT,
+  locked_at TEXT,
+  locked_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (repository_id, number)
+);
+
+CREATE TABLE issue_assignees (
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (issue_id, user_id)
+);
+
+CREATE TABLE issue_comments (
+  id TEXT PRIMARY KEY,
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  author_id TEXT NOT NULL REFERENCES users(id),
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TEXT
+);
+
+CREATE TABLE issue_events (
+  id TEXT PRIMARY KEY,
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL,
+  details TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE issue_labels (
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  label_id TEXT NOT NULL REFERENCES repository_labels(id) ON DELETE CASCADE,
+  PRIMARY KEY (issue_id, label_id)
+);
+
+CREATE TABLE issue_timeline (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('comment', 'event')),
+  entity_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (kind, entity_id)
+);
+
+CREATE INDEX issues_by_state ON issues(repository_id, state, updated_at DESC, id DESC);
+CREATE INDEX issues_by_author ON issues(author_id, updated_at DESC);
+CREATE INDEX issue_comments_issue_created ON issue_comments(issue_id, created_at, id);
+CREATE INDEX issue_events_issue_created ON issue_events(issue_id, created_at, id);
+CREATE INDEX issue_timeline_issue_sequence ON issue_timeline(issue_id, sequence);
+CREATE INDEX issue_assignees_user ON issue_assignees(user_id, issue_id);
+CREATE INDEX issue_labels_label ON issue_labels(label_id, issue_id);
+
+CREATE TRIGGER issue_timeline_comment_insert
+AFTER INSERT ON issue_comments
+BEGIN
+  INSERT INTO issue_timeline (issue_id, kind, entity_id, created_at)
+  VALUES (NEW.issue_id, 'comment', NEW.id, NEW.created_at);
+END;
+
+CREATE TRIGGER issue_timeline_event_insert
+AFTER INSERT ON issue_events
+BEGIN
+  INSERT INTO issue_timeline (issue_id, kind, entity_id, created_at)
+  VALUES (NEW.issue_id, 'event', NEW.id, NEW.created_at);
+END;

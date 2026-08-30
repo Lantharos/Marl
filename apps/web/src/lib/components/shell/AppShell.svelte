@@ -30,7 +30,7 @@
   import UserAvatar from '../UserAvatar.svelte';
   import { api } from '$lib/api';
 
-  type CommandKind = 'home' | 'repository' | 'organization' | 'user' | 'commit' | 'file' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
+  type CommandKind = 'home' | 'repository' | 'organization' | 'user' | 'commit' | 'file' | 'issue' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
   function uniqueCommands(entries: Command[]) {
@@ -71,6 +71,7 @@
       const base = `/${repository.owner}/${repository.name}`;
       return [
         { label: `${repository.owner}/${repository.name} code`, detail: 'Browse branches and files', href: `${base}/code`, keywords: 'repository source tree files', kind: 'repository' as const },
+        { label: `${repository.owner}/${repository.name} issues`, detail: 'Repository issues', href: `${base}/issues`, keywords: 'repository bugs tasks work', kind: 'issue' as const },
         { label: `${repository.owner}/${repository.name} pull requests`, detail: 'Repository pull requests', href: `${base}/pulls`, keywords: 'repository reviews merge', kind: 'pull' as const },
         { label: `${repository.owner}/${repository.name} runs`, detail: 'Repository workflow runs', href: `${base}/runs`, keywords: 'repository automation jobs checks', kind: 'run' as const },
         { label: `${repository.owner}/${repository.name} settings`, detail: 'Repository general settings', href: `${base}/settings`, keywords: 'repository settings general', kind: 'settings' as const },
@@ -94,12 +95,14 @@
         ...(organization.role === 'member' ? [] : [{ label: `${organization.name} CI secrets`, detail: 'Organization workflow secrets', href: `${base}/secrets`, keywords: `organization settings ci ${organization.slug}`, kind: 'key' as const }])
       ];
     }),
+    { label: 'Issues', detail: 'Work across your repositories', href: '/issues', keywords: 'bugs tasks work', kind: 'issue' },
     { label: 'Pull requests', detail: 'Your review queue', href: '/pulls', keywords: 'reviews merge changes', kind: 'pull' },
     { label: 'Runs', detail: 'Automation across your code', href: '/runs', keywords: 'workflows jobs checks', kind: 'run' },
     { label: 'Repositories', detail: 'Browse every project', href: '/repositories', keywords: 'code projects', kind: 'repository' },
     { label: 'Runners', detail: 'Connected self-hosted machines', href: '/runners', keywords: 'machines agents docker', kind: 'runner' },
     { label: 'New repository', detail: 'Create or import code', href: '/repositories/new', keywords: 'create import', kind: 'create' },
     { label: 'New organization', detail: 'Create a shared home for projects', href: '/organizations?new=1', keywords: 'create team workspace', kind: 'organization' },
+    { label: 'New issue', detail: 'Track a bug, proposal, or task', href: '/issues/new', keywords: 'create bug task', kind: 'create' },
     { label: 'New pull request', detail: 'Put a branch up for review', href: '/pulls/new', keywords: 'create review', kind: 'create' },
     { label: 'Connect runner', detail: 'Add a self-hosted machine', href: '/runners/new', keywords: 'create machine agent', kind: 'create' }
   ]));
@@ -200,6 +203,7 @@
     <a class="brand-link" href="/"><BrandMark /></a>
     <nav class:open={mobileOpen} aria-label="Global navigation">
       <a class:active={active('/')} href="/" aria-label="Home" data-label="Home" onclick={() => (mobileOpen = false)}><Home size={17} /><span>Home</span></a>
+      <a class:active={active('/issues')} href="/issues" aria-label="Issues" data-label="Issues" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Issues</span></a>
       <a class:active={active('/pulls')} href="/pulls" aria-label="Pull requests" data-label="Pull requests" onclick={() => (mobileOpen = false)}><GitPullRequest size={17} /><span>Pull requests</span></a>
       <a class:active={active('/runs')} href="/runs" aria-label="Runs" data-label="Runs" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Runs</span></a>
       <a class:active={active('/repositories')} href="/repositories" aria-label="Repositories" data-label="Repositories" onclick={() => (mobileOpen = false)}><BookOpen size={17} /><span>Repositories</span></a>
@@ -209,7 +213,7 @@
     <div class="actions">
       <div class="menu-anchor" use:dismissable={() => (createOpen = false)}>
         <button class="new" aria-expanded={createOpen} onclick={() => { createOpen = !createOpen; profileOpen = false; }}><Plus size={15} /><span>New</span><ChevronDown size={12} /></button>
-        {#if createOpen}<div class="popover create-menu"><a href="/repositories/new" onclick={() => (createOpen = false)}><BookOpen size={15} /><span><strong>Repository</strong><small>Start or import code</small></span></a><a href="/organizations?new=1" onclick={() => (createOpen = false)}><Building2 size={15} /><span><strong>Organization</strong><small>Create a home for a team</small></span></a><a href="/pulls/new" onclick={() => (createOpen = false)}><GitPullRequest size={15} /><span><strong>Pull request</strong><small>Put a branch up for review</small></span></a></div>{/if}
+        {#if createOpen}<div class="popover create-menu"><a href="/repositories/new" onclick={() => (createOpen = false)}><BookOpen size={15} /><span><strong>Repository</strong><small>Start or import code</small></span></a><a href="/organizations?new=1" onclick={() => (createOpen = false)}><Building2 size={15} /><span><strong>Organization</strong><small>Create a home for a team</small></span></a><a href="/issues/new" onclick={() => (createOpen = false)}><CircleDot size={15} /><span><strong>Issue</strong><small>Track a bug, proposal, or task</small></span></a><a href="/pulls/new" onclick={() => (createOpen = false)}><GitPullRequest size={15} /><span><strong>Pull request</strong><small>Put a branch up for review</small></span></a></div>{/if}
       </div>
       <div class="menu-anchor" use:dismissable={() => (profileOpen = false)}>
         <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={28} /></button>
@@ -224,15 +228,15 @@
 {#if searchOpen}
   <div class="dialog-layer" role="presentation" onclick={(event) => event.currentTarget === event.target && closeSearch()}>
     <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Search Marl">
-      <header><Search size={18} /><input bind:this={searchInput} bind:value={query} oninput={() => (selectedIndex = 0)} onkeydown={commandKeydown} placeholder="Repositories, pull requests, runs..." /><kbd>Esc</kbd></header>
+      <header><Search size={18} /><input bind:this={searchInput} bind:value={query} oninput={() => (selectedIndex = 0)} onkeydown={commandKeydown} placeholder="Repositories, issues, pull requests..." /><kbd>Esc</kbd></header>
       <section bind:this={commandList} aria-label="Commands">
         <p>{query ? (searchLoading ? 'Searching Marl…' : `${results.length} results`) : 'Jump to'}</p>
         {#each results as command, index (command.href)}
           <button data-command={index} class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
+            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'issue'}<CircleDot size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>
           </button>
-        {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, commit, pull request, or run.</span></div>{/if}{/each}
+        {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, issue, pull request, or run.</span></div>{/if}{/each}
       </section>
     </div>
   </div>

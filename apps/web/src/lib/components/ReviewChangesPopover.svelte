@@ -6,6 +6,7 @@
   import { positionFloatingPanel } from '$lib/ui/floating';
   import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
+  import type { MarkdownContext } from '$lib/markdown';
 
   type ReviewState = 'commented' | 'approved' | 'changes_requested';
 
@@ -14,13 +15,15 @@
     reviewState = $bindable<ReviewState>('commented'),
     body = $bindable(''),
     busy = false,
-    onSubmit
+    onSubmit,
+    context
   } = $props<{
     open?: boolean;
     reviewState?: ReviewState;
     body?: string;
     busy?: boolean;
     onSubmit: () => void | Promise<void>;
+    context?: MarkdownContext;
   }>();
 
   const choices: { value: ReviewState; label: string; detail: string }[] = [
@@ -76,10 +79,10 @@
         <Button icon size="small" variant="ghost" aria-label="Close review" onclick={() => (open = false)}><X size={14} /></Button>
       </header>
 
-      <MarkdownComposer bind:value={body} placeholder="Leave a review summary (optional)" minHeight={100} />
+      <MarkdownComposer bind:value={body} {context} placeholder="Leave a review summary (optional)" minHeight={100} />
 
       <div class="review-decisions" role="radiogroup" aria-label="Review outcome">
-        {#each choices as choice}
+        {#each choices as choice (choice.value)}
           <Button class={`review-choice${reviewState === choice.value ? ' active' : ''}`} variant="ghost" block role="radio" aria-checked={reviewState === choice.value} onclick={() => (reviewState = choice.value)}>
             <span class="choice-mark" aria-hidden="true"></span>
             <span class="choice-copy"><strong>{choice.label}</strong><small>{choice.detail}</small></span>

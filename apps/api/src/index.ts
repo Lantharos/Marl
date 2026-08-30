@@ -19,6 +19,8 @@ import { getPublicIdentityProfile } from './public-profiles';
 import { readAvatar } from './profile';
 import { readOrganizationAvatar } from './organizations';
 import { getShell } from './shell';
+import { addIssueComment, createIssue, createIssueLabel, deleteIssueComment, setIssueState, updateIssue, updateIssueComment, updateIssueMetadata } from './issues';
+import { getIssue, getIssueTimeline, listAllIssues, listIssues } from './issue-queries';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -98,6 +100,7 @@ const worker = {
 
     if (request.method === 'GET' && url.pathname === '/api/v1/dashboard') return getDashboard(_env, principal);
     if (request.method === 'GET' && url.pathname === '/api/v1/search') return search(_env, principal, url);
+    if (request.method === 'GET' && url.pathname === '/api/v1/issues') return listAllIssues(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/runners') return listRunners(_env, principal);
     const runnerDetail = url.pathname.match(/^\/api\/v1\/runners\/(runner_[a-z0-9]+)$/);
@@ -162,6 +165,24 @@ const worker = {
     const pullSourcesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pull-sources$/);
     if (pullSourcesRoute && request.method === 'GET') return listPullSources(_env, principal, decodeURIComponent(pullSourcesRoute[1]), decodeURIComponent(pullSourcesRoute[2]));
 
+    const issueRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/issues(?:\/(\d+)(?:\/(comments|metadata|labels|state|timeline))?)?$/);
+    if (issueRoute) {
+      const owner = decodeURIComponent(issueRoute[1]);
+      const repository = decodeURIComponent(issueRoute[2]);
+      const number = issueRoute[3] ? Number(issueRoute[3]) : null;
+      const action = issueRoute[4];
+      if (number === null && request.method === 'GET') return listIssues(_env, principal, owner, repository, url);
+      if (number === null && request.method === 'POST') return createIssue(request, _env, principal, owner, repository);
+      if (number !== null && !action && request.method === 'GET') return getIssue(_env, principal, owner, repository, number);
+      if (number !== null && !action && request.method === 'PATCH') return updateIssue(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'comments' && request.method === 'POST') return addIssueComment(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'metadata' && request.method === 'PATCH') return updateIssueMetadata(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'labels' && request.method === 'POST') return createIssueLabel(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'state' && request.method === 'POST') return setIssueState(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'timeline' && request.method === 'GET') return getIssueTimeline(_env, principal, owner, repository, number, url);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
+
     const overviewRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/overview$/);
     if (overviewRoute) {
       const owner = decodeURIComponent(overviewRoute[1]); const repository = decodeURIComponent(overviewRoute[2]);
@@ -218,6 +239,9 @@ const worker = {
     const pullCommentRoute = url.pathname.match(/^\/api\/v1\/pull-comments\/(comment_[a-z0-9]+)$/);
     if (pullCommentRoute && request.method === 'PATCH') return updatePullComment(request, _env, principal, pullCommentRoute[1]);
     if (pullCommentRoute && request.method === 'DELETE') return deletePullComment(_env, principal, pullCommentRoute[1]);
+    const issueCommentRoute = url.pathname.match(/^\/api\/v1\/issue-comments\/(comment_[a-z0-9]+)$/);
+    if (issueCommentRoute && request.method === 'PATCH') return updateIssueComment(request, _env, principal, issueCommentRoute[1]);
+    if (issueCommentRoute && request.method === 'DELETE') return deleteIssueComment(_env, principal, issueCommentRoute[1]);
 
     const match = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob)(?:\/(.*))?)?$/);
     if (match) {
