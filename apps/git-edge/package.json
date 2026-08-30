@@ -8,7 +8,7 @@
     "test": "bun test",
     "build": "wrangler deploy --dry-run --containers-rollout=none --outdir dist",
     "build:container": "wrangler deploy --dry-run --outdir dist",
-    "dev": "cargo run --manifest-path ../../Cargo.toml -p git",
+    "dev": "bun ../../scripts/dev.ts git",
     "dev:cloudflare": "wrangler dev"
   },
   "dependencies": {

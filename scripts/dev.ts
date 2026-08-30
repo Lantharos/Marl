@@ -39,6 +39,7 @@ for (const name of selected) console.log(`  ${services[name].label}`);
 if (requested === 'plan') process.exit(0);
 
 const workspace = import.meta.dir.replace(/[\\/]scripts$/, '');
+const repositoryRoot = `${workspace}/.marl-data/repositories`;
 const children = new Map<number, { name: string; process: ManagedProcess }>();
 let stopping = false;
 
@@ -138,7 +139,9 @@ if (selected.includes('api')) {
 }
 
 function startService(name: ServiceName) {
-  const env = name === 'git' ? { ...process.env, MARL_GIT_GATEWAY_TOKEN: gatewayToken } : process.env;
+  const env = name === 'git'
+    ? { ...process.env, MARL_GIT_GATEWAY_TOKEN: gatewayToken, MARL_GIT_ROOT: repositoryRoot }
+    : process.env;
   const child = spawn(name, services[name].command, env);
   void child.exited.then((exitCode) => {
     if (stopping) return;

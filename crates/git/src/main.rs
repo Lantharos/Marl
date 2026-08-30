@@ -25,15 +25,8 @@ use tokio::fs;
 #[tokio::main]
 async fn main() -> Result<()> {
     let local_storage = std::env::var("MARL_GIT_LOCAL").map_or(true, |value| value != "0");
-    let repositories = std::env::var("MARL_GIT_ROOT").map_or_else(
-        |_| {
-            let mut workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            workspace.pop();
-            workspace.pop();
-            workspace.join(".marl-data/repositories")
-        },
-        PathBuf::from,
-    );
+    let repositories =
+        PathBuf::from(std::env::var("MARL_GIT_ROOT").expect("MARL_GIT_ROOT is required"));
     fs::create_dir_all(&repositories)
         .await
         .context("create repository root")?;
