@@ -3,6 +3,7 @@
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import { dismissable } from '$lib/actions/dismissable';
+  import { interfaceScale } from '$lib/ui/floating';
 
   type Option = { value: string; label: string; description?: string };
   let { value = $bindable(), options, ariaLabel, onchange }: { value: string; options: Option[]; ariaLabel: string; onchange?: (value: string) => void | Promise<void> } = $props();
@@ -21,12 +22,15 @@
   }
   function positionMenu() {
     if (!open || !trigger) return;
+    const scale = interfaceScale();
     const rect = trigger.getBoundingClientRect();
-    const height = Math.min(menu?.scrollHeight ?? 280, 280);
-    const below = rect.bottom + 5;
-    const top = below + height <= window.innerHeight - 8 ? below : Math.max(8, rect.top - height - 5);
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8));
-    menuStyle = `top:${top}px;left:${left}px;width:${rect.width}px`;
+    const height = Math.min(menu?.scrollHeight ?? 280, 280) * scale;
+    const gap = 5 * scale;
+    const viewportMargin = 8 * scale;
+    const below = rect.bottom + gap;
+    const top = below + height <= window.innerHeight - viewportMargin ? below : Math.max(viewportMargin, rect.top - height - gap);
+    const left = Math.max(viewportMargin, Math.min(rect.left, window.innerWidth - rect.width - viewportMargin));
+    menuStyle = `top:${top / scale}px;left:${left / scale}px;width:${rect.width / scale}px`;
   }
   function keydown(event: KeyboardEvent) {
     if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); void toggle(); return; }
@@ -52,7 +56,7 @@
 
 <div class="select" use:dismissable={() => (open = false)}>
   <button bind:this={trigger} type="button" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} onkeydown={keydown} onclick={toggle}><span><strong>{selected?.label ?? 'Choose…'}</strong>{#if selected?.description}<small>{selected.description}</small>{/if}</span><ChevronDown size={14} /></button>
-  {#if open}<div bind:this={menu} class="options" style={menuStyle} role="listbox" aria-label={ariaLabel}>{#each options as option,index}<button type="button" role="option" aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
+  {#if open}<div bind:this={menu} class="options" style={menuStyle} role="listbox" aria-label={ariaLabel}>{#each options as option,index (option.value)}<button type="button" role="option" aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
 </div>
 
 <style>

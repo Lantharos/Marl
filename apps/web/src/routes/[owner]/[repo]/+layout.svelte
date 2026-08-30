@@ -21,6 +21,7 @@
   import Select from '$lib/components/Select.svelte';
   import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
   import { dismissable } from '$lib/actions/dismissable';
+  import { interfaceScale } from '$lib/ui/floating';
 
   import type { LayoutData } from './$types';
 
@@ -117,23 +118,34 @@
   function updateIsland(node: HTMLElement, animate = true) {
     const active = node.querySelector<HTMLElement>('a.active');
     if (!active) return;
+    const scale = interfaceScale();
     const navBounds = node.getBoundingClientRect();
     const activeBounds = active.getBoundingClientRect();
-    islandStrokeWidth = 1 / (window.devicePixelRatio || 1);
-    moveIsland(activeBounds.left - navBounds.left + node.scrollLeft, activeBounds.width, animate);
+    islandStrokeWidth = 1 / ((window.devicePixelRatio || 1) * scale);
+    moveIsland((activeBounds.left - navBounds.left) / scale + node.scrollLeft, activeBounds.width / scale, animate);
   }
   function trackRepositoryNav(node: HTMLElement) {
     repositoryNav = node;
-    const frame = requestAnimationFrame(() => updateIsland(node));
-    const timer = window.setTimeout(() => updateIsland(node));
-    const observer = new ResizeObserver(() => updateIsland(node));
+    let layoutFrame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(layoutFrame);
+      layoutFrame = requestAnimationFrame(() => updateIsland(node, false));
+    };
+    const scaleQuery = window.matchMedia('(min-width: 1200px) and (max-resolution: 1.05dppx)');
+    const timer = window.setTimeout(schedule);
+    const observer = new ResizeObserver(schedule);
     observer.observe(node);
+    window.addEventListener('resize', schedule);
+    scaleQuery.addEventListener('change', schedule);
+    schedule();
     return {
       destroy() {
-        cancelAnimationFrame(frame);
+        cancelAnimationFrame(layoutFrame);
         cancelAnimationFrame(islandAnimation);
         window.clearTimeout(timer);
         observer.disconnect();
+        window.removeEventListener('resize', schedule);
+        scaleQuery.removeEventListener('change', schedule);
         if (repositoryNav === node) repositoryNav = undefined;
       }
     };

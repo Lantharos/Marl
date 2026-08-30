@@ -73,6 +73,7 @@
 :root {
   font-family: "Open Runde", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --interface-scale: 1;
   color-scheme: dark;
   color: #d8d8d5;
   background: #0d0d0f;
@@ -139,6 +140,9 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--canvas); }
 body { color: var(--text); font-size: 14px; line-height: 1.45; }
+@media (min-width: 1200px) and (max-resolution: 1.05dppx) {
+  :root { --interface-scale: 1.1; zoom: var(--interface-scale); }
+}
 ::selection { background: var(--brand-soft-strong); color: var(--text-strong); }
 button, input, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
