@@ -7,6 +7,7 @@ import type { Env } from './platform';
 import { commentBody, createIssueBody, createPullLabelBody, issueMetadataBody, issueStateBody, updateIssueBody } from './request-schemas';
 import { authorizeRepository } from './repository-access';
 import type { RepositoryAccess } from './repository-access';
+import { deleteReferenceStatements, linkedWorkItems, referenceStatements } from './work-item-references';
 
 type EditableIssue = { id: string; title: string; body: string; state: 'open' | 'closed'; authorId: string };
 
@@ -24,6 +25,8 @@ export async function createIssue(request: Request, env: Env, principal: Princip
   ]);
   const row = await env.DB.prepare(`${issueSelect} WHERE issues.id=?`).bind(id).first<IssueRow>();
   if (!row) return problem(500, 'issue_create_failed', 'Issue creation did not persist.');
+  const references = await referenceStatements(env, principal, { kind: 'issue', id, owner, repository: name }, 'body', id, body?.body?.trim() ?? '');
+  if (references.length) await env.DB.batch(references);
   return json({ issue: (await summarizeIssueRows(env, [row]))[0] }, { status: 201 });
 }
 
@@ -39,12 +42,14 @@ export async function updateIssue(request: Request, env: Env, principal: Princip
   if (title !== context.issue.title) events.push(createIssueEvent(env, context.issue.id, principal, 'title_changed', { from: context.issue.title, to: title }));
   if (description !== context.issue.body) events.push(createIssueEvent(env, context.issue.id, principal, 'description_changed'));
   if (!events.length) return problem(422, 'unchanged_issue', 'No issue details changed.');
+  const references = description === context.issue.body ? [] : await referenceStatements(env, principal, { kind: 'issue', id: context.issue.id, owner, repository: name }, 'body', context.issue.id, description);
   await env.DB.batch([
     env.DB.prepare('UPDATE issues SET title=?,body=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(title, description, context.issue.id),
+    ...references,
     ...events.map((event) => event.statement),
     auditStatement(env, { organizationId: context.repository.organizationId, repositoryId: context.repository.id, actor: principal, action: 'issue.updated', subjectType: 'issue', subjectId: context.issue.id })
   ]);
-  return json({ issue: { title, body: description }, timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })) });
+  return json({ issue: { title, body: description }, linkedItems: await linkedWorkItems(env, principal, 'issue', context.issue.id), timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })) });
 }
 
 export async function setIssueState(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
@@ -72,11 +77,14 @@ export async function addIssueComment(request: Request, env: Env, principal: Pri
   if (!body?.body.trim()) return problem(422, 'invalid_comment', 'Comment body is required.');
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
+  const comment = body.body.trim();
+  const references = await referenceStatements(env, principal, { kind: 'issue', id: issue.id, owner, repository: name }, 'comment', id, comment);
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, issue.id, principal.id, body.body.trim(), createdAt, createdAt),
+    env.DB.prepare('INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, issue.id, principal.id, comment, createdAt, createdAt),
+    ...references,
     env.DB.prepare('UPDATE issues SET updated_at=? WHERE id=?').bind(createdAt, issue.id)
   ]);
-  return json({ comment: { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true } }, { status: 201 });
+  return json({ comment: { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: comment, createdAt, updatedAt: createdAt, deleted: false, canEdit: true }, linkedItems: await linkedWorkItems(env, principal, 'issue', issue.id) }, { status: 201 });
 }
 
 export async function updateIssueComment(request: Request, env: Env, principal: Principal, commentId: string): Promise<Response> {
@@ -86,8 +94,10 @@ export async function updateIssueComment(request: Request, env: Env, principal: 
   const body = await readJson(request, commentBody);
   if (!body?.body.trim()) return problem(422, 'invalid_comment', 'Comment body is required.');
   const updatedAt = new Date().toISOString();
-  await env.DB.prepare('UPDATE issue_comments SET body=?,updated_at=? WHERE id=?').bind(body.body.trim(), updatedAt, commentId).run();
-  return json({ comment: { id: commentId, body: body.body.trim(), updatedAt } });
+  const value = body.body.trim();
+  const references = await referenceStatements(env, principal, { kind: 'issue', id: comment.issueId, owner: comment.owner, repository: comment.repository }, 'comment', commentId, value);
+  await env.DB.batch([env.DB.prepare('UPDATE issue_comments SET body=?,updated_at=? WHERE id=?').bind(value, updatedAt, commentId), ...references]);
+  return json({ comment: { id: commentId, body: value, updatedAt }, linkedItems: await linkedWorkItems(env, principal, 'issue', comment.issueId) });
 }
 
 export async function deleteIssueComment(env: Env, principal: Principal, commentId: string): Promise<Response> {
@@ -95,8 +105,11 @@ export async function deleteIssueComment(env: Env, principal: Principal, comment
   if (!comment || (!comment.canManage && comment.authorId !== principal.id)) return problem(404, 'comment_not_found', 'Comment not found.');
   if (comment.deletedAt) return problem(409, 'comment_deleted', 'Comment is already deleted.');
   const deletedAt = new Date().toISOString();
-  await env.DB.prepare('UPDATE issue_comments SET body=?,deleted_at=?,updated_at=? WHERE id=?').bind('', deletedAt, deletedAt, commentId).run();
-  return json({ deleted: true, id: commentId, updatedAt: deletedAt });
+  await env.DB.batch([
+    env.DB.prepare('UPDATE issue_comments SET body=?,deleted_at=?,updated_at=? WHERE id=?').bind('', deletedAt, deletedAt, commentId),
+    ...deleteReferenceStatements(env, 'comment', commentId)
+  ]);
+  return json({ deleted: true, id: commentId, updatedAt: deletedAt, linkedItems: await linkedWorkItems(env, principal, 'issue', comment.issueId) });
 }
 
 export async function updateIssueMetadata(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
@@ -177,7 +190,7 @@ async function editableIssue(env: Env, principal: Principal, owner: string, name
 }
 
 async function commentContext(env: Env, principal: Principal, commentId: string) {
-  const row = await env.DB.prepare('SELECT issue_comments.author_id AS authorId,issue_comments.deleted_at AS deletedAt,organizations.slug AS owner,repositories.name AS repository FROM issue_comments JOIN issues ON issues.id=issue_comments.issue_id JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE issue_comments.id=?').bind(commentId).first<{ authorId: string; deletedAt: string | null; owner: string; repository: string }>();
+  const row = await env.DB.prepare('SELECT issue_comments.author_id AS authorId,issue_comments.deleted_at AS deletedAt,issues.id AS issueId,organizations.slug AS owner,repositories.name AS repository FROM issue_comments JOIN issues ON issues.id=issue_comments.issue_id JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE issue_comments.id=?').bind(commentId).first<{ authorId: string; deletedAt: string | null; issueId: string; owner: string; repository: string }>();
   if (!row || !(await authorizeRepository(env, principal, row.owner, row.repository, 'repository.read'))) return null;
   return { ...row, canManage: row.authorId === principal.id ? false : Boolean(await authorizeRepository(env, principal, row.owner, row.repository, 'repository.triage')) };
 }

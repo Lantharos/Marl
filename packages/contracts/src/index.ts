@@ -185,14 +185,32 @@ export interface IssueEvent {
   id: Identifier;
   actor: string;
   actorDisplayName: string;
-  kind: 'title_changed' | 'description_changed' | 'assigned' | 'unassigned' | 'label_added' | 'label_removed' | 'locked' | 'unlocked' | 'closed' | 'reopened';
+  kind: 'title_changed' | 'description_changed' | 'assigned' | 'unassigned' | 'label_added' | 'label_removed' | 'locked' | 'unlocked' | 'closed' | 'reopened' | 'closed_by_pull';
   details: Record<string, string>;
+  createdAt: string;
+}
+
+export interface LinkedWorkItem {
+  id: Identifier;
+  kind: 'issue' | 'pull';
+  repository: Pick<RepositorySummary, 'owner' | 'name'>;
+  number: number;
+  title: string;
+  state: string;
+  closes: boolean;
+  direction: 'references' | 'referenced_by';
+}
+
+export interface WorkItemReferenceEvent {
+  id: Identifier;
+  source?: Omit<LinkedWorkItem, 'closes' | 'direction'>;
   createdAt: string;
 }
 
 export type IssueTimelineItem =
   | { sequence: number; kind: 'comment'; createdAt: string; value: IssueComment }
-  | { sequence: number; kind: 'event'; createdAt: string; value: IssueEvent };
+  | { sequence: number; kind: 'event'; createdAt: string; value: IssueEvent }
+  | { sequence: number; kind: 'reference'; createdAt: string; value: WorkItemReferenceEvent };
 
 export interface IssueTimelineWindow {
   items: IssueTimelineItem[];
@@ -210,6 +228,7 @@ export interface IssueDetail extends IssueSummary {
   canManage: boolean;
   availableAssignees: IssuePerson[];
   availableLabels: IssueLabel[];
+  linkedItems: LinkedWorkItem[];
   timeline: IssueTimelineWindow;
 }
 
@@ -243,6 +262,7 @@ export interface PullRequestDetail extends PullRequestSummary {
   locked: boolean;
   canManage: boolean;
   realtimeVersion: number;
+  linkedItems: LinkedWorkItem[];
   timeline: PullTimelineWindow;
 }
 
@@ -250,7 +270,8 @@ export type PullTimelineItem =
   | { sequence: number; kind: 'comment'; createdAt: string; value: PullRequestComment }
   | { sequence: number; kind: 'review'; createdAt: string; value: PullRequestReview }
   | { sequence: number; kind: 'thread'; createdAt: string; value: ReviewThread }
-  | { sequence: number; kind: 'event'; createdAt: string; value: PullRequestEvent };
+  | { sequence: number; kind: 'event'; createdAt: string; value: PullRequestEvent }
+  | { sequence: number; kind: 'reference'; createdAt: string; value: WorkItemReferenceEvent };
 
 export interface PullTimelineWindow {
   items: PullTimelineItem[];

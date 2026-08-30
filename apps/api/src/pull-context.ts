@@ -8,7 +8,7 @@ import { mergeRequirements, type CheckCounts, type RequirementReview } from './p
 import { authorizeRepository, lookupRepository } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
 
-export type PullRepository = { id: string; owner: string; name: string; visibility: 'public' | 'private'; organizationId: string };
+export type PullRepository = { id: string; owner: string; name: string; visibility: 'public' | 'private'; organizationId: string; defaultBranch: string };
 export type PullRow = { id: string; repositoryId: string; sourceRepositoryId: string | null; number: number; title: string; body: string; authorId: string; author: string; authorDisplayName: string; authorAvatarUrl: string | null; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; sourceOwner: string; sourceRepository: string; state: 'draft' | 'open' | 'merged' | 'closed'; mergedCommitId?: string; mergeMethod?: MergeMethod; lockedAt?: string; realtimeVersion: number; createdAt: string; updatedAt: string; owner: string; repository: string };
 export type ReviewStatus = 'none' | 'requested' | 'approved' | 'changes_requested';
 
@@ -25,7 +25,7 @@ export function createPullEvent(env: Env, pullId: string, actor: Pick<Principal,
 
 export async function pullRepository(env: Env, owner: string, name: string): Promise<PullRepository | null> {
   const repository = await lookupRepository(env, owner, name);
-  return repository ? { id: repository.id, owner: repository.owner, name: repository.name, visibility: repository.visibility, organizationId: repository.organizationId } : null;
+  return repository ? { id: repository.id, owner: repository.owner, name: repository.name, visibility: repository.visibility, organizationId: repository.organizationId, defaultBranch: repository.defaultBranch } : null;
 }
 
 export async function canManageRepository(env: Env, principal: Principal, repository: PullRepository): Promise<boolean> {

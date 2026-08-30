@@ -1,6 +1,7 @@
-import type { IssueComment, IssueEvent, IssueTimelineItem, IssueTimelineWindow } from '@marl/contracts';
+import type { IssueComment, IssueEvent, IssueTimelineItem, IssueTimelineWindow, WorkItemReferenceEvent } from '@marl/contracts';
 import type { Principal } from './auth';
 import type { Env } from './platform';
+import { hydrateReferenceEvents } from './work-item-references';
 
 type TimelineRow = { sequence: number; kind: IssueTimelineItem['kind']; entityId: string; createdAt: string };
 type CommentRow = Omit<IssueComment, 'deleted' | 'canEdit'> & { deletedAt: string | null };
@@ -36,18 +37,22 @@ function uniqueRows(rows: TimelineRow[]) {
 async function hydrate(env: Env, principal: Principal, rows: TimelineRow[], canManage: boolean): Promise<IssueTimelineItem[]> {
   const commentIds = rows.filter((row) => row.kind === 'comment').map((row) => row.entityId);
   const eventIds = rows.filter((row) => row.kind === 'event').map((row) => row.entityId);
-  const [comments, events] = await Promise.all([
+  const referenceIds = rows.filter((row) => row.kind === 'reference').map((row) => row.entityId);
+  const [comments, events, references] = await Promise.all([
     selectIds<CommentRow>(env, `SELECT issue_comments.id,issue_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,issue_comments.body,issue_comments.created_at AS createdAt,issue_comments.updated_at AS updatedAt,issue_comments.deleted_at AS deletedAt FROM issue_comments JOIN users ON users.id=issue_comments.author_id WHERE issue_comments.id IN`, commentIds),
-    selectIds<EventRow>(env, `SELECT issue_events.id,users.handle AS actor,users.display_name AS actorDisplayName,issue_events.kind,issue_events.details,issue_events.created_at AS createdAt FROM issue_events JOIN users ON users.id=issue_events.actor_id WHERE issue_events.id IN`, eventIds)
+    selectIds<EventRow>(env, `SELECT issue_events.id,users.handle AS actor,users.display_name AS actorDisplayName,issue_events.kind,issue_events.details,issue_events.created_at AS createdAt FROM issue_events JOIN users ON users.id=issue_events.actor_id WHERE issue_events.id IN`, eventIds),
+    hydrateReferenceEvents(env, principal, referenceIds)
   ]);
-  const values = new Map<string, IssueComment | IssueEvent>();
+  const values = new Map<string, IssueComment | IssueEvent | WorkItemReferenceEvent>();
   for (const { deletedAt, ...comment } of comments) values.set(comment.id, { ...comment, body: deletedAt ? '' : comment.body, deleted: Boolean(deletedAt), canEdit: canManage || comment.authorId === principal.id });
   for (const event of events) values.set(event.id, { ...event, details: parseDetails(event.details) });
+  for (const reference of references) values.set(reference.id, reference);
   const hydrated: IssueTimelineItem[] = [];
   for (const row of rows) {
     const value = values.get(row.entityId);
     if (row.kind === 'comment' && value && 'author' in value) hydrated.push({ sequence: Number(row.sequence), kind: 'comment', createdAt: row.createdAt, value });
     if (row.kind === 'event' && value && 'actor' in value) hydrated.push({ sequence: Number(row.sequence), kind: 'event', createdAt: row.createdAt, value });
+    if (row.kind === 'reference' && value && !('actor' in value) && !('author' in value)) hydrated.push({ sequence: Number(row.sequence), kind: 'reference', createdAt: row.createdAt, value });
   }
   return hydrated;
 }

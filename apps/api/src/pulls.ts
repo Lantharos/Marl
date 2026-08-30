@@ -10,6 +10,7 @@ import { mergeRequirements } from './pull-requirements';
 import { commitPullUpdate } from './pull-realtime';
 import { commentBody, createPullBody, createPullLabelBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
 import { authorizeRepository, authorizeRepositoryId } from './repository-access';
+import { closingIssueStatements, deleteReferenceStatements, referenceStatements } from './work-item-references';
 
 export async function createPull(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const repository = await repo(env, owner, name);
@@ -51,6 +52,8 @@ export async function createPull(request: Request, env: Env, principal: Principa
   if (!created) return problem(500, 'pull_request_create_failed', 'Pull request creation did not persist.');
   const pinned = await preservePullRefs(env, repository, created);
   if (pinned) return pinned;
+  const references = await referenceStatements(env, principal, { kind: 'pull', id, owner, repository: name }, 'body', id, created.body);
+  if (references.length) await env.DB.batch(references);
   return json({ pullRequest: created && summary(created) }, { status: 201 });
 }
 
@@ -75,8 +78,9 @@ export async function updatePullDetails(request: Request, env: Env, principal: P
   if (description !== pull.body) events.push(createPullEvent(env, pull.id, principal, 'description_changed'));
   const statements = events.map((event) => event.statement);
   if (!statements.length) return problem(422, 'unchanged_pull_request', 'No pull request details changed.');
+  if (description !== pull.body) statements.push(...await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'body', pull.id, description));
   statements.unshift(env.DB.prepare('UPDATE pull_requests SET title=?,body=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(title, description, pull.id));
-  const update = await commitPullUpdate(env, pull.id, 'details.updated', { details: { title, body: description }, timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })) }, statements);
+  const update = await commitPullUpdate(env, pull.id, 'details.updated', { details: { title, body: description }, timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })), refreshState: true }, statements);
   return json({ updated: true, pull: { title, body: description }, update });
 }
 
@@ -191,8 +195,10 @@ export async function addPullComment(request: Request, env: Env, principal: Prin
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
   const comment = { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
-  const update = await commitPullUpdate(env, pull.id, 'comment.created', { timeline: [{ kind: 'comment', value: comment, createdAt }] }, [
-    env.DB.prepare(`INSERT INTO pull_request_comments (id,pull_request_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)`).bind(id, pull.id, principal.id, comment.body, createdAt, createdAt)
+  const references = await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'comment', id, comment.body);
+  const update = await commitPullUpdate(env, pull.id, 'comment.created', { timeline: [{ kind: 'comment', value: comment, createdAt }], refreshState: true }, [
+    env.DB.prepare(`INSERT INTO pull_request_comments (id,pull_request_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)`).bind(id, pull.id, principal.id, comment.body, createdAt, createdAt),
+    ...references
   ]);
   return json({ comment, update }, { status: 201 });
 }
@@ -200,12 +206,14 @@ export async function addPullComment(request: Request, env: Env, principal: Prin
 export async function updatePullComment(request: Request, env: Env, principal: Principal, commentId: string): Promise<Response> {
   const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 50_000) return problem(422, 'invalid_pull_comment', 'A comment is required.');
-  const comment = await env.DB.prepare('SELECT id,pull_request_id AS pullId FROM pull_request_comments WHERE id=? AND author_id=? AND deleted_at IS NULL').bind(commentId, principal.id).first<{ id: string; pullId: string }>();
+  const comment = await env.DB.prepare('SELECT pull_request_comments.id,pull_requests.id AS pullId,organizations.slug AS owner,repositories.name AS repository FROM pull_request_comments JOIN pull_requests ON pull_requests.id=pull_request_comments.pull_request_id JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE pull_request_comments.id=? AND pull_request_comments.author_id=? AND pull_request_comments.deleted_at IS NULL').bind(commentId, principal.id).first<{ id: string; pullId: string; owner: string; repository: string }>();
   if (!comment) return problem(404, 'pull_comment_not_found', 'Editable comment not found.');
   const updatedAt = new Date().toISOString();
   const value = { id: commentId, body: body.body.trim(), updatedAt, deleted: false };
-  const update = await commitPullUpdate(env, comment.pullId, 'comment.updated', { comment: value }, [
-    env.DB.prepare(`UPDATE pull_request_comments SET body=?,updated_at=? WHERE id=?`).bind(value.body, updatedAt, commentId)
+  const references = await referenceStatements(env, principal, { kind: 'pull', id: comment.pullId, owner: comment.owner, repository: comment.repository }, 'comment', commentId, value.body);
+  const update = await commitPullUpdate(env, comment.pullId, 'comment.updated', { comment: value, refreshState: true }, [
+    env.DB.prepare(`UPDATE pull_request_comments SET body=?,updated_at=? WHERE id=?`).bind(value.body, updatedAt, commentId),
+    ...references
   ]);
   return json({ comment: value, update });
 }
@@ -215,8 +223,9 @@ export async function deletePullComment(env: Env, principal: Principal, commentI
   if (!comment) return problem(404, 'pull_comment_not_found', 'Comment not found.');
   const updatedAt = new Date().toISOString();
   const value = { id: commentId, body: '', updatedAt, deleted: true };
-  const update = await commitPullUpdate(env, comment.pullId, 'comment.deleted', { comment: value }, [
-    env.DB.prepare(`UPDATE pull_request_comments SET body='',deleted_at=?,updated_at=? WHERE id=?`).bind(updatedAt, updatedAt, commentId)
+  const update = await commitPullUpdate(env, comment.pullId, 'comment.deleted', { comment: value, refreshState: true }, [
+    env.DB.prepare(`UPDATE pull_request_comments SET body='',deleted_at=?,updated_at=? WHERE id=?`).bind(updatedAt, updatedAt, commentId),
+    ...deleteReferenceStatements(env, 'comment', commentId)
   ]);
   return json({ comment: value, update });
 }
@@ -236,9 +245,11 @@ export async function createThread(request: Request, env: Env, principal: Princi
   const createdAt = new Date().toISOString();
   const comment = { id: commentId, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const thread = { id: threadId, path: body.path, side: body.side, line: body.line, startSide, startLine, commitId: pull.sourceCommitId, createdAt, outdated: false, resolved: false, comments: [comment] };
+  const references = await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'comment', commentId, comment.body);
   const update = await commitPullUpdate(env, pull.id, 'thread.created', { timeline: [{ kind: 'thread', value: thread, createdAt }], refreshState: true }, [
     env.DB.prepare('INSERT INTO review_threads (id, pull_request_id, path, side, line, start_side, start_line, commit_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(threadId, pull.id, body.path, body.side, body.line, startSide, startLine, pull.sourceCommitId, createdAt),
-    env.DB.prepare('INSERT INTO review_comments (id, thread_id, author_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(commentId, threadId, principal.id, comment.body, createdAt, createdAt)
+    env.DB.prepare('INSERT INTO review_comments (id, thread_id, author_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(commentId, threadId, principal.id, comment.body, createdAt, createdAt),
+    ...references
   ]);
   return json({ thread, update }, { status: 201 });
 }
@@ -260,15 +271,17 @@ export async function resolveThread(request: Request, env: Env, principal: Princ
 }
 
 export async function addThreadComment(request: Request, env: Env, principal: Principal, threadId: string): Promise<Response> {
-  const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,pull_requests.repository_id AS repositoryId FROM review_threads JOIN pull_requests ON pull_requests.id=review_threads.pull_request_id WHERE review_threads.id=? AND pull_requests.state IN ('draft','open') AND pull_requests.locked_at IS NULL`).bind(threadId).first<{ id: string; pullId: string; repositoryId: string }>();
+  const thread = await env.DB.prepare(`SELECT review_threads.id,review_threads.pull_request_id AS pullId,pull_requests.repository_id AS repositoryId,organizations.slug AS owner,repositories.name AS repository FROM review_threads JOIN pull_requests ON pull_requests.id=review_threads.pull_request_id JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE review_threads.id=? AND pull_requests.state IN ('draft','open') AND pull_requests.locked_at IS NULL`).bind(threadId).first<{ id: string; pullId: string; repositoryId: string; owner: string; repository: string }>();
   if (!thread || !(await authorizeRepositoryId(env, principal, thread.repositoryId, 'repository.triage'))) return problem(404, 'review_thread_not_found', 'Review conversation not found.');
   const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_comment', 'A review comment is required.');
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
   const comment = { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
-  const update = await commitPullUpdate(env, thread.pullId, 'thread.comment.created', { threadComment: { threadId, comment } }, [
-    env.DB.prepare('INSERT INTO review_comments (id,thread_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, threadId, principal.id, comment.body, createdAt, createdAt)
+  const references = await referenceStatements(env, principal, { kind: 'pull', id: thread.pullId, owner: thread.owner, repository: thread.repository }, 'comment', id, comment.body);
+  const update = await commitPullUpdate(env, thread.pullId, 'thread.comment.created', { threadComment: { threadId, comment }, refreshState: true }, [
+    env.DB.prepare('INSERT INTO review_comments (id,thread_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, threadId, principal.id, comment.body, createdAt, createdAt),
+    ...references
   ]);
   return json({ comment, update }, { status: 201 });
 }
@@ -276,12 +289,14 @@ export async function addThreadComment(request: Request, env: Env, principal: Pr
 export async function updateReviewComment(request: Request, env: Env, principal: Principal, commentId: string): Promise<Response> {
   const body = await readJson(request, commentBody);
   if (!body || typeof body.body !== 'string' || !body.body.trim() || body.body.length > 20_000) return problem(422, 'invalid_review_comment', 'A review comment is required.');
-  const comment = await env.DB.prepare(`SELECT review_comments.id,review_comments.thread_id AS threadId,review_threads.pull_request_id AS pullId FROM review_comments JOIN review_threads ON review_threads.id=review_comments.thread_id WHERE review_comments.id=? AND review_comments.author_id=? AND review_comments.deleted_at IS NULL`).bind(commentId, principal.id).first<{ id: string; threadId: string; pullId: string }>();
+  const comment = await env.DB.prepare(`SELECT review_comments.id,review_comments.thread_id AS threadId,review_threads.pull_request_id AS pullId,organizations.slug AS owner,repositories.name AS repository FROM review_comments JOIN review_threads ON review_threads.id=review_comments.thread_id JOIN pull_requests ON pull_requests.id=review_threads.pull_request_id JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE review_comments.id=? AND review_comments.author_id=? AND review_comments.deleted_at IS NULL`).bind(commentId, principal.id).first<{ id: string; threadId: string; pullId: string; owner: string; repository: string }>();
   if (!comment) return problem(404, 'review_comment_not_found', 'Editable review comment not found.');
   const updatedAt = new Date().toISOString();
   const value = { id: commentId, body: body.body.trim(), updatedAt, deleted: false };
-  const update = await commitPullUpdate(env, comment.pullId, 'thread.comment.updated', { threadComment: { threadId: comment.threadId, comment: value } }, [
-    env.DB.prepare(`UPDATE review_comments SET body=?,updated_at=? WHERE id=?`).bind(value.body, updatedAt, commentId)
+  const references = await referenceStatements(env, principal, { kind: 'pull', id: comment.pullId, owner: comment.owner, repository: comment.repository }, 'comment', commentId, value.body);
+  const update = await commitPullUpdate(env, comment.pullId, 'thread.comment.updated', { threadComment: { threadId: comment.threadId, comment: value }, refreshState: true }, [
+    env.DB.prepare(`UPDATE review_comments SET body=?,updated_at=? WHERE id=?`).bind(value.body, updatedAt, commentId),
+    ...references
   ]);
   return json({ comment: value, update });
 }
@@ -291,8 +306,9 @@ export async function deleteReviewComment(env: Env, principal: Principal, commen
   if (!comment) return problem(404, 'review_comment_not_found', 'Review comment not found.');
   const updatedAt = new Date().toISOString();
   const value = { id: commentId, body: '', updatedAt, deleted: true };
-  const update = await commitPullUpdate(env, comment.pullId, 'thread.comment.deleted', { threadComment: { threadId: comment.threadId, comment: value } }, [
-    env.DB.prepare(`UPDATE review_comments SET body='',deleted_at=?,updated_at=? WHERE id=?`).bind(updatedAt, updatedAt, commentId)
+  const update = await commitPullUpdate(env, comment.pullId, 'thread.comment.deleted', { threadComment: { threadId: comment.threadId, comment: value }, refreshState: true }, [
+    env.DB.prepare(`UPDATE review_comments SET body='',deleted_at=?,updated_at=? WHERE id=?`).bind(updatedAt, updatedAt, commentId),
+    ...deleteReferenceStatements(env, 'comment', commentId)
   ]);
   return json({ comment: value, update });
 }
@@ -340,8 +356,10 @@ export async function reviewPull(request: Request, env: Env, principal: Principa
   const id = identifier('review');
   const createdAt = new Date().toISOString();
   const review = { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, state: body.state, body: typeof body.body === 'string' ? body.body.slice(0, 20_000) : '', commitId: pull.sourceCommitId, createdAt };
+  const references = await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'comment', id, review.body);
   const update = await commitPullUpdate(env, pull.id, 'review.created', { timeline: [{ kind: 'review', value: review, createdAt }], refreshState: true }, [
-    env.DB.prepare('INSERT INTO pull_request_reviews (id,pull_request_id,author_id,state,body,commit_id,created_at) VALUES (?,?,?,?,?,?,?)').bind(id, pull.id, principal.id, review.state, review.body, pull.sourceCommitId, createdAt)
+    env.DB.prepare('INSERT INTO pull_request_reviews (id,pull_request_id,author_id,state,body,commit_id,created_at) VALUES (?,?,?,?,?,?,?)').bind(id, pull.id, principal.id, review.state, review.body, pull.sourceCommitId, createdAt),
+    ...references
   ]);
   return json({ review, update }, { status: 201 });
 }
@@ -374,11 +392,15 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   if (!gateway.ok || !result?.commitId) return problem(gateway.status === 409 ? 409 : 502, gateway.status === 409 ? 'merge_conflict' : 'merge_gateway_failed', result?.error ?? 'Git gateway could not merge this pull request.');
   const targetHeadId = result.targetHeadId ?? result.commitId;
   const event = createPullEvent(env, pull.id, principal, 'merged', { method: String(method), commit: result.commitId.slice(0, 7) });
+  const closing = pull.targetBranch === repository.defaultBranch
+    ? await closingIssueStatements(env, pull.id, principal, { owner, repository: name, number })
+    : { statements: [], issueIds: [] };
   const pullPatch = { state: 'merged', mergedCommitId: result.commitId, mergeMethod: method };
-  const update = await commitPullUpdate(env, pull.id, 'pull.merged', { pull: pullPatch, timeline: [{ kind: 'event', value: event.value, createdAt: event.value.createdAt }], refreshState: true }, [
+  const update = await commitPullUpdate(env, pull.id, 'pull.merged', { pull: pullPatch, closedIssueIds: closing.issueIds, timeline: [{ kind: 'event', value: event.value, createdAt: event.value.createdAt }], refreshState: true }, [
     env.DB.prepare(`UPDATE pull_requests SET state='merged', target_commit_id=?, merged_commit_id=?,merge_method=?, merged_by=?, merged_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND state='open'`).bind(pull.targetCommitId, result.commitId, method, principal.id, pull.id),
     env.DB.prepare('UPDATE branches SET commit_id=?, updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND name=? AND commit_id IN (?, ?)').bind(targetHeadId, repository.id, pull.targetBranch, pull.targetCommitId, result.commitId),
     event.statement,
+    ...closing.statements,
     auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.merged', subjectType: 'pull_request', subjectId: pull.id, details: { number, method, commitId: result.commitId, targetBranch: pull.targetBranch } })
   ]);
   return json({ merged: true, commitId: result.commitId, update });

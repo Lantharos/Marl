@@ -94,7 +94,9 @@ comments, durable deletion tombstones, assignees, repository labels, conversatio
 complete actor-attributed timeline. Global Issues provides one searchable queue across every
 repository the current user can read; repository Issues preserves label filtering and repository
 context. Only repository triage roles manage assignment, labels, and locks, while issue authors
-can edit and close their own work.
+can edit and close their own work. References in descriptions, comments, reviews, and review
+conversations create durable links and backlink timeline entries. References may use the current
+repository shorthand or a qualified form such as `lantharos/marl#12` and `lantharos/marl!7`.
 
 ## Pull requests
 
@@ -113,6 +115,10 @@ close, and reopen actions together without navigating away. Choosing an action m
 composer's primary submit behavior and includes the written comment when present. Assignees and
 repository labels make ownership and triage visible without replacing review state. The commits,
 changes, checks, and conversation views all describe the same pinned head revision.
+
+Pull request descriptions can close linked issues with `fixes`, `closes`, or `resolves`. Closing
+occurs atomically with a successful merge into the repository's default branch; merging into any
+other branch preserves the link without changing issue state.
 
 Repository owners configure merge rules from the branches surface: required approvals,
 successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,

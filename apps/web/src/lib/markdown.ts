@@ -70,16 +70,17 @@ function referenceExtension(context: MarkdownContext) {
   return {
     name: 'marlReference',
     level: 'inline' as const,
-    start(source: string) { return source.search(/[#!]\d+\b/); },
+    start(source: string) { return source.search(/(?:[a-z0-9_.-]+\/[a-z0-9_.-]+)?[#!]\d+\b/i); },
     tokenizer(source: string) {
-      const match = /^([#!])(\d+)\b/.exec(source);
+      const match = /^(?:([a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?)\/([a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?))?([#!])(\d+)\b/i.exec(source);
       if (!match) return;
-      return { type: 'marlReference', raw: match[0], marker: match[1], number: match[2] };
+      return { type: 'marlReference', raw: match[0], owner: match[1], repository: match[2], marker: match[3], number: match[4] };
     },
-    renderer(token: { marker: string; number: string }) {
+    renderer(token: { raw: string; owner?: string; repository?: string; marker: string; number: string }) {
       const collection = token.marker === '#' ? 'issues' : 'pulls';
-      const reference = `${token.marker}${token.number}`;
-      return `<a class="reference" href="/${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repository)}/${collection}/${token.number}">${reference}</a>`;
+      const owner = token.owner ?? context.owner;
+      const repository = token.repository ?? context.repository;
+      return `<a class="reference" href="/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/${collection}/${token.number}">${token.raw}</a>`;
     }
   };
 }

@@ -358,7 +358,7 @@ CREATE TABLE pull_requests (
 CREATE TABLE pull_timeline (
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,
   pull_request_id TEXT NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('comment', 'review', 'thread', 'event')),
+  kind TEXT NOT NULL CHECK (kind IN ('comment', 'review', 'thread', 'event', 'reference')),
   entity_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   UNIQUE (kind, entity_id)
@@ -762,10 +762,25 @@ CREATE TABLE issue_labels (
 CREATE TABLE issue_timeline (
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,
   issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('comment', 'event')),
+  kind TEXT NOT NULL CHECK (kind IN ('comment', 'event', 'reference')),
   entity_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   UNIQUE (kind, entity_id)
+);
+
+CREATE TABLE work_item_references (
+  id TEXT PRIMARY KEY,
+  source_issue_id TEXT REFERENCES issues(id) ON DELETE CASCADE,
+  source_pull_id TEXT REFERENCES pull_requests(id) ON DELETE CASCADE,
+  source_content_kind TEXT NOT NULL CHECK (source_content_kind IN ('body', 'comment')),
+  source_content_id TEXT NOT NULL,
+  target_issue_id TEXT REFERENCES issues(id) ON DELETE CASCADE,
+  target_pull_id TEXT REFERENCES pull_requests(id) ON DELETE CASCADE,
+  closes_target INTEGER NOT NULL DEFAULT 0 CHECK (closes_target IN (0, 1)),
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK ((source_issue_id IS NOT NULL) != (source_pull_id IS NOT NULL)),
+  CHECK ((target_issue_id IS NOT NULL) != (target_pull_id IS NOT NULL))
 );
 
 CREATE INDEX issues_by_state ON issues(repository_id, state, updated_at DESC, id DESC);
@@ -775,6 +790,13 @@ CREATE INDEX issue_events_issue_created ON issue_events(issue_id, created_at, id
 CREATE INDEX issue_timeline_issue_sequence ON issue_timeline(issue_id, sequence);
 CREATE INDEX issue_assignees_user ON issue_assignees(user_id, issue_id);
 CREATE INDEX issue_labels_label ON issue_labels(label_id, issue_id);
+CREATE INDEX work_item_references_source_issue ON work_item_references(source_issue_id);
+CREATE INDEX work_item_references_source_pull ON work_item_references(source_pull_id);
+CREATE INDEX work_item_references_target_issue ON work_item_references(target_issue_id);
+CREATE INDEX work_item_references_target_pull ON work_item_references(target_pull_id);
+CREATE INDEX work_item_references_content ON work_item_references(source_content_kind, source_content_id);
+CREATE UNIQUE INDEX work_item_references_issue_target ON work_item_references(source_content_kind, source_content_id, target_issue_id) WHERE target_issue_id IS NOT NULL;
+CREATE UNIQUE INDEX work_item_references_pull_target ON work_item_references(source_content_kind, source_content_id, target_pull_id) WHERE target_pull_id IS NOT NULL;
 
 CREATE TRIGGER issue_timeline_comment_insert
 AFTER INSERT ON issue_comments
@@ -788,4 +810,34 @@ AFTER INSERT ON issue_events
 BEGIN
   INSERT INTO issue_timeline (issue_id, kind, entity_id, created_at)
   VALUES (NEW.issue_id, 'event', NEW.id, NEW.created_at);
+END;
+
+CREATE TRIGGER issue_timeline_reference_insert
+AFTER INSERT ON work_item_references
+WHEN NEW.target_issue_id IS NOT NULL
+BEGIN
+  INSERT INTO issue_timeline (issue_id, kind, entity_id, created_at)
+  VALUES (NEW.target_issue_id, 'reference', NEW.id, NEW.created_at);
+END;
+
+CREATE TRIGGER issue_timeline_reference_delete
+AFTER DELETE ON work_item_references
+WHEN OLD.target_issue_id IS NOT NULL
+BEGIN
+  DELETE FROM issue_timeline WHERE kind = 'reference' AND entity_id = OLD.id;
+END;
+
+CREATE TRIGGER pull_timeline_reference_insert
+AFTER INSERT ON work_item_references
+WHEN NEW.target_pull_id IS NOT NULL
+BEGIN
+  INSERT INTO pull_timeline (pull_request_id, kind, entity_id, created_at)
+  VALUES (NEW.target_pull_id, 'reference', NEW.id, NEW.created_at);
+END;
+
+CREATE TRIGGER pull_timeline_reference_delete
+AFTER DELETE ON work_item_references
+WHEN OLD.target_pull_id IS NOT NULL
+BEGIN
+  DELETE FROM pull_timeline WHERE kind = 'reference' AND entity_id = OLD.id;
 END;

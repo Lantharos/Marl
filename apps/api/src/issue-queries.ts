@@ -7,6 +7,7 @@ import { initialIssueTimeline, olderIssueTimeline } from './issue-timeline';
 import { readListQuery } from './list-query';
 import type { Env } from './platform';
 import { authorizeRepository, repositoryListFilter } from './repository-access';
+import { linkedWorkItems } from './work-item-references';
 
 export async function listIssues(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
@@ -58,13 +59,14 @@ export async function getIssue(env: Env, principal: Principal, owner: string, na
   const row = await env.DB.prepare(`${issueSelect} WHERE issues.repository_id=? AND issues.number=?`).bind(repository.id, number).first<IssueRow>();
   if (!row) return problem(404, 'issue_not_found', 'Issue not found.');
   const canManage = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.triage'));
-  const [summary, availableLabels, availableAssignees, timeline] = await Promise.all([
+  const [summary, availableLabels, availableAssignees, timeline, linkedItems] = await Promise.all([
     summarizeIssueRows(env, [row]),
     env.DB.prepare('SELECT id,name,color,description FROM repository_labels WHERE repository_id=? ORDER BY name').bind(repository.id).all<IssueLabel>(),
     env.DB.prepare('SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle').bind(repository.organizationId).all<IssuePerson>(),
-    initialIssueTimeline(env, principal, row.id, canManage)
+    initialIssueTimeline(env, principal, row.id, canManage),
+    linkedWorkItems(env, principal, 'issue', row.id)
   ]);
-  const issue: IssueDetail = { ...summary[0], body: row.body, authorId: row.authorId, locked: Boolean(row.lockedAt), canEdit: canManage || row.authorId === principal.id, canManage, availableLabels: availableLabels.results, availableAssignees: availableAssignees.results, timeline };
+  const issue: IssueDetail = { ...summary[0], body: row.body, authorId: row.authorId, locked: Boolean(row.lockedAt), canEdit: canManage || row.authorId === principal.id, canManage, availableLabels: availableLabels.results, availableAssignees: availableAssignees.results, linkedItems, timeline };
   return json({ issue });
 }
 

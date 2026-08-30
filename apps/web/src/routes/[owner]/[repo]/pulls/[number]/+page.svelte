@@ -25,11 +25,13 @@
   import Modal from '$lib/components/Modal.svelte';
   import PullActionComposer, { type PullComposerAction } from '$lib/components/PullActionComposer.svelte';
   import PullMetadata from '$lib/components/PullMetadata.svelte';
+  import ReferenceTimelineEvent from '$lib/components/ReferenceTimelineEvent.svelte';
   import ReviewChangesPopover from '$lib/components/ReviewChangesPopover.svelte';
   import PullTimelineEvent from '$lib/components/PullTimelineEvent.svelte';
   import ReviewThread from '$lib/components/ReviewThread.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import WorkItemLinks from '$lib/components/WorkItemLinks.svelte';
   import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
   import { connectPullLive } from '$lib/pulls/pull-live';
   import type { PageData } from './$types';
@@ -333,6 +335,8 @@
           {#if timeline.hidden > 0 && index === 2}<Button class="timeline-gap" variant="ghost" block loading={busy} onclick={loadOlderTimeline}>{timeline.hidden} comments and events hidden <span>Load earlier activity</span></Button>{/if}
           {#if item.kind === 'event'}
             <PullTimelineEvent event={item.value} />
+          {:else if item.kind === 'reference'}
+            <ReferenceTimelineEvent reference={item.value} />
           {:else if item.kind === 'review'}
             <article class="event"><span class="event-icon {item.value.state}">{#if item.value.state === 'approved'}<CircleCheck size={15} />{:else if item.value.state === 'changes_requested'}<CircleAlert size={15} />{:else}<MessageSquare size={15} />{/if}</span><div><p><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatar={false} /> {item.value.state === 'approved' ? 'approved these changes' : item.value.state === 'changes_requested' ? 'requested changes' : 'reviewed this pull request'} <Time class="end" value={item.value.createdAt} /></p>{#if item.value.body}<div class="event-body"><MarkdownBody source={item.value.body} context={markdownContext} /></div>{/if}</div></article>
           {:else if item.kind === 'thread'}
@@ -350,7 +354,7 @@
           <ul><li class:passed={pull.mergeRequirements.checksPass}><Check size={13} />{pull.checkSummary.total ? `${pull.checkSummary.passed} of ${pull.checkSummary.total} checks passed` : 'No checks reported'}</li><li class:passed={pull.mergeRequirements.approvals >= pull.mergeRequirements.requiredApprovals}><Check size={13} />{pull.mergeRequirements.approvals} of {pull.mergeRequirements.requiredApprovals} required approvals</li><li class:passed={pull.mergeRequirements.conversationsPass}><Check size={13} />{openCurrentThreads()} unresolved current conversations</li></ul>
           {#if pull.mergeRequirements.reasons.length}<div class="requirement-reasons">{#each pull.mergeRequirements.reasons as reason (reason)}<p><CircleAlert size={12} />{reason}</p>{/each}</div>{/if}
         {/if}
-      </section><PullMetadata {pull} {busy} onUpdate={updateMetadata} onCreateLabel={createLabel} /></aside>
+      </section><WorkItemLinks items={pull.linkedItems} /><PullMetadata {pull} {busy} onUpdate={updateMetadata} onCreateLabel={createLabel} /></aside>
     </div>
   {:else if tab === 'commits'}
     <section class="commit-list">{#each pull.commits as commit (commit.id)}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{pull.sourceRepository?.owner ?? owner}/{pull.sourceRepository?.name ?? repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={12} />Verified</i>{/if}</small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull request head.</p></div>{/each}</section>

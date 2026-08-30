@@ -11,6 +11,7 @@ import { mergeRequirements } from './pull-requirements';
 import { pullUpdatesAfter } from './pull-realtime';
 import { allPullThreads, initialPullTimeline, olderPullTimeline } from './pull-timeline';
 import { authorizeRepository, repositoryListFilter } from './repository-access';
+import { linkedWorkItems } from './work-item-references';
 
 function selectedLabels(url: URL) {
   return [...new Set(url.searchParams.getAll('label').map((label) => label.trim()).filter(Boolean))];
@@ -72,7 +73,7 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const [reviews, checks, unresolvedThreads, rule, commits, labels, availableLabels, assignees, availableAssignees, timeline] = await Promise.all([
+  const [reviews, checks, unresolvedThreads, rule, commits, labels, availableLabels, assignees, availableAssignees, timeline, linkedItems] = await Promise.all([
     latestReviews(env, pull.id),
     env.DB.prepare(`SELECT id, name, state, summary, details_url AS detailsUrl, updated_at AS updatedAt FROM checks WHERE repository_id = ? AND commit_id = ? ORDER BY name`).bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
@@ -82,7 +83,8 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
     env.DB.prepare(`SELECT id,name,color,description FROM repository_labels WHERE repository_id=? ORDER BY name`).bind(repository.id).all(),
     env.DB.prepare(`SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN pull_request_assignees ON pull_request_assignees.user_id=users.id WHERE pull_request_assignees.pull_request_id=? ORDER BY users.handle`).bind(pull.id).all(),
     env.DB.prepare(`SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle`).bind(repository.organizationId).all(),
-    initialPullTimeline(env, principal, pull.id)
+    initialPullTimeline(env, principal, pull.id),
+    linkedWorkItems(env, principal, 'pull', pull.id)
   ]);
   const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length, items: checks.results.map(({ name: checkName, state: checkState }) => ({ name: checkName, state: checkState })) };
   const reviewStatus = reviewStatusFor(pull, rule, reviews.results);
@@ -94,7 +96,7 @@ export async function getPull(env: Env, principal: Principal, owner: string, nam
   const timelineReviews = timeline.items.filter((item) => item.kind === 'review').map((item) => item.value);
   const threads = timeline.items.filter((item) => item.kind === 'thread').map((item) => item.value);
   const events = timeline.items.filter((item) => item.kind === 'event').map((item) => item.value);
-  return json({ pullRequest: { ...pullSummary, state, body: pull.body, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, authorId: pull.authorId, createdAt: pull.createdAt, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, mergeRequirements: requirements, allowedMergeMethods: rule.allowedMergeMethods, commits: commits.results, comments, reviews: timelineReviews, checks: checks.results, threads, events, labels: labels.results, availableLabels: availableLabels.results, assignees: assignees.results, availableAssignees: availableAssignees.results, locked: Boolean(pull.lockedAt), canManage: await membership(env, principal, repository), realtimeVersion: Number(pull.realtimeVersion), timeline } });
+  return json({ pullRequest: { ...pullSummary, state, body: pull.body, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, authorId: pull.authorId, createdAt: pull.createdAt, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, mergeRequirements: requirements, allowedMergeMethods: rule.allowedMergeMethods, commits: commits.results, comments, reviews: timelineReviews, checks: checks.results, threads, events, labels: labels.results, availableLabels: availableLabels.results, assignees: assignees.results, availableAssignees: availableAssignees.results, locked: Boolean(pull.lockedAt), canManage: await membership(env, principal, repository), realtimeVersion: Number(pull.realtimeVersion), linkedItems, timeline } });
 }
 
 export async function getPullTimeline(env: Env, principal: Principal, owner: string, name: string, number: number, url: URL): Promise<Response> {
@@ -124,18 +126,19 @@ export async function getPullState(env: Env, principal: Principal, owner: string
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? AND pull_requests.number=?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const [checks, reviews, unresolvedThreads, rule, commits] = await Promise.all([
+  const [checks, reviews, unresolvedThreads, rule, commits, linkedItems] = await Promise.all([
     env.DB.prepare('SELECT name,state FROM checks WHERE repository_id=? AND commit_id=?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
     latestReviews(env, pull.id),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>(),
     branchRuleFor(env, repository.id, pull.targetBranch),
-    pullCommits(env, repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, pull.targetCommitId)
+    pullCommits(env, repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, pull.targetCommitId),
+    linkedWorkItems(env, principal, 'pull', pull.id)
   ]);
   const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length, items: checks.results };
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, Number(unresolvedThreads?.count ?? 0));
   const pullSummary = summary(pull, checkSummary, reviewStatusFor(pull, rule, reviews.results), Number(unresolvedThreads?.count ?? 0));
   const state = pull.state === 'open' ? (requirements.ready ? 'mergeable' : 'blocked') : pullSummary.state;
-  return json({ state: { state, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, commits: commits.results, checkSummary, mergeRequirements: requirements, realtimeVersion: Number(pull.realtimeVersion) } });
+  return json({ state: { state, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, commits: commits.results, checkSummary, mergeRequirements: requirements, linkedItems, realtimeVersion: Number(pull.realtimeVersion) } });
 }
 
 export async function connectPullRealtime(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
