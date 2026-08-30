@@ -9,6 +9,14 @@ import { organizationRole, requireOrganizationRole } from './repository-access';
 import { sendTransactionalEmail } from './email';
 import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 
+export type RepositoryOwner = { slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string };
+
+export async function listRepositoryOwners(env: Env, principal: Principal): Promise<RepositoryOwner[]> {
+  if (principal.authType === 'token') return [];
+  const rows = await env.DB.prepare(`SELECT organizations.slug,organizations.name,organizations.avatar_url AS avatarUrl,organizations.kind,organization_members.role FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? ORDER BY organizations.kind,organizations.name`).bind(principal.id).all<RepositoryOwner>();
+  return rows.results;
+}
+
 export async function listOrganizations(env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Organizations can only be managed from a browser session.');
   const rows = await env.DB.prepare(`SELECT organizations.id,organizations.slug,organizations.name,organizations.avatar_url AS avatarUrl,organizations.kind,organizations.base_repository_role AS baseRepositoryRole,organization_members.role,(SELECT COUNT(*) FROM organization_members AS members WHERE members.organization_id=organizations.id) AS members,(SELECT COUNT(*) FROM repositories WHERE repositories.organization_id=organizations.id AND repositories.deletion_scheduled_at IS NULL) AS repositories FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? ORDER BY organizations.kind,organizations.name`).bind(principal.id).all();

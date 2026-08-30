@@ -2,6 +2,7 @@ use crate::process::standard_command;
 use anyhow::{Context, Result, bail};
 use std::{path::Path, process::Command};
 
+#[cfg(windows)]
 const SERVICE_NAME: &str = "MarlRunner";
 
 pub fn install(config: &Path) -> Result<()> {

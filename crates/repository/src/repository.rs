@@ -278,6 +278,7 @@ fn validate_repo_path(path: &str) -> Result<String> {
     let normalized = path.replace('\\', "/");
     let parsed = Path::new(&normalized);
     if normalized.is_empty()
+        || matches!(normalized.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic())
         || parsed.is_absolute()
         || parsed.components().any(|part| {
             matches!(

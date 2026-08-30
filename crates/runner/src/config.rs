@@ -1,4 +1,6 @@
-use crate::{models::RunnerConfig, process::standard_command};
+use crate::models::RunnerConfig;
+#[cfg(windows)]
+use crate::process::standard_command;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 

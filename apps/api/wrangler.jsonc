@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "marl-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-15",
+  "compatibility_date": "2026-08-30",
   "workers_dev": true,
   "vars": {
     "ENVIRONMENT": "development",

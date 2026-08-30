@@ -18,6 +18,7 @@ import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys, signingKeys } fr
 import { getPublicIdentityProfile } from './public-profiles';
 import { readAvatar } from './profile';
 import { readOrganizationAvatar } from './organizations';
+import { getShell } from './shell';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -85,6 +86,7 @@ const worker = {
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });
+    if (request.method === 'GET' && url.pathname === '/api/v1/shell') return getShell(_env, principal);
     if (url.pathname === '/api/v1/ssh-keys') {
       if (request.method === 'GET') return listSshKeys(_env, principal);
       if (request.method === 'POST') return createSshKey(request, _env, principal);

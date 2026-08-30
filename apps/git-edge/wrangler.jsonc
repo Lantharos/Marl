@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "marl-git",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-15",
+  "compatibility_date": "2026-08-30",
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

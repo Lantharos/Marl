@@ -28,7 +28,6 @@
   import { dismissable } from '$lib/actions/dismissable';
   import BrandMark from '../BrandMark.svelte';
   import UserAvatar from '../UserAvatar.svelte';
-  import { authClient } from '$lib/auth-client';
   import { api } from '$lib/api';
 
   type CommandKind = 'home' | 'repository' | 'organization' | 'user' | 'commit' | 'file' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
@@ -169,6 +168,7 @@
   }
 
   async function signOut() {
+    const { authClient } = await import('$lib/auth-client');
     await authClient.signOut();
     await invalidateAll();
     await goto('/sign-in');
@@ -218,7 +218,7 @@
       <header><Search size={18} /><input bind:this={searchInput} bind:value={query} oninput={() => (selectedIndex = 0)} onkeydown={commandKeydown} placeholder="Repositories, pull requests, runs..." /><kbd>Esc</kbd></header>
       <section bind:this={commandList} aria-label="Commands">
         <p>{query ? (searchLoading ? 'Searching Marl…' : `${results.length} results`) : 'Jump to'}</p>
-        {#each results as command, index}
+        {#each results as command, index (command.href)}
           <button data-command={index} class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
             {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>

@@ -134,6 +134,12 @@ export async function listRepositories(env: Env, principal: Principal, url: URL)
   return json({ repositories: page.items.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo), nextCursor: page.nextCursor });
 }
 
+export async function listShellRepositories(env: Env, principal: Principal): Promise<RepositorySummary[]> {
+  const access = repositoryListFilter(principal);
+  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 100`).bind(...access.values).all<RepositoryRow>();
+  return result.results.map(({ organizationId: _, defaultBranch: __, ...repository }) => repository);
+}
+
 export async function createRepository(request: Request, env: Env, principal: Principal): Promise<Response> {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Repositories must be created from a browser session.');
   const body = await readJson(request, createRepositoryBody);

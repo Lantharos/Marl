@@ -3,7 +3,6 @@
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Button from '../Button.svelte';
   import Modal from '../Modal.svelte';
-  import { authClient } from '$lib/auth-client';
 
   type Method = 'passkey' | 'totp' | 'password';
   let { open, method, description = 'Confirm this sensitive account change before continuing.', onClose, onVerified } = $props<{
@@ -30,6 +29,7 @@
     error = '';
     try {
       if (method === 'passkey') {
+        const { authClient } = await import('$lib/auth-client');
         const result = await authClient.signIn.passkey();
         if (result.error) throw new Error(result.error.message || 'The passkey could not be verified.');
       } else {

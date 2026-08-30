@@ -8,9 +8,17 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
   const publicHandle = url.pathname.match(/^\/([^/]+)\/?$/)?.[1];
   const privateRoots = new Set(['forgot-password', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
   const isPublicProfile = Boolean(publicHandle && !privateRoots.has(publicHandle));
-  let shellUser = null;
+  type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
+  type ShellOrganization = { slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string };
+  type ShellData = { user: ShellUser; repositories: RepositorySummary[]; repositoryOwners: ShellOrganization[] };
+  let shellUser: ShellUser | null = null;
+  let shellData: ShellData | null = null;
   try {
-    shellUser = (await apiWith<{ user: { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null } }>(fetch, '/session')).user;
+    if (isAuthRoute) shellUser = (await apiWith<{ user: ShellUser }>(fetch, '/session')).user;
+    else {
+      shellData = await apiWith<ShellData>(fetch, '/shell');
+      shellUser = shellData.user;
+    }
   } catch (cause) {
     if (!isAuthRoute && !isPublicProfile) {
       if (cause instanceof MarlApiError && cause.status === 401) redirect(303, `/sign-in?returnTo=${encodeURIComponent(url.pathname + url.search)}`);
@@ -22,14 +30,10 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
     redirect(303, requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/');
   }
   if (isAuthRoute || !shellUser) return { shellUser: null, shellRepositories: [] as RepositorySummary[], shellOrganizations: [], shellRepositoriesUnavailable: false };
-  const [repositoryResult, organizationResult] = await Promise.allSettled([
-    apiWith<{ repositories: RepositorySummary[] }>(fetch, '/repositories'),
-    apiWith<{ repositoryOwners: Array<{ slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string }> }>(fetch, '/organizations')
-  ]);
   return {
     shellUser,
-    shellRepositories: repositoryResult.status === 'fulfilled' ? repositoryResult.value.repositories : [],
-    shellOrganizations: organizationResult.status === 'fulfilled' ? organizationResult.value.repositoryOwners : [],
-    shellRepositoriesUnavailable: repositoryResult.status === 'rejected'
+    shellRepositories: shellData?.repositories ?? [],
+    shellOrganizations: shellData?.repositoryOwners ?? [],
+    shellRepositoriesUnavailable: !shellData
   };
 };
