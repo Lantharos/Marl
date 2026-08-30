@@ -44,11 +44,13 @@ export async function retryGatewayRequest(send: () => Promise<Response>, attempt
     try {
       const response = await send();
       if (response.status < 500 || attempt === attempts - 1) return response;
+      await response.body?.cancel();
       lastResponse = response;
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1) throw error;
     }
+    await new Promise((resolve) => setTimeout(resolve, 75 * 2 ** attempt));
   }
   if (lastResponse) return lastResponse;
   throw lastError;

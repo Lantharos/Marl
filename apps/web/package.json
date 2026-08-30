@@ -21,9 +21,9 @@
     "vite": "^8.2.2"
   },
   "dependencies": {
-    "@better-auth/passkey": "1.6.29",
+    "@better-auth/passkey": "1.7.2",
     "@marl/contracts": "workspace:*",
-    "better-auth": "1.6.29",
+    "better-auth": "1.7.2",
     "lucide-svelte": "^1.0.1",
     "marked": "^18.0.11",
     "qrcode": "^1.5.4",

@@ -24,7 +24,7 @@ bun install
 Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECRET` and
 `SECRET_ENCRYPTION_KEY` before
 creating an account. Ave credentials are optional; local password and passkey sign-in work without
-them.
+them. Register `${PUBLIC_URL}/api/auth/callback/ave` as the Ave OAuth callback URL.
 
 Generate the 32-byte encryption key with
 `bun -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"`.

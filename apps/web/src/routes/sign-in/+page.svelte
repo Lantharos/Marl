@@ -51,7 +51,7 @@
 
   async function useAve() {
     error = '';
-    const result = await authClient.signIn.oauth2({ providerId: 'ave', callbackURL: returnTo });
+    const result = await authClient.signIn.social({ provider: 'ave', callbackURL: returnTo });
     if (result.error) error = result.error.message || 'Ave sign in could not be started.';
   }
 </script>

@@ -32,6 +32,7 @@ export const account = sqliteTable('auth_account', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   accountId: text('account_id').notNull(),
+  issuer: text('issuer').notNull(),
   providerId: text('provider_id').notNull(),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
@@ -41,7 +42,7 @@ export const account = sqliteTable('auth_account', {
   idToken: text('id_token'),
   password: text('password'),
   ...timestamps
-}, (table) => [uniqueIndex('auth_account_provider_subject').on(table.providerId, table.accountId)]);
+}, (table) => [uniqueIndex('auth_account_issuer_subject').on(table.issuer, table.accountId)]);
 
 export const verification = sqliteTable('auth_verification', {
   id: text('id').primaryKey(),

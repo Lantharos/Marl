@@ -87,6 +87,7 @@ export function createAuth(env: Env, request: Request) {
       }
     },
     account: {
+      identityStrategy: 'provider-id',
       accountLinking: {
         enabled: true,
         trustedProviders: ['ave'],
@@ -143,13 +144,10 @@ function aveProvider(env: Env) {
   return [genericOAuth({
     config: [{
       providerId: 'ave',
-      authorizationUrl: 'https://aveid.net/signin',
-      tokenUrl: 'https://api.aveid.net/api/oauth/token',
-      userInfoUrl: 'https://api.aveid.net/api/oauth/userinfo',
+      discoveryUrl: 'https://aveid.net/.well-known/openid-configuration',
       clientId: env.AVE_CLIENT_ID,
       clientSecret: env.AVE_CLIENT_SECRET,
       scopes: ['openid', 'profile', 'email'],
-      pkce: true,
       disableImplicitSignUp: true
     }]
   })];

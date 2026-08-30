@@ -520,8 +520,8 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     if (cached) return cached;
   }
   const response = await (env.ENVIRONMENT === 'development'
-    ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 2 })
-    : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 2 })).catch(() => null);
+    ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 3 })
+    : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 3 })).catch(() => null);
   if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob') return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
   const result = new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
   if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
