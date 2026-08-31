@@ -34,7 +34,7 @@
     {
       "binding": "DB",
       "database_name": "marl",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "54bbc019-642f-40e6-81fe-e5ed04f34b4a",
       "migrations_dir": "migrations"
     }
   ],

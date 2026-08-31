@@ -16,16 +16,15 @@ accidentally bypass the intended domains, cookies, or same-origin API route.
 
 ## Resources
 
-Create the D1 database and both R2 buckets before the first deployment:
+The production D1 database is already bound in `apps/api/wrangler.jsonc`. Create both R2 buckets
+before the first deployment:
 
 ```sh
-bunx wrangler d1 create marl
 bunx wrangler r2 bucket create marl-objects
 bunx wrangler r2 bucket create marl-git-repositories
 ```
 
-Copy the returned D1 identifier into `apps/api/wrangler.jsonc`. Configure the
-`marl-git-repositories` bucket with the retention lock described in
+Configure the `marl-git-repositories` bucket with the retention lock described in
 [`repository-reliability.md`](repository-reliability.md), and enable D1 Time Travel before
 accepting production writes.
 
