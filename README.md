@@ -95,9 +95,10 @@ a separate Linux or WSL staging requirement.
 
 ## Product boundary
 
-Marl has five primary product surfaces:
+Marl has six primary product surfaces:
 
-- Home: work that needs attention.
+- Home: a compact view of your inbox, recent runs, and repositories.
+- Inbox: mentions, assignments, and relevant updates.
 - Code: repositories, files, branches, and history.
 - Issues: repository work, discussion, assignment, and triage.
 - Pull requests: review, checks, and merging.

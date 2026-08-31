@@ -13,6 +13,7 @@
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import FileCode from 'lucide-svelte/icons/file-code-2';
   import Home from 'lucide-svelte/icons/house';
+  import Inbox from 'lucide-svelte/icons/inbox';
   import KeyRound from 'lucide-svelte/icons/key-round';
   import LogOut from 'lucide-svelte/icons/log-out';
   import Menu from 'lucide-svelte/icons/menu';
@@ -30,7 +31,7 @@
   import UserAvatar from '../UserAvatar.svelte';
   import { api } from '$lib/api';
 
-  type CommandKind = 'home' | 'repository' | 'organization' | 'user' | 'commit' | 'file' | 'issue' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
+  type CommandKind = 'home' | 'inbox' | 'repository' | 'organization' | 'user' | 'commit' | 'file' | 'issue' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
   type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
   function uniqueCommands(entries: Command[]) {
@@ -59,6 +60,7 @@
   const currentPath = $derived($page.url.pathname);
   const commands = $derived<Command[]>(uniqueCommands([
     { label: 'Home', detail: 'Your work across Marl', href: '/', keywords: 'dashboard overview', kind: 'home' },
+    { label: 'Inbox', detail: 'Mentions, assignments, and updates', href: '/inbox', keywords: 'notifications attention unread', kind: 'inbox' },
     { label: user.displayName, detail: `Your public profile · @${user.handle}`, href: `/${user.handle}`, keywords: 'user account profile activity contributions', kind: 'user' },
     ...repositories.map((repository: RepositorySummary) => ({
       label: `${repository.owner}/${repository.name}`,
@@ -203,6 +205,7 @@
     <a class="brand-link" href="/"><BrandMark /></a>
     <nav class:open={mobileOpen} aria-label="Global navigation">
       <a class:active={active('/')} href="/" aria-label="Home" data-label="Home" onclick={() => (mobileOpen = false)}><Home size={17} /><span>Home</span></a>
+      <a class:active={active('/inbox')} href="/inbox" aria-label="Inbox" data-label="Inbox" onclick={() => (mobileOpen = false)}><Inbox size={17} /><span>Inbox</span></a>
       <a class:active={active('/issues')} href="/issues" aria-label="Issues" data-label="Issues" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Issues</span></a>
       <a class:active={active('/pulls')} href="/pulls" aria-label="Pull requests" data-label="Pull requests" onclick={() => (mobileOpen = false)}><GitPullRequest size={17} /><span>Pull requests</span></a>
       <a class:active={active('/runs')} href="/runs" aria-label="Runs" data-label="Runs" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Runs</span></a>
@@ -233,7 +236,7 @@
         <p>{query ? (searchLoading ? 'Searching Marl…' : `${results.length} results`) : 'Jump to'}</p>
         {#each results as command, index (command.href)}
           <button data-command={index} class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'issue'}<CircleDot size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
+            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'inbox'}<Inbox size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'issue'}<CircleDot size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>
           </button>
         {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, issue, pull request, or run.</span></div>{/if}{/each}

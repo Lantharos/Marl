@@ -768,6 +768,27 @@ CREATE TABLE issue_timeline (
   UNIQUE (kind, entity_id)
 );
 
+CREATE TABLE inbox_item_states (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_key TEXT NOT NULL,
+  read_at TEXT,
+  done_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, item_key)
+);
+
+CREATE TABLE content_mentions (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL REFERENCES users(id),
+  source_issue_id TEXT REFERENCES issues(id) ON DELETE CASCADE,
+  source_pull_id TEXT REFERENCES pull_requests(id) ON DELETE CASCADE,
+  content_kind TEXT NOT NULL CHECK (content_kind IN ('issue_body','issue_comment','pull_body','pull_comment','pull_review','review_comment')),
+  content_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, content_kind, content_id),
+  CHECK ((source_issue_id IS NOT NULL) != (source_pull_id IS NOT NULL))
+);
+
 CREATE TABLE work_item_references (
   id TEXT PRIMARY KEY,
   source_issue_id TEXT REFERENCES issues(id) ON DELETE CASCADE,
@@ -790,6 +811,10 @@ CREATE INDEX issue_events_issue_created ON issue_events(issue_id, created_at, id
 CREATE INDEX issue_timeline_issue_sequence ON issue_timeline(issue_id, sequence);
 CREATE INDEX issue_assignees_user ON issue_assignees(user_id, issue_id);
 CREATE INDEX issue_labels_label ON issue_labels(label_id, issue_id);
+CREATE INDEX inbox_item_states_by_user ON inbox_item_states(user_id, done_at, read_at);
+CREATE INDEX content_mentions_by_user ON content_mentions(user_id, created_at DESC);
+CREATE INDEX content_mentions_by_issue ON content_mentions(source_issue_id, created_at DESC) WHERE source_issue_id IS NOT NULL;
+CREATE INDEX content_mentions_by_pull ON content_mentions(source_pull_id, created_at DESC) WHERE source_pull_id IS NOT NULL;
 CREATE INDEX work_item_references_source_issue ON work_item_references(source_issue_id);
 CREATE INDEX work_item_references_source_pull ON work_item_references(source_pull_id);
 CREATE INDEX work_item_references_target_issue ON work_item_references(target_issue_id);

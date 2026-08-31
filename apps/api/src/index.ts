@@ -21,6 +21,7 @@ import { readOrganizationAvatar } from './organizations';
 import { getShell } from './shell';
 import { addIssueComment, createIssue, createIssueLabel, deleteIssueComment, setIssueState, updateIssue, updateIssueComment, updateIssueMetadata } from './issues';
 import { getIssue, getIssueTimeline, listAllIssues, listIssues } from './issue-queries';
+import { listInbox, markInboxRead, updateInboxState } from './inbox';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -99,6 +100,10 @@ const worker = {
     if (accessRoute) return accessRoute;
 
     if (request.method === 'GET' && url.pathname === '/api/v1/dashboard') return getDashboard(_env, principal);
+    if (request.method === 'GET' && url.pathname === '/api/v1/inbox') return listInbox(_env, principal, url);
+    if (request.method === 'POST' && url.pathname === '/api/v1/inbox/read') return markInboxRead(_env, principal);
+    const inboxItem = url.pathname.match(/^\/api\/v1\/inbox\/(issue|pull|run)\/([a-z0-9_]+)$/);
+    if (request.method === 'PATCH' && inboxItem) return updateInboxState(request, _env, principal, inboxItem[1], inboxItem[2]);
     if (request.method === 'GET' && url.pathname === '/api/v1/search') return search(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/issues') return listAllIssues(_env, principal, url);
     if (request.method === 'GET' && url.pathname === '/api/v1/pulls') return listAllPulls(_env, principal, url);

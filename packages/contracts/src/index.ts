@@ -19,6 +19,28 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase';
 export type RunState = 'queued' | 'running' | 'success' | 'failure' | 'canceled';
 export type RunCancellationReason = 'developer' | 'superseded';
 export type RunnerState = 'idle' | 'busy' | 'offline';
+export type InboxItemKind = 'issue' | 'pull' | 'run';
+export type InboxReason = 'mention' | 'assignment' | 'authored' | 'participating' | 'failure';
+
+export interface InboxItem {
+  id: string;
+  kind: InboxItemKind;
+  reason: InboxReason;
+  repository: Pick<RepositorySummary, 'owner' | 'name'>;
+  number: number;
+  title: string;
+  state: string;
+  href: string;
+  updatedAt: string;
+  unread: boolean;
+  done: boolean;
+}
+
+export interface InboxPage {
+  items: InboxItem[];
+  nextCursor: string | null;
+  counts: { inbox: number; unread: number; done: number };
+}
 
 export interface RepositorySummary {
   id: Identifier;

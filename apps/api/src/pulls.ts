@@ -11,6 +11,7 @@ import { commitPullUpdate } from './pull-realtime';
 import { commentBody, createPullBody, createPullLabelBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
 import { authorizeRepository, authorizeRepositoryId } from './repository-access';
 import { closingIssueStatements, deleteReferenceStatements, referenceStatements } from './work-item-references';
+import { deleteMentionStatements, mentionStatements } from './mentions';
 
 export async function createPull(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
   const repository = await repo(env, owner, name);
@@ -41,10 +42,13 @@ export async function createPull(request: Request, env: Env, principal: Principa
   }
   const id = identifier('pr');
   const state = body.draft === true ? 'draft' : 'open';
+  const description = typeof body.body === 'string' ? body.body.slice(0, 100_000) : '';
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id }, 'pull_body', id, description, new Date().toISOString());
   const commits = await pullCommits(env, repository.id, sourceRepository.id, source.commitId, target.commitId);
   const commitEvent = commits.results.length ? createPullEvent(env, id, principal, 'commits_added', { commits: JSON.stringify(commits.results.map((commit) => ({ id: commit.id, title: commit.title }))), owner: sourceOwner, repository: sourceName }) : null;
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO pull_requests (id,repository_id,source_repository_id,number,title,body,author_id,source_branch,target_branch,source_commit_id,target_commit_id,state) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,?,?,?,? FROM pull_requests WHERE repository_id=?`).bind(id, repository.id, sameRepository ? null : sourceRepository.id, body.title.trim(), typeof body.body === 'string' ? body.body.slice(0, 100_000) : '', principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
+    env.DB.prepare(`INSERT INTO pull_requests (id,repository_id,source_repository_id,number,title,body,author_id,source_branch,target_branch,source_commit_id,target_commit_id,state) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,?,?,?,? FROM pull_requests WHERE repository_id=?`).bind(id, repository.id, sameRepository ? null : sourceRepository.id, body.title.trim(), description, principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
+    ...mentions,
     ...(commitEvent ? [commitEvent.statement] : []),
     auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'pull.created', subjectType: 'pull_request', subjectId: id, details: { sourceRepository: `${sourceOwner}/${sourceName}`, sourceBranch: body.sourceBranch, targetBranch: body.targetBranch, state } })
   ]);
@@ -79,6 +83,7 @@ export async function updatePullDetails(request: Request, env: Env, principal: P
   const statements = events.map((event) => event.statement);
   if (!statements.length) return problem(422, 'unchanged_pull_request', 'No pull request details changed.');
   if (description !== pull.body) statements.push(...await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'body', pull.id, description));
+  if (description !== pull.body) statements.push(...await mentionStatements(env, principal, { kind: 'pull', id: pull.id }, 'pull_body', pull.id, description, new Date().toISOString()));
   statements.unshift(env.DB.prepare('UPDATE pull_requests SET title=?,body=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(title, description, pull.id));
   const update = await commitPullUpdate(env, pull.id, 'details.updated', { details: { title, body: description }, timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })), refreshState: true }, statements);
   return json({ updated: true, pull: { title, body: description }, update });
@@ -196,9 +201,11 @@ export async function addPullComment(request: Request, env: Env, principal: Prin
   const createdAt = new Date().toISOString();
   const comment = { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const references = await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'comment', id, comment.body);
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id: pull.id }, 'pull_comment', id, comment.body, createdAt);
   const update = await commitPullUpdate(env, pull.id, 'comment.created', { timeline: [{ kind: 'comment', value: comment, createdAt }], refreshState: true }, [
     env.DB.prepare(`INSERT INTO pull_request_comments (id,pull_request_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)`).bind(id, pull.id, principal.id, comment.body, createdAt, createdAt),
-    ...references
+    ...references,
+    ...mentions
   ]);
   return json({ comment, update }, { status: 201 });
 }
@@ -211,9 +218,11 @@ export async function updatePullComment(request: Request, env: Env, principal: P
   const updatedAt = new Date().toISOString();
   const value = { id: commentId, body: body.body.trim(), updatedAt, deleted: false };
   const references = await referenceStatements(env, principal, { kind: 'pull', id: comment.pullId, owner: comment.owner, repository: comment.repository }, 'comment', commentId, value.body);
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id: comment.pullId }, 'pull_comment', commentId, value.body, updatedAt);
   const update = await commitPullUpdate(env, comment.pullId, 'comment.updated', { comment: value, refreshState: true }, [
     env.DB.prepare(`UPDATE pull_request_comments SET body=?,updated_at=? WHERE id=?`).bind(value.body, updatedAt, commentId),
-    ...references
+    ...references,
+    ...mentions
   ]);
   return json({ comment: value, update });
 }
@@ -225,7 +234,8 @@ export async function deletePullComment(env: Env, principal: Principal, commentI
   const value = { id: commentId, body: '', updatedAt, deleted: true };
   const update = await commitPullUpdate(env, comment.pullId, 'comment.deleted', { comment: value, refreshState: true }, [
     env.DB.prepare(`UPDATE pull_request_comments SET body='',deleted_at=?,updated_at=? WHERE id=?`).bind(updatedAt, updatedAt, commentId),
-    ...deleteReferenceStatements(env, 'comment', commentId)
+    ...deleteReferenceStatements(env, 'comment', commentId),
+    ...deleteMentionStatements(env, 'pull_comment', commentId)
   ]);
   return json({ comment: value, update });
 }
@@ -246,10 +256,12 @@ export async function createThread(request: Request, env: Env, principal: Princi
   const comment = { id: commentId, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const thread = { id: threadId, path: body.path, side: body.side, line: body.line, startSide, startLine, commitId: pull.sourceCommitId, createdAt, outdated: false, resolved: false, comments: [comment] };
   const references = await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'comment', commentId, comment.body);
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id: pull.id }, 'review_comment', commentId, comment.body, createdAt);
   const update = await commitPullUpdate(env, pull.id, 'thread.created', { timeline: [{ kind: 'thread', value: thread, createdAt }], refreshState: true }, [
     env.DB.prepare('INSERT INTO review_threads (id, pull_request_id, path, side, line, start_side, start_line, commit_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(threadId, pull.id, body.path, body.side, body.line, startSide, startLine, pull.sourceCommitId, createdAt),
     env.DB.prepare('INSERT INTO review_comments (id, thread_id, author_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(commentId, threadId, principal.id, comment.body, createdAt, createdAt),
-    ...references
+    ...references,
+    ...mentions
   ]);
   return json({ thread, update }, { status: 201 });
 }
@@ -279,9 +291,11 @@ export async function addThreadComment(request: Request, env: Env, principal: Pr
   const createdAt = new Date().toISOString();
   const comment = { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: body.body.trim(), createdAt, updatedAt: createdAt, deleted: false, canEdit: true };
   const references = await referenceStatements(env, principal, { kind: 'pull', id: thread.pullId, owner: thread.owner, repository: thread.repository }, 'comment', id, comment.body);
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id: thread.pullId }, 'review_comment', id, comment.body, createdAt);
   const update = await commitPullUpdate(env, thread.pullId, 'thread.comment.created', { threadComment: { threadId, comment }, refreshState: true }, [
     env.DB.prepare('INSERT INTO review_comments (id,thread_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, threadId, principal.id, comment.body, createdAt, createdAt),
-    ...references
+    ...references,
+    ...mentions
   ]);
   return json({ comment, update }, { status: 201 });
 }
@@ -294,9 +308,11 @@ export async function updateReviewComment(request: Request, env: Env, principal:
   const updatedAt = new Date().toISOString();
   const value = { id: commentId, body: body.body.trim(), updatedAt, deleted: false };
   const references = await referenceStatements(env, principal, { kind: 'pull', id: comment.pullId, owner: comment.owner, repository: comment.repository }, 'comment', commentId, value.body);
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id: comment.pullId }, 'review_comment', commentId, value.body, updatedAt);
   const update = await commitPullUpdate(env, comment.pullId, 'thread.comment.updated', { threadComment: { threadId: comment.threadId, comment: value }, refreshState: true }, [
     env.DB.prepare(`UPDATE review_comments SET body=?,updated_at=? WHERE id=?`).bind(value.body, updatedAt, commentId),
-    ...references
+    ...references,
+    ...mentions
   ]);
   return json({ comment: value, update });
 }
@@ -308,7 +324,8 @@ export async function deleteReviewComment(env: Env, principal: Principal, commen
   const value = { id: commentId, body: '', updatedAt, deleted: true };
   const update = await commitPullUpdate(env, comment.pullId, 'thread.comment.deleted', { threadComment: { threadId: comment.threadId, comment: value }, refreshState: true }, [
     env.DB.prepare(`UPDATE review_comments SET body='',deleted_at=?,updated_at=? WHERE id=?`).bind(updatedAt, updatedAt, commentId),
-    ...deleteReferenceStatements(env, 'comment', commentId)
+    ...deleteReferenceStatements(env, 'comment', commentId),
+    ...deleteMentionStatements(env, 'review_comment', commentId)
   ]);
   return json({ comment: value, update });
 }
@@ -357,9 +374,11 @@ export async function reviewPull(request: Request, env: Env, principal: Principa
   const createdAt = new Date().toISOString();
   const review = { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, state: body.state, body: typeof body.body === 'string' ? body.body.slice(0, 20_000) : '', commitId: pull.sourceCommitId, createdAt };
   const references = await referenceStatements(env, principal, { kind: 'pull', id: pull.id, owner, repository: name }, 'comment', id, review.body);
+  const mentions = await mentionStatements(env, principal, { kind: 'pull', id: pull.id }, 'pull_review', id, review.body, createdAt);
   const update = await commitPullUpdate(env, pull.id, 'review.created', { timeline: [{ kind: 'review', value: review, createdAt }], refreshState: true }, [
     env.DB.prepare('INSERT INTO pull_request_reviews (id,pull_request_id,author_id,state,body,commit_id,created_at) VALUES (?,?,?,?,?,?,?)').bind(id, pull.id, principal.id, review.state, review.body, pull.sourceCommitId, createdAt),
-    ...references
+    ...references,
+    ...mentions
   ]);
   return json({ review, update }, { status: 201 });
 }

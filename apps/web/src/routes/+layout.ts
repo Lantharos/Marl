@@ -6,7 +6,7 @@ import type { LayoutLoad } from './$types';
 export const load: LayoutLoad = async ({ fetch, url }) => {
   const isAuthRoute = ['/sign-in', '/sign-up', '/two-factor', '/forgot-password', '/reset-password'].includes(url.pathname) || url.pathname.startsWith('/invitations/');
   const publicHandle = url.pathname.match(/^\/([^/]+)\/?$/)?.[1];
-  const privateRoots = new Set(['forgot-password', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
+  const privateRoots = new Set(['forgot-password', 'inbox', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
   const isPublicProfile = Boolean(publicHandle && !privateRoots.has(publicHandle));
   type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
   type ShellOrganization = { slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string };

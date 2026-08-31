@@ -38,6 +38,7 @@ export const createIssueBody = strictObject({ title: pipe(string(), minLength(1)
 export const updateIssueBody = strictObject({ title: optional(pipe(string(), maxLength(240))), body: optional(bodyString) });
 export const issueMetadataBody = strictObject({ assigneeIds: optional(pipe(array(identifier), maxLength(10))), labelIds: optional(pipe(array(identifier), maxLength(20))), locked: optional(boolean()) });
 export const issueStateBody = strictObject({ state: picklist(['open', 'closed']) });
+export const inboxStateBody = strictObject({ read: optional(boolean()), done: optional(boolean()) });
 
 export const runnerEnrollmentBody = strictObject({ organization: identifier, expiresMinutes: optional(pipe(number(), integer(), minValue(5), maxValue(60))) });
 export const runnerRegistrationBody = strictObject({ enrollmentToken: identifier, name: identifier, labels: optional(pipe(array(shortString), maxLength(64))), platform: shortString, architecture: shortString, version: shortString, concurrency: optional(pipe(number(), integer(), minValue(1), maxValue(32))) });

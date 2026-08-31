@@ -201,6 +201,12 @@ keyset pagination and indexed repository, state, and update-time predicates. Met
 batched with their actor-attributed timeline events, while permission checks reuse the repository
 capability resolver rather than duplicating access rules.
 
+Inbox items are derived from canonical issue, pull-request, review, assignment, and run state rather
+than copied into a second notification stream. Markdown writes maintain a bounded, indexed mention
+projection in the same D1 batch as their source content, so Inbox reads never scan comment bodies.
+Only personal read and done timestamps are stored separately. A newer canonical activity timestamp
+makes a previously read or finished item active again.
+
 Repository routes use SvelteKit's Cloudflare adapter and load repository, issue, pull-request, run,
 runner, and settings data through route loaders so the initial response is server-rendered. The
 root loader supplies the repository list to both the shell and child routes without a second

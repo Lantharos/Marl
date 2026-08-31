@@ -8,6 +8,7 @@ import { commentBody, createIssueBody, createPullLabelBody, issueMetadataBody, i
 import { authorizeRepository } from './repository-access';
 import type { RepositoryAccess } from './repository-access';
 import { deleteReferenceStatements, linkedWorkItems, referenceStatements } from './work-item-references';
+import { deleteMentionStatements, mentionStatements } from './mentions';
 
 type EditableIssue = { id: string; title: string; body: string; state: 'open' | 'closed'; authorId: string };
 
@@ -19,13 +20,17 @@ export async function createIssue(request: Request, env: Env, principal: Princip
   const title = body?.title.trim() ?? '';
   if (title.length < 3) return problem(422, 'invalid_issue', 'Issue titles must contain at least three characters.');
   const id = identifier('issue');
+  const description = body?.body?.trim() ?? '';
+  const createdAt = new Date().toISOString();
+  const mentions = await mentionStatements(env, principal, { kind: 'issue', id }, 'issue_body', id, description, createdAt);
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO issues (id,repository_id,number,title,body,author_id) SELECT ?,?,COALESCE(MAX(number),0)+1,?,?,? FROM issues WHERE repository_id=?').bind(id, repository.id, title, body?.body?.trim() ?? '', principal.id, repository.id),
+    env.DB.prepare('INSERT INTO issues (id,repository_id,number,title,body,author_id,created_at,updated_at) SELECT ?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM issues WHERE repository_id=?').bind(id, repository.id, title, description, principal.id, createdAt, createdAt, repository.id),
+    ...mentions,
     auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'issue.created', subjectType: 'issue', subjectId: id })
   ]);
   const row = await env.DB.prepare(`${issueSelect} WHERE issues.id=?`).bind(id).first<IssueRow>();
   if (!row) return problem(500, 'issue_create_failed', 'Issue creation did not persist.');
-  const references = await referenceStatements(env, principal, { kind: 'issue', id, owner, repository: name }, 'body', id, body?.body?.trim() ?? '');
+  const references = await referenceStatements(env, principal, { kind: 'issue', id, owner, repository: name }, 'body', id, description);
   if (references.length) await env.DB.batch(references);
   return json({ issue: (await summarizeIssueRows(env, [row]))[0] }, { status: 201 });
 }
@@ -43,9 +48,11 @@ export async function updateIssue(request: Request, env: Env, principal: Princip
   if (description !== context.issue.body) events.push(createIssueEvent(env, context.issue.id, principal, 'description_changed'));
   if (!events.length) return problem(422, 'unchanged_issue', 'No issue details changed.');
   const references = description === context.issue.body ? [] : await referenceStatements(env, principal, { kind: 'issue', id: context.issue.id, owner, repository: name }, 'body', context.issue.id, description);
+  const mentions = description === context.issue.body ? [] : await mentionStatements(env, principal, { kind: 'issue', id: context.issue.id }, 'issue_body', context.issue.id, description, new Date().toISOString());
   await env.DB.batch([
     env.DB.prepare('UPDATE issues SET title=?,body=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(title, description, context.issue.id),
     ...references,
+    ...mentions,
     ...events.map((event) => event.statement),
     auditStatement(env, { organizationId: context.repository.organizationId, repositoryId: context.repository.id, actor: principal, action: 'issue.updated', subjectType: 'issue', subjectId: context.issue.id })
   ]);
@@ -79,9 +86,11 @@ export async function addIssueComment(request: Request, env: Env, principal: Pri
   const createdAt = new Date().toISOString();
   const comment = body.body.trim();
   const references = await referenceStatements(env, principal, { kind: 'issue', id: issue.id, owner, repository: name }, 'comment', id, comment);
+  const mentions = await mentionStatements(env, principal, { kind: 'issue', id: issue.id }, 'issue_comment', id, comment, createdAt);
   await env.DB.batch([
     env.DB.prepare('INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, issue.id, principal.id, comment, createdAt, createdAt),
     ...references,
+    ...mentions,
     env.DB.prepare('UPDATE issues SET updated_at=? WHERE id=?').bind(createdAt, issue.id)
   ]);
   return json({ comment: { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: comment, createdAt, updatedAt: createdAt, deleted: false, canEdit: true }, linkedItems: await linkedWorkItems(env, principal, 'issue', issue.id) }, { status: 201 });
@@ -96,7 +105,8 @@ export async function updateIssueComment(request: Request, env: Env, principal: 
   const updatedAt = new Date().toISOString();
   const value = body.body.trim();
   const references = await referenceStatements(env, principal, { kind: 'issue', id: comment.issueId, owner: comment.owner, repository: comment.repository }, 'comment', commentId, value);
-  await env.DB.batch([env.DB.prepare('UPDATE issue_comments SET body=?,updated_at=? WHERE id=?').bind(value, updatedAt, commentId), ...references]);
+  const mentions = await mentionStatements(env, principal, { kind: 'issue', id: comment.issueId }, 'issue_comment', commentId, value, updatedAt);
+  await env.DB.batch([env.DB.prepare('UPDATE issue_comments SET body=?,updated_at=? WHERE id=?').bind(value, updatedAt, commentId), ...references, ...mentions]);
   return json({ comment: { id: commentId, body: value, updatedAt }, linkedItems: await linkedWorkItems(env, principal, 'issue', comment.issueId) });
 }
 
@@ -107,7 +117,8 @@ export async function deleteIssueComment(env: Env, principal: Principal, comment
   const deletedAt = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare('UPDATE issue_comments SET body=?,deleted_at=?,updated_at=? WHERE id=?').bind('', deletedAt, deletedAt, commentId),
-    ...deleteReferenceStatements(env, 'comment', commentId)
+    ...deleteReferenceStatements(env, 'comment', commentId),
+    ...deleteMentionStatements(env, 'issue_comment', commentId)
   ]);
   return json({ deleted: true, id: commentId, updatedAt: deletedAt, linkedItems: await linkedWorkItems(env, principal, 'issue', comment.issueId) });
 }

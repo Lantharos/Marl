@@ -50,6 +50,7 @@ a concrete capability that cannot be explained with these terms.
 The global application contains:
 
 - Home
+- Inbox
 - Issues
 - Pull requests
 - Runs
@@ -73,11 +74,20 @@ organization profiles emphasize their public repositories and the people maintai
 
 ## Home
 
-Home answers one question: what needs my attention?
+Home opens with a compact Inbox preview, then keeps recent runs and frequently used repositories
+within reach. It does not invent a generic attention score or present empty operational queues as
+personal work.
 
-It prioritizes requested reviews, blocked pull requests, failed runs, active work, and
-unhealthy runners. Generic activity, vanity metrics, social feeds, and discovery do not
-belong here.
+## Inbox
+
+Inbox answers one question: what changed that is relevant to me? It contains direct mentions,
+current issue and pull-request assignments, new activity on work the user authored or joined, and
+failed workflow runs triggered by that user. Read state and done state are personal and durable;
+newer activity moves a finished item back into the Inbox. Home previews the newest active items,
+while the full Inbox separates active, unread, and done work.
+
+Repository membership alone never subscribes someone to every event. Marl only adds an item when
+it can explain the direct relationship between the user and the work.
 
 ## Code
 
