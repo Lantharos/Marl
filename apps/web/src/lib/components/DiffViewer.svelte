@@ -7,12 +7,12 @@
   import MessageSquarePlus from 'lucide-svelte/icons/message-square-plus';
   import Search from 'lucide-svelte/icons/search';
   import { dismissable } from '$lib/actions/dismissable';
+  import { parsePatchLines, type PatchLine } from '$lib/diff';
   import Button from './Button.svelte';
   import CommentComposer from './CommentComposer.svelte';
   import ReviewThread from './ReviewThread.svelte';
   import type { MarkdownContext } from '$lib/markdown';
 
-  type PatchLine = { key: number; kind: 'hunk' | 'context' | 'added' | 'removed'; text: string; oldLine: number | null; newLine: number | null; side: 'old' | 'new' | null; line: number | null };
   type Draft = { path: string; side: 'old' | 'new'; startLine: number; line: number };
   type DiffFile = PullRequestDiff['files'][number];
   type CollapseReason = 'deleted' | 'large' | 'lazy' | null;
@@ -38,30 +38,6 @@
   let loadingFiles = $state<Record<string, boolean>>({});
   let failedFiles = $state<Record<string, boolean>>({});
 
-  function parseLines(patch: string): PatchLine[] {
-    let oldLine = 0;
-    let newLine = 0;
-    const output: PatchLine[] = [];
-    const source = patch.endsWith('\n') ? patch.slice(0, -1) : patch;
-    if (!source) return output;
-    for (const text of source.split('\n')) {
-      const hunk = text.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)/);
-      if (hunk) {
-        oldLine = Number(hunk[1]); newLine = Number(hunk[2]);
-        output.push({ key: output.length, kind: 'hunk', text, oldLine: null, newLine: null, side: null, line: null });
-      } else if (text.startsWith('diff ') || text.startsWith('index ') || text.startsWith('---') || text.startsWith('+++') || text.startsWith('new file ') || text.startsWith('deleted file ')) {
-        continue;
-      } else if (text.startsWith('+')) {
-        output.push({ key: output.length, kind: 'added', text, oldLine: null, newLine, side: 'new', line: newLine++ });
-      } else if (text.startsWith('-')) {
-        output.push({ key: output.length, kind: 'removed', text, oldLine, newLine: null, side: 'old', line: oldLine++ });
-      } else {
-        output.push({ key: output.length, kind: 'context', text, oldLine, newLine, side: 'new', line: newLine }); oldLine++; newLine++;
-      }
-    }
-    return output;
-  }
-
   function collapseReason(file: DiffFile): CollapseReason {
     if (file.patchOmitted) return file.patchOmitted;
     if (file.status === 'deleted') return 'deleted';
@@ -73,17 +49,17 @@
     const reason = collapseReason(file);
     const expanded = !reason || expandedFiles[file.path] === true;
     const patch = loadedPatches[file.path] ?? file.patch;
-    return { ...file, patch, reason, expanded, loading: loadingFiles[file.path] === true, failed: failedFiles[file.path] === true, lines: expanded ? parseLines(patch) : [] };
+    return { ...file, patch, reason, expanded, loading: loadingFiles[file.path] === true, failed: failedFiles[file.path] === true, lines: expanded ? parsePatchLines(patch) : [] };
   }));
   const additions = $derived(files.reduce((total: number, file: DiffFile) => total + file.additions, 0));
   const deletions = $derived(files.reduce((total: number, file: DiffFile) => total + file.deletions, 0));
   const matchingFiles = $derived(parsedFiles.filter((file: DiffFile) => file.path.toLowerCase().includes(fileQuery.trim().toLowerCase())));
   const threadIndex = $derived.by(() => {
-    const index = new Map<string, ReviewThreadType[]>();
+    const index: Record<string, ReviewThreadType[]> = {};
     for (const thread of threads) {
       if (thread.outdated) continue;
       const key = `${thread.path}:${thread.side}:${thread.line}`;
-      index.set(key, [...(index.get(key) ?? []), thread]);
+      index[key] = [...(index[key] ?? []), thread];
     }
     return index;
   });
@@ -107,7 +83,7 @@
     const range = drag?.path === path && drag.side === line.side ? { startLine: Math.min(drag.anchor, drag.current), line: Math.max(drag.anchor, drag.current), side: drag.side } : draft?.path === path ? draft : null;
     return Boolean(range && line.side === range.side && line.line !== null && line.line >= range.startLine && line.line <= range.line);
   }
-  function threadsAt(path: string, line: PatchLine) { return threadIndex.get(`${path}:${line.side}:${line.line}`) ?? []; }
+  function threadsAt(path: string, line: PatchLine) { return threadIndex[`${path}:${line.side}:${line.line}`] ?? []; }
   function draftAt(path: string, line: PatchLine) { return draft?.path === path && draft.side === line.side && draft.line === line.line ? draft : null; }
   function fileAnchor(index: number) { return `changed-file-${index + 1}`; }
   function visible(node: HTMLElement, load: () => void) {
@@ -161,7 +137,7 @@
             {#if file.lines.length === 0}<div class="empty-patch">No textual diff is available for this file.</div>{/if}
             {#each file.lines as line (`${file.path}:${line.key}`)}
               <div class="line {line.kind}" class:selected={selected(file.path, line)} role="group" onpointerenter={() => extendRange(file.path, line)}><div class="gutter">{#if line.line !== null}<span>{line.line}</span>{#if reviewable}<Button class="line-comment" icon size="small" variant="primary" aria-label="Comment on line {line.line}; drag to select a range" onpointerdown={(event) => beginRange(event, file.path, line)} onclick={() => openSingle(file.path, line)}><MessageSquarePlus size={14} /></Button>{/if}{/if}</div><pre>{line.text || ' '}</pre></div>
-              {#if reviewable}{#each threadsAt(file.path, line) as thread (thread.id)}<ReviewThread {thread} {busy} {context} inline onReply={onReply} onResolve={onResolve} onEdit={onEdit} onDelete={onDelete} />{/each}{/if}
+              {#each threadsAt(file.path, line) as thread (thread.id)}<ReviewThread {thread} {busy} {context} inline interactive={reviewable} onReply={onReply} onResolve={onResolve} onEdit={onEdit} onDelete={onDelete} />{/each}
               {@const activeDraft = draftAt(file.path, line)}
               {#if activeDraft}<div class="draft"><div class="range-label">Commenting on {activeDraft.startLine === activeDraft.line ? `line ${activeDraft.line}` : `lines ${activeDraft.startLine}–${activeDraft.line}`}</div><CommentComposer bind:value={body} {context} placeholder="Leave a review comment" submitLabel="Add review comment" minHeight={92} {busy} onSubmit={submit} onCancel={() => { draft = null; body = ''; }} /></div>{/if}
             {/each}
@@ -173,5 +149,5 @@
 </div>
 
 <style>
-  .diff-viewer{min-width:0}.diff-toolbar{position:sticky;top:52px;z-index:8;display:flex;align-items:center;justify-content:space-between;min-height:44px;margin-bottom:12px;padding:0 2px;background:color-mix(in srgb,var(--canvas) 94%,transparent);backdrop-filter:blur(10px)}.summary,.summary span{display:flex;align-items:center;gap:7px}.summary{color:var(--text-muted);font-size:10px}.summary strong{color:var(--text-strong)}.summary span{margin-left:4px;font-size:9px}.summary b,.navigator-list b{color:var(--success)}.summary i,.navigator-list i{color:var(--danger);font-style:normal}.navigator{position:relative}.navigator :global(.navigator-trigger.button){font-size:9px}.navigator-menu{position:absolute;top:calc(100% + 6px);right:0;width:min(420px,calc(100vw - 32px));overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface-raised);box-shadow:0 14px 40px rgb(0 0 0/.35)}.navigator-menu label{display:flex;align-items:center;gap:7px;margin:8px;padding:0 9px;border:1px solid var(--border);border-radius:6px;color:var(--text-faint)}.navigator-menu input{width:100%;height:32px;border:0;outline:0;background:transparent;color:var(--text);font:10px inherit}.navigator-list{max-height:320px;overflow:auto;border-top:1px solid var(--border-subtle)}.navigator-list :global(.file-choice.button){min-height:38px;height:auto;justify-content:space-between;padding:6px 10px;border-radius:0;border-top:1px solid var(--border-subtle);font-size:10px;text-align:left}.navigator-list :global(.file-choice.button:first-child){border-top:0}.navigator-list :global(.file-choice span){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.navigator-list small{display:flex;flex:0 0 auto;gap:5px;font-size:8px}.navigator-list p{margin:18px;color:var(--text-faint);font-size:10px;text-align:center}.diffs{display:grid;min-width:0;gap:16px}.diff{scroll-margin-top:118px;overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface);content-visibility:auto;contain-intrinsic-size:auto 520px}.diff>header{display:flex;min-height:43px;align-items:center;gap:8px;padding:0 12px;background:var(--surface-muted)}.diff>header strong{overflow:hidden;color:var(--text-strong);font:600 10px ui-monospace,SFMono-Regular,Consolas,monospace;text-overflow:ellipsis;white-space:nowrap}.diff>header>span{padding:3px 6px;border-radius:4px;background:var(--canvas);color:var(--text-faint);font-size:8px;text-transform:capitalize}.diff>header small{display:flex;gap:6px;margin-left:auto;font-size:10px}.diff>header b{color:var(--success)}.diff>header i{color:var(--danger);font-style:normal}.collapsed-patch{display:flex;min-height:76px;align-items:center;gap:11px;padding:13px 15px;color:var(--text-faint)}.collapsed-patch>div{min-width:0}.collapsed-patch strong{display:block;color:var(--text);font-size:10px}.collapsed-patch p{margin:4px 0 0;font-size:9px}.collapsed-patch :global(.button){margin-left:auto}.empty-patch{padding:28px 14px;color:var(--text-faint);font-size:10px;text-align:center}.patch{overflow:auto;border-top:1px solid var(--border-subtle)}.line{display:grid;grid-template-columns:54px minmax(max-content,1fr);min-height:22px}.gutter{position:relative;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;background:var(--surface-muted);color:var(--text-faint);font:9px ui-monospace,SFMono-Regular,Consolas,monospace;user-select:none}.gutter :global(.line-comment.button){position:absolute;left:4px;display:none;width:24px;height:20px;padding:0;cursor:crosshair}.line:hover .gutter :global(.line-comment.button),.gutter :global(.line-comment.button:focus-visible){display:flex}.line pre{margin:0;padding:0 10px;color:var(--text);font:10px/22px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}.line.added .gutter,.line.added pre{background:var(--success-soft)}.line.added pre{color:var(--success)}.line.removed .gutter,.line.removed pre{background:var(--danger-soft)}.line.removed pre{color:var(--danger)}.line.hunk .gutter,.line.hunk pre{background:var(--brand-soft);color:var(--brand)}.line.selected .gutter{box-shadow:inset 3px 0 var(--brand)}.line.selected pre{background:color-mix(in srgb,var(--brand-soft) 68%,var(--surface))}.draft{padding:11px 12px 12px 66px;border-block:1px solid var(--border);background:var(--surface-raised)}.range-label{margin-bottom:7px;color:var(--text-faint);font-size:9px}@media(max-width:600px){.diff-toolbar{top:52px}.summary>span{display:none}.diff>header>span{display:none}.collapsed-patch{align-items:flex-start}.collapsed-patch :global(.button){margin-top:1px}}
+  .diff-viewer{min-width:0}.diff-toolbar{position:sticky;top:52px;z-index:8;display:flex;align-items:center;justify-content:space-between;min-height:44px;margin-bottom:12px;padding:0 2px;background:color-mix(in srgb,var(--canvas) 94%,transparent);backdrop-filter:blur(10px)}.summary,.summary span{display:flex;align-items:center;gap:7px}.summary{color:var(--text-muted);font-size:10px}.summary strong{color:var(--text-strong)}.summary span{margin-left:4px;font-size:9px}.summary b,.navigator-list b{color:var(--success)}.summary i,.navigator-list i{color:var(--danger);font-style:normal}.navigator{position:relative}.navigator :global(.navigator-trigger.button){font-size:9px}.navigator-menu{position:absolute;top:calc(100% + 6px);right:0;width:min(420px,calc(100vw - 32px));overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface-raised);box-shadow:0 14px 40px rgb(0 0 0/.35)}.navigator-menu label{display:flex;align-items:center;gap:7px;margin:8px;padding:0 9px;border:1px solid var(--border);border-radius:6px;color:var(--text-faint)}.navigator-menu input{width:100%;height:32px;border:0;outline:0;background:transparent;color:var(--text);font:10px inherit}.navigator-menu input:focus-visible{border-radius:3px;outline:2px solid var(--brand);outline-offset:-2px}.navigator-list{max-height:320px;overflow:auto;border-top:1px solid var(--border-subtle)}.navigator-list :global(.file-choice.button){min-height:38px;height:auto;justify-content:space-between;padding:6px 10px;border-radius:0;border-top:1px solid var(--border-subtle);font-size:10px;text-align:left}.navigator-list :global(.file-choice.button:first-child){border-top:0}.navigator-list :global(.file-choice span){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.navigator-list small{display:flex;flex:0 0 auto;gap:5px;font-size:8px}.navigator-list p{margin:18px;color:var(--text-faint);font-size:10px;text-align:center}.diffs{display:grid;min-width:0;gap:16px}.diff{scroll-margin-top:118px;overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface);content-visibility:auto;contain-intrinsic-size:auto 520px}.diff>header{display:flex;min-height:43px;align-items:center;gap:8px;padding:0 12px;background:var(--surface-muted)}.diff>header strong{overflow:hidden;color:var(--text-strong);font:600 10px ui-monospace,SFMono-Regular,Consolas,monospace;text-overflow:ellipsis;white-space:nowrap}.diff>header>span{padding:3px 6px;border-radius:4px;background:var(--canvas);color:var(--text-faint);font-size:8px;text-transform:capitalize}.diff>header small{display:flex;gap:6px;margin-left:auto;font-size:10px}.diff>header b{color:var(--success)}.diff>header i{color:var(--danger);font-style:normal}.collapsed-patch{display:flex;min-height:76px;align-items:center;gap:11px;padding:13px 15px;color:var(--text-faint)}.collapsed-patch>div{min-width:0}.collapsed-patch strong{display:block;color:var(--text);font-size:10px}.collapsed-patch p{margin:4px 0 0;font-size:9px}.collapsed-patch :global(.button){margin-left:auto}.empty-patch{padding:28px 14px;color:var(--text-faint);font-size:10px;text-align:center}.patch{overflow:auto;border-top:1px solid var(--border-subtle)}.line{display:grid;grid-template-columns:54px minmax(max-content,1fr);min-height:22px}.gutter{position:relative;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;background:var(--surface-muted);color:var(--text-faint);font:9px ui-monospace,SFMono-Regular,Consolas,monospace;user-select:none}.gutter :global(.line-comment.button){position:absolute;left:4px;display:none;width:24px;height:20px;padding:0;cursor:crosshair}.line:hover .gutter :global(.line-comment.button),.gutter :global(.line-comment.button:focus-visible){display:flex}.line pre{margin:0;padding:0 10px;color:var(--text);font:10px/22px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}.line.added .gutter,.line.added pre{background:var(--success-soft)}.line.added pre{color:var(--success)}.line.removed .gutter,.line.removed pre{background:var(--danger-soft)}.line.removed pre{color:var(--danger)}.line.hunk .gutter,.line.hunk pre{background:var(--brand-soft);color:var(--brand)}.line.selected .gutter{box-shadow:inset 3px 0 var(--brand)}.line.selected pre{background:color-mix(in srgb,var(--brand-soft) 68%,var(--surface))}.draft{padding:11px 12px 12px 66px;border-block:1px solid var(--border);background:var(--surface-raised)}.range-label{margin-bottom:7px;color:var(--text-faint);font-size:9px}@media(max-width:600px){.diff-toolbar{top:52px}.summary>span{display:none}.diff>header>span{display:none}.collapsed-patch{align-items:flex-start}.collapsed-patch :global(.button){margin-top:1px}}
 </style>

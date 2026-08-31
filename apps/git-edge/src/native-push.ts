@@ -1,10 +1,11 @@
 import { authorizeGit, AuthorizationError } from './authorization';
+import { readBoundedJson, readBoundedText } from './bounded-body';
 import { scheduleCompaction } from './compaction';
 import type { GitEdgeEnv } from './env';
 import { scheduleRepositoryIndex } from './indexing';
 import { finalizeUploadedPush } from './publication';
 import { StateRequestError, organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state-client';
-import { STORAGE_LIMITS } from './storage-model';
+import { STORAGE_LIMITS, changesMarlManagedRefs } from './storage-model';
 import { nativePushBody, repositoryManifest } from './state-schemas';
 import { safeParse } from 'valibot';
 
@@ -57,9 +58,16 @@ async function downloadPack(env: GitEdgeEnv, repository: string, route: PushRout
   const generation = await repositoryState(env, repository).request<{ generation: { manifestKey: string; manifestHash: string } }>(`/generations/${route.generation}`);
   const object = await env.REPOSITORIES.get(generation.generation.manifestKey);
   if (!object) return failure(404, 'generation_not_found', 'Repository generation not found.');
-  const source = await new Response(object.body).text();
+  const source = await readBoundedText(object.body, 16 * 1024 * 1024);
+  if (!source) return failure(502, 'manifest_corrupt', 'Repository generation manifest is empty or too large.');
   if (await sha256(source) !== generation.generation.manifestHash) return failure(502, 'manifest_corrupt', 'Repository generation manifest failed its integrity check.');
-  const parsedManifest = safeParse(repositoryManifest, JSON.parse(source) as unknown);
+  let manifestValue: unknown;
+  try {
+    manifestValue = JSON.parse(source) as unknown;
+  } catch {
+    return failure(502, 'manifest_corrupt', 'Repository generation manifest is not valid JSON.');
+  }
+  const parsedManifest = safeParse(repositoryManifest, manifestValue);
   if (!parsedManifest.success) return failure(502, 'manifest_corrupt', 'Repository generation manifest has an invalid structure.');
   const manifest = parsedManifest.output;
   const pack = manifest.packs.find((value) => value.id === route.packId);
@@ -90,6 +98,8 @@ async function createPush(request: Request, env: GitEdgeEnv, repository: string,
   const plans: PackPlan[] = sizes.map((bytes, number) => ({ bytes, parts: Math.ceil(bytes / STORAGE_LIMITS.partBytes), key: `quarantine/${repository}/${pushId}/${number}.pack` }));
   const quota = organizationQuota(env, organizationId);
   const repo = repositoryState(env, repository);
+  const current = await repo.request<RepositorySnapshotResponse>('/snapshot');
+  if (changesMarlManagedRefs(current.state.refs, body.refs)) return failure(403, 'managed_ref_update', 'The refs/marl namespace is managed by Marl.');
   const uploads = uploadSession(env, pushId);
   const created: R2MultipartUpload[] = [];
   try {
@@ -110,15 +120,7 @@ async function createPush(request: Request, env: GitEdgeEnv, repository: string,
 }
 
 async function parseNativePushRequest(request: Request) {
-  const declaredSize = Number(request.headers.get('content-length') ?? 0);
-  if (Number.isFinite(declaredSize) && declaredSize > 1024 * 1024) return safeParse(nativePushBody, null);
-  try {
-    const text = await request.text();
-    if (text.length > 1024 * 1024) return safeParse(nativePushBody, null);
-    return safeParse(nativePushBody, JSON.parse(text) as unknown);
-  } catch {
-    return safeParse(nativePushBody, null);
-  }
+  return safeParse(nativePushBody, await readBoundedJson<unknown>(request, 1024 * 1024));
 }
 
 async function uploadPart(request: Request, env: GitEdgeEnv, route: PushRoute, session: UploadSnapshotResponse['session']) {

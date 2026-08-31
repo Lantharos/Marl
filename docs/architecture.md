@@ -72,9 +72,10 @@ changes update the linked authentication identity and any owned personal-organiz
 same D1 batch.
 
 Public user and organization profile projections contain only public repositories and activity.
-Commit attribution prefers a verified signing identity and otherwise matches the account's email
-inside D1 without returning that email to profile clients. Organization descriptions and websites
-share the same settings-owned identity record used by the public profile.
+Commit attribution links to a Marl account only when its signature is verified against a signing
+key owned by that account. Unsigned author names and emails remain Git metadata and never become a
+profile link or contribution signal. Organization descriptions and websites share the same
+settings-owned identity record used by the public profile.
 
 Verification, recovery, and organization invitation email is sent directly by the API Worker
 through a sender-restricted Cloudflare Email Service binding. Local development writes action URLs
@@ -158,9 +159,10 @@ Compatibility sleeps after one idle minute, while validators stop as soon as a p
 Compaction uses an isolated 4 GiB/8 GB `standard-1` Container and stops immediately when the
 job ends. Validator and maintenance Containers have no Internet access.
 
-Initial defensive limits are 2 GiB per repository, 10 GiB per organization, 1 GiB expanded
-per push, 100 MiB per blob, 50,000 objects per push, and 32 changed refs per push. These are
-implementation and abuse ceilings unless they describe a user-facing storage or upload limit.
+Initial defensive limits are 2 GiB per repository, 10 GiB per organization, 256 MiB of compressed
+pack data and 1 GiB expanded per push, 100 MiB per blob, 50,000 objects per push, and 32 changed
+refs per push. These are implementation and abuse ceilings unless they describe a user-facing
+storage or upload limit.
 
 Open pull requests pin their current base and head plus immutable reviewed revisions under
 `refs/marl/pulls`. These refs are included in pack capture and compaction, so force-pushing a
@@ -170,10 +172,15 @@ are idempotent across gateway retries. The relational pull-request row and branc
 reconcile after Git publication; they are not the source of truth for whether the target Git
 ref advanced.
 
+The complete `refs/marl/` namespace is server-owned. Native pushes and compatibility pushes over
+Smart HTTP or SSH reject client attempts to create, update, or delete those refs. Smart HTTP and
+SSH fetches do not advertise the namespace or allow clients to request a hidden ref by name.
+
 Branch merge rules live in D1 and are evaluated by the API at merge time against the current
-head's reviews, checks, and conversations. Git ref publication still provides the final
-compare-and-swap boundary, preventing a target update that raced with policy evaluation from
-being overwritten.
+head's reviews, checks, and conversations. Required checks bind to the target repository's
+immutable workflow and job producer identity instead of trusting a display name supplied by a
+fork. Git ref publication still provides the final compare-and-swap boundary, preventing a target
+update that raced with policy evaluation from being overwritten.
 
 HTTP request bodies and internal Worker-to-Durable-Object messages are size-bounded and
 runtime-validated before domain logic sees them. Repository access is decided by one capability

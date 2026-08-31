@@ -21,11 +21,20 @@
   let { data } = $props<{ data: PageData }>();
   const owner = $derived($page.params.owner);
   const repo = $derived($page.params.repo);
-  let workflow = $state<WorkflowDetail>(untrack(() => data.workflow));
+  let workflow = $derived<WorkflowDetail>(data.workflow);
   let dispatchOpen = $state(false);
   let busy = $state(false);
   let error = $state('');
   const manual = $derived(workflow.triggers.includes('workflow_dispatch'));
+
+  $effect(() => {
+    data.workflow.id;
+    untrack(() => {
+      dispatchOpen = false;
+      busy = false;
+      error = '';
+    });
+  });
 
   function triggerLabel(trigger: WorkflowTrigger) {
     return trigger === 'workflow_dispatch' ? 'Manual dispatch' : trigger === 'pull_request' ? 'Pull request' : trigger[0].toUpperCase() + trigger.slice(1);
@@ -51,7 +60,7 @@
 </header>
 
 <div class="definition">
-  <div><strong>Triggers</strong><span class="trigger-list">{#each workflow.triggers as trigger}<span>{#if trigger === 'workflow_dispatch'}<MousePointerClick size={12} />{:else if trigger === 'schedule'}<Timer size={12} />{:else}<GitBranch size={12} />{/if}{triggerLabel(trigger)}</span>{/each}</span></div>
+  <div><strong>Triggers</strong><span class="trigger-list">{#each workflow.triggers as trigger (trigger)}<span>{#if trigger === 'workflow_dispatch'}<MousePointerClick size={12} />{:else if trigger === 'schedule'}<Timer size={12} />{:else}<GitBranch size={12} />{/if}{triggerLabel(trigger)}</span>{/each}</span></div>
   <div><strong>Definition</strong><code>{workflow.branch}@{workflow.commit.slice(0, 7)}</code></div>
   <div><strong>Jobs</strong><span>{workflow.jobs}</span></div>
 </div>
@@ -61,7 +70,7 @@
 
 <section class="history">
   <header><h2>Run history</h2><span>{workflow.runCount} total</span></header>
-  {#each workflow.runs as run}
+  {#each workflow.runs as run (run.id)}
     <a href="/{owner}/{repo}/runs/{run.number}">
       <span class="state {run.state}">{#if ['queued', 'running'].includes(run.state)}<CircleDot size={15} />{:else if run.state === 'success'}<CircleCheck size={15} />{:else}<CircleAlert size={15} />{/if}</span>
       <span class="run-main"><strong>Run #{run.number}</strong><small>{run.trigger === 'workflow_dispatch' ? `Started manually${run.actor ? ` by ${run.actor}` : ''}` : run.trigger === 'retry' ? `Retried${run.actor ? ` by ${run.actor}` : ''}` : `Triggered by ${run.trigger}`}</small></span>

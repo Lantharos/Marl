@@ -8,6 +8,7 @@ mod metadata;
 mod pack;
 mod pack_graph;
 mod process;
+mod receive;
 mod refs;
 mod relocate;
 mod repository_files;

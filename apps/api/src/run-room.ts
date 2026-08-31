@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { readBody } from './http';
 import type { Env } from './platform';
 
 export class RunRoom extends DurableObject<Env> {
@@ -12,7 +13,8 @@ export class RunRoom extends DurableObject<Env> {
     if (request.method !== 'POST' || !request.body) return new Response(null, { status: 405 });
     const sequence = Number(request.headers.get('x-marl-log-sequence'));
     if (!Number.isSafeInteger(sequence) || sequence < 0) return new Response(null, { status: 422 });
-    const bytes = new Uint8Array(await request.arrayBuffer());
+    const bytes = await readBody(request, 1024 * 1024);
+    if (!bytes) return new Response(null, { status: 413 });
     const message = new Uint8Array(8 + bytes.byteLength);
     new DataView(message.buffer).setBigUint64(0, BigInt(sequence));
     message.set(bytes, 8);

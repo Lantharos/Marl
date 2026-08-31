@@ -28,13 +28,15 @@ function gatewayToken(env: Env) {
 
 export async function requestGitGateway<Path extends GitGatewayPath>(env: Env, path: Path, body: GitGatewayRequestMap[Path], options: GatewayRequestOptions = {}) {
   const attempts = options.attempts ?? 1;
-  const request = () => new Request(env.ENVIRONMENT === 'development' ? `${env.GIT_GATEWAY_URL}${path}` : `http://git-edge.internal${path}`, {
+  const gatewayUrl = env.ENVIRONMENT === 'development' ? env.GIT_GATEWAY_URL : env.GIT_PUBLIC_URL;
+  if (!gatewayUrl) throw new Error('Git gateway URL is required.');
+  const request = () => new Request(`${gatewayUrl}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-marl-gateway-token': gatewayToken(env) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(options.timeoutMs ?? 15_000)
   });
-  return retryGatewayRequest(() => env.ENVIRONMENT === 'development' ? fetch(request()) : env.GIT_EDGE.fetch(request()), attempts);
+  return retryGatewayRequest(() => fetch(request()), attempts);
 }
 
 export async function retryGatewayRequest(send: () => Promise<Response>, attempts = 2) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { STORAGE_LIMITS, StorageError, adjustStorage, beginPush, emptyOrganizationQuota, emptyRepositoryState, proposePushRefs, publish, releaseReservation, reserveStorage, settleStorage } from './storage-model';
+import { STORAGE_LIMITS, StorageError, adjustStorage, beginPush, changesMarlManagedRefs, emptyOrganizationQuota, emptyRepositoryState, proposePushRefs, publish, releaseReservation, reserveStorage, settleStorage } from './storage-model';
 
 const now = 1_000_000;
 const reservation = { id: 'push_1', repository: 'lantharos/marl', maximumBytes: 1024, expiresAt: now + 60_000, state: 'reserved' as const };
@@ -30,6 +30,13 @@ describe('repository ref limits', () => {
     expect(proposePushRefs(leased, 'push_one', proposed, now).activePush?.proposedRefs).toEqual(proposed);
     const excessive = { ...refs, ...Object.fromEntries(Array.from({ length: STORAGE_LIMITS.refsPerPush + 1 }, (_, index) => [`refs/tags/new-${index}`, 'b'.repeat(40)])) };
     expect(() => proposePushRefs(leased, 'push_one', excessive, now)).toThrow(StorageError);
+  });
+
+  test('separates client refs from Marl-managed refs', () => {
+    const current = { 'refs/heads/main': 'a'.repeat(40), 'refs/marl/pulls/1/head': 'b'.repeat(40) };
+    expect(changesMarlManagedRefs(current, { ...current, 'refs/heads/main': 'c'.repeat(40) })).toBeFalse();
+    expect(changesMarlManagedRefs(current, { ...current, 'refs/marl/pulls/1/head': 'c'.repeat(40) })).toBeTrue();
+    expect(changesMarlManagedRefs(current, { 'refs/heads/main': 'a'.repeat(40) })).toBeTrue();
   });
 });
 

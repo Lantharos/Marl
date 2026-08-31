@@ -16,8 +16,12 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
   const options = await routeLoad(apiWith<{ target: { defaultBranch: string; branches: Branch[] }; sources: PullSource[] }>(fetch, `/repositories/${owner}/${name}/pull-sources`));
   const requestedSource = url.searchParams.get('sourceRepository');
   const source = options.sources.find((item) => `${item.owner}/${item.name}` === requestedSource) ?? options.sources[0];
-  const base = options.target.defaultBranch;
-  const compare = source?.branches.find((branch) => `${source.owner}/${source.name}` !== repository || branch.name !== base)?.name ?? '';
+  const requestedBase = url.searchParams.get('base');
+  const base = options.target.branches.some((branch) => branch.name === requestedBase) ? requestedBase! : options.target.defaultBranch;
+  const requestedCompare = url.searchParams.get('compare');
+  const compare = source?.branches.some((branch) => branch.name === requestedCompare) && (`${source.owner}/${source.name}` !== repository || requestedCompare !== base)
+    ? requestedCompare!
+    : source?.branches.find((branch) => `${source.owner}/${source.name}` !== repository || branch.name !== base)?.name ?? '';
   let comparison: PullRequestDiff | null = null;
   if (source && base && compare) {
     try { comparison = await apiWith<PullRequestDiff>(fetch, `/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}&sourceRepository=${encodeURIComponent(`${source.owner}/${source.name}`)}`); } catch {}

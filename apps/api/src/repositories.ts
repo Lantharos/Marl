@@ -4,7 +4,7 @@ import { requireFreshSession, type Principal } from './auth';
 import { identifier, safeRepositoryPath, validBranchName, validSlug, validVisibility } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
 import { requestGitGateway } from './git-gateway';
-import { json, problem, readJson } from './http';
+import { json, problem, readJson, readJsonValue } from './http';
 import { readListQuery } from './list-query';
 import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositoryOverviewBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
@@ -13,6 +13,7 @@ import { queuePushWorkflows } from './workflows';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter, repositoryPermissions } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
 import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
+import { rawBlobHeaders } from './raw-content';
 
 type RepositoryRow = RepositorySummary & { organizationId: string; defaultBranch: string; archivedAt: string | null; deletionScheduledAt: string | null };
 
@@ -451,7 +452,7 @@ export async function getCommit(env: Env, principal: Principal, owner: string, n
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
   const response = await requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
-  const commit = await response.json().catch(() => null) as { author?: string; authorEmail?: string } | null;
+  const commit = await readJsonValue<{ author?: string; authorEmail?: string }>(response, 16 * 1024 * 1024);
   if (!commit || typeof commit.author !== 'string') return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
   return json({ ...commit, signatureStatus: indexed.signatureStatus, authorHandle: indexed.authorHandle, authorDisplayName: indexed.authorDisplayName, authorAvatarUrl: indexed.authorAvatarUrl });
 }
@@ -469,7 +470,7 @@ export async function readCommitPatch(env: Env, principal: Principal, owner: str
   const base = Array.isArray(parents) && typeof parents[0] === 'string' ? parents[0] : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
   const response = await requestGitGateway(env, '/_marl/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
-  return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store' } });
+  return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
 }
 
 export async function listTree(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
@@ -513,7 +514,7 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     entry = historical.find((candidate) => candidate.path === path && candidate.kind === 'blob') ?? null;
   }
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const cacheKey = new Request(`https://blob-cache.marl.internal/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
+  const cacheKey = new Request(`https://blob-cache.marl.internal/v2/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
   const publicCache = (caches as unknown as { default: Cache }).default;
   if (repo.visibility === 'public') {
     const cached = await publicCache.match(cacheKey);
@@ -523,7 +524,7 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 3 })
     : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 3 })).catch(() => null);
   if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob') return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
-  const result = new Response(response.body, { headers: { 'content-type': contentType(path), ...(response.headers.get('content-length') ? { 'content-length': response.headers.get('content-length')! } : {}), 'cache-control': repo.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store' } });
+  const result = new Response(response.body, { headers: rawBlobHeaders(path, repo.visibility, response.headers.get('content-length')) });
   if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
   return result;
 }
@@ -533,19 +534,9 @@ type TreeEntry = { path: string; name: string; kind: string; objectId: string; b
 async function readGatewayTree(env: Env, owner: string, repository: string, commitId: string, path: string): Promise<TreeEntry[] | null> {
   const response = await requestGitGateway(env, '/_marl/tree', { owner, repository, commitId, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return null;
-  const body = await response.json().catch(() => null) as { entries?: TreeEntry[] } | null;
+  const body = await readJsonValue<{ entries?: TreeEntry[] }>(response, 16 * 1024 * 1024);
   if (!Array.isArray(body?.entries)) return null;
   return body.entries.filter((entry) => entry && typeof entry.path === 'string' && safeRepositoryPath(entry.path) && typeof entry.name === 'string' && ['tree', 'blob'].includes(entry.kind) && typeof entry.objectId === 'string' && /^[0-9a-f]{40,64}$/.test(entry.objectId));
-}
-
-function contentType(path: string) {
-  const extension = path.split('.').at(-1)?.toLowerCase();
-  if (['md', 'txt', 'rs', 'ts', 'tsx', 'js', 'jsx', 'svelte', 'toml', 'yaml', 'yml', 'css', 'html', 'json'].includes(extension ?? '')) return 'text/plain; charset=utf-8';
-  if (extension === 'svg') return 'image/svg+xml';
-  if (extension === 'png') return 'image/png';
-  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
-  if (extension === 'gif') return 'image/gif';
-  return 'application/octet-stream';
 }
 
 async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string } | null> {

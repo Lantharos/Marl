@@ -283,6 +283,7 @@ export interface PullRequestDetail extends PullRequestSummary {
   availableLabels: PullRequestLabel[];
   locked: boolean;
   canManage: boolean;
+  canMerge: boolean;
   realtimeVersion: number;
   linkedItems: LinkedWorkItem[];
   timeline: PullTimelineWindow;
@@ -397,6 +398,8 @@ export interface CheckSummary {
   name: string;
   state: RunState;
   summary: string;
+  producerWorkflowId: Identifier;
+  producerJobKey: string;
   detailsUrl?: string;
   updatedAt: string;
 }

@@ -1,7 +1,7 @@
 # SSH Git access
 
-Marl accepts OpenSSH public keys from **Settings -> SSH keys**. Once a key is registered, use the
-SSH URL from a repository's **Clone** menu:
+Marl accepts Ed25519 and ECDSA OpenSSH public keys from **Settings -> SSH keys**. Once a key is
+registered, use the SSH URL from a repository's **Clone** menu:
 
 ```powershell
 git clone ssh://git@marl.example.com/organization/repository.git
@@ -12,6 +12,10 @@ The gateway authenticates only public keys registered to a Marl account. It auth
 and token-independent user permissions. It does not provide an interactive shell or accept other
 commands. The host key is generated once under the Git data directory; set `MARL_SSH_HOST_KEY`
 to keep it at an explicit persistent path.
+
+Smart HTTP and SSH pushes accept at most 256 MiB of incoming pack data. The `refs/marl/`
+namespace is reserved for Marl's pull-request retention refs; clients cannot create, update, or
+delete refs in that namespace, and the gateway does not advertise them to fetch clients.
 
 ## Commit signing
 
@@ -38,12 +42,12 @@ Override the SSH listener with `MARL_SSH_LISTEN` and the URL shown by the API wi
 
 ## Production topology
 
-Cloudflare Container SSH is an operator connection reached through Wrangler, not a public TCP
-listener. Run Marl's Rust Git gateway on a persistent TCP origin for public SSH, set
-`MARL_SSH_LISTEN=0.0.0.0:22`, and publish that origin through Cloudflare Spectrum or another TCP
-load balancer. Set `GIT_SSH_PUBLIC_URL` to the external SSH base URL. The Cloudflare Worker and
-Container path continues to serve HTTPS Git independently.
+Production currently advertises HTTPS Git only. Cloudflare Container SSH is an operator
+connection reached through Wrangler, not a public TCP listener, and the persistent Rust gateway
+writes a local bare repository rather than Marl's canonical R2 generations. Publishing it as a
+second writable origin would split repository state.
 
-Keep the gateway token and host private key outside the image, restrict the control-plane route
-to the gateway, and persist the repository data directory. Production startup should fail if
-either the HTTP or SSH listener cannot bind.
+Do not set `GIT_SSH_PUBLIC_URL` until the SSH receive path participates in the same repository
+lease, validation, and R2 publication protocol as HTTPS. A future public TCP origin must also keep
+the gateway token and host private key outside its image, restrict control-plane access, persist
+the host key, and fail startup when either listener cannot bind.

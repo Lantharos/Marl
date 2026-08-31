@@ -24,6 +24,13 @@ describe('GitHub workflow compatibility', () => {
     const result = parseWorkflow({ jobs: { check: { 'runs-on': 'ubuntu-latest', steps: [{ uses: 'vendor/unknown@v1' }] } } }, '.github/workflows/verify.yml');
     expect(result.error).toContain('not supported');
   });
+
+  test('rejects oversized matrix products and includes before allocating jobs', () => {
+    const product = parseWorkflow({ jobs: { check: { 'runs-on': 'ubuntu-latest', strategy: { matrix: { os: Array.from({ length: 9 }, (_, index) => index), runtime: [1, 2, 3, 4] } }, steps: [{ run: 'echo check' }] } } }, '.github/workflows/verify.yml');
+    const includes = parseWorkflow({ jobs: { check: { 'runs-on': 'ubuntu-latest', strategy: { matrix: { runtime: Array.from({ length: 32 }, (_, index) => index), include: [{ runtime: 'extra' }] } }, steps: [{ run: 'echo check' }] } } }, '.github/workflows/verify.yml');
+    expect(product.error).toBe('Workflow expansion produced more than 32 jobs.');
+    expect(includes.error).toBe('Workflow expansion produced more than 32 jobs.');
+  });
 });
 
 describe('workflow queue policy', () => {

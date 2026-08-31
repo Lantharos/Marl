@@ -12,8 +12,8 @@ import { stepUp } from './step-up';
 
 export function createAuth(env: Env, request: Request) {
   const configuredUrl = new URL(env.PUBLIC_URL || new URL(request.url).origin);
-  const trustedOrigins = developmentOrigins(env, configuredUrl);
   const requestOrigin = request.headers.get('origin');
+  const trustedOrigins = developmentOrigins(env, configuredUrl, requestOrigin);
   const publicUrl = requestOrigin && trustedOrigins.includes(requestOrigin) ? new URL(requestOrigin) : configuredUrl;
   const secret = env.AUTH_SECRET;
   if (!secret) throw new Error('AUTH_SECRET is required.');
@@ -106,13 +106,21 @@ function validDeviceId(value: string | false | null): value is string {
   return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
-function developmentOrigins(env: Env, configuredUrl: URL) {
-  if (env.ENVIRONMENT !== 'development' || configuredUrl.protocol !== 'http:' || !isLoopbackHost(configuredUrl.hostname)) return [configuredUrl.origin];
-  return ['127.0.0.1', 'localhost', '[::1]'].map((hostname) => {
-    const origin = new URL(configuredUrl);
-    origin.hostname = hostname;
-    return origin.origin;
-  });
+function developmentOrigins(env: Env, configuredUrl: URL, requestOrigin: string | null) {
+  const origins = new Set([configuredUrl.origin]);
+  if (env.ENVIRONMENT !== 'development') return [...origins];
+  if (configuredUrl.protocol === 'http:' && isLoopbackHost(configuredUrl.hostname)) {
+    for (const hostname of ['127.0.0.1', 'localhost', '[::1]']) {
+      const origin = new URL(configuredUrl);
+      origin.hostname = hostname;
+      origins.add(origin.origin);
+    }
+  }
+  if (requestOrigin && URL.canParse(requestOrigin)) {
+    const requested = new URL(requestOrigin);
+    if (requested.protocol === 'http:' && (isLoopbackHost(requested.hostname) || requested.hostname === 'marl.sh')) origins.add(requested.origin);
+  }
+  return [...origins];
 }
 
 function isLoopbackHost(hostname: string) {

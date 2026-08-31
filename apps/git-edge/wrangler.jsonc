@@ -2,7 +2,27 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "marl-git",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-30",
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "git.marl.sh",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "MARL_API_URL": "https://marl.sh"
+  },
+  "secrets": {
+    "required": ["MARL_GIT_GATEWAY_TOKEN"]
+  },
+  "services": [
+    {
+      "binding": "MARL_API",
+      "service": "marl-api"
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

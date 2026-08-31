@@ -29,6 +29,8 @@
   let comparing = $state(false);
   let creating = $state(false);
   let error = $state('');
+  let branchRequest = 0;
+  let comparisonRequest = 0;
   const repositoryOptions = $derived(repositories.map((repo) => ({ value: `${repo.owner}/${repo.name}`, label: `${repo.owner}/${repo.name}`, description: repo.description })));
   const sourceOptions = $derived(sources.map((source) => ({ value: `${source.owner}/${source.name}`, label: `${source.owner}/${source.name}`, description: `${source.branches.length} branches` })));
   const sourceBranches = $derived(sources.find((source) => `${source.owner}/${source.name}` === sourceRepository)?.branches ?? []);
@@ -42,17 +44,29 @@
 
   async function loadBranches() {
     if (!repository) return;
+    const requestedRepository = repository;
+    const request = ++branchRequest;
+    comparisonRequest += 1;
+    comparing = false;
     const { owner, name } = repoParts();
     comparison = null; error = '';
     try {
       const result = await api<{ target: { defaultBranch: string; branches: Branch[] }; sources: PullSource[] }>(`/repositories/${owner}/${name}/pull-sources`);
+      if (request !== branchRequest || requestedRepository !== repository) return;
+      const nextSourceRepository = result.sources.some((source) => `${source.owner}/${source.name}` === requestedRepository)
+        ? requestedRepository
+        : result.sources[0] ? `${result.sources[0].owner}/${result.sources[0].name}` : '';
+      const nextSource = result.sources.find((source) => `${source.owner}/${source.name}` === nextSourceRepository);
+      const nextBase = result.target.defaultBranch;
       sources = result.sources;
       targetBranches = result.target.branches;
-      sourceRepository = sources.some((source) => `${source.owner}/${source.name}` === repository) ? repository : sources[0] ? `${sources[0].owner}/${sources[0].name}` : '';
-      base = result.target.defaultBranch;
-      compare = sourceBranches.find((branch) => sourceRepository !== repository || branch.name !== base)?.name ?? '';
+      sourceRepository = nextSourceRepository;
+      base = nextBase;
+      compare = nextSource?.branches.find((branch) => nextSourceRepository !== requestedRepository || branch.name !== nextBase)?.name ?? '';
       await loadComparison();
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Branches could not be loaded.'; }
+    } catch (cause) {
+      if (request === branchRequest) error = cause instanceof MarlApiError ? cause.message : 'Branches could not be loaded.';
+    }
   }
 
   async function loadSource() {
@@ -62,13 +76,23 @@
   }
 
   async function loadComparison() {
+    const request = ++comparisonRequest;
     comparison = null;
-    if (!repository || !base || !compare || (sourceRepository === repository && base === compare)) return;
+    if (!repository || !base || !compare || (sourceRepository === repository && base === compare)) {
+      comparing = false;
+      return;
+    }
+    const requested = { repository, sourceRepository, base, compare };
     comparing = true; error = '';
     const { owner, name } = repoParts();
-    try { comparison = await api<PullRequestDiff>(`/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}&sourceRepository=${encodeURIComponent(sourceRepository)}`); }
-    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'These branches could not be compared.'; }
-    finally { comparing = false; }
+    try {
+      const result = await api<PullRequestDiff>(`/repositories/${owner}/${name}/compare?base=${encodeURIComponent(requested.base)}&head=${encodeURIComponent(requested.compare)}&sourceRepository=${encodeURIComponent(requested.sourceRepository)}`);
+      if (request === comparisonRequest && requested.repository === repository && requested.sourceRepository === sourceRepository && requested.base === base && requested.compare === compare) comparison = result;
+    } catch (cause) {
+      if (request === comparisonRequest) error = cause instanceof MarlApiError ? cause.message : 'These branches could not be compared.';
+    } finally {
+      if (request === comparisonRequest) comparing = false;
+    }
   }
 
   async function createPull() {

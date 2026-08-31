@@ -59,14 +59,18 @@ impl DockerSandbox {
                 "no-new-privileges",
                 "--pids-limit",
                 "256",
+                "--memory",
+                "1g",
+                "--cpus",
+                "1",
             ]);
             add_environment(&mut command, &service.environment);
             command.arg(&service.image);
             checked(&mut command, &format!("start service {}", service.name)).await?;
             self.services.push(name);
         }
-        let workspace_mount = format!("{}:/workspace", workspace.display());
-        let cache_mount = format!("{}:/marl-cache", cache.display());
+        let workspace_mount = bind_mount(workspace, "/workspace", false);
+        let cache_mount = bind_mount(cache, "/marl-cache", true);
         let mut command = Command::new("docker");
         command.args([
             "create",
@@ -175,6 +179,15 @@ impl DockerSandbox {
             .status()
             .await;
     }
+}
+
+fn bind_mount(source: &Path, destination: &str, shared: bool) -> String {
+    let label = if cfg!(target_os = "linux") {
+        if shared { ":z" } else { ":Z" }
+    } else {
+        ""
+    };
+    format!("{}:{destination}{label}", source.display())
 }
 
 fn add_environment(command: &mut Command, values: &BTreeMap<String, String>) {

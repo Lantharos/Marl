@@ -24,7 +24,7 @@ describe('R2 Git pack reader', () => {
       REPOSITORY_STATE: { idFromName: () => 'repo', get: () => state },
       REPOSITORIES: { get: async (_key: string, options: { range: { offset: number; length: number } }) => {
         const bytes = pack.slice(options.range.offset, options.range.offset + options.range.length);
-        return { arrayBuffer: async () => bytes.buffer };
+        return { body: new Blob([bytes]).stream() };
       } }
     };
     const object = await readPackedObject(env as never, 'repo_test', deltaId);

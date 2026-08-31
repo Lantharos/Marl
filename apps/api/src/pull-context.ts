@@ -32,6 +32,10 @@ export async function canManageRepository(env: Env, principal: Principal, reposi
   return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'repository.triage'));
 }
 
+export async function canMergeRepository(env: Env, principal: Principal, repository: PullRepository): Promise<boolean> {
+  return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'repository.push'));
+}
+
 export function reviewStatusFor(pull: PullRow, rule: BranchRule, reviews: RequirementReview[]): ReviewStatus {
   const latest = new Map<string, string>();
   for (const review of reviews) if (!rule.dismissStaleReviews || review.commitId === pull.sourceCommitId) latest.set(review.authorId, review.state);
@@ -54,7 +58,7 @@ export async function summarizePullRows(env: Env, rows: PullRow[]) {
   const placeholders = rows.map(() => '?').join(',');
   const ids = rows.map((row) => row.id);
   const [checkRows, reviewRows, threadRows, labelRows, rules] = await Promise.all([
-    env.DB.prepare(`SELECT pull_requests.id AS pullId,checks.name,checks.state FROM pull_requests LEFT JOIN checks ON checks.repository_id=COALESCE(pull_requests.source_repository_id,pull_requests.repository_id) AND checks.commit_id=pull_requests.source_commit_id WHERE pull_requests.id IN (${placeholders})`).bind(...ids).all<{ pullId: string; name: string | null; state: string | null }>(),
+    env.DB.prepare(`SELECT pull_requests.id AS pullId,checks.name,checks.state,checks.producer_workflow_id AS workflowId,checks.producer_job_key AS jobKey FROM pull_requests LEFT JOIN checks ON checks.repository_id=COALESCE(pull_requests.source_repository_id,pull_requests.repository_id) AND checks.commit_id=pull_requests.source_commit_id AND checks.producer_repository_id=pull_requests.repository_id WHERE pull_requests.id IN (${placeholders})`).bind(...ids).all<{ pullId: string; name: string | null; state: string | null; workflowId: string | null; jobKey: string | null }>(),
     env.DB.prepare(`SELECT pullId,authorId,state,commitId FROM (SELECT pull_request_id AS pullId,author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt,ROW_NUMBER() OVER (PARTITION BY pull_request_id,author_id,commit_id ORDER BY created_at DESC,id DESC) AS rank FROM pull_request_reviews WHERE pull_request_id IN (${placeholders})) WHERE rank=1 ORDER BY createdAt`).bind(...ids).all<{ pullId: string; authorId: string; state: 'commented' | 'approved' | 'changes_requested'; commitId: string }>(),
     env.DB.prepare(`SELECT review_threads.pull_request_id AS pullId, COUNT(*) AS unresolved FROM review_threads JOIN pull_requests ON pull_requests.id = review_threads.pull_request_id AND pull_requests.source_commit_id = review_threads.commit_id WHERE review_threads.pull_request_id IN (${placeholders}) AND review_threads.resolved_at IS NULL GROUP BY review_threads.pull_request_id`).bind(...ids).all<{ pullId: string; unresolved: number }>(),
     env.DB.prepare(`SELECT pull_request_labels.pull_request_id AS pullId,repository_labels.id,repository_labels.name,repository_labels.color,repository_labels.description FROM pull_request_labels JOIN repository_labels ON repository_labels.id=pull_request_labels.label_id WHERE pull_request_labels.pull_request_id IN (${placeholders}) ORDER BY repository_labels.name`).bind(...ids).all<{ pullId: string; id: string; name: string; color: string; description: string }>(),
@@ -63,12 +67,12 @@ export async function summarizePullRows(env: Env, rows: PullRow[]) {
   const checks = new Map<string, CheckCounts>();
   for (const row of checkRows.results) {
     const counts = checks.get(row.pullId) ?? { total: 0, passed: 0, failed: 0, running: 0, items: [] };
-    if (row.name && row.state) {
+    if (row.name && row.state && row.workflowId && row.jobKey) {
       counts.total += 1;
       if (row.state === 'success') counts.passed += 1;
       else if (row.state === 'failure' || row.state === 'canceled') counts.failed += 1;
       else counts.running += 1;
-      counts.items!.push({ name: row.name, state: row.state });
+      counts.items!.push({ name: row.name, state: row.state, workflowId: row.workflowId, jobKey: row.jobKey });
     }
     checks.set(row.pullId, counts);
   }

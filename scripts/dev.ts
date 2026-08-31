@@ -15,7 +15,15 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
   },
   api: {
     label: `api       http://127.0.0.1:${ports.api}`,
-    command: ['bun', 'run', '--cwd', 'apps/api', 'dev', '--', '--var', `GIT_GATEWAY_TOKEN:${gatewayToken}`]
+    command: [
+      'bun', 'run', '--cwd', 'apps/api', 'dev', '--',
+      '--var', 'ENVIRONMENT:development',
+      '--var', `GIT_GATEWAY_URL:http://127.0.0.1:${ports.git}`,
+      '--var', `GIT_PUBLIC_URL:http://127.0.0.1:${ports.git}`,
+      '--var', 'GIT_SSH_PUBLIC_URL:ssh://git@127.0.0.1:42621',
+      '--var', `PUBLIC_URL:http://127.0.0.1:${ports.web}`,
+      '--var', `GIT_GATEWAY_TOKEN:${gatewayToken}`
+    ]
   },
   git: {
     label: `git       http://127.0.0.1:${ports.git}  ssh://git@127.0.0.1:42621`,

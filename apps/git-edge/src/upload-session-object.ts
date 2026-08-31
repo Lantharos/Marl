@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { readBoundedJson } from './bounded-body';
 import { StorageError } from './storage-model';
 import { attachMultipart, claimPart, completePart, createUploadSession, failPart, markServerUploaded, markUploaded, prepareServerUpload, trackCleanupKey, uploadedParts, type UploadSession } from './upload-model';
 import { parseStateBody, stateFailure, stateFetch, stateResponse, trusted, type StateEnv } from './state-http';
@@ -113,7 +114,8 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
     try {
       const committed = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/committed', { pushId: session.pushId });
       if (committed.ok) {
-        const value = await committed.json<{ committed: { actualBytes: number } }>();
+        const value = await readBoundedJson<{ committed: { actualBytes: number } }>(committed, 64 * 1024);
+        if (!value) throw new Error('Commit reconciliation returned an invalid response.');
         const settled = await stateFetch(this.env.ORGANIZATION_QUOTAS, session.organizationId, this.env, '/settle', { id: session.pushId, actualBytes: value.committed.actualBytes });
         if (!settled.ok) throw new Error(`Quota settlement failed with ${settled.status}.`);
         await this.ctx.storage.put('session', { ...session, state: 'published' });

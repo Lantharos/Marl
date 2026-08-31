@@ -6,9 +6,11 @@
     "lib": ["ES2024", "WebWorker"],
     "types": ["@cloudflare/workers-types"],
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["worker-configuration.d.ts", "src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

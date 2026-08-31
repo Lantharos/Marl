@@ -108,7 +108,7 @@ try {
   const pushRuns = queuedRuns.runs.filter((item) => item.trigger === 'push' && item.branch === 'main');
   assert(pushRuns.length >= 3, 'Expected a workflow run for every main push.');
   assert(pushRuns.filter((item) => ['queued', 'running'].includes(item.state)).length === 1, 'Only the latest supersedable push may remain active.');
-  assert(pushRuns.slice(1).every((item) => item.state === 'canceled' && item.cancellationReason === 'superseded'), 'Older push runs were not marked superseded.');
+  assert(pushRuns.filter((item) => !['queued', 'running'].includes(item.state)).every((item) => item.state === 'canceled' && item.cancellationReason === 'superseded'), 'Older push runs were not marked superseded.');
 
   stage('Execute the latest run in Docker');
   const enrollment = await client.request<{ enrollment: { token: string } }>('/api/v1/runner-enrollments', {

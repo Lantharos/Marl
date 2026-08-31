@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit",
+    "types": "wrangler types worker-configuration.d.ts --include-runtime=false --strict-vars=false --env-interface CloudflareBindings",
+    "types:check": "bun run types --check",
+    "check": "bun run types:check && tsc --noEmit",
     "test": "bun test",
     "build": "wrangler deploy --dry-run --containers-rollout=none --outdir dist",
     "build:container": "wrangler deploy --dry-run --outdir dist",
@@ -16,8 +18,8 @@
     "valibot": "^1.4.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260830.1",
-    "typescript": "^6.0.2",
+    "@cloudflare/workers-types": "^5.20260831.1",
+    "typescript": "^7.0.2",
     "wrangler": "^4.127.1"
   }
 }

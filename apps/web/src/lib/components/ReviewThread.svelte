@@ -13,10 +13,11 @@
   import UserProfileLink from './UserProfileLink.svelte';
   import type { MarkdownContext } from '$lib/markdown';
 
-  let { thread, busy, inline = false, onReply, onResolve, onEdit, onDelete, context } = $props<{
+  let { thread, busy, inline = false, interactive = true, onReply, onResolve, onEdit, onDelete, context } = $props<{
     thread: ReviewThread;
     busy: boolean;
     inline?: boolean;
+    interactive?: boolean;
     onReply: (threadId: string, body: string) => Promise<void>;
     onResolve: (threadId: string, resolved: boolean) => Promise<void>;
     onEdit: (commentId: string, body: string) => Promise<void>;
@@ -40,15 +41,15 @@
   <header>
     {#if thread.resolved}<Button class="collapse" icon size="small" variant="ghost" aria-label={expanded ? 'Collapse resolved conversation' : 'Expand resolved conversation'} onclick={() => (expanded = !expanded)}>{#if expanded}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}</Button>{/if}
     <span class="path">{thread.path}:{thread.startLine === thread.line ? thread.line : `${thread.startLine}–${thread.line}`}</span>
-    <div>{#if thread.outdated}<span>Outdated</span>{:else if thread.resolved}<span class="resolved"><Check size={11} />Resolved</span><Button size="small" disabled={busy} onclick={() => onResolve(thread.id, false)}>Reopen</Button>{:else}<Button size="small" disabled={busy} onclick={() => onResolve(thread.id, true)}>Resolve conversation</Button>{/if}</div>
+    <div>{#if thread.outdated}<span>Outdated</span>{:else if thread.resolved}<span class="resolved"><Check size={11} />Resolved</span>{#if interactive}<Button size="small" disabled={busy} onclick={() => onResolve(thread.id, false)}>Reopen</Button>{/if}{:else if interactive}<Button size="small" disabled={busy} onclick={() => onResolve(thread.id, true)}>Resolve conversation</Button>{/if}</div>
   </header>
   {#if !thread.resolved || expanded}
     {#each thread.comments as comment (comment.id)}
-      <section class="entry"><div class="meta"><UserProfileLink handle={comment.author} displayName={comment.authorDisplayName} avatarUrl={comment.authorAvatarUrl} size={23} /><Time value={comment.createdAt} />{#if comment.canEdit && !comment.deleted}<div class="actions"><Button variant="ghost" size="small" icon aria-label="Edit comment" onclick={() => { editing = comment.id; editBody = comment.body; }}><Pencil size={12} /></Button>{#if confirmingDelete === comment.id}<Button variant="danger-soft" size="small" onclick={async () => { await onDelete(comment.id); confirmingDelete = null; }}>Delete</Button><Button variant="ghost" size="small" onclick={() => (confirmingDelete = null)}>Cancel</Button>{:else}<Button variant="ghost" size="small" icon aria-label="Delete comment" onclick={() => (confirmingDelete = comment.id)}><Trash2 size={12} /></Button>{/if}</div>{/if}</div>
+      <section class="entry"><div class="meta"><UserProfileLink handle={comment.author} displayName={comment.authorDisplayName} avatarUrl={comment.authorAvatarUrl} size={23} /><Time value={comment.createdAt} />{#if interactive && comment.canEdit && !comment.deleted}<div class="actions"><Button variant="ghost" size="small" icon aria-label="Edit comment" onclick={() => { editing = comment.id; editBody = comment.body; }}><Pencil size={12} /></Button>{#if confirmingDelete === comment.id}<Button variant="danger-soft" size="small" onclick={async () => { await onDelete(comment.id); confirmingDelete = null; }}>Delete</Button><Button variant="ghost" size="small" onclick={() => (confirmingDelete = null)}>Cancel</Button>{:else}<Button variant="ghost" size="small" icon aria-label="Delete comment" onclick={() => (confirmingDelete = comment.id)}><Trash2 size={12} /></Button>{/if}</div>{/if}</div>
         {#if comment.deleted}<p class="deleted">Comment deleted</p>{:else if editing === comment.id}<MarkdownComposer bind:value={editBody} {context} minHeight={70} /><footer><Button size="small" onclick={() => (editing = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editBody.trim()} onclick={() => submitEdit(comment.id)}>Save</Button></footer>{:else}<MarkdownBody source={comment.body} {context} />{/if}
       </section>
     {/each}
-    {#if !thread.outdated && !thread.resolved}
+    {#if interactive && !thread.outdated && !thread.resolved}
       {#if replying}<div class="reply-composer"><MarkdownComposer bind:value={replyBody} {context} placeholder="Reply to this conversation" minHeight={70} /><footer><Button size="small" onclick={() => (replying = false)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !replyBody.trim()} onclick={submitReply}>Reply</Button></footer></div>{:else}<Button class="reply" variant="ghost" size="small" onclick={() => (replying = true)}><Reply size={13} />Reply</Button>{/if}
     {/if}
   {/if}

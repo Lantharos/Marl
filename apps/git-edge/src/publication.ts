@@ -1,4 +1,5 @@
 import { getContainer } from '@cloudflare/containers';
+import { readBoundedJson, readBoundedText } from './bounded-body';
 import { promoteCanonicalObject } from './canonical';
 import type { GitEdgeEnv } from './env';
 import { acknowledgeCommittedPush, committedPush, publishWithReconciliation, recoverCommittedState } from './reconciliation';
@@ -107,7 +108,9 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
       const object = await env.REPOSITORIES.get(pack.key);
       if (!object) throw new Error(`Uploaded pack ${pack.number} is missing.`);
       const response = await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${pack.number}`, env, { method: 'PUT', body: object.body })));
-      reports.push(await response.json<PackReport>());
+      const report = await readBoundedJson<PackReport>(response, 64 * 1024);
+      if (!report) throw new Error(`Validator returned invalid metadata for pack ${pack.number}.`);
+      reports.push(report);
     }
     for (const [number, report] of reports.entries()) {
       if (report.compressedBytes !== session.packs[number].bytes) throw new Error(`Pack ${number} does not match its declared size.`);
@@ -127,7 +130,7 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
     const packs: PackDescriptor[] = [];
     for (const [number, report] of reports.entries()) {
       const metadataResponse = await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${number}/objects`, env)));
-      const objects = await metadataResponse.json<PackObject[]>();
+      const objects = await readBoundedJson<PackObject[]>(metadataResponse, 64 * 1024 * 1024);
       if (!Array.isArray(objects) || objects.length !== report.objectCount) throw new Error('Validator returned an invalid object index.');
       const metadata = JSON.stringify(objects);
       const metadataKey = `quarantine/${session.repository}/${session.pushId}/${number}.objects.json`;
@@ -161,7 +164,7 @@ function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit = {}) {
 
 async function expectContainer(promise: Promise<Response>) {
   const response = await promise;
-  if (!response.ok) throw new Error((await response.text()) || `Validator failed with ${response.status}.`);
+  if (!response.ok) throw new Error((await readBoundedText(response.body, 64 * 1024)) || `Validator failed with ${response.status}.`);
   return response;
 }
 

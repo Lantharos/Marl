@@ -1,3 +1,4 @@
+import { readBoundedJson } from './bounded-body';
 import type { GitEdgeEnv } from './env';
 
 export type GitAuthorization = { repositoryId: string; storageKey: string; organizationId: string; actorId?: string; read: boolean; write: boolean };
@@ -8,13 +9,15 @@ export async function authorizeGit(request: Request, env: GitEdgeEnv, owner: str
   if (authorization) headers.set('authorization', authorization);
   const gateway = request.headers.get('x-marl-gateway-token');
   if (gateway) headers.set('x-marl-gateway-token', gateway);
-  const url = new URL('/api/v1/git/authorize', env.MARL_API_URL);
+  const url = new URL('/api/v1/git/authorize', 'http://marl-api.internal');
   url.searchParams.set('owner', owner);
   url.searchParams.set('repository', repository);
   url.searchParams.set('service', service);
-  const response = await fetch(url, { headers });
+  const response = await env.MARL_API.fetch(url, { headers });
   if (!response.ok) throw new AuthorizationError(response.status);
-  return response.json<GitAuthorization>();
+  const body = await readBoundedJson<GitAuthorization>(response, 64 * 1024);
+  if (!body) throw new AuthorizationError(502);
+  return body;
 }
 
 export class AuthorizationError extends Error {

@@ -1,4 +1,5 @@
 import { apiWith } from '$lib/api';
+import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = ({ fetch, params }) => apiWith(fetch, `/organizations/${params.slug}`);
+export const load: PageLoad = ({ fetch, params }) => routeLoad(apiWith(fetch, `/organizations/${params.slug}`));

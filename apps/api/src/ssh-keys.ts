@@ -6,7 +6,7 @@ import type { Env } from './platform';
 import { authorizeRepository } from './repository-access';
 import { signingKeysBody, sshKeyBody } from './request-schemas';
 
-const keyTypes = new Set(['ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-rsa']);
+const keyTypes = new Set(['ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521']);
 
 function base64(bytes: ArrayBuffer) {
   let value = '';

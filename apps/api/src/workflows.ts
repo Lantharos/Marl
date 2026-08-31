@@ -4,7 +4,7 @@ import { auditStatement } from './audit';
 import { identifier } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
 import { requestGitGateway } from './git-gateway';
-import { json, problem } from './http';
+import { json, problem, readBody } from './http';
 import type { Env } from './platform';
 import { parseRunJobs, queueRun, runSelect, summarizeRun, type RunJob } from './runs';
 import { authorizeRepository } from './repository-access';
@@ -84,17 +84,25 @@ function stringEnvironment(value: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, String(item)]));
 }
 
-function matrixRows(value: unknown): Array<Record<string, string>> {
+function matrixRows(value: unknown, limit: number): Array<Record<string, string>> {
+  if (limit < 1) throw new Error('Workflow expansion produced more than 32 jobs.');
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [{}];
   const axes = Object.entries(value as ObjectValue).filter(([key]) => !['include', 'exclude'].includes(key));
+  if (axes.length > 16) throw new Error('A job matrix may define at most 16 axes.');
   let rows: Array<Record<string, string>> = [{}];
   for (const [key, raw] of axes) {
     if (!Array.isArray(raw) || !raw.length) return [];
+    if (raw.length > 32 || raw.length > Math.floor(limit / rows.length)) throw new Error('Workflow expansion produced more than 32 jobs.');
     rows = rows.flatMap((row) => raw.map((item) => ({ ...row, [key]: String(item) })));
   }
-  const excluded = Array.isArray((value as ObjectValue).exclude) ? (value as ObjectValue).exclude as ObjectValue[] : [];
+  const excludedValue = (value as ObjectValue).exclude;
+  if (excludedValue !== undefined && (!Array.isArray(excludedValue) || excludedValue.some((entry) => !entry || typeof entry !== 'object' || Array.isArray(entry)))) throw new Error('Matrix exclusions must be objects.');
+  const excluded = (excludedValue ?? []) as ObjectValue[];
   rows = rows.filter((row) => !excluded.some((entry) => Object.entries(entry).every(([key, item]) => row[key] === String(item))));
-  const included = Array.isArray((value as ObjectValue).include) ? (value as ObjectValue).include as ObjectValue[] : [];
+  const includedValue = (value as ObjectValue).include;
+  if (includedValue !== undefined && (!Array.isArray(includedValue) || includedValue.some((entry) => !entry || typeof entry !== 'object' || Array.isArray(entry)))) throw new Error('Matrix inclusions must be objects.');
+  const included = (includedValue ?? []) as ObjectValue[];
+  if (included.length > limit - rows.length) throw new Error('Workflow expansion produced more than 32 jobs.');
   return [...rows, ...included.map((entry) => Object.fromEntries(Object.entries(entry).map(([key, item]) => [key, String(item)])))];
 }
 
@@ -149,7 +157,7 @@ function githubJobs(value: unknown, globalEnvironment: Record<string, string>): 
   for (const [baseKey, raw] of Object.entries(value as ObjectValue)) {
     if (!raw || typeof raw !== 'object') throw new Error(`Job ${baseKey} is invalid.`);
     const job = raw as ObjectValue;
-    const rows = matrixRows(job.strategy && typeof job.strategy === 'object' ? (job.strategy as ObjectValue).matrix : undefined);
+    const rows = matrixRows(job.strategy && typeof job.strategy === 'object' ? (job.strategy as ObjectValue).matrix : undefined, 32 - jobs.length);
     if (!rows.length) throw new Error(`Job ${baseKey} has an empty matrix.`);
     for (const [index, matrix] of rows.entries()) {
       const suffix = rows.length === 1 ? '' : `_${index + 1}`;
@@ -195,15 +203,15 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
       object: await requestGitGateway(env, '/_marl/blob', { owner: repository.owner, repository: repository.name, objectId: entry.objectId }, { attempts: 2 })
     })));
     for (const { entry, object } of batch) {
-      const size = Number(object.headers.get('content-length'));
-      if (!object.ok || !Number.isSafeInteger(size) || size > 1024 * 1024) {
+      const source = object.ok ? await readBody(object, 1024 * 1024) : null;
+      if (!source) {
         const error = 'Workflow file is missing or larger than 1 MiB.';
         warnings.push({ path: entry.path, error });
         indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(null, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'marl', triggers: [], jobs: null, error, pushEnabled: false, supersedePushes: true });
         continue;
       }
       try {
-        const value = parse(await object.text(), { maxAliasCount: 10 }) as ObjectValue | null;
+        const value = parse(new TextDecoder('utf-8', { fatal: true }).decode(source), { maxAliasCount: 10 }) as ObjectValue | null;
         const triggers = declaredTriggers(value?.on);
         const parsed = value ? parseWorkflow(value, entry.path) : { error: 'Workflow YAML must contain an object.' };
         const unsupported = triggers.filter((trigger) => !executableTriggers.has(trigger));

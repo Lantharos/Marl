@@ -2,14 +2,27 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "marl-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-30",
-  "workers_dev": true,
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "marl.sh/api/*",
+      "zone_name": "marl.sh"
+    },
+    {
+      "pattern": "marl.sh/health",
+      "zone_name": "marl.sh"
+    }
+  ],
   "vars": {
-    "ENVIRONMENT": "development",
-    "GIT_GATEWAY_URL": "http://127.0.0.1:42619",
-    "GIT_PUBLIC_URL": "http://127.0.0.1:42619",
-    "GIT_SSH_PUBLIC_URL": "ssh://git@127.0.0.1:42621",
+    "ENVIRONMENT": "production",
+    "PUBLIC_URL": "https://marl.sh",
+    "GIT_PUBLIC_URL": "https://git.marl.sh",
     "EMAIL_FROM": "noreply@marl.sh"
+  },
+  "secrets": {
+    "required": ["AUTH_SECRET", "SECRET_ENCRYPTION_KEY", "GIT_GATEWAY_TOKEN"]
   },
   "send_email": [
     {
@@ -29,12 +42,6 @@
     {
       "binding": "OBJECTS",
       "bucket_name": "marl-objects"
-    }
-  ],
-  "services": [
-    {
-      "binding": "GIT_EDGE",
-      "service": "marl-git"
     }
   ],
   "ratelimits": [

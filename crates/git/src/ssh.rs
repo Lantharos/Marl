@@ -1,6 +1,7 @@
 use crate::{
     metadata::index_local_repository,
     process::Command,
+    receive,
     repository_files::{ensure_bare_repository, repair_head},
     state::{AppState, repository_path, safe_segment},
 };
@@ -27,7 +28,12 @@ struct SshServer {
 struct SshSession {
     state: Arc<AppState>,
     fingerprint: Option<String>,
-    inputs: HashMap<ChannelId, Arc<Mutex<ChildStdin>>>,
+    inputs: HashMap<ChannelId, GitInput>,
+}
+
+struct GitInput {
+    writer: Arc<Mutex<ChildStdin>>,
+    remaining: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -189,20 +195,27 @@ impl server::Handler for SshSession {
         if receives_pack {
             let _ = fs::remove_file(repository.join("marl-generation")).await;
         }
-        let mut child = Command::new(command.service)
+        let mut child_command = Command::new(command.service);
+        child_command
             .arg(&repository)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .context("start SSH Git process")?;
+            .kill_on_drop(true);
+        receive::configure(&mut child_command, receives_pack);
+        let mut child = child_command.spawn().context("start SSH Git process")?;
         let input = child.stdin.take().context("open SSH Git stdin")?;
         let stdout = child.stdout.take().context("open SSH Git stdout")?;
         let stderr = child.stderr.take().context("open SSH Git stderr")?;
-        self.inputs.insert(channel, Arc::new(Mutex::new(input)));
+        self.inputs.insert(
+            channel,
+            GitInput {
+                writer: Arc::new(Mutex::new(input)),
+                remaining: receives_pack.then_some(receive::MAX_REQUEST_BYTES),
+            },
+        );
         let handle = session.handle();
         tokio::spawn(copy_output(stdout, handle.clone(), channel, false));
         tokio::spawn(copy_output(stderr, handle.clone(), channel, true));
@@ -239,16 +252,31 @@ impl server::Handler for SshSession {
         Ok(())
     }
 
-    async fn data(&mut self, channel: ChannelId, data: &[u8], _: &mut Session) -> Result<()> {
-        if let Some(input) = self.inputs.get(&channel) {
-            input.lock().await.write_all(data).await?;
+    async fn data(&mut self, channel: ChannelId, data: &[u8], session: &mut Session) -> Result<()> {
+        let Some((writer, exceeds_limit)) = self.inputs.get_mut(&channel).map(|input| {
+            let exceeds_limit = input
+                .remaining
+                .is_some_and(|remaining| data.len() as u64 > remaining);
+            if !exceeds_limit && let Some(remaining) = input.remaining.as_mut() {
+                *remaining -= data.len() as u64;
+            }
+            (input.writer.clone(), exceeds_limit)
+        }) else {
+            return Ok(());
+        };
+        if exceeds_limit {
+            self.inputs.remove(&channel);
+            writer.lock().await.shutdown().await?;
+            session.extended_data(channel, 1, "Push request exceeds the 256 MiB pack limit.\n")?;
+            return Ok(());
         }
+        writer.lock().await.write_all(data).await?;
         Ok(())
     }
 
     async fn channel_eof(&mut self, channel: ChannelId, _: &mut Session) -> Result<()> {
         if let Some(input) = self.inputs.remove(&channel) {
-            input.lock().await.shutdown().await?;
+            input.writer.lock().await.shutdown().await?;
         }
         Ok(())
     }

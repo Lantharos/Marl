@@ -32,13 +32,17 @@ export function stepUp(env: Env) {
         body: verificationBody,
         use: [sessionMiddleware]
       }, async (context) => {
-        const { user } = context.context.session;
+        const { session, user } = context.context.session;
         if (context.body.method === 'password') await verifyAccountPassword(env, user.id, context.body.value, context.context.password.verify);
         else await verifyAuthenticatorCode(env, user.id, context.body.value, context.context.secretConfig);
 
-        const nextSession = await context.context.internalAdapter.createSession(user.id);
+        const override = typeof session.deviceId === 'string'
+          ? { expiresAt: session.expiresAt, deviceId: session.deviceId }
+          : { expiresAt: session.expiresAt };
+        const nextSession = await context.context.internalAdapter.createSession(user.id, false, override, true);
         if (!nextSession) throw new APIError('INTERNAL_SERVER_ERROR', { code: 'SESSION_ROTATION_FAILED', message: 'Identity confirmation could not be completed.' });
         await setSessionCookie(context, { session: nextSession, user });
+        await context.context.internalAdapter.deleteSession(session.token);
         return context.json({ status: true });
       })
     }
@@ -53,20 +57,19 @@ async function verifyAccountPassword(env: Env, userId: string, password: string,
 }
 
 async function verifyAuthenticatorCode(env: Env, userId: string, code: string, secretConfig: string | SecretConfig) {
-  const factor = await env.DB.prepare('SELECT secret,verified,failed_verification_count AS failedVerificationCount,locked_until AS lockedUntil FROM auth_two_factor WHERE user_id=? LIMIT 1').bind(userId).first<{ secret: string; verified: number; failedVerificationCount: number; lockedUntil: number | null }>();
+  const factor = await env.DB.prepare('SELECT secret,verified,locked_until AS lockedUntil FROM auth_two_factor WHERE user_id=? LIMIT 1').bind(userId).first<{ secret: string; verified: number; lockedUntil: number | null }>();
   if (!factor?.verified) throw new APIError('BAD_REQUEST', { code: 'TOTP_NOT_ENABLED', message: 'Authenticator verification is not enabled.' });
   const now = Date.now();
   if (factor.lockedUntil && factor.lockedUntil > now) throw new APIError('TOO_MANY_REQUESTS', { code: 'TWO_FACTOR_LOCKED', message: 'Too many incorrect codes. Try again later.' });
-  if (factor.lockedUntil) await env.DB.prepare('UPDATE auth_two_factor SET failed_verification_count=0,locked_until=NULL WHERE user_id=?').bind(userId).run();
 
   const secret = await symmetricDecrypt({ key: secretConfig, data: factor.secret });
   if (!await validTotp(secret, code)) {
-    const failures = (factor.lockedUntil ? 0 : factor.failedVerificationCount) + 1;
-    const lockedUntil = failures >= 10 ? now + 15 * 60_000 : null;
-    await env.DB.prepare('UPDATE auth_two_factor SET failed_verification_count=?,locked_until=? WHERE user_id=?').bind(failures, lockedUntil, userId).run();
+    const failed = await env.DB.prepare(`UPDATE auth_two_factor SET failed_verification_count=CASE WHEN locked_until IS NOT NULL AND locked_until<=? THEN 1 ELSE failed_verification_count+1 END,locked_until=CASE WHEN CASE WHEN locked_until IS NOT NULL AND locked_until<=? THEN 1 ELSE failed_verification_count+1 END>=10 THEN ? ELSE NULL END WHERE user_id=? AND verified=1 AND (locked_until IS NULL OR locked_until<=?) RETURNING failed_verification_count AS failedVerificationCount,locked_until AS lockedUntil`).bind(now, now, now + 15 * 60_000, userId, now).first<{ failedVerificationCount: number; lockedUntil: number | null }>();
+    if (!failed || (failed.lockedUntil && failed.lockedUntil > now)) throw new APIError('TOO_MANY_REQUESTS', { code: 'TWO_FACTOR_LOCKED', message: 'Too many incorrect codes. Try again later.' });
     throw new APIError('UNAUTHORIZED', { code: 'INVALID_TOTP', message: 'That authentication code is not valid.' });
   }
-  await env.DB.prepare('UPDATE auth_two_factor SET failed_verification_count=0,locked_until=NULL WHERE user_id=?').bind(userId).run();
+  const accepted = await env.DB.prepare('UPDATE auth_two_factor SET failed_verification_count=0,locked_until=NULL WHERE user_id=? AND verified=1 AND (locked_until IS NULL OR locked_until<=?) RETURNING id').bind(userId, now).first<{ id: string }>();
+  if (!accepted) throw new APIError('TOO_MANY_REQUESTS', { code: 'TWO_FACTOR_LOCKED', message: 'Too many incorrect codes. Try again later.' });
 }
 
 export async function validTotp(secret: string, candidate: string, now = Date.now()) {

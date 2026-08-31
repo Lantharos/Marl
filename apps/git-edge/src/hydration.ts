@@ -1,4 +1,5 @@
 import type { Container } from '@cloudflare/containers';
+import { readBoundedJson, readBoundedText } from './bounded-body';
 import type { GitEdgeEnv } from './env';
 import { repositoryState, type RepositorySnapshotResponse } from './state-client';
 
@@ -8,7 +9,9 @@ type ContainerStatus = { generation: number | null; cachedPacks: string[] };
 export async function hydrateRepository(container: ContainerStub, env: GitEdgeEnv, owner: string, repository: string, storageKey: string) {
   const snapshot = await repositoryState(env, storageKey).request<RepositorySnapshotResponse>('/snapshot');
   const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
-  const status = await expectContainer(container.fetch(internalRequest(`${base}/status`, env))).then((response) => response.json<ContainerStatus>());
+  const statusResponse = await expectContainer(container.fetch(internalRequest(`${base}/status`, env)));
+  const status = await readBoundedJson<ContainerStatus>(statusResponse, 64 * 1024);
+  if (!status) throw new Error('Git container returned an invalid repository status.');
   if (status.generation === snapshot.state.generation) return snapshot.state;
   const cached = new Set(status.cachedPacks);
   const missing = snapshot.state.packs.filter((pack) => !cached.has(pack.id));
@@ -33,7 +36,9 @@ export async function indexHydratedRepository(container: ContainerStub, env: Git
   const response = await expectContainer(container.fetch(internalRequest('http://container/_marl/index', env, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository, indexId: `generation_${generation}`, excludeCommits, actorId })
   })));
-  return response.json<{ heads: string[] }>();
+  const result = await readBoundedJson<{ heads: string[] }>(response, 1024 * 1024);
+  if (!result) throw new Error('Git container returned invalid index metadata.');
+  return result;
 }
 
 export function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit = {}) {
@@ -44,6 +49,6 @@ export function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit 
 
 export async function expectContainer(promise: Promise<Response>) {
   const response = await promise;
-  if (!response.ok) throw new Error((await response.text()) || `Git container failed with ${response.status}.`);
+  if (!response.ok) throw new Error((await readBoundedText(response.body, 64 * 1024)) || `Git container failed with ${response.status}.`);
   return response;
 }

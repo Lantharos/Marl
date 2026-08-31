@@ -7,6 +7,8 @@
 
   type Option = { value: string; label: string; description?: string };
   let { value = $bindable(), options, ariaLabel, onchange }: { value: string; options: Option[]; ariaLabel: string; onchange?: (value: string) => void | Promise<void> } = $props();
+  const id = $props.id();
+  const listboxId = `${id}-listbox`;
   let open = $state(false);
   let activeIndex = $state(0);
   let trigger = $state<HTMLButtonElement>();
@@ -14,11 +16,34 @@
   let menuStyle = $state('');
   const selected = $derived(options.find((option) => option.value === value) ?? options[0]);
 
-  async function choose(option: Option) { value = option.value; open = false; await tick(); await onchange?.(value); }
-  async function toggle() {
-    open = !open;
+  function optionId(index: number) { return `${id}-option-${index}`; }
+  function closeMenu(restoreFocus = false) {
+    open = false;
+    if (restoreFocus) trigger?.focus();
+  }
+  async function focusActiveOption() {
+    await tick();
+    menu?.querySelector<HTMLElement>(`#${CSS.escape(optionId(activeIndex))}`)?.focus();
+  }
+  async function choose(option: Option) {
+    const changed = option.value !== value;
+    value = option.value;
+    closeMenu(true);
+    if (changed) await onchange?.(value);
+  }
+  async function openMenu(direction?: 'first' | 'last') {
+    if (!options.length) return;
+    open = true;
     activeIndex = Math.max(0, options.findIndex((option) => option.value === value));
-    if (open) { await tick(); positionMenu(); }
+    if (direction === 'first') activeIndex = 0;
+    if (direction === 'last') activeIndex = options.length - 1;
+    await tick();
+    positionMenu();
+    await focusActiveOption();
+  }
+  function toggle() {
+    if (open) closeMenu(true);
+    else void openMenu();
   }
   function positionMenu() {
     if (!open || !trigger) return;
@@ -33,14 +58,29 @@
     menuStyle = `top:${top / scale}px;left:${left / scale}px;width:${rect.width / scale}px`;
   }
   function keydown(event: KeyboardEvent) {
-    if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); void toggle(); return; }
+    if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      void openMenu(event.key === 'ArrowDown' ? 'first' : 'last');
+      return;
+    }
     if (!open) return;
-    if (event.key === 'Escape' || event.key === 'Tab') { open = false; if (event.key === 'Escape') event.preventDefault(); }
-    if (event.key === 'Home') { event.preventDefault(); activeIndex = 0; }
-    if (event.key === 'End') { event.preventDefault(); activeIndex = options.length - 1; }
-    if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = (activeIndex + 1) % options.length; }
-    if (event.key === 'ArrowUp') { event.preventDefault(); activeIndex = (activeIndex - 1 + options.length) % options.length; }
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (options[activeIndex]) void choose(options[activeIndex]); }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu(true);
+      return;
+    }
+    if (event.key === 'Tab') {
+      closeMenu();
+      return;
+    }
+    if (event.key === 'Home') activeIndex = 0;
+    else if (event.key === 'End') activeIndex = options.length - 1;
+    else if (event.key === 'ArrowDown') activeIndex = (activeIndex + 1) % options.length;
+    else if (event.key === 'ArrowUp') activeIndex = (activeIndex - 1 + options.length) % options.length;
+    else return;
+    event.preventDefault();
+    void focusActiveOption();
   }
 
   onMount(() => {
@@ -54,9 +94,9 @@
   });
 </script>
 
-<div class="select" use:dismissable={() => (open = false)}>
-  <button bind:this={trigger} type="button" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} onkeydown={keydown} onclick={toggle}><span><strong>{selected?.label ?? 'Choose…'}</strong>{#if selected?.description}<small>{selected.description}</small>{/if}</span><ChevronDown size={14} /></button>
-  {#if open}<div bind:this={menu} class="options" style={menuStyle} role="listbox" aria-label={ariaLabel}>{#each options as option,index (option.value)}<button type="button" role="option" aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
+<div class="select" use:dismissable={() => closeMenu()}>
+  <button bind:this={trigger} type="button" aria-label={ariaLabel} aria-haspopup="listbox" aria-controls={listboxId} aria-expanded={open} onkeydown={keydown} onclick={toggle}><span><strong>{selected?.label ?? 'Choose…'}</strong>{#if selected?.description}<small>{selected.description}</small>{/if}</span><ChevronDown size={14} /></button>
+  {#if open}<div bind:this={menu} id={listboxId} class="options" style={menuStyle} role="listbox" tabindex="-1" aria-label={ariaLabel} onkeydown={keydown}>{#each options as option,index (option.value)}<button id={optionId(index)} type="button" role="option" tabindex={index === activeIndex ? 0 : -1} aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
 </div>
 
 <style>

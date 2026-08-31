@@ -1,3 +1,4 @@
+import { readBoundedJson } from './bounded-body';
 import { StorageError } from './storage-model';
 import { safeParse, type BaseIssue, type BaseSchema, type InferOutput } from 'valibot';
 
@@ -19,18 +20,9 @@ export function trusted(request: Request, env: StateEnv) {
 
 export async function parseStateBody<TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>>(request: Request, schema: TSchema): Promise<InferOutput<TSchema>> {
   if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) throw new StorageError('invalid_request', 'A JSON request body is required.');
-  const declaredSize = Number(request.headers.get('content-length') ?? 0);
-  if (Number.isFinite(declaredSize) && declaredSize > 1024 * 1024) throw new StorageError('invalid_request', 'The request body is too large.');
-  try {
-    const text = await request.text();
-    if (text.length > 1024 * 1024) throw new StorageError('invalid_request', 'The request body is too large.');
-    const result = safeParse(schema, JSON.parse(text) as unknown);
-    if (!result.success) throw new StorageError('invalid_request', 'The request body is invalid.');
-    return result.output as InferOutput<TSchema>;
-  } catch (error) {
-    if (error instanceof StorageError) throw error;
-    throw new StorageError('invalid_request', 'The request body is invalid.');
-  }
+  const result = safeParse(schema, await readBoundedJson<unknown>(request, 1024 * 1024));
+  if (!result.success) throw new StorageError('invalid_request', 'The request body is invalid or too large.');
+  return result.output as InferOutput<TSchema>;
 }
 
 export function stateFailure(error: unknown) {

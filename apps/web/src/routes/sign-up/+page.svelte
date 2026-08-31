@@ -35,7 +35,7 @@
   {#if awaitingVerification}<div class="auth-form"><p>We sent a verification link to <strong>{email}</strong>. Verify the address before signing in.</p><a class="auth-submit" href="/sign-in">Back to sign in</a></div>{:else}<form class="auth-form" onsubmit={(event) => { event.preventDefault(); void signUp(); }}>
     {#if error}<p class="auth-error">{error}</p>{/if}
     <label class="auth-field"><span>Name</span><input autocomplete="name" bind:value={name} required /></label>
-    <label class="auth-field"><span>Username</span><input autocomplete="username" minlength="2" maxlength="39" pattern="[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?" bind:value={username} oninput={() => (username = username.toLowerCase())} required /><small>Letters, numbers, dots, dashes, and underscores.</small></label>
+    <label class="auth-field"><span>Username</span><input autocomplete="username" minlength="2" maxlength="39" pattern="[a-z0-9](?:(?:[a-z0-9._]|-)*[a-z0-9])?" bind:value={username} oninput={() => (username = username.toLowerCase())} required /><small>Letters, numbers, dots, dashes, and underscores.</small></label>
     <label class="auth-field"><span>Email</span><input type="email" autocomplete="email" bind:value={email} required /></label>
     <label class="auth-field"><span>Password</span><input type="password" autocomplete="new-password" minlength="12" bind:value={password} required /><small>At least 12 characters.</small></label>
     <Button type="submit" variant="primary" size="large" block loading={busy}>Create account</Button>

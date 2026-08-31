@@ -43,7 +43,7 @@ export async function pullUpdatesAfter(env: Env, pullId: string, version: number
 }
 
 export async function notifyPullsForCommit(env: Env, repositoryId: string, commitId: string): Promise<void> {
-  const pulls = await env.DB.prepare(`SELECT id FROM pull_requests WHERE repository_id=? AND source_commit_id=? AND state IN ('draft','open')`).bind(repositoryId, commitId).all<{ id: string }>();
+  const pulls = await env.DB.prepare(`SELECT id FROM pull_requests WHERE source_commit_id=? AND state IN ('draft','open') AND (repository_id=? OR COALESCE(source_repository_id,repository_id)=?)`).bind(commitId, repositoryId, repositoryId).all<{ id: string }>();
   await Promise.all(pulls.results.map((pull) => commitPullUpdate(env, pull.id, 'checks.updated', { refreshState: true }, [])));
 }
 

@@ -1,5 +1,6 @@
 import { getContainer } from '@cloudflare/containers';
 import { DurableObject } from 'cloudflare:workers';
+import { readBoundedJson } from './bounded-body';
 import { promoteCanonicalObject } from './canonical';
 import { beginOperation, completeOperation, operationResponse, readOperation, retryOperation, scheduleOperation } from './durable-operation';
 import type { GitEdgeEnv } from './env';
@@ -87,9 +88,11 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
   try {
     await repo.request('/begin', { pushId, reservationId: pushId, expiresAt, expectedRefs: {}, proposedRefs: current.state.refs });
     await hydrateRepository(container, env, owner, name, repositoryId);
-    const capture = await expectContainer(container.fetch(internalRequest(base, env, {
+    const captureResponse = await expectContainer(container.fetch(internalRequest(base, env, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ knownRefs: {}, full: true })
-    }))).then((response) => response.json<Capture>());
+    })));
+    const capture = await readBoundedJson<Capture>(captureResponse, 16 * 1024 * 1024);
+    if (!capture) throw new Error('Compaction returned invalid capture metadata.');
     if (!capture.hasPack && Object.keys(capture.refs).length) throw new Error('Compaction did not produce a canonical pack.');
     const packs: PackDescriptor[] = [];
     if (capture.hasPack && capture.packId) {
@@ -99,7 +102,7 @@ export async function maybeCompactRepository(env: GitEdgeEnv, owner: string, nam
         expectContainer(container.fetch(internalRequest(`${base}/objects`, env)))
       ]);
       if (!pack.body || !index.body) throw new Error('Compaction returned an incomplete pack index.');
-      const objectCatalog = await objects.json<Array<{ id: string; kind: string; size: number; packedBytes: number; offset: number; references: string[] }>>();
+      const objectCatalog = await readBoundedJson<Array<{ id: string; kind: string; size: number; packedBytes: number; offset: number; references: string[] }>>(objects, 64 * 1024 * 1024);
       if (!Array.isArray(objectCatalog) || objectCatalog.length !== capture.objectCount) throw new Error('Compaction returned an invalid object catalog.');
       const objectMetadata = JSON.stringify(objectCatalog);
       const quarantinePrefix = `quarantine/${repository}/${pushId}/canonical`;

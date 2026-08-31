@@ -1,3 +1,4 @@
+import { readBoundedJson, readBoundedJsonBody } from './bounded-body';
 import type { GitEdgeEnv } from './env';
 import { scheduleRepositoryIndex } from './indexing';
 import { organizationQuota, repositoryState, type RepositorySnapshotResponse } from './state-client';
@@ -16,7 +17,7 @@ type ForkRequest = {
 
 export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
   if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
-  const body = await request.json<ForkRequest>().catch(() => null);
+  const body = await readBoundedJson<ForkRequest>(request, 64 * 1024);
   if (!body || !valid(body)) return Response.json({ error: 'invalid_fork' }, { status: 422 });
   const source = await repositoryState(env, body.sourceRepositoryId).request<RepositorySnapshotResponse>('/snapshot');
   if (source.state.generation === 0) return new Response(null, { status: 201 });
@@ -38,7 +39,7 @@ export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
       ]);
       keys.push(copied.packKey, copied.indexKey, copied.objectIndexKey);
       const catalogObject = await env.REPOSITORIES.get(copied.objectIndexKey);
-      const objects = catalogObject ? await catalogObject.json<unknown[]>() : null;
+      const objects = catalogObject ? await readBoundedJsonBody<unknown[]>(catalogObject.body, 64 * 1024 * 1024) : null;
       if (!Array.isArray(objects)) throw new Error('Fork object catalog is missing.');
       catalogs.push({ packId: pack.id, objects });
       packs.push(copied);

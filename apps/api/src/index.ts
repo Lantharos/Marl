@@ -8,7 +8,7 @@ import type { Env } from './platform';
 import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositoryOverview, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, readRepositoryIcon, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings, uploadRepositoryIcon } from './repositories';
 import { addPullComment, addThreadComment, createPull, createPullLabel, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
 import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
-import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
+import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, hasRunnerCredential, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
 import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
 import { connectRunRealtime } from './run-realtime';
 import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
@@ -36,15 +36,34 @@ const worker = {
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/config') return json({ emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
     const gatewayTrusted = Boolean(_env.GIT_GATEWAY_TOKEN && request.headers.get('x-marl-gateway-token') === _env.GIT_GATEWAY_TOKEN);
-    const principal = await authenticate(request, _env);
-    const runner = await authenticateRunner(request, _env);
+    if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') return listPendingGitIndexes(_env);
+    if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
+    if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') return signingKeys(request, _env);
+    if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/git/index') return indexGit(request, _env, null, true);
+
+    const avatar = url.pathname.match(/^\/api\/v1\/avatars\/([^/]+)\/([^/]+)$/);
+    const organizationAvatar = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
+    const repositoryIcon = url.pathname.match(/^\/api\/v1\/repository-icons\/([^/]+)\/([^/]+)$/);
+    const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
+    const publicGet = request.method === 'GET' && (avatar || organizationAvatar || repositoryIcon || publicIdentity);
+    if (publicGet) {
+      const rate = await _env.RATE_LIMITER.limit({ key: request.headers.get('cf-connecting-ip') ?? 'anonymous' });
+      if (!rate.success) return problem(429, 'rate_limited', 'Too many requests. Try again shortly.');
+      if (avatar) return readAvatar(_env, avatar[1], avatar[2]);
+      if (organizationAvatar) return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
+      if (repositoryIcon) return readRepositoryIcon(_env, repositoryIcon[1], repositoryIcon[2]);
+      if (publicIdentity) return getPublicIdentityProfile(_env, decodeURIComponent(publicIdentity[1]));
+    }
+
+    const runnerCredential = hasRunnerCredential(request);
+    const runner = runnerCredential ? await authenticateRunner(request, _env) : null;
+    const principal = !runnerCredential || !runner || request.headers.has('cookie') ? await authenticate(request, _env) : null;
     if (!gatewayTrusted) {
       const rate = await _env.RATE_LIMITER.limit({ key: principal?.id ?? runner?.id ?? request.headers.get('cf-connecting-ip') ?? 'anonymous' });
       if (!rate.success) return problem(429, 'rate_limited', 'Too many requests. Try again shortly.');
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') {
-      if (!gatewayTrusted) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
-      return listPendingGitIndexes(_env);
+      return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     }
     if (request.method === 'POST' && url.pathname === '/api/v1/runner/register') return registerRunner(request, _env);
     if (runner && request.method === 'POST' && url.pathname === '/api/v1/runner/heartbeat') return heartbeatRunner(_env, runner);
@@ -75,17 +94,8 @@ const worker = {
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
     if (request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') {
-      if (!gatewayTrusted) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
-      return signingKeys(request, _env);
+      return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     }
-    const avatar = url.pathname.match(/^\/api\/v1\/avatars\/([^/]+)\/([^/]+)$/);
-    if (avatar && request.method === 'GET') return readAvatar(_env, avatar[1], avatar[2]);
-    const organizationAvatar = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
-    if (organizationAvatar && request.method === 'GET') return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
-    const repositoryIcon = url.pathname.match(/^\/api\/v1\/repository-icons\/([^/]+)\/([^/]+)$/);
-    if (repositoryIcon && request.method === 'GET') return readRepositoryIcon(_env, repositoryIcon[1], repositoryIcon[2]);
-    const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
-    if (publicIdentity && request.method === 'GET') return getPublicIdentityProfile(_env, decodeURIComponent(publicIdentity[1]));
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });

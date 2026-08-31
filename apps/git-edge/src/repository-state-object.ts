@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { readBoundedJson, readBoundedText } from './bounded-body';
 import { RepositoryStateStore } from './repository-state-store';
 import { abortPush, beginPush, proposePushRefs, publish, type RepositoryState } from './storage-model';
 import { parseStateBody, stateFailure, stateResponse, trusted, type StateEnv } from './state-http';
@@ -27,7 +28,8 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
         return locator ? stateResponse({ locator }) : stateResponse({ error: 'object_not_found' }, 404);
       }
       if (request.method === 'POST' && path === '/catalog') {
-        const body = await request.json<{ packId?: unknown; objects?: unknown }>();
+        const body = await readBoundedJson<{ packId?: unknown; objects?: unknown }>(request, 1024 * 1024);
+        if (!body || typeof body !== 'object') return stateResponse({ error: 'invalid_catalog' }, 422);
         if (typeof body.packId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.packId) || !Array.isArray(body.objects) || body.objects.length > 500) return stateResponse({ error: 'invalid_catalog' }, 422);
         const objects = body.objects.filter((value): value is { id: string; kind: string; size: number; packedBytes: number; offset: number } => {
           if (!value || typeof value !== 'object') return false;
@@ -155,7 +157,8 @@ async function verifyRepositoryIntegrity(bucket: R2Bucket, state: RepositoryStat
   if (!state.manifestKey || !state.manifestHash) throw new Error('Published repository state has no manifest.');
   const manifestObject = await bucket.get(state.manifestKey);
   if (!manifestObject) throw new Error(`Repository manifest ${state.manifestKey} is missing.`);
-  const manifest = await manifestObject.text();
+  const manifest = await readBoundedText(manifestObject.body, 16 * 1024 * 1024);
+  if (!manifest) throw new Error(`Repository manifest ${state.manifestKey} is empty or too large.`);
   if (await sha256(manifest) !== state.manifestHash) throw new Error(`Repository manifest ${state.manifestKey} is corrupt.`);
   const expected = JSON.stringify({ generation: state.generation, refsVersion: state.refsVersion, refs: state.refs, packs: state.packs });
   if (manifest !== expected) throw new Error(`Repository manifest ${state.manifestKey} disagrees with repository state.`);

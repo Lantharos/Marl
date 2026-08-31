@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+
   let { open, title, description, children, actions, onClose } = $props<{
     open?: boolean;
     title: string;
@@ -7,17 +9,60 @@
     actions: import('svelte').Snippet;
     onClose: () => void;
   }>();
+  const id = $props.id();
+  const titleId = `${id}-title`;
+  const descriptionId = `${id}-description`;
+  let modal = $state<HTMLDivElement>();
+
+  function focusableElements() {
+    if (!modal) return [];
+    return [...modal.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true');
+  }
 
   function keydown(event: KeyboardEvent) {
-    if (open && event.key === 'Escape') onClose();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = focusableElements();
+    if (!focusable.length) {
+      event.preventDefault();
+      modal?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && (document.activeElement === first || !modal?.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
+
+  $effect(() => {
+    if (!open) return;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    let cancelled = false;
+    void tick().then(() => {
+      if (cancelled) return;
+      (focusableElements()[0] ?? modal)?.focus();
+    });
+    return () => {
+      cancelled = true;
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
+  });
 </script>
 
-<svelte:window onkeydown={keydown} />
 {#if open}
   <div class="modal-layer" role="presentation" onclick={(event) => event.target === event.currentTarget && onClose()}>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-      <header><h2 id="modal-title">{title}</h2>{#if description}<p>{description}</p>{/if}</header>
+    <div bind:this={modal} class="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} tabindex="-1" onkeydown={keydown}>
+      <header><h2 id={titleId}>{title}</h2>{#if description}<p id={descriptionId}>{description}</p>{/if}</header>
       <div class="content">{@render children()}</div>
       <footer>{@render actions()}</footer>
     </div>

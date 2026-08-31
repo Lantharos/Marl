@@ -10,5 +10,5 @@
 </header>
 
 <style>
-  .page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px}h1{margin:0;color:var(--text-strong);font-size:28px;font-weight:660;letter-spacing:-.035em;line-height:1.1}p{margin:8px 0 0;color:var(--text-muted);font-size:14px}@media(max-width:600px){.page-header{align-items:flex-start}.page-header :global(.link-button){display:none}h1{font-size:24px}}
+  .page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px}.page-header>div{min-width:0}h1{margin:0;color:var(--text-strong);font-size:28px;font-weight:660;letter-spacing:-.035em;line-height:1.1}p{margin:8px 0 0;color:var(--text-muted);font-size:14px}@media(max-width:600px){.page-header{align-items:flex-start;flex-wrap:wrap;gap:14px}.page-header>div{flex:1 1 180px}.page-header :global(.link-button){flex:0 0 auto}h1{font-size:24px}}
 </style>

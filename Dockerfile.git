@@ -5,10 +5,14 @@ COPY crates ./crates
 RUN cargo build --locked --release -p git
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git \
+    && useradd --system --uid 10001 --home-dir /var/lib/marl --create-home --shell /usr/sbin/nologin marl \
+    && install -d -o marl -g marl /var/lib/marl/repositories \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /build/target/release/git-gateway /usr/local/bin/git-gateway
 ENV MARL_GIT_LISTEN=0.0.0.0:8788
 ENV MARL_GIT_ROOT=/var/lib/marl/repositories
 ENV MARL_GIT_LOCAL=0
 EXPOSE 8788
+USER marl
 ENTRYPOINT ["/usr/local/bin/git-gateway"]

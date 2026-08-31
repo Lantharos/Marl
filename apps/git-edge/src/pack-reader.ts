@@ -1,3 +1,4 @@
+import { readBoundedBody, readBoundedJsonBody } from './bounded-body';
 import type { GitEdgeEnv } from './env';
 import { repositoryState, StateRequestError, type RepositorySnapshotResponse } from './state-client';
 import type { CatalogObject } from './repository-state-store';
@@ -29,7 +30,7 @@ async function repairCatalog(env: GitEdgeEnv, state: ReturnType<typeof repositor
     if (count?.catalogCount === pack.objectCount) continue;
     const stored = await env.REPOSITORIES.get(pack.objectIndexKey);
     if (!stored) throw new Error(`Canonical object index ${pack.id} is missing.`);
-    const objects = await stored.json<CatalogObject[]>();
+    const objects = await readBoundedJsonBody<CatalogObject[]>(stored.body, 64 * 1024 * 1024);
     if (!Array.isArray(objects) || objects.length !== pack.objectCount) throw new Error(`Canonical object index ${pack.id} is invalid.`);
     for (let offset = 0; offset < objects.length; offset += 500) await state.request('/catalog', { packId: pack.id, objects: objects.slice(offset, offset + 500) });
   }
@@ -40,7 +41,9 @@ async function unpack(env: GitEdgeEnv, state: ReturnType<typeof repositoryState>
   visiting.add(`${locator.packId}:${locator.offset}`);
   const stored = await env.REPOSITORIES.get(locator.packKey, { range: { offset: locator.offset, length: locator.packedBytes } });
   if (!stored) throw new Error(`Git pack ${locator.packId} is missing.`);
-  const packed = new Uint8Array(await stored.arrayBuffer());
+  const packedBytes = await readBoundedBody(stored.body, locator.packedBytes);
+  if (!packedBytes || packedBytes.byteLength !== locator.packedBytes) throw new Error(`Git object ${locator.id} has invalid packed bounds.`);
+  const packed = new Uint8Array(packedBytes);
   const header = parseHeader(packed);
   let base: PackedObject | null = null;
   let contentOffset = header.bytes;
@@ -59,7 +62,7 @@ async function unpack(env: GitEdgeEnv, state: ReturnType<typeof repositoryState>
     const found = await state.request<{ locator: Locator }>(`/objects/${baseId}`);
     base = await unpack(env, state, found.locator, visiting, depth + 1);
   }
-  const inflated = await inflate(packed.subarray(contentOffset));
+  const inflated = await inflate(packed.subarray(contentOffset), header.size);
   const bytes = base ? applyDelta(base.bytes, inflated) : inflated;
   if (bytes.byteLength !== locator.size) throw new Error(`Git object ${locator.id} expanded to an unexpected size.`);
   visiting.delete(`${locator.packId}:${locator.offset}`);
@@ -95,9 +98,11 @@ function parseOffsetDistance(bytes: Uint8Array, start: number) {
   return { value, bytes: offset - start };
 }
 
-async function inflate(bytes: Uint8Array) {
+async function inflate(bytes: Uint8Array, expectedBytes: number) {
   const stream = new Blob([new Uint8Array(bytes).buffer]).stream().pipeThrough(new DecompressionStream('deflate'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const inflated = await readBoundedBody(stream, expectedBytes);
+  if (!inflated || inflated.byteLength !== expectedBytes) throw new Error('Git object expands beyond its declared size.');
+  return new Uint8Array(inflated);
 }
 
 function applyDelta(base: Uint8Array, delta: Uint8Array) {

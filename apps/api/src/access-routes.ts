@@ -27,7 +27,7 @@ export async function handleAccessRoute(request: Request, env: Env, principal: P
   if (organizationAvatar && request.method === 'PUT') return uploadOrganizationAvatar(request, env, principal, decodeURIComponent(organizationAvatar[1]));
 
   const invitationAccept = url.pathname.match(/^\/api\/v1\/invitations\/([^/]+)\/accept$/);
-  if (invitationAccept && request.method === 'POST') return acceptOrganizationInvitation(request, env, principal, invitationAccept[1]);
+  if (invitationAccept && request.method === 'POST') return acceptOrganizationInvitation(env, principal, invitationAccept[1]);
 
   const organizationAccess = url.pathname.match(/^\/api\/v1\/organizations\/([^/]+)\/access(?:\/(invitations|members|teams)(?:\/([^/]+))?(?:\/members(?:\/([^/]+))?)?)?$/);
   if (organizationAccess) {
@@ -42,7 +42,7 @@ export async function handleAccessRoute(request: Request, env: Env, principal: P
     if (kind === 'members' && subject && request.method === 'DELETE') return removeOrganizationMember(request, env, principal, slug, subject);
     if (kind === 'teams' && !subject && request.method === 'POST') return createTeam(request, env, principal, slug);
     if (kind === 'teams' && subject && !teamMember && url.pathname.endsWith('/members') && request.method === 'POST') return addTeamMember(request, env, principal, slug, subject);
-    if (kind === 'teams' && subject && teamMember && request.method === 'DELETE') return removeTeamMember(request, env, principal, slug, subject, teamMember);
+    if (kind === 'teams' && subject && teamMember && request.method === 'DELETE') return removeTeamMember(env, principal, slug, subject, teamMember);
     if (kind === 'teams' && subject && !teamMember && request.method === 'DELETE') return deleteTeam(request, env, principal, slug, subject);
   }
 

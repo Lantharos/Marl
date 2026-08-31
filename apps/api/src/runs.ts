@@ -1,4 +1,5 @@
 import type { Principal } from './auth';
+import { workflowCheckName } from './check-provenance';
 import { identifier } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
 import { json, problem } from './http';
@@ -11,7 +12,7 @@ type Repository = { id: string; organizationId: string; owner: string; name: str
 export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
 export type RunService = { name: string; image: string; environment: Record<string, string> };
 export type RunJob = { key: string; name: string; labels: string[]; needs: string[]; steps: RunStep[]; environment: Record<string, string>; artifacts: string[]; runtime: { image: string; timeoutMinutes: number; services: RunService[] } };
-type QueueRun = { repositoryId: string; workflowId?: string; name: string; trigger: 'workflow_dispatch' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[]; supersede?: boolean };
+type QueueRun = { repositoryId: string; workflowId: string; name: string; trigger: 'workflow_dispatch' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[]; supersede?: boolean };
 export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
 async function repository(env: Env, principal: Principal, owner: string, name: string, capability: RepositoryCapability = 'repository.read'): Promise<Repository | null> {
@@ -128,15 +129,15 @@ export async function queueRun(env: Env, input: QueueRun): Promise<Record<string
   const statements = supersede ? [
     env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE state='queued' AND run_id IN (SELECT id FROM runs WHERE repository_id=? AND workflow_id=? AND branch=? AND trigger_name='push' AND state IN ('queued','running'))`).bind(input.repositoryId, input.workflowId, input.branch),
     env.DB.prepare(`UPDATE jobs SET cancel_requested=1 WHERE state='running' AND run_id IN (SELECT id FROM runs WHERE repository_id=? AND workflow_id=? AND branch=? AND trigger_name='push' AND state IN ('queued','running'))`).bind(input.repositoryId, input.workflowId, input.branch),
-    env.DB.prepare(`UPDATE checks SET state='canceled',summary='Superseded by a newer push.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND EXISTS (SELECT 1 FROM runs JOIN jobs ON jobs.run_id=runs.id WHERE runs.repository_id=? AND runs.workflow_id=? AND runs.branch=? AND runs.trigger_name='push' AND runs.state IN ('queued','running') AND runs.commit_id=checks.commit_id AND jobs.check_name=checks.name)`).bind(input.repositoryId, input.repositoryId, input.workflowId, input.branch),
+    env.DB.prepare(`UPDATE checks SET state='canceled',summary='Superseded by a newer push.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND producer_repository_id=? AND producer_workflow_id=? AND EXISTS (SELECT 1 FROM runs JOIN jobs ON jobs.run_id=runs.id WHERE runs.repository_id=? AND runs.workflow_id=? AND runs.branch=? AND runs.trigger_name='push' AND runs.state IN ('queued','running') AND runs.commit_id=checks.commit_id AND jobs.job_key=checks.producer_job_key)`).bind(input.repositoryId, input.repositoryId, input.workflowId, input.repositoryId, input.workflowId, input.branch),
     env.DB.prepare(`UPDATE runs SET state='canceled',cancellation_reason='superseded',completed_at=CURRENT_TIMESTAMP WHERE repository_id=? AND workflow_id=? AND branch=? AND trigger_name='push' AND state IN ('queued','running') RETURNING commit_id AS commitId`).bind(input.repositoryId, input.workflowId, input.branch)
   ] : [];
   const supersededResultIndex = statements.length - 1;
-  statements.push(env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM runs WHERE repository_id=?`).bind(runId, input.repositoryId, input.workflowId ?? null, input.name, input.trigger, input.branch, input.commitId, input.actorId, input.repositoryId));
+  statements.push(env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM runs WHERE repository_id=?`).bind(runId, input.repositoryId, input.workflowId, input.name, input.trigger, input.branch, input.commitId, input.actorId, input.repositoryId));
   for (const job of input.jobs) {
-    const checkName = `${input.name} / ${job.name}`.slice(0, 240);
+    const checkName = workflowCheckName(input.name, job.name);
     statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), runId, job.key, job.name, checkName, JSON.stringify(job.labels), JSON.stringify(job.steps), JSON.stringify(job.environment), JSON.stringify(job.artifacts), JSON.stringify(job.runtime), JSON.stringify(job.needs)));
-    statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), input.repositoryId, input.commitId, checkName, 'queued'));
+    statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key,name,state,summary) VALUES (?,?,?,?,?,?,?,?, 'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key) DO UPDATE SET name=excluded.name,state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), input.repositoryId, input.commitId, input.repositoryId, input.workflowId, job.key, checkName, 'queued'));
   }
   const results = await env.DB.batch(statements);
   const supersededCommits = supersede
@@ -180,7 +181,7 @@ export async function cancelRun(env: Env, principal: Principal, owner: string, n
   await env.DB.batch([
     env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE run_id=? AND state='queued'`).bind(run.id),
     env.DB.prepare(`UPDATE jobs SET cancel_requested=1 WHERE run_id=? AND state='running'`).bind(run.id),
-    env.DB.prepare(`UPDATE checks SET state='canceled',summary='Canceled by a developer.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND commit_id=(SELECT commit_id FROM runs WHERE id=?) AND name IN (SELECT check_name FROM jobs WHERE run_id=?)`).bind(repo.id, run.id, run.id),
+    env.DB.prepare(`UPDATE checks SET state='canceled',summary='Canceled by a developer.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id IN (SELECT job_checks.id FROM checks AS job_checks JOIN runs ON runs.id=? JOIN jobs ON jobs.run_id=runs.id WHERE job_checks.repository_id=runs.repository_id AND job_checks.commit_id=runs.commit_id AND job_checks.producer_repository_id=runs.repository_id AND job_checks.producer_workflow_id=runs.workflow_id AND job_checks.producer_job_key=jobs.job_key)`).bind(run.id),
     env.DB.prepare(`UPDATE runs SET state='canceled',cancellation_reason='developer',completed_at=CURRENT_TIMESTAMP WHERE id=?`).bind(run.id)
   ]);
   await notifyPullsForCommit(env, repo.id, run.commitId);
@@ -190,14 +191,14 @@ export async function cancelRun(env: Env, principal: Principal, owner: string, n
 export async function retryRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   const repo = await repository(env, principal, owner, name, 'repository.push');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const previous = await env.DB.prepare(`SELECT id,workflow_id AS workflowId,name,branch,commit_id AS commitId FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; workflowId?: string; name: string; branch: string; commitId: string }>();
+  const previous = await env.DB.prepare(`SELECT id,workflow_id AS workflowId,name,branch,commit_id AS commitId FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; workflowId: string; name: string; branch: string; commitId: string }>();
   if (!previous) return problem(409, 'run_not_retryable', 'This run cannot be retried yet.');
   const jobs = await env.DB.prepare(`SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson,runtime_json AS runtimeJson,needs_json AS needsJson FROM jobs WHERE run_id=? ORDER BY created_at`).bind(previous.id).all<{ jobKey: string; name: string; checkName: string; labelsJson: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; needsJson: string }>();
   const id = identifier('run');
-  const statements = [env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,'retry',?,?,? FROM runs WHERE repository_id=?`).bind(id, repo.id, previous.workflowId ?? null, previous.name, previous.branch, previous.commitId, principal.id, repo.id)];
+  const statements = [env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,'retry',?,?,? FROM runs WHERE repository_id=?`).bind(id, repo.id, previous.workflowId, previous.name, previous.branch, previous.commitId, principal.id, repo.id)];
   for (const job of jobs.results) {
     statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), id, job.jobKey, job.name, job.checkName, job.labelsJson, job.stepsJson, job.environmentJson, job.artifactPathsJson, job.runtimeJson, job.needsJson));
-    statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,name,state,summary) VALUES (?,?,?,?,?,'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,name) DO UPDATE SET state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), repo.id, previous.commitId, job.checkName, 'queued'));
+    statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key,name,state,summary) VALUES (?,?,?,?,?,?,?,?, 'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key) DO UPDATE SET name=excluded.name,state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), repo.id, previous.commitId, repo.id, previous.workflowId, job.jobKey, job.checkName, 'queued'));
   }
   await env.DB.batch(statements);
   await notifyPullsForCommit(env, repo.id, previous.commitId);
@@ -218,7 +219,7 @@ export async function readJobLogs(env: Env, principal: Principal, jobId: string,
   }));
   if (streams.some((stream) => stream === null)) return problem(502, 'log_chunk_missing', 'One or more persisted log chunks are unavailable.');
   const cursor = visible.at(-1)?.sequence ?? after;
-  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-marl-log-cursor': String(cursor), 'x-marl-log-more': String(chunks.results.length > visible.length) } });
+  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'x-marl-log-cursor': String(cursor), 'x-marl-log-more': String(chunks.results.length > visible.length) } });
 }
 
 export async function downloadArtifact(env: Env, principal: Principal, artifactId: string): Promise<Response> {
@@ -226,5 +227,5 @@ export async function downloadArtifact(env: Env, principal: Principal, artifactI
   if (!artifact || !(await authorizeRepositoryId(env, principal, artifact.repositoryId, 'repository.read'))) return problem(404, 'artifact_not_found', 'Artifact not found.');
   const object = await env.OBJECTS.get(artifact.objectKey);
   if (!object) return problem(502, 'artifact_missing', 'Artifact bytes are missing.');
-  return new Response(object.body, { headers: { 'content-type': artifact.contentType, 'content-disposition': `attachment; filename="${artifact.name.replaceAll('"', '')}"`, 'content-length': String(object.size) } });
+  return new Response(object.body, { headers: { 'content-type': artifact.contentType, 'content-disposition': `attachment; filename="${artifact.name.replaceAll('"', '')}"`, 'content-length': String(object.size), 'x-content-type-options': 'nosniff' } });
 }

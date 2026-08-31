@@ -1,5 +1,6 @@
 import { Container, ContainerProxy, getContainer } from '@cloudflare/containers';
 import { authorizeGit, AuthorizationError } from './authorization';
+import { readBoundedJson } from './bounded-body';
 import { handleCompatibilityPush } from './compatibility';
 import type { GitEdgeEnv } from './env';
 import { hydrateRepository } from './hydration';
@@ -12,7 +13,7 @@ export { UploadSessionObject } from './upload-session-object';
 export { CompactionObject } from './compaction';
 export { RepositoryIndexObject } from './indexing';
 
-type RepositoryRoute = { owner: string; repository: string; writes: boolean };
+type RepositoryRoute = { owner: string; repository: string; writes: boolean; body?: Record<string, unknown> };
 
 const INTERNAL_REPOSITORY_ROUTES = new Set([
   '/_marl/blob',
@@ -45,14 +46,16 @@ export { ContainerProxy };
 export default {
   async fetch(request: Request, env: GitEdgeEnv): Promise<Response> {
     try {
-      if (new URL(request.url).pathname === '/_marl/repositories/relocate' && request.method === 'POST') {
+      const path = new URL(request.url).pathname;
+      if (path.startsWith('/_marl/') && request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+      if (path === '/_marl/repositories/relocate' && request.method === 'POST') {
         return new Response(null, { status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404 });
       }
-      if (new URL(request.url).pathname === '/_marl/repositories/fork' && request.method === 'POST') return forkRepositoryStorage(request, env);
-      if (new URL(request.url).pathname === '/_marl/object' && request.method === 'POST') {
+      if (path === '/_marl/repositories/fork' && request.method === 'POST') return forkRepositoryStorage(request, env);
+      if (path === '/_marl/object' && request.method === 'POST') {
         if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
-        const body = await request.json<{ repositoryId?: unknown; objectId?: unknown }>().catch(() => null);
-        if (!body || typeof body.repositoryId !== 'string' || typeof body.objectId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.objectId)) return new Response(null, { status: 422 });
+        const body = await readBoundedJson<{ repositoryId?: unknown; objectId?: unknown }>(request, 64 * 1024);
+        if (!body || typeof body !== 'object' || typeof body.repositoryId !== 'string' || typeof body.objectId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.objectId)) return new Response(null, { status: 422 });
         const object = await readPackedObject(env, body.repositoryId, body.objectId);
         return new Response(new Uint8Array(object.bytes).buffer, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(object.bytes.byteLength), 'x-marl-git-object-type': object.kind, 'cache-control': 'private, max-age=31536000, immutable' } });
       }
@@ -62,11 +65,12 @@ export default {
       if (!route) return new Response('Repository not found\n', { status: 404 });
       const authorization = await authorizeGit(request, env, route.owner, route.repository, route.writes ? 'git-receive-pack' : 'git-upload-pack');
       const container = getContainer(env.GIT_CONTAINERS, authorization.storageKey);
-      if (new URL(request.url).pathname === '/_marl/compare' || new URL(request.url).pathname === '/_marl/pulls/pin') {
-        const body = await request.clone().json<{ sourceOwner?: unknown; sourceRepository?: unknown; sourceRepositoryId?: unknown }>().catch(() => null);
+      if (path === '/_marl/compare' || path === '/_marl/pulls/pin') {
+        const body = route.body;
         if (body && typeof body.sourceOwner === 'string' && typeof body.sourceRepository === 'string' && typeof body.sourceRepositoryId === 'string' && safeSegment(body.sourceOwner) && safeSegment(body.sourceRepository)) await hydrateRepository(container, env, body.sourceOwner, body.sourceRepository, body.sourceRepositoryId);
       }
-      if (route.writes) return handleCompatibilityPush(request, container, env, route.owner, route.repository);
+      const internalActorId = typeof route.body?.actorId === 'string' && route.body.actorId.length > 0 && route.body.actorId.length <= 200 ? route.body.actorId : undefined;
+      if (route.writes) return handleCompatibilityPush(request, container, env, authorization, route.owner, route.repository, internalActorId);
       await hydrateRepository(container, env, route.owner, route.repository, authorization.storageKey);
       return container.fetch(request);
     } catch (error) {
@@ -85,9 +89,9 @@ async function repositoryRoute(request: Request): Promise<RepositoryRoute | null
   const url = new URL(request.url);
   if (url.pathname.startsWith('/_marl/')) {
     if (request.method !== 'POST' || !INTERNAL_REPOSITORY_ROUTES.has(url.pathname)) return null;
-    const body = await request.clone().json<Record<string, unknown>>().catch(() => null);
-    if (!body || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
-    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin' };
+    const body = await readBoundedJson<Record<string, unknown>>(request.clone(), 1024 * 1024);
+    if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
+    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin', body };
   }
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\.git\//);
   if (!match || !safeSegment(match[1]) || !safeSegment(match[2])) return null;

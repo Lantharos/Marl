@@ -9,7 +9,7 @@ const mergeMethod = picklist(['merge', 'squash', 'rebase']);
 export const branchRuleBody = strictObject({
   pattern: branch,
   requiredApprovals: pipe(number(), integer(), minValue(0), maxValue(10)),
-  requiredChecks: pipe(array(pipe(string(), minLength(1), maxLength(160))), maxLength(32)),
+  requiredChecks: pipe(array(pipe(string(), minLength(1), maxLength(240))), maxLength(32)),
   requireConversations: boolean(),
   dismissStaleReviews: boolean(),
   allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3))

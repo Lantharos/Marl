@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
@@ -14,16 +14,18 @@
   import PageHeader from '$lib/components/PageHeader.svelte';
   import Time from '$lib/components/Time.svelte';
   import type { PageData } from './$types';
-  import { api } from '$lib/api';
+  import { api, MarlApiError } from '$lib/api';
 
   let { data } = $props<{ data: PageData }>();
-  let items = $state<PullRequestSummary[]>(untrack(() => data.pullRequests));
+  let items = $state.raw<PullRequestSummary[]>(untrack(() => data.pullRequests));
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let query = $state(untrack(() => data.query));
   let activeFilter = $state(untrack(() => data.state[0].toUpperCase() + data.state.slice(1)));
   let selectedLabels = $state<string[]>(untrack(() => data.labels));
   let loadingMore = $state(false);
+  let loadError = $state('');
   let queryTimer: ReturnType<typeof setTimeout> | undefined;
+  let listGeneration = 0;
 
   $effect(() => {
     items = [...data.pullRequests];
@@ -31,6 +33,10 @@
     query = data.query;
     activeFilter = data.state[0].toUpperCase() + data.state.slice(1);
     selectedLabels = [...data.labels];
+    loadingMore = false;
+    loadError = '';
+    listGeneration += 1;
+    clearTimeout(queryTimer);
   });
 
   function navigate(state = activeFilter, value = query, labels = selectedLabels) {
@@ -48,15 +54,26 @@
 
   async function loadMore() {
     if (!nextCursor || loadingMore) return;
+    const generation = listGeneration;
+    const cursor = nextCursor;
     loadingMore = true;
-    const params = new URLSearchParams({ limit: '30', state: activeFilter.toLowerCase(), cursor: nextCursor });
-    if (query.trim()) params.set('q', query.trim());
-    for (const label of selectedLabels) params.append('label', label);
-    const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(`/pulls?${params}`);
-    items = [...items, ...result.pullRequests];
-    nextCursor = result.nextCursor;
-    loadingMore = false;
+    loadError = '';
+    try {
+      const params = new URLSearchParams({ limit: '30', state: activeFilter.toLowerCase(), cursor });
+      if (query.trim()) params.set('q', query.trim());
+      for (const label of selectedLabels) params.append('label', label);
+      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(`/pulls?${params}`);
+      if (generation !== listGeneration) return;
+      const ids = new Set(items.map((pull) => pull.id));
+      items = [...items, ...result.pullRequests.filter((pull) => !ids.has(pull.id))];
+      nextCursor = result.nextCursor;
+    } catch (cause) {
+      if (generation === listGeneration) loadError = cause instanceof MarlApiError ? cause.message : 'More pull requests could not be loaded.';
+    } finally {
+      if (generation === listGeneration) loadingMore = false;
+    }
   }
+  onDestroy(() => clearTimeout(queryTimer));
 </script>
 
 <svelte:head><title>Pull requests · Marl</title></svelte:head>
@@ -72,9 +89,10 @@
       </article>
     {:else}<div class="empty"><GitPullRequest size={24} /><strong>{query ? 'No matching pull requests' : `No ${activeFilter.toLowerCase()} pull requests`}</strong><p>{query ? 'Try a different title, branch, author, or repository.' : activeFilter === 'Open' ? 'Create a pull request when a branch is ready for review.' : `Pull requests will appear here after they are ${activeFilter.toLowerCase()}.`}</p>{#if !query && activeFilter === 'Open'}<a href="/pulls/new">New pull request</a>{/if}</div>{/each}
   </section>
+  {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}
   {#if nextCursor}<Button class="load-more" loading={loadingMore} onclick={loadMore}>Load more</Button>{/if}
 </main>
 
 <style>
-  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.list{display:grid;gap:4px}.empty{padding:70px 20px;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:10px;color:var(--text-strong);font-size:15px}.empty p{margin:7px auto 0;max-width:420px;font-size:12px}.empty a{display:inline-flex;margin-top:16px;color:var(--brand-strong);font-size:12px;text-decoration:none}.row{position:relative;display:grid;grid-template-columns:36px minmax(0,1fr) 140px;align-items:center;gap:12px;min-height:84px;padding:11px 12px;border-radius:8px;color:inherit;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--brand-soft);color:var(--brand)}.state.blocked,.state.closed{background:var(--danger-soft);color:var(--danger)}.state.ready{background:var(--success-soft);color:var(--success)}.state.merged{background:color-mix(in srgb,#8b5cf6 18%,transparent);color:#a78bfa}.main{min-width:0}.title-line{display:flex;min-width:0;align-items:center;gap:6px}.main .title-link,.main>small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main .title-link{min-width:0;color:var(--text-strong);font-size:13px;font-weight:640;text-decoration:none}.main .title-link::after{position:absolute;z-index:0;inset:0;content:''}.main>small{margin-top:4px;color:var(--text-muted);font-size:10px}.main .author-link{position:relative;z-index:1;color:var(--text-strong);text-decoration:none}.main .author-link:hover{color:var(--brand)}.labels{position:relative;z-index:1;display:flex;min-width:0;align-items:center;gap:5px;overflow:hidden}.details{display:flex;min-width:0;align-items:center;gap:6px;margin-top:6px}.main code{display:flex;align-items:center;gap:5px;color:var(--text-muted);font-size:9px;white-space:nowrap}.label{flex:none;padding:3px 6px;border-radius:999px;background:color-mix(in srgb,var(--label-color) 14%,transparent);color:var(--label-color);font-size:8px;font-weight:650}.more-labels{flex:none;color:var(--text-faint);font-size:8px}.review,.checks{display:inline-flex;align-items:center;gap:5px;color:var(--text-muted);font-size:10px;font-weight:580}.checks{color:var(--success);font-size:9px;white-space:nowrap}.checks.failed{color:var(--danger)}.checks.running{color:var(--warning)}.checks.empty-checks{color:var(--text-muted)}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:760px){.page{width:calc(100% - 28px);padding-top:28px}.row{grid-template-columns:36px minmax(0,1fr);padding-inline:6px}.review{display:none}.labels{display:none}}
+  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.list{display:grid;gap:4px}.empty{padding:70px 20px;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:10px;color:var(--text-strong);font-size:15px}.empty p{margin:7px auto 0;max-width:420px;font-size:12px}.empty a{display:inline-flex;margin-top:16px;color:var(--brand-strong);font-size:12px;text-decoration:none}.row{position:relative;display:grid;grid-template-columns:36px minmax(0,1fr) 140px;align-items:center;gap:12px;min-height:84px;padding:11px 12px;border-radius:8px;color:inherit;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--brand-soft);color:var(--brand)}.state.blocked,.state.closed{background:var(--danger-soft);color:var(--danger)}.state.ready{background:var(--success-soft);color:var(--success)}.state.merged{background:color-mix(in srgb,#8b5cf6 18%,transparent);color:#a78bfa}.main{min-width:0}.title-line{display:flex;min-width:0;align-items:center;gap:6px}.main .title-link,.main>small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main .title-link{min-width:0;color:var(--text-strong);font-size:13px;font-weight:640;text-decoration:none}.main .title-link::after{position:absolute;z-index:0;inset:0;content:''}.main>small{margin-top:4px;color:var(--text-muted);font-size:10px}.main .author-link{position:relative;z-index:1;color:var(--text-strong);text-decoration:none}.main .author-link:hover{color:var(--brand)}.labels{position:relative;z-index:1;display:flex;min-width:0;align-items:center;gap:5px;overflow:hidden}.details{display:flex;min-width:0;align-items:center;gap:6px;margin-top:6px}.main code{display:flex;align-items:center;gap:5px;color:var(--text-muted);font-size:9px;white-space:nowrap}.label{flex:none;padding:3px 6px;border-radius:999px;background:color-mix(in srgb,var(--label-color) 14%,transparent);color:var(--label-color);font-size:8px;font-weight:650}.more-labels{flex:none;color:var(--text-faint);font-size:8px}.review,.checks{display:inline-flex;align-items:center;gap:5px;color:var(--text-muted);font-size:10px;font-weight:580}.checks{color:var(--success);font-size:9px;white-space:nowrap}.checks.failed{color:var(--danger)}.checks.running{color:var(--warning)}.checks.empty-checks{color:var(--text-muted)}.load-error{margin:16px 0 0;color:var(--danger);font-size:10px;text-align:center}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:760px){.page{width:calc(100% - 28px);padding-top:28px}.row{grid-template-columns:36px minmax(0,1fr);padding-inline:6px}.review{display:none}.labels{display:none}}
 </style>

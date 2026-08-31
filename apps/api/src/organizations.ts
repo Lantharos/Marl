@@ -131,7 +131,7 @@ export async function inviteOrganizationMember(request: Request, env: Env, princ
   return json({ invitation: { id: invitationId, email: body.email.toLowerCase(), role: body.role, expiresAt } }, { status: 201 });
 }
 
-export async function acceptOrganizationInvitation(request: Request, env: Env, principal: Principal, token: string) {
+export async function acceptOrganizationInvitation(env: Env, principal: Principal, token: string) {
   const invitation = await env.DB.prepare(`SELECT organization_invitations.id,organization_invitations.organization_id AS organizationId,organization_invitations.email,organization_invitations.role,organizations.slug,organizations.name FROM organization_invitations JOIN organizations ON organizations.id=organization_invitations.organization_id WHERE token_hash=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>CURRENT_TIMESTAMP`).bind(await sha256(token)).first<{ id: string; organizationId: string; email: string; role: 'admin' | 'member'; slug: string; name: string }>();
   if (!invitation) return problem(404, 'invitation_not_found', 'This invitation is invalid or expired.');
   if (!principal.email || principal.email.toLowerCase() !== invitation.email.toLowerCase()) return problem(403, 'invitation_email_mismatch', 'Sign in with the email address that received this invitation.');
@@ -206,7 +206,7 @@ export async function addTeamMember(request: Request, env: Env, principal: Princ
   return json({ added: true });
 }
 
-export async function removeTeamMember(request: Request, env: Env, principal: Principal, slug: string, teamId: string, userId: string) {
+export async function removeTeamMember(env: Env, principal: Principal, slug: string, teamId: string, userId: string) {
   const organization = await organizationBySlug(env, slug);
   if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'admin'))) return problem(404, 'organization_not_found', 'Organization not found.');
   await env.DB.batch([

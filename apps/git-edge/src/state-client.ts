@@ -1,3 +1,4 @@
+import { readBoundedJson } from './bounded-body';
 import type { GitEdgeEnv } from './env';
 import type { OrganizationQuotaState, RepositoryState } from './storage-model';
 import type { UploadSession } from './upload-model';
@@ -23,7 +24,7 @@ export class StateClient {
       headers: { 'content-type': 'application/json', 'x-marl-storage-token': this.env.MARL_GIT_GATEWAY_TOKEN },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
-    const value: Record<string, unknown> = await response.json<Record<string, unknown>>().catch(() => ({}));
+    const value = await readBoundedJson<Record<string, unknown>>(response, 16 * 1024 * 1024) ?? {};
     if (!response.ok) throw new StateRequestError(response.status, String(value.error ?? 'state_request_failed'), String(value.detail ?? 'Repository state request failed.'));
     return value as T;
   }

@@ -5,7 +5,7 @@ import { identifier, safeRepositoryPath, validBranchName } from './domain';
 import { pinPullRefs, requestGatewayWrite } from './git-writes';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
-import { canManageRepository as membership, createPullEvent, latestReviews, preservePullRefs, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, type PullRow } from './pull-context';
+import { canManageRepository as membership, canMergeRepository, createPullEvent, preservePullRefs, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
 import { commitPullUpdate } from './pull-realtime';
 import { commentBody, createPullBody, createPullLabelBody, mergeBody, pullMetadataBody, resolveThreadBody, reviewBody, reviewThreadBody, updatePullBody } from './request-schemas';
@@ -385,7 +385,7 @@ export async function reviewPull(request: Request, env: Env, principal: Principa
 
 export async function mergePull(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
   const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository || !(await canMergeRepository(env, principal, repository))) return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id = ? AND pull_requests.number = ?`).bind(repository.id, number).first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   if (pull.state === 'merged' && pull.mergedCommitId) return json({ merged: true, commitId: pull.mergedCommitId });
@@ -396,7 +396,7 @@ export async function mergePull(request: Request, env: Env, principal: Principal
   const [source, target, checks, reviews, unresolvedThreads] = await Promise.all([
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch).first<{ commitId: string }>(),
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?').bind(repository.id, pull.targetBranch).first<{ commitId: string }>(),
-    env.DB.prepare('SELECT name,state FROM checks WHERE repository_id = ? AND commit_id = ?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId).all<{ name: string; state: string }>(),
+    env.DB.prepare('SELECT name,state,producer_workflow_id AS workflowId,producer_job_key AS jobKey FROM checks WHERE repository_id=? AND commit_id=? AND producer_repository_id=?').bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, repository.id).all<{ name: string; state: string; workflowId: string; jobKey: string }>(),
     env.DB.prepare(`SELECT author_id AS authorId,state,commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? ORDER BY created_at`).bind(pull.id).all<{ authorId: string; state: string; commitId: string; createdAt: string }>(),
     env.DB.prepare('SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id = ? AND commit_id = ? AND resolved_at IS NULL').bind(pull.id, pull.sourceCommitId).first<{ count: number }>()
   ]);

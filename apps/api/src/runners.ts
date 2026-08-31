@@ -1,21 +1,27 @@
 import type { Principal } from './auth';
 import { requireFreshSession, sha256 } from './auth';
 import { identifier, validSlug } from './domain';
-import { json, problem, readJson } from './http';
+import { json, problem, readBody, readJson } from './http';
 import type { Env } from './platform';
 import { artifactUploadBody, completeJobBody, runnerEnrollmentBody, runnerRegistrationBody } from './request-schemas';
 import { notifyPullsForCommit } from './pull-realtime';
 import { publishRunLog } from './run-realtime';
 import { auditStatement } from './audit';
 import { jobSecrets } from './secrets';
+import { reserveArtifactUploadSql, reserveEmptyArtifactSql, reserveLogChunkSql, runnerQuotas } from './runner-quotas';
 
 type Runner = { id: string; organizationId: string; name: string; labelsJson: string; concurrency: number; platform: string; architecture: string; version: string };
 const runnerSelect = `SELECT runners.id,runners.name,runners.labels_json AS labelsJson,runners.active_jobs AS activeJobs,runners.concurrency,runners.platform,runners.architecture,runners.version,runners.last_seen_at AS lastSeenAt,CASE WHEN runners.disabled_at IS NOT NULL OR runners.last_seen_at < datetime('now','-90 seconds') THEN 'offline' WHEN runners.active_jobs > 0 THEN 'busy' ELSE 'idle' END AS state FROM runners JOIN organization_members ON organization_members.organization_id=runners.organization_id`;
 const artifactPartBytes = 16 * 1024 * 1024;
+const checkForJobSql = `id=(SELECT job_checks.id FROM checks AS job_checks JOIN jobs ON jobs.id=? JOIN runs ON runs.id=jobs.run_id WHERE job_checks.repository_id=runs.repository_id AND job_checks.commit_id=runs.commit_id AND job_checks.producer_repository_id=runs.repository_id AND job_checks.producer_workflow_id=runs.workflow_id AND job_checks.producer_job_key=jobs.job_key)`;
 
 function bearer(request: Request): string | null {
   const value = request.headers.get('authorization');
   return value?.startsWith('Bearer ') ? value.slice(7) : null;
+}
+
+export function hasRunnerCredential(request: Request) {
+  return bearer(request)?.startsWith('marl_runner_') === true;
 }
 
 function cleanLabels(value: unknown): string[] | null {
@@ -114,7 +120,7 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
   await env.DB.batch([
     env.DB.prepare(`UPDATE runners SET active_jobs=active_jobs+1,last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
     env.DB.prepare(`UPDATE runs SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP) WHERE id=? AND state='queued'`).bind(job.runId),
-    env.DB.prepare(`UPDATE checks SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE repository_id=(SELECT repository_id FROM runs WHERE id=?) AND commit_id=? AND name=(SELECT check_name FROM jobs WHERE id=?)`).bind(job.runId, job.commitId, job.id),
+    env.DB.prepare(`UPDATE checks SET state='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE ${checkForJobSql}`).bind(job.id),
     ...(secretNames.length ? [auditStatement(env, { organizationId: runner.organizationId, repositoryId: job.repositoryId, action: 'ci.secrets.delivered', subjectType: 'job', subjectId: job.id, details: { runnerId: runner.id, names: secretNames } })] : [])
   ]);
   await notifyPullsForCommit(env, job.repositoryId, job.commitId);
@@ -140,16 +146,32 @@ export async function renewJob(request: Request, env: Env, runner: Runner, jobId
 export async function uploadLog(request: Request, env: Env, runner: Runner, jobId: string, sequence: number): Promise<Response> {
   const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   if (!job || !request.body) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
-  const size = Number(request.headers.get('content-length'));
-  if (!Number.isFinite(size) || size < 0 || size > 1024 * 1024 || !Number.isSafeInteger(sequence) || sequence < 0) return problem(413, 'log_chunk_too_large', 'Log chunks are limited to 1 MiB and require a valid sequence.');
-  const key = `logs/${jobId}/${String(sequence).padStart(10, '0')}`;
-  const [stored, live] = request.body.tee();
-  await Promise.all([
-    env.OBJECTS.put(key, stored, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } }),
-    publishRunLog(env, jobId, sequence, live).catch(() => undefined)
-  ]);
-  await env.DB.prepare(`INSERT INTO job_log_chunks (id,job_id,sequence,object_key,byte_size) VALUES (?,?,?,?,?) ON CONFLICT(job_id,sequence) DO NOTHING`).bind(identifier('log'), jobId, sequence, key, size).run();
-  return new Response(null, { status: 204 });
+  if (!Number.isSafeInteger(sequence) || sequence < 0) return problem(422, 'invalid_log_sequence', 'Log chunks require a valid sequence.');
+  if (sequence >= runnerQuotas.logChunksPerJob) return problem(413, 'job_log_limit', 'A job can retain at most 65,536 log chunks.');
+  const existing = await env.DB.prepare('SELECT id FROM job_log_chunks WHERE job_id=? AND sequence=?').bind(jobId, sequence).first();
+  if (existing) return new Response(null, { status: 204 });
+  const bytes = await readBody(request, runnerQuotas.logChunkBytes);
+  if (!bytes) return problem(413, 'log_chunk_too_large', 'Log chunks are limited to 1 MiB.');
+  if (bytes.byteLength === 0) return new Response(null, { status: 204 });
+  const id = identifier('log');
+  const key = `logs/${jobId}/${String(sequence).padStart(10, '0')}-${id}`;
+  let stored = false;
+  let retained = false;
+  try {
+    await env.OBJECTS.put(key, bytes, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } });
+    stored = true;
+    const reservation = await env.DB.prepare(reserveLogChunkSql).bind(id, jobId, sequence, key, bytes.byteLength, bytes.byteLength, runnerQuotas.logBytesPerJob, jobId, jobId, runnerQuotas.logChunksPerJob).run();
+    if (reservation.meta.changes !== 1) {
+      const duplicate = await env.DB.prepare('SELECT id FROM job_log_chunks WHERE job_id=? AND sequence=?').bind(jobId, sequence).first();
+      if (duplicate) return new Response(null, { status: 204 });
+      return problem(413, 'job_log_limit', 'A job can retain at most 64 MiB of logs.');
+    }
+    retained = true;
+    await publishRunLog(env, jobId, sequence, byteStream(bytes)).catch(() => undefined);
+    return new Response(null, { status: 204 });
+  } finally {
+    if (stored && !retained) await env.OBJECTS.delete(key);
+  }
 }
 
 export async function beginArtifactUpload(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
@@ -157,25 +179,49 @@ export async function beginArtifactUpload(request: Request, env: Env, runner: Ru
   if (!job) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
   const body = await readJson(request, artifactUploadBody);
   if (!body || !validArtifactName(body.name)) return problem(422, 'invalid_artifact', 'Artifact names must be relative workspace paths.');
-  const existing = await env.DB.prepare('SELECT id,name,byte_size AS byteSize,content_type AS contentType FROM artifacts WHERE job_id=? AND name=?').bind(jobId, body.name).first<{ id: string; name: string; byteSize: number; contentType: string }>();
-  if (existing) return json({ artifact: existing, completed: true });
+  await discardExpiredArtifactUpload(env, jobId, body.name);
   await discardExpiredArtifactUploads(env);
+  const existing = await completedArtifact(env, jobId, body.name);
+  if (existing) return json({ artifact: existing, completed: true });
+  const active = await activeArtifactUpload(env, jobId, body.name);
+  if (active) return artifactUploadResponse(active);
   const id = identifier('artifact');
   const key = `artifacts/${jobId}/${id}`;
   const contentType = body.contentType ?? 'application/octet-stream';
   if (body.byteSize === 0) {
-    await env.OBJECTS.put(key, new Uint8Array(), { httpMetadata: { contentType } });
-    await env.DB.prepare('INSERT INTO artifacts (id,job_id,name,object_key,byte_size,content_type) VALUES (?,?,?,?,?,?)').bind(id, jobId, body.name, key, 0, contentType).run();
-    return json({ artifact: { id, name: body.name, byteSize: 0, contentType }, completed: true }, { status: 201 });
+    let stored = false;
+    let retained = false;
+    try {
+      await env.OBJECTS.put(key, new Uint8Array(), { httpMetadata: { contentType } });
+      stored = true;
+      const reservation = await env.DB.prepare(reserveEmptyArtifactSql).bind(id, jobId, body.name, key, 0, contentType, jobId, body.name, jobId, jobId, runnerQuotas.artifactsPerJob).run();
+      if (reservation.meta.changes !== 1) {
+        const [completed, uploading] = await Promise.all([completedArtifact(env, jobId, body.name), activeArtifactUpload(env, jobId, body.name)]);
+        if (completed) return json({ artifact: completed, completed: true });
+        if (uploading) return artifactUploadResponse(uploading);
+        return problem(409, 'artifact_name_conflict', 'An artifact with this name is already being created.');
+      }
+      retained = true;
+      return json({ artifact: { id, name: body.name, byteSize: 0, contentType }, completed: true }, { status: 201 });
+    } finally {
+      if (stored && !retained) await env.OBJECTS.delete(key);
+    }
   }
   const multipart = await env.OBJECTS.createMultipartUpload(key, { httpMetadata: { contentType } });
+  let reserved = false;
   try {
-    await env.DB.prepare(`INSERT INTO artifact_uploads (id,job_id,name,object_key,multipart_upload_id,expected_size,content_type,expires_at) VALUES (?,?,?,?,?,?,?,datetime('now','+1 hour'))`).bind(id, jobId, body.name, key, multipart.uploadId, body.byteSize, contentType).run();
-  } catch (error) {
-    await multipart.abort();
-    throw error;
+    const reservation = await env.DB.prepare(reserveArtifactUploadSql).bind(id, jobId, body.name, key, multipart.uploadId, body.byteSize, contentType, jobId, body.name, body.byteSize, runnerQuotas.artifactBytesPerJob, jobId, jobId, jobId, jobId, runnerQuotas.artifactsPerJob).run();
+    if (reservation.meta.changes !== 1) {
+      const [completed, uploading] = await Promise.all([completedArtifact(env, jobId, body.name), activeArtifactUpload(env, jobId, body.name)]);
+      if (completed) return json({ artifact: completed, completed: true });
+      if (uploading) return artifactUploadResponse(uploading);
+      return problem(413, 'job_artifact_limit', 'A job can retain at most 2 GiB of artifacts.');
+    }
+    reserved = true;
+    return artifactUploadResponse({ id, name: body.name, objectKey: key, multipartUploadId: multipart.uploadId, expectedSize: body.byteSize, contentType, state: 'uploading' }, 201);
+  } finally {
+    if (!reserved) await multipart.abort();
   }
-  return json({ upload: { id, partBytes: artifactPartBytes, partCount: Math.ceil(body.byteSize / artifactPartBytes) }, completed: false }, { status: 201 });
 }
 
 export async function uploadArtifactPart(request: Request, env: Env, runner: Runner, jobId: string, uploadId: string, partNumber: number): Promise<Response> {
@@ -224,10 +270,23 @@ export async function completeArtifactUpload(request: Request, env: Env, runner:
   return json({ artifact: { id: uploadId, name: upload.name, byteSize: upload.expectedSize, contentType: upload.contentType }, completed: true }, { status: 201 });
 }
 
-type ArtifactUpload = { name: string; objectKey: string; multipartUploadId: string; expectedSize: number; contentType: string; state: 'uploading' | 'completed' };
+type Artifact = { id: string; name: string; byteSize: number; contentType: string };
+type ArtifactUpload = { id: string; name: string; objectKey: string; multipartUploadId: string; expectedSize: number; contentType: string; state: 'uploading' | 'completed' };
 
 function artifactUpload(env: Env, jobId: string, uploadId: string) {
-  return env.DB.prepare(`SELECT name,object_key AS objectKey,multipart_upload_id AS multipartUploadId,expected_size AS expectedSize,content_type AS contentType,state FROM artifact_uploads WHERE id=? AND job_id=? AND (state='completed' OR expires_at>CURRENT_TIMESTAMP)`).bind(uploadId, jobId).first<ArtifactUpload>();
+  return env.DB.prepare(`SELECT id,name,object_key AS objectKey,multipart_upload_id AS multipartUploadId,expected_size AS expectedSize,content_type AS contentType,state FROM artifact_uploads WHERE id=? AND job_id=? AND (state='completed' OR expires_at>CURRENT_TIMESTAMP)`).bind(uploadId, jobId).first<ArtifactUpload>();
+}
+
+function completedArtifact(env: Env, jobId: string, name: string) {
+  return env.DB.prepare('SELECT id,name,byte_size AS byteSize,content_type AS contentType FROM artifacts WHERE job_id=? AND name=?').bind(jobId, name).first<Artifact>();
+}
+
+function activeArtifactUpload(env: Env, jobId: string, name: string) {
+  return env.DB.prepare("SELECT id,name,object_key AS objectKey,multipart_upload_id AS multipartUploadId,expected_size AS expectedSize,content_type AS contentType,state FROM artifact_uploads WHERE job_id=? AND name=? AND state='uploading' AND expires_at>CURRENT_TIMESTAMP").bind(jobId, name).first<ArtifactUpload>();
+}
+
+function artifactUploadResponse(upload: ArtifactUpload, status = 200) {
+  return json({ upload: { id: upload.id, partBytes: artifactPartBytes, partCount: Math.ceil(upload.expectedSize / artifactPartBytes) }, completed: false }, { status });
 }
 
 function validArtifactName(name: string) {
@@ -246,6 +305,22 @@ async function discardExpiredArtifactUploads(env: Env) {
   }
 }
 
+async function discardExpiredArtifactUpload(env: Env, jobId: string, name: string) {
+  const upload = await env.DB.prepare("SELECT id,object_key AS objectKey,multipart_upload_id AS multipartUploadId FROM artifact_uploads WHERE job_id=? AND name=? AND state='uploading' AND expires_at<=CURRENT_TIMESTAMP").bind(jobId, name).first<{ id: string; objectKey: string; multipartUploadId: string }>();
+  if (!upload) return;
+  await env.OBJECTS.resumeMultipartUpload(upload.objectKey, upload.multipartUploadId).abort();
+  await env.DB.prepare("DELETE FROM artifact_uploads WHERE id=? AND state='uploading' AND expires_at<=CURRENT_TIMESTAMP").bind(upload.id).run();
+}
+
+function byteStream(bytes: Uint8Array) {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    }
+  });
+}
+
 export async function completeJob(request: Request, env: Env, runner: Runner, jobId: string): Promise<Response> {
   const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   const body = await readJson(request, completeJobBody);
@@ -261,13 +336,13 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
   await env.DB.batch([
     env.DB.prepare(`UPDATE jobs SET state=?,exit_code=?,completed_at=CURRENT_TIMESTAMP,lease_token_hash=NULL,lease_expires_at=NULL WHERE id=? AND state='running'`).bind(state, state === 'canceled' ? 130 : body.exitCode, jobId),
     env.DB.prepare(`UPDATE runners SET active_jobs=MAX(active_jobs-1,0),last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
-    env.DB.prepare(`UPDATE checks SET state=?,summary=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=(SELECT repository_id FROM runs WHERE id=?) AND commit_id=(SELECT commit_id FROM runs WHERE id=?) AND name=(SELECT check_name FROM jobs WHERE id=?)`).bind(state, summary, job.runId, job.runId, jobId)
+    env.DB.prepare(`UPDATE checks SET state=?,summary=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE ${checkForJobSql}`).bind(state, summary, jobId)
   ]);
   for (let depth = 0; depth < 32; depth += 1) {
     const canceled = await env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE run_id=? AND state='queued' AND EXISTS (SELECT 1 FROM json_each(jobs.needs_json) AS need JOIN jobs AS dependency ON dependency.run_id=jobs.run_id AND dependency.job_key=need.value WHERE dependency.state IN ('failure','canceled'))`).bind(job.runId).run();
     if (!canceled.meta?.changes) break;
   }
-  await env.DB.prepare(`UPDATE checks SET state='canceled',summary='A required job did not succeed.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE repository_id=(SELECT repository_id FROM runs WHERE id=?) AND commit_id=(SELECT commit_id FROM runs WHERE id=?) AND name IN (SELECT check_name FROM jobs WHERE run_id=? AND state='canceled') AND state='queued'`).bind(job.runId, job.runId, job.runId).run();
+  await env.DB.prepare(`UPDATE checks SET state='canceled',summary='A required job did not succeed.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id IN (SELECT job_checks.id FROM checks AS job_checks JOIN runs ON runs.id=? JOIN jobs ON jobs.run_id=runs.id AND jobs.state='canceled' WHERE job_checks.repository_id=runs.repository_id AND job_checks.commit_id=runs.commit_id AND job_checks.producer_repository_id=runs.repository_id AND job_checks.producer_workflow_id=runs.workflow_id AND job_checks.producer_job_key=jobs.job_key) AND state='queued'`).bind(job.runId).run();
   const remaining = await env.DB.prepare(`SELECT state,COUNT(*) AS count FROM jobs WHERE run_id=? GROUP BY state`).bind(job.runId).all<{ state: string; count: number }>();
   const states = new Set(remaining.results.map((row) => row.state));
   const runState = states.has('failure') ? 'failure' : states.has('canceled') ? 'canceled' : states.has('running') ? 'running' : states.has('queued') ? 'queued' : 'success';

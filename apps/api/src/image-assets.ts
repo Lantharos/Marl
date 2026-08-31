@@ -1,5 +1,7 @@
-import { problem } from './http';
+import { problem, readBody } from './http';
 import type { Env } from './platform';
+
+const imageBytes = 2 * 1024 * 1024;
 
 const imageTypes = new Map([
   ['image/png', 'png'],
@@ -10,10 +12,9 @@ const imageTypes = new Map([
 export async function readImageUpload(request: Request) {
   const contentType = request.headers.get('content-type')?.split(';')[0].toLowerCase() ?? '';
   const extension = imageTypes.get(contentType);
-  const declaredSize = Number(request.headers.get('content-length') ?? 0);
-  if (!extension || (declaredSize && declaredSize > 2 * 1024 * 1024)) return null;
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (!bytes.length || bytes.length > 2 * 1024 * 1024 || !matchesImageSignature(contentType, bytes)) return null;
+  if (!extension) return null;
+  const bytes = await readBody(request, imageBytes);
+  if (!bytes?.length || !matchesImageSignature(contentType, bytes)) return null;
   return { bytes, contentType, extension, version: crypto.randomUUID().replaceAll('-', '') };
 }
 

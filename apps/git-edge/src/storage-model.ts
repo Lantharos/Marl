@@ -189,6 +189,10 @@ export function validateRefs(refs: Record<string, GitHash>) {
   }
 }
 
+export function changesMarlManagedRefs(current: Record<string, GitHash>, proposed: Record<string, GitHash>) {
+  return changedRefs(current, proposed).some((name) => name.startsWith('refs/marl/'));
+}
+
 export function validatePacks(packs: PackDescriptor[]) {
   if (packs.length > STORAGE_LIMITS.packsPerGeneration) throw new StorageError('too_many_packs', 'This repository needs compaction before another pack can be published.');
   const ids = new Set<string>();

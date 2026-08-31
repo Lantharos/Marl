@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import Check from 'lucide-svelte/icons/check';
   import BookOpen from 'lucide-svelte/icons/book-open';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
@@ -51,6 +51,7 @@
   let forkOwner = $state(untrack(() => data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? ''));
   let forkName = $state($page.params.repo ?? '');
   let forkError = $state('');
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   const submittedForkName = $derived(completeRepositoryName(forkName));
   const forkNameValid = $derived(validRepositoryName(submittedForkName));
   const cloneUrl = $derived(cloneProtocol === 'ssh' ? repository?.sshCloneUrl ?? '' : repository?.cloneUrl ?? '');
@@ -62,12 +63,13 @@
   const islandBoundary = $derived(buildIslandBoundary(islandWidth, islandStrokeWidth));
   const islandFill = $derived(buildIslandFill(islandWidth, islandStrokeWidth));
 
-  async function copyCloneUrl() { if (!cloneUrl) return; await navigator.clipboard.writeText(cloneUrl); copied = true; setTimeout(() => (copied = false), 1600); }
+  async function copyCloneUrl() { if (!cloneUrl) return; await navigator.clipboard.writeText(cloneUrl); copied = true; clearTimeout(copiedTimer); copiedTimer = setTimeout(() => (copied = false), 1600); }
   async function toggleStar() {
     if (starring) return;
     starring = true;
-    try { const result = await api<{ starred: boolean; starCount: number }>(`/repositories/${owner}/${repo}/star`, { method: starred ? 'DELETE' : 'PUT' }); starred = result.starred; starCount = result.starCount; }
-    finally { starring = false; }
+    const route = { owner, repo, base };
+    try { const result = await api<{ starred: boolean; starCount: number }>(`/repositories/${route.owner}/${route.repo}/star`, { method: starred ? 'DELETE' : 'PUT' }); if (base === route.base) { starred = result.starred; starCount = result.starCount; } }
+    finally { if (base === route.base) starring = false; }
   }
   async function createFork() {
     if (forking || !forkOwner || !forkNameValid) return;
@@ -159,6 +161,27 @@
     });
     return () => cancelAnimationFrame(frame);
   });
+  $effect(() => {
+    const currentRepository = base;
+    untrack(() => {
+      clearTimeout(copiedTimer);
+      cloneOpen = false;
+      copied = false;
+      cloneProtocol = 'https';
+      starred = Boolean(data.repository?.starred);
+      starCount = data.repository?.starCount ?? 0;
+      starring = false;
+      forkOpen = false;
+      forking = false;
+      forkOwner = data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? '';
+      forkName = repositoryName(currentRepository.split('/').at(-1) ?? '');
+      forkError = '';
+    });
+  });
+  onDestroy(() => {
+    clearTimeout(copiedTimer);
+    cancelAnimationFrame(islandAnimation);
+  });
 </script>
 
 <section class="repo-bar">
@@ -187,7 +210,7 @@
 <style>
   .repo-bar{border-bottom:1px solid var(--border-subtle);background:var(--surface)}.repo-line{display:flex;width:min(1240px,calc(100% - 48px));min-height:64px;margin:0 auto;align-items:center;justify-content:space-between;gap:20px}.identity{min-width:0}.crumb{display:flex;align-items:center;gap:6px}.crumb>a{color:var(--text-strong);font-size:15px;font-weight:640;text-decoration:none}.crumb>a:first-child{color:var(--text-muted);font-weight:520}.crumb>span:not(.private){color:var(--text-faint)}.private{display:inline-flex;align-items:center;gap:4px;margin-left:5px;color:var(--text-faint);font-size:11px}.identity p{overflow:hidden;margin:5px 0 0;color:var(--text-muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.clone-anchor{position:relative}.clone-menu{position:absolute;top:40px;right:0;z-index:30;width:360px;padding:14px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.clone-menu>strong{color:var(--text-strong);font-size:13px}.clone-menu>p{margin:8px 0 11px;color:var(--text-muted);font-size:11px}.protocols{display:flex!important;grid-template-columns:none!important;gap:2px;margin-top:10px;border:0!important;background:transparent!important}.protocols button{width:auto!important;height:28px;padding:0 9px;border:0!important;border-radius:5px;background:transparent!important;color:var(--text-muted);font-size:11px;font-weight:620;cursor:pointer}.protocols button.active{background:var(--brand-soft)!important;color:var(--text-strong)}.clone-value{display:grid;grid-template-columns:minmax(0,1fr)34px;border:1px solid var(--border);border-radius:5px;background:var(--surface)}.clone-menu code{overflow:hidden;padding:9px;color:var(--text);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.clone-value button{display:grid;width:34px;border:0;border-left:1px solid var(--border);background:transparent;color:var(--text-muted);place-items:center;cursor:pointer}.repo-bar nav{position:relative;display:flex;width:min(1240px,calc(100% - 48px));height:40px;margin:0 auto;gap:5px}.repo-bar nav a{position:relative;z-index:1;display:inline-flex;height:40px;align-items:center;gap:6px;padding:0 11px;color:var(--text-muted);font-size:12px;font-weight:580;text-decoration:none;transition:color 140ms ease,background-color 180ms ease,transform 220ms cubic-bezier(.2,.8,.2,1)}.repo-bar nav a:hover,.repo-bar nav a.active{color:var(--text-strong)}.repo-bar nav a.active{z-index:2;height:47px;margin-bottom:-7px;padding-bottom:7px;border-radius:0 0 15px 15px;background:var(--surface-raised);box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--border-strong) 75%,transparent);transform:translateY(1px)}.repo-bar nav a.active::before,.repo-bar nav a.active::after{position:absolute;bottom:0;width:10px;height:10px;content:'';pointer-events:none}.repo-bar nav a.active::before{left:-10px;border-bottom-right-radius:10px;box-shadow:4px 4px 0 4px var(--surface-raised)}.repo-bar nav a.active::after{right:-10px;border-bottom-left-radius:10px;box-shadow:-4px 4px 0 4px var(--surface-raised)}.repo-bar nav a.active{background-image:linear-gradient(var(--brand),var(--brand));background-position:center calc(100% - 5px);background-repeat:no-repeat;background-size:calc(100% - 22px) 2px}.repository-content{width:min(1240px,calc(100% - 48px));margin:0 auto;padding:31px 0 72px}
   .repo-bar{--repo-head-height:64px;position:relative;border-bottom:0;background:linear-gradient(to bottom,var(--surface) 0 var(--repo-head-height),var(--canvas) var(--repo-head-height))}.repo-bar nav{z-index:1}.repo-bar nav a{z-index:2}.repo-bar nav a.active{height:40px;margin:0;padding-bottom:0;border-radius:0;background:transparent;background-image:none;box-shadow:none;transform:none}.repo-bar nav a.active::before,.repo-bar nav a.active::after{display:none}.active-island{position:absolute;z-index:1;top:0;left:0;width:1px;height:43px;transform:translate3d(var(--island-x),0,0);pointer-events:none;will-change:transform}.active-island svg{position:absolute;inset:0;width:1px;height:43px;overflow:visible}.island-fill{fill:var(--surface);stroke:none}.island-outline{fill:none;stroke:var(--border-subtle);stroke-linecap:butt;stroke-linejoin:round;vector-effect:non-scaling-stroke}.repository-content{padding-top:27px}
-  .repo-actions{display:flex;align-items:center;gap:7px}.count{padding-left:6px;border-left:1px solid var(--border);color:var(--text-faint)}.upstream{display:flex;align-items:center;gap:5px}.upstream a{color:var(--text-muted);text-decoration:none}.upstream a:hover{color:var(--brand)}.fork-fields{display:grid;gap:14px}.fork-fields label{display:grid;gap:7px}.fork-fields label>span{color:var(--text-muted);font-size:11px;font-weight:620}.fork-fields input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:12px}.fork-fields input:focus{border-color:var(--brand)}.fork-error{margin:0;color:var(--danger);font-size:11px}
+  .repo-actions{display:flex;align-items:center;gap:7px}.count{padding-left:6px;border-left:1px solid var(--border);color:var(--text-faint)}.upstream{display:flex;align-items:center;gap:5px}.upstream a{color:var(--text-muted);text-decoration:none}.upstream a:hover{color:var(--brand)}.fork-fields{display:grid;gap:14px}.fork-fields label{display:grid;gap:7px}.fork-fields label>span{color:var(--text-muted);font-size:11px;font-weight:620}.fork-fields input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:12px}.fork-fields input:focus{border-color:var(--brand)}.fork-fields input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}.fork-error{margin:0;color:var(--danger);font-size:11px}
   .repo-identity{display:flex;min-width:0;align-items:center;gap:10px}
   @media(max-width:680px){.repo-bar{--repo-head-height:57px}.repo-line,.repo-bar nav,.repository-content{width:calc(100% - 28px)}.repo-line{min-height:57px}.identity p,.repo-actions :global(.button span){display:none}.repo-actions{gap:4px}.repo-bar nav{overflow-x:auto}.repo-bar nav a{flex:0 0 auto}.repository-content{padding-top:18px}}
 </style>

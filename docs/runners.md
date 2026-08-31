@@ -109,14 +109,19 @@ creates a private Docker network, starts declared service containers, and execut
 job step in one disposable job container. The checkout and repository-scoped cache are the
 only host directories mounted into that container.
 
-Job containers drop Linux capabilities, enable `no-new-privileges`, and receive CPU,
-memory, and process limits. The runner coalesces small output into bounded log chunks and sends
-new frames through a per-job hibernating realtime room. Cursor-paged object-storage logs remain
-authoritative for reconnects and completed runs. Cancellation and timeout kill the entire job
+Job and service containers drop Linux capabilities and enable `no-new-privileges`. Each job
+container is limited to 2 CPUs, 4 GiB of memory, and 512 processes; each declared service is
+limited to 1 CPU, 1 GiB of memory, and 256 processes. The runner coalesces small output into
+log chunks no larger than 1 MiB and sends new frames through a per-job hibernating realtime room.
+Persisted logs are capped at 64 MiB per job. Cursor-paged object-storage logs remain authoritative
+for reconnects and completed runs.
+Cancellation and timeout kill the entire job
 container. Artifact paths are relative to the checkout; symlinks and paths outside the workspace
-are refused. Artifacts use size-negotiated, lease-renewed multipart uploads directly to object
-storage. Job containers and networks are removed after every attempt, while the repository cache
-survives.
+are refused. Completed artifacts and in-flight artifact reservations share a 2 GiB and 4,096-file
+per-job limit. Logs also have a 65,536-chunk ceiling so tiny writes cannot grow metadata without
+bound.
+Artifacts use size-negotiated, lease-renewed 16 MiB multipart uploads directly to object storage.
+Job containers and networks are removed after every attempt, while the repository cache survives.
 
 Docker is the security boundary for job execution, but a Docker daemon is still privileged
 infrastructure. Keep runner administration narrow, do not mount the Docker socket into job

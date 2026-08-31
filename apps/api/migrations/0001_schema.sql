@@ -153,6 +153,9 @@ CREATE TABLE checks (
   id TEXT PRIMARY KEY,
   repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
   commit_id TEXT NOT NULL,
+  producer_repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+  producer_workflow_id TEXT NOT NULL,
+  producer_job_key TEXT NOT NULL,
   name TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('queued', 'running', 'success', 'failure', 'canceled')),
   summary TEXT NOT NULL DEFAULT '',
@@ -160,7 +163,8 @@ CREATE TABLE checks (
   started_at TEXT,
   completed_at TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (repository_id, commit_id, name)
+  UNIQUE (repository_id, commit_id, producer_repository_id, producer_workflow_id, producer_job_key),
+  FOREIGN KEY (producer_repository_id, producer_workflow_id) REFERENCES workflows(repository_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE ci_secrets (
@@ -488,7 +492,7 @@ CREATE TABLE runs (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   started_at TEXT,
   completed_at TEXT,
-  workflow_id TEXT REFERENCES workflows(id) ON DELETE SET NULL, cancellation_reason TEXT CHECK (cancellation_reason IN ('developer', 'superseded')),
+  workflow_id TEXT NOT NULL REFERENCES workflows(id), cancellation_reason TEXT CHECK (cancellation_reason IN ('developer', 'superseded')),
   UNIQUE (repository_id, number)
 );
 
@@ -549,7 +553,8 @@ CREATE TABLE workflows (
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, supersede_pushes INTEGER NOT NULL DEFAULT 1,
-  UNIQUE(repository_id, branch, path)
+  UNIQUE(repository_id, branch, path),
+  UNIQUE(repository_id, id)
 );
 
 CREATE INDEX artifact_uploads_by_expiry ON artifact_uploads(state, expires_at);
@@ -574,7 +579,7 @@ CREATE INDEX auth_verifications_by_identifier ON auth_verification(identifier, e
 
 CREATE INDEX branches_by_index_version ON branches(repository_id, index_version);
 
-CREATE INDEX checks_by_commit ON checks(repository_id, commit_id, updated_at DESC);
+CREATE INDEX checks_by_commit ON checks(repository_id, commit_id, producer_repository_id, updated_at DESC);
 
 CREATE UNIQUE INDEX ci_secrets_organization_name ON ci_secrets(organization_id,name) WHERE repository_id IS NULL;
 

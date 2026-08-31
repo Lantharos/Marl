@@ -13,20 +13,20 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
-anyhow = "1.0.102"
-clap = { version = "4.6.1", features = ["derive"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 tempfile = "3.27.0"
-thiserror = "2.0.18"
+thiserror = "2.0.20"
 repository = { path = "crates/repository" }
 axum = "0.8.9"
-bytes = "1.11.1"
+bytes = "1.12.1"
 futures-util = "0.3.34"
 glob = "0.3.4"
-reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "stream"] }
-russh = "0.62.5"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "query", "rustls", "stream"] }
+russh = { version = "0.63.1", default-features = false, features = ["aws-lc-rs", "flate2"] }
 rand = "0.10.2"
-tokio = { version = "1.52.1", features = ["full"] }
-tokio-util = { version = "0.7.18", features = ["io"] }
+tokio = { version = "1.53.1", features = ["full"] }
+tokio-util = { version = "0.7.19", features = ["io"] }
 runner = { path = "crates/runner" }

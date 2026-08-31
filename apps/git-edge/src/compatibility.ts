@@ -1,19 +1,23 @@
-import { authorizeGit } from './authorization';
+import type { GitAuthorization } from './authorization';
+import { readBoundedBody, readBoundedJson } from './bounded-body';
 import { scheduleCompaction } from './compaction';
 import type { GitEdgeEnv } from './env';
 import { expectContainer, hydrateRepository, internalRequest, type ContainerStub } from './hydration';
 import { scheduleRepositoryIndex } from './indexing';
 import { finalizeUploadedPush } from './publication';
 import { organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state-client';
-import { STORAGE_LIMITS } from './storage-model';
+import { STORAGE_LIMITS, changesMarlManagedRefs } from './storage-model';
 
 type Capture = { refs: Record<string, string>; packBytes: number; hasPack: boolean };
+const maximumReceiveRequestBytes = STORAGE_LIMITS.pushBytes + 1024 * 1024;
+const maximumCompatibilityResponseBytes = 16 * 1024 * 1024;
 
-export async function handleCompatibilityPush(request: Request, container: ContainerStub, env: GitEdgeEnv, owner: string, name: string) {
-  const authorization = await authorizeGit(request, env, owner, name, 'git-receive-pack');
-  const internalActorId = request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN
-    ? await request.clone().json<{ actorId?: unknown }>().then((body) => typeof body.actorId === 'string' && body.actorId.length > 0 && body.actorId.length <= 200 ? body.actorId : undefined).catch(() => undefined)
-    : undefined;
+export async function handleCompatibilityPush(request: Request, container: ContainerStub, env: GitEdgeEnv, authorization: GitAuthorization, owner: string, name: string, actorId?: string) {
+  const gatewayTrusted = request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN;
+  const receivesPack = request.method === 'POST' && new URL(request.url).pathname.endsWith('/git-receive-pack');
+  const declaredSize = Number(request.headers.get('content-length') ?? 0);
+  if (receivesPack && Number.isFinite(declaredSize) && declaredSize > maximumReceiveRequestBytes) return new Response('Push request exceeds the 256 MiB pack limit.\n', { status: 413 });
+  const internalActorId = gatewayTrusted ? actorId : undefined;
   const repository = authorization.storageKey;
   const repo = repositoryState(env, repository);
   const quota = organizationQuota(env, authorization.organizationId);
@@ -30,21 +34,31 @@ export async function handleCompatibilityPush(request: Request, container: Conta
     await uploads.request('/initialize', { pushId, repository, organizationId: authorization.organizationId, expiresAt, expectedGeneration: current.state.generation, refs: current.state.refs, packs: [] });
     await hydrateRepository(container, env, owner, name, repository);
     const response = await container.fetch(request);
-    const body = await response.arrayBuffer();
+    const body = await readBoundedBody(response.body, maximumCompatibilityResponseBytes);
+    if (!body) {
+      await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+      return new Response('Git receive response exceeded its limit.\n', { status: 502 });
+    }
     if (!response.ok) {
       await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
       return new Response(body, response);
     }
     const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
-    const captured = await expectContainer(container.fetch(internalRequest(base, env, {
+    const captureResponse = await expectContainer(container.fetch(internalRequest(base, env, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ knownRefs: current.state.refs })
-    }))).then((value) => value.json<Capture>());
+    })));
+    const captured = await readBoundedJson<Capture>(captureResponse, maximumCompatibilityResponseBytes);
+    if (!captured) throw new Error('Compatibility capture returned invalid metadata.');
     captureCreated = true;
     if (refsEqual(current.state.refs, captured.refs)) {
       await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
       return new Response(body, response);
+    }
+    if (!gatewayTrusted && changesMarlManagedRefs(current.state.refs, captured.refs)) {
+      await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+      return new Response('The refs/marl namespace is managed by Marl.\n', { status: 403 });
     }
     await repo.request('/propose', { pushId, refs: captured.refs });
     const plans = captured.hasPack ? [{ bytes: captured.packBytes, parts: Math.ceil(captured.packBytes / STORAGE_LIMITS.partBytes), key: `quarantine/${repository}/${pushId}/0.pack` }] : [];

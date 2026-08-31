@@ -406,6 +406,8 @@ mod tests {
                     "user.name=Marl Test",
                     "-c",
                     "user.email=marl@example.invalid",
+                    "-c",
+                    "commit.gpgsign=false",
                     "commit",
                     "-m",
                     "Initial commit"
@@ -470,6 +472,8 @@ mod tests {
                     "user.name=Marl Test",
                     "-c",
                     "user.email=marl@example.invalid",
+                    "-c",
+                    "commit.gpgsign=false",
                     "commit",
                     "-m",
                     "Large change"

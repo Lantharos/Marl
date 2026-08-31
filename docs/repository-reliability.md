@@ -53,6 +53,12 @@ dismissed when the head changes, required checks must be complete and successful
 review conversations must be resolved. The UI presents the same authoritative reasons but
 cannot bypass them.
 
+A required check is stored as the target repository's workflow and job identity; its display name
+is not an authentication boundary. Results produced by a fork therefore cannot impersonate a
+target-required check. Until Marl has a target-controlled, secret-free evaluation path for fork
+code, a fork pull request targeting a branch with required checks remains blocked rather than
+trusting the fork's runner results.
+
 ## Required production configuration
 
 The `marl-git-repositories` R2 bucket must have a bucket-lock rule for the `repositories/`

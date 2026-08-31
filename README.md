@@ -12,6 +12,8 @@ The repository acknowledgement and recovery contract is documented in
 [`docs/repository-reliability.md`](docs/repository-reliability.md).
 SSH key authentication and the production TCP topology are documented in
 [`docs/ssh.md`](docs/ssh.md).
+Production resources, routes, secrets, and deployment order are documented in
+[`docs/deployment.md`](docs/deployment.md).
 
 ## Development
 
@@ -75,7 +77,7 @@ Before considering a milestone complete:
 ```powershell
 bun check
 bun run build
-bun test
+bun run test
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { onMount, untrack } from 'svelte';
+  import { untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import type { RunDetail, RunJob } from '@marl/contracts';
   import Archive from 'lucide-svelte/icons/archive';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
@@ -11,7 +12,7 @@
   import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
   import Square from 'lucide-svelte/icons/square';
   import Terminal from 'lucide-svelte/icons/terminal';
-  import { api, apiTextCursor, MarlApiError } from '$lib/api';
+  import { api, apiTextCursorAll, MarlApiError } from '$lib/api';
   import Time from '$lib/components/Time.svelte';
   import Button from '$lib/components/Button.svelte';
   import type { PageData } from './$types';
@@ -20,37 +21,73 @@
   const owner = $derived($page.params.owner);
   const repo = $derived($page.params.repo);
   const number = $derived(Number($page.params.number));
-  let run = $state<RunDetail>(untrack(() => data.run));
-  let selected = $state(untrack(() => data.selected));
-  let logs = $state(untrack(() => data.logs));
-  let logCursor = $state(untrack(() => data.logCursor));
-  let logUnavailable = $state(untrack(() => data.logUnavailable));
+  let run = $derived<RunDetail>(data.run);
+  let selected = $derived(data.selected);
+  let logs = $derived(data.logs);
+  let logCursor = $derived(data.logCursor);
+  let logMore = $derived(data.logMore);
+  let logUnavailable = $derived(data.logUnavailable);
   let actionBusy = $state(false);
   let error = $state('');
+  let logFetch: Promise<void> | null = null;
+  let logFetchJob = '';
+  const pendingLogs = new SvelteMap<number, string>();
   const job = $derived(run.jobsDetail.find((item) => item.id === selected) ?? run.jobsDetail[0] ?? null);
+  const activeRun = $derived(run.state === 'queued' || run.state === 'running');
+
+  function flushPendingLogs(jobId: string) {
+    if (job?.id !== jobId) return;
+    const parts: string[] = [];
+    while (pendingLogs.has(logCursor + 1)) {
+      const sequence = logCursor + 1;
+      parts.push(pendingLogs.get(sequence)!);
+      pendingLogs.delete(sequence);
+      logCursor = sequence;
+    }
+    if (parts.length) logs += parts.join('');
+  }
+
+  async function loadLogs(jobId: string, requestedAfter: number) {
+    try {
+      const next = await apiTextCursorAll(`/jobs/${jobId}/logs`, requestedAfter);
+      if (job?.id !== jobId || logCursor !== requestedAfter) return;
+      if (next.text) logs += next.text;
+      logCursor = next.cursor;
+      logMore = false;
+      for (const sequence of pendingLogs.keys()) if (sequence <= logCursor) pendingLogs.delete(sequence);
+      flushPendingLogs(jobId);
+      logUnavailable = false;
+    } catch {
+      if (job?.id === jobId) logUnavailable = true;
+    }
+  }
 
   async function appendLogs() {
     const current = job;
     if (!current) return;
+    if (logFetch && logFetchJob === current.id) return logFetch;
+    const request = loadLogs(current.id, logCursor);
+    logFetch = request;
+    logFetchJob = current.id;
     try {
-      for (let page = 0; page < 4; page += 1) {
-        const next = await apiTextCursor(`/jobs/${current.id}/logs`, logCursor);
-        if (next.text) logs += next.text;
-        logCursor = next.cursor;
-        logUnavailable = false;
-        if (!next.more) break;
+      await request;
+    } finally {
+      if (logFetch === request) {
+        logFetch = null;
+        logFetchJob = '';
       }
-    } catch {
-      logUnavailable = true;
     }
   }
 
   async function refreshState() {
     if (!['queued', 'running'].includes(run.state)) return;
+    const runId = run.id;
+    const route = { owner, repo, number };
     try {
       const result = await api<{ run: Partial<RunDetail>; jobs: Array<Partial<RunJob> & { id: string }> }>(
-        `/repositories/${owner}/${repo}/runs/${number}/state`
+        `/repositories/${route.owner}/${route.repo}/runs/${route.number}/state`
       );
+      if (run.id !== runId) return;
       run = {
         ...run,
         ...result.run,
@@ -63,10 +100,15 @@
   }
 
   async function choose(id: string) {
+    if (id === job?.id) return;
     selected = id;
     logs = '';
     logCursor = -1;
+    logMore = true;
     logUnavailable = false;
+    pendingLogs.clear();
+    logFetch = null;
+    logFetchJob = '';
     await appendLogs();
   }
 
@@ -98,22 +140,41 @@
   }
 
   $effect(() => {
+    data.run.id;
+    data.selected;
+    pendingLogs.clear();
+    logFetch = null;
+    logFetchJob = '';
+    actionBusy = false;
+    error = '';
+  });
+
+  $effect(() => {
     const id = job?.id;
-    if (!id || typeof window === 'undefined') return;
+    if (!id || !logMore) return;
+    untrack(() => void appendLogs());
+  });
+
+  $effect(() => {
+    const id = job?.id;
+    if (!id || !['queued', 'running'].includes(job.state) || typeof window === 'undefined') return;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${location.host}/api/v1/jobs/${id}/live`);
     socket.binaryType = 'arraybuffer';
     socket.onmessage = (event) => {
       if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 8) return;
       const sequence = Number(new DataView(event.data).getBigUint64(0));
-      if (sequence <= logCursor) return;
-      logs += new TextDecoder().decode(event.data.slice(8));
-      logCursor = sequence;
+      if (!Number.isSafeInteger(sequence) || sequence <= logCursor || pendingLogs.has(sequence)) return;
+      pendingLogs.set(sequence, new TextDecoder().decode(event.data.slice(8)));
+      flushPendingLogs(id);
+      if (pendingLogs.size) void appendLogs();
     };
     return () => socket.close();
   });
 
-  onMount(() => {
+  $effect(() => {
+    const runId = data.run.id;
+    if (!activeRun) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     let polling = false;
@@ -122,7 +183,7 @@
       polling = true;
       await refreshState();
       polling = false;
-      if (!stopped && ['queued', 'running'].includes(run.state)) {
+      if (!stopped && run.id === runId && ['queued', 'running'].includes(run.state)) {
         timer = setTimeout(poll, document.hidden ? 10_000 : 2_000);
       }
     };
@@ -132,7 +193,7 @@
         void poll();
       }
     };
-    if (['queued', 'running'].includes(run.state)) timer = setTimeout(poll, 2_000);
+    timer = setTimeout(poll, 2_000);
     document.addEventListener('visibilitychange', visible);
     return () => {
       stopped = true;
@@ -173,7 +234,7 @@
 <div class="run-layout">
   <aside>
     <h2>Jobs</h2>
-    {#each run.jobsDetail as item}
+    {#each run.jobsDetail as item (item.id)}
       <button class:active={item.id === job?.id} onclick={() => choose(item.id)}>
         <span class="job-icon {item.state}">
           {#if item.state === 'success'}<CircleCheck size={16} />
@@ -204,7 +265,7 @@
       {#if job.artifacts.length}
         <section class="artifacts">
           <h3>Artifacts</h3>
-          {#each job.artifacts as artifact}
+          {#each job.artifacts as artifact (artifact.id)}
             <a href="/api/v1/artifacts/{artifact.id}"><Archive size={15} /><span><strong>{artifact.name}</strong><small>{artifact.byteSize} bytes</small></span></a>
           {/each}
         </section>

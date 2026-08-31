@@ -6,11 +6,11 @@ import type { PageLoad } from './$types';
 export const load: PageLoad = async ({ fetch, params }) => {
   const detail = await routeLoad(apiWith<{ run: RunDetail }>(fetch, `/repositories/${params.owner}/${params.repo}/runs/${params.number}`));
   const firstJob = detail.run.jobsDetail[0];
-  if (!firstJob) return { run: detail.run, selected: '', logs: '', logCursor: -1, logUnavailable: false };
+  if (!firstJob) return { run: detail.run, selected: '', logs: '', logCursor: -1, logMore: false, logUnavailable: false };
   try {
     const log = await apiTextCursorWith(fetch, `/jobs/${firstJob.id}/logs`);
-    return { run: detail.run, selected: firstJob.id, logs: log.text, logCursor: log.cursor, logUnavailable: false };
+    return { run: detail.run, selected: firstJob.id, logs: log.text, logCursor: log.cursor, logMore: log.more, logUnavailable: false };
   } catch {
-    return { run: detail.run, selected: firstJob.id, logs: '', logCursor: -1, logUnavailable: true };
+    return { run: detail.run, selected: firstJob.id, logs: '', logCursor: -1, logMore: false, logUnavailable: true };
   }
 };

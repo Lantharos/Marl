@@ -1,6 +1,7 @@
 use crate::{
     metadata::index_local_repository,
     process::Command,
+    receive,
     repository_files::{ensure_bare_repository, repair_head},
     state::{AppState, repository_path, safe_segment},
 };
@@ -8,7 +9,7 @@ use anyhow::{Context, Result};
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
 use bytes::{Bytes, BytesMut};
@@ -68,9 +69,19 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
     if git_path.service == "git-receive-pack" && !authorization.write {
         return Ok((StatusCode::FORBIDDEN, "Push access denied\n").into_response());
     }
+    let receives_pack = git_path.service == "git-receive-pack"
+        && request.method() == Method::POST
+        && git_path.path_info.ends_with("/git-receive-pack");
+    if receives_pack && declared_body_too_large(request.headers()) {
+        return Ok((
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "Push request exceeds the 256 MiB pack limit.\n",
+        )
+            .into_response());
+    }
     let repository = repository_path(&state.repositories, &git_path.owner, &git_path.repository)?;
     ensure_bare_repository(&repository).await?;
-    if git_path.service == "git-receive-pack" {
+    if receives_pack {
         let _ = fs::remove_file(repository.join("marl-generation")).await;
     }
     let (parts, body) = request.into_parts();
@@ -114,18 +125,17 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    receive::configure(&mut command, git_path.service == "git-receive-pack");
     let mut child = command.spawn().context("start git http-backend")?;
-    let mut stdin = child.stdin.take().context("open Git stdin")?;
-    let request_stream = body.into_data_stream().map_err(std::io::Error::other);
-    tokio::spawn(async move {
-        let mut reader = StreamReader::new(request_stream);
-        let result = tokio::io::copy(&mut reader, &mut stdin).await;
-        let _ = stdin.shutdown().await;
-        result
-    });
+    let stdin = child.stdin.take().context("open Git stdin")?;
+    let input_task = tokio::spawn(copy_request_body(
+        body,
+        stdin,
+        receives_pack.then_some(receive::MAX_REQUEST_BYTES),
+    ));
     let mut stdout = child.stdout.take().context("open Git stdout")?;
     let (status, headers, initial_body) = read_cgi_headers(&mut stdout).await?;
-    if git_path.service == "git-receive-pack" {
+    if receives_pack {
         let mut response_body = initial_body.to_vec();
         stdout.read_to_end(&mut response_body).await?;
         let mut stderr = child.stderr.take().context("open Git stderr")?;
@@ -135,6 +145,13 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
         });
         let result = child.wait().await?;
         let stderr = stderr_task.await??;
+        if input_task.await.unwrap_or(false) {
+            return Ok((
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "Push request exceeds the 256 MiB pack limit.\n",
+            )
+                .into_response());
+        }
         if !result.success() {
             anyhow::bail!(
                 "git http-backend exited {result}: {}",
@@ -167,6 +184,7 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
         futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(initial_body) })
             .chain(ReaderStream::new(stdout));
     tokio::spawn(async move {
+        let _ = input_task.await;
         if let Ok(result) = child.wait_with_output().await
             && !result.status.success()
         {
@@ -185,6 +203,32 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
         HeaderValue::from_str(&authorization.repository_id)?,
     );
     Ok(response)
+}
+
+fn declared_body_too_large(headers: &HeaderMap) -> bool {
+    headers
+        .get("content-length")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .is_some_and(|value| value > receive::MAX_REQUEST_BYTES)
+}
+
+async fn copy_request_body(
+    body: Body,
+    mut stdin: tokio::process::ChildStdin,
+    limit: Option<u64>,
+) -> bool {
+    let request_stream = body.into_data_stream().map_err(std::io::Error::other);
+    let mut reader = StreamReader::new(request_stream);
+    let copied = match limit {
+        Some(maximum) => tokio::io::copy(&mut reader.take(maximum + 1), &mut stdin).await,
+        None => tokio::io::copy(&mut reader, &mut stdin).await,
+    };
+    let _ = stdin.shutdown().await;
+    match (limit, copied) {
+        (Some(maximum), Ok(bytes)) => bytes > maximum,
+        _ => false,
+    }
 }
 
 async fn authorize(
@@ -331,5 +375,21 @@ mod tests {
             Some((15, 4))
         );
         assert_eq!(find_header_end(b"Status: 200\n\nbody"), Some((11, 2)));
+    }
+
+    #[test]
+    fn rejects_declared_receive_pack_body_over_limit() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "content-length",
+            HeaderValue::from_str(&(receive::MAX_REQUEST_BYTES + 1).to_string()).unwrap(),
+        );
+        assert!(declared_body_too_large(&headers));
+
+        headers.insert(
+            "content-length",
+            HeaderValue::from_str(&receive::MAX_REQUEST_BYTES.to_string()).unwrap(),
+        );
+        assert!(!declared_body_too_large(&headers));
     }
 }
