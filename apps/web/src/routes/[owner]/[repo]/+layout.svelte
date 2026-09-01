@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onDestroy, tick, untrack } from 'svelte';
@@ -160,7 +161,9 @@
       const node = repositoryNav;
       if (node) frame = requestAnimationFrame(() => updateIsland(node));
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      if (browser) cancelAnimationFrame(frame);
+    };
   });
   $effect(() => {
     const currentRepository = base;
@@ -181,7 +184,7 @@
   });
   onDestroy(() => {
     clearTimeout(copiedTimer);
-    cancelAnimationFrame(islandAnimation);
+    if (browser) cancelAnimationFrame(islandAnimation);
   });
 </script>
 
