@@ -6,11 +6,11 @@ import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { userEmailBody, verifyUserEmailBody } from './request-schemas';
 
-type UserEmail = { id: string; email: string; primary: number; verifiedAt: string | null; createdAt: string };
+type UserEmail = { id: string; email: string; isPrimary: number; verifiedAt: string | null; createdAt: string };
 
 export async function listUserEmails(env: Env, principal: Principal) {
   if (principal.authType !== 'session') return problem(403, 'browser_session_required', 'Emails can only be managed from a browser session.');
-  const emails = await env.DB.prepare('SELECT id,email,primary_email AS primary,verified_at AS verifiedAt,created_at AS createdAt FROM user_emails WHERE user_id=? ORDER BY primary_email DESC,created_at').bind(principal.id).all<UserEmail>();
+  const emails = await env.DB.prepare('SELECT id,email,primary_email AS isPrimary,verified_at AS verifiedAt,created_at AS createdAt FROM user_emails WHERE user_id=? ORDER BY primary_email DESC,created_at').bind(principal.id).all<UserEmail>();
   return json({ emails: emails.results.map(serializeEmail), verificationRequired: env.ENVIRONMENT !== 'development' });
 }
 
@@ -70,7 +70,7 @@ export async function deleteUserEmail(request: Request, env: Env, principal: Pri
   if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before removing an email.');
   const email = await findEmail(env, principal.id, id);
   if (!email) return problem(404, 'email_not_found', 'Email not found.');
-  if (email.primary) return problem(409, 'primary_email_required', 'Your sign-in email cannot be removed here.');
+  if (email.isPrimary) return problem(409, 'primary_email_required', 'Your sign-in email cannot be removed here.');
   await env.DB.prepare('DELETE FROM user_emails WHERE id=? AND user_id=?').bind(id, principal.id).run();
   return new Response(null, { status: 204 });
 }
@@ -97,11 +97,12 @@ async function sendVerification(env: Env, principal: Principal, emailId: string,
 }
 
 async function findEmail(env: Env, userId: string, id: string) {
-  return env.DB.prepare('SELECT id,email,primary_email AS primary,verified_at AS verifiedAt,created_at AS createdAt FROM user_emails WHERE id=? AND user_id=?').bind(id, userId).first<UserEmail>();
+  return env.DB.prepare('SELECT id,email,primary_email AS isPrimary,verified_at AS verifiedAt,created_at AS createdAt FROM user_emails WHERE id=? AND user_id=?').bind(id, userId).first<UserEmail>();
 }
 
 function serializeEmail(email: UserEmail) {
-  return { ...email, primary: Boolean(email.primary), verified: Boolean(email.verifiedAt) };
+  const { isPrimary, ...value } = email;
+  return { ...value, primary: Boolean(isPrimary), verified: Boolean(email.verifiedAt) };
 }
 
 function validEmail(value: string) {
