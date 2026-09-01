@@ -13,6 +13,7 @@
   import { dismissable } from '$lib/actions/dismissable';
   import { api } from '$lib/api';
   import Button from '$lib/components/Button.svelte';
+  import EmptyRepository from '$lib/repositories/EmptyRepository.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
   import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
@@ -29,8 +30,8 @@
   const repo = $derived($page.params.repo ?? '');
   let selectedBranch = $state(untrack(() => data.defaultBranch));
   let branchItems = $state<BranchItem[]>(untrack(() => data.branches.map((branch: BranchData) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), updatedAt: branch.updatedAt }))));
-  let fileItems = $state<FileItem[]>(untrack(() => mapEntries(data.tree.entries)));
-  let latestCommit = $state<Commit>(untrack(() => data.tree.commit));
+  let fileItems = $state<FileItem[]>(untrack(() => mapEntries(data.tree?.entries ?? [])));
+  let latestCommit = $state<Commit | null>(untrack(() => data.tree?.commit ?? null));
   let branchOpen = $state(false);
   let branchQuery = $state('');
   let finderOpen = $state(false);
@@ -99,6 +100,7 @@
 <svelte:head><title>Code · {owner}/{repo} · Marl</title></svelte:head>
 
 <div class="code-page">
+  {#if latestCommit}
   <div class="toolbar">
     <div class="branch-group">
       <div class="branch-anchor" use:dismissable={() => (branchOpen = false)}>
@@ -128,6 +130,9 @@
     </div>
   </section>
   {#if error}<p class="error" role="alert">Repository data could not be loaded. Refresh to try again.</p>{/if}
+  {:else}
+    <EmptyRepository name={repo} defaultBranch={data.defaultBranch} cloneUrl={data.repository.cloneUrl} sshCloneUrl={data.repository.sshCloneUrl} canPush={data.repository.permissions.push} />
+  {/if}
 </div>
 
 {#if finderOpen}
