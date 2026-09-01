@@ -148,6 +148,7 @@ try {
   await commitMarker('first queued revision');
   await client.git(['push', 'origin', 'main'], token);
   await commitMarker('latest queued revision');
+  const runnerCommit = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
   await client.git(['push', 'origin', 'main'], token);
   const queuedRuns = await client.request<{ runs: RunSummary[] }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs?limit=100`);
   const pushRuns = queuedRuns.runs.filter((item) => item.trigger === 'push' && item.branch === 'main');
@@ -170,8 +171,8 @@ try {
     await run([executable('marl'), 'runner', 'register', '--url', apiUrl, '--token', enrollment.enrollment.token, '--name', `qualification-${Date.now().toString(36)}`, '--label', 'docker', '--concurrency', '1', '--work-dir', runnerWork, '--config', runnerConfig], { cwd: root, timeoutMs: 120_000 });
     await run([executable('marl'), 'runner', 'run', '--once', '--config', runnerConfig], { cwd: root, timeoutMs: 300_000 });
     const completedRuns = await client.request<{ runs: RunSummary[] }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs?limit=100`);
-    const completed = completedRuns.runs.find((item) => item.trigger === 'push' && item.branch === 'main' && item.state === 'success');
-    assert(completed, 'The latest push workflow did not complete successfully.');
+    const completed = completedRuns.runs.find((item) => item.trigger === 'push' && item.branch === 'main' && item.commit === runnerCommit);
+    assert(completed, `The runner did not report the latest push workflow for ${runnerCommit}.\n${JSON.stringify(completedRuns.runs, null, 2)}`);
     const runDetail = await client.request<{
       run: {
         jobsDetail: Array<{
@@ -182,15 +183,16 @@ try {
       };
     }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs/${completed.number}`);
     const completedJob = runDetail.run.jobsDetail[0];
+    if (completedJob) jobIds.add(completedJob.id);
+    const logs = completedJob ? await readAllLogs(completedJob.id) : '';
+    assert(completed.state === 'success', `The latest push workflow finished as ${completed.state}.\n${logs}`);
     assert(completedJob?.state === 'success', 'The Docker job did not succeed.');
-    jobIds.add(completedJob.id);
     assert(
       completedJob.artifacts.some((artifact) => artifact.name === 'qualification/result.txt'),
       'The qualification artifact was not published.'
     );
     const artifact = completedJob.artifacts.find((item) => item.name === 'qualification/result.txt')!;
     assert((await client.text(`/api/v1/artifacts/${artifact.id}`)).trim() === 'passed', 'The stored artifact contents are incorrect.');
-    const logs = await readAllLogs(completedJob.id);
     assert(logs.includes('Verify checkout'), 'Persisted job logs are incomplete.');
     assert(logs.includes('***') && !logs.includes(qualificationSecret), 'A CI secret was not masked from persisted logs.');
   }
@@ -563,5 +565,6 @@ interface RunSummary {
   state: string;
   trigger: string;
   branch: string;
+  commit: string;
   cancellationReason?: string;
 }

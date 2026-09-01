@@ -10,6 +10,7 @@ pub struct DockerSandbox {
     container: String,
     network: String,
     services: Vec<String>,
+    user: Option<String>,
 }
 
 impl DockerSandbox {
@@ -24,6 +25,7 @@ impl DockerSandbox {
             container: format!("marl-job-{suffix}"),
             network: format!("marl-job-{suffix}"),
             services: Vec::new(),
+            user: container_user(workspace)?,
         };
         let result = sandbox.prepare(job, workspace, cache).await;
         if let Err(error) = result {
@@ -94,11 +96,18 @@ impl DockerSandbox {
             "4g",
             "--cpus",
             "2",
+            "--env",
+            "HOME=/tmp/marl-home",
             "--entrypoint",
             "/bin/sh",
+        ]);
+        if let Some(user) = &self.user {
+            command.args(["--user", user]);
+        }
+        command.args([
             &job.runtime.image,
             "-c",
-            "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done",
+            "mkdir -p \"$HOME\"; trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done",
         ]);
         checked(&mut command, "create job container").await?;
         checked(
@@ -128,6 +137,9 @@ impl DockerSandbox {
         ]);
         let mut command = Command::new("docker");
         command.args(["exec", "--workdir", &working_directory]);
+        if let Some(user) = &self.user {
+            command.args(["--user", user]);
+        }
         add_environment(&mut command, &environment);
         command.arg(&self.container).arg(shell);
         match shell {
@@ -178,6 +190,19 @@ impl DockerSandbox {
             .args(["network", "rm", &self.network])
             .status()
             .await;
+    }
+}
+
+fn container_user(workspace: &Path) -> Result<Option<String>> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = std::fs::metadata(workspace)?;
+        Ok(Some(format!("{}:{}", metadata.uid(), metadata.gid())))
+    }
+    #[cfg(not(unix))]
+    {
+        Ok(None)
     }
 }
 

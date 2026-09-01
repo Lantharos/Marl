@@ -111,7 +111,9 @@ only host directories mounted into that container.
 
 Job and service containers drop Linux capabilities and enable `no-new-privileges`. Each job
 container is limited to 2 CPUs, 4 GiB of memory, and 512 processes; each declared service is
-limited to 1 CPU, 1 GiB of memory, and 256 processes. The runner coalesces small output into
+limited to 1 CPU, 1 GiB of memory, and 256 processes. On Unix hosts, job steps use the runner
+account's numeric user and group with a disposable container home, keeping the checkout and cache
+writable without granting filesystem-bypass capabilities. The runner coalesces small output into
 log chunks no larger than 1 MiB and sends new frames through a per-job hibernating realtime room.
 Persisted logs are capped at 64 MiB per job. Cursor-paged object-storage logs remain authoritative
 for reconnects and completed runs.
