@@ -26,7 +26,7 @@
 </script>
 
 <div class="picker" use:dismissable={() => (open = false)}>
-  <div class="input"><Tag size={14} /><input bind:value {disabled} maxlength="255" autocomplete="off" spellcheck="false" placeholder="v1.0.0" aria-label="Release tag" aria-expanded={open} aria-controls="release-tag-options" onfocus={() => (open = true)} oninput={() => (open = true)} /></div>
+  <div class="input"><Tag size={14} /><input bind:value {disabled} maxlength="255" autocomplete="off" data-1p-ignore spellcheck="false" placeholder="v1.0.0" aria-label="Release tag" aria-expanded={open} aria-controls="release-tag-options" onfocus={() => (open = true)} oninput={() => (open = true)} /></div>
   {#if open && filtered.length}<div id="release-tag-options" class="options" role="listbox" aria-label="Existing tags">{#each filtered as tag (tag.name)}<button type="button" role="option" aria-selected={tag.name === value} onclick={() => choose(tag)}><Tag size={13} /><span><strong>{tag.name}</strong><small>{tag.annotated ? 'Annotated tag' : 'Tag'} · {tag.targetCommitId.slice(0, 8)}</small></span></button>{/each}</div>{/if}
 </div>
 

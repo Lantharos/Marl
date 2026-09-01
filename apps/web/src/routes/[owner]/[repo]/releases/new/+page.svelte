@@ -6,4 +6,4 @@
 </script>
 
 <svelte:head><title>New release · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
-<ReleaseForm owner={$page.params.owner ?? ''} repository={$page.params.repo ?? ''} branches={data.branches} tags={data.tags} />
+{#key `${$page.params.owner}/${$page.params.repo}`}<ReleaseForm owner={$page.params.owner ?? ''} repository={$page.params.repo ?? ''} branches={data.branches} tags={data.tags} />{/key}

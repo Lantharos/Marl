@@ -66,10 +66,11 @@ function authorizationToken(authorization: string | null) {
   }
 }
 
-async function ensureApplicationUser(env: Env, authUser: { id: string; name: string; email: string; image?: string | null; username?: string | null }) {
-  const existing = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE').bind(authUser.id, authUser.email).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null; authUserId: string | null }>();
+async function ensureApplicationUser(env: Env, authUser: { id: string; name: string; email: string; emailVerified?: boolean; image?: string | null; username?: string | null }) {
+  const existing = await env.DB.prepare('SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId,EXISTS(SELECT 1 FROM user_emails WHERE user_emails.user_id=users.id AND user_emails.email=users.email COLLATE NOCASE AND user_emails.primary_email=1) AS primaryEmailReady,EXISTS(SELECT 1 FROM user_emails WHERE user_emails.user_id=users.id AND user_emails.email=users.email COLLATE NOCASE AND user_emails.verified_at IS NOT NULL) AS primaryEmailVerified FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE').bind(authUser.id, authUser.email).first<{ id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null; authUserId: string | null; primaryEmailReady: number; primaryEmailVerified: number }>();
   if (existing) {
     if (!existing.authUserId) await env.DB.prepare('UPDATE users SET auth_user_id=?,avatar_url=COALESCE(avatar_url,?) WHERE id=? AND auth_user_id IS NULL').bind(authUser.id, authUser.image ?? null, existing.id).run();
+    if (!existing.primaryEmailReady || ((authUser.emailVerified || env.ENVIRONMENT === 'development') && !existing.primaryEmailVerified)) await ensurePrimaryEmail(env, existing.id, authUser.email, Boolean(authUser.emailVerified));
     return { id: existing.id, handle: existing.handle, displayName: existing.displayName, email: existing.email, avatarUrl: existing.avatarUrl ?? authUser.image ?? null };
   }
   const handle = authUser.username ?? await availableHandle(env, authUser.email.split('@')[0] || authUser.name);
@@ -79,7 +80,25 @@ async function ensureApplicationUser(env: Env, authUser: { id: string; name: str
     env.DB.prepare(`INSERT OR IGNORE INTO organizations (id,slug,name,kind,base_repository_role) VALUES (?,?,?,'personal',NULL)`).bind(organizationId, handle, authUser.name),
     env.DB.prepare(`INSERT OR IGNORE INTO organization_members (organization_id,user_id,role) VALUES (?,?,'owner')`).bind(organizationId, authUser.id)
   ]);
+  await ensurePrimaryEmail(env, authUser.id, authUser.email, Boolean(authUser.emailVerified));
   return { id: authUser.id, handle, displayName: authUser.name, email: authUser.email, avatarUrl: authUser.image ?? null };
+}
+
+async function ensurePrimaryEmail(env: Env, userId: string, value: string, verified: boolean) {
+  const email = value.trim().toLowerCase();
+  const current = await env.DB.prepare('SELECT id,user_id AS userId FROM user_emails WHERE email=? COLLATE NOCASE').bind(email).first<{ id: string; userId: string }>();
+  if (current?.userId === userId) {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE user_emails SET primary_email=0 WHERE user_id=? AND id!=?').bind(userId, current.id),
+      env.DB.prepare(`UPDATE user_emails SET primary_email=1,verified_at=CASE WHEN ? OR ?='development' THEN COALESCE(verified_at,CURRENT_TIMESTAMP) ELSE verified_at END WHERE id=?`).bind(verified ? 1 : 0, env.ENVIRONMENT, current.id)
+    ]);
+    return;
+  }
+  if (current) return;
+  await env.DB.batch([
+    env.DB.prepare('UPDATE user_emails SET primary_email=0 WHERE user_id=?').bind(userId),
+    env.DB.prepare(`INSERT INTO user_emails (id,user_id,email,primary_email,verified_at) VALUES (?,?,?,1,CASE WHEN ? OR ?='development' THEN CURRENT_TIMESTAMP END)`).bind(`email_${crypto.randomUUID().replaceAll('-', '')}`, userId, email, verified ? 1 : 0, env.ENVIRONMENT)
+  ]);
 }
 
 async function availableHandle(env: Env, source: string) {

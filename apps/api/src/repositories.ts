@@ -175,11 +175,11 @@ export async function listRepositories(env: Env, principal: Principal, url: URL)
   const cursor = readCursor(url);
   const access = repositoryListFilter(principal);
   const visibility = url.searchParams.get('visibility') ?? 'all';
-  if (!['all', 'public', 'private'].includes(visibility)) return problem(422, 'invalid_visibility', 'Repository visibility is invalid.');
-  const visibilitySql = visibility === 'all' ? '' : 'AND repositories.visibility=?';
+  if (!['all', 'public', 'private', 'archived'].includes(visibility)) return problem(422, 'invalid_visibility', 'Repository visibility is invalid.');
+  const visibilitySql = visibility === 'archived' ? 'AND repositories.archived_at IS NOT NULL' : `${visibility === 'all' ? '' : 'AND repositories.visibility=?'} AND repositories.archived_at IS NULL`;
   const querySql = search.query ? `AND (repositories.name LIKE ? ESCAPE '\\' OR organizations.slug LIKE ? ESCAPE '\\' OR repositories.description LIKE ? ESCAPE '\\')` : '';
   const after = cursor ? 'AND (repositories.updated_at<? OR (repositories.updated_at=? AND repositories.id<?))' : '';
-  const filters = [...access.values, ...(visibility === 'all' ? [] : [visibility]), ...(search.query ? [search.like, search.like, search.like] : [])];
+  const filters = [...access.values, ...(['public', 'private'].includes(visibility) ? [visibility] : []), ...(search.query ? [search.like, search.like, search.like] : [])];
   const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
   const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ${visibilitySql} ${querySql} ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`)
     .bind(...values)
@@ -196,7 +196,7 @@ export async function listRepositories(env: Env, principal: Principal, url: URL)
 
 export async function listShellRepositories(env: Env, principal: Principal): Promise<RepositorySummary[]> {
   const access = repositoryListFilter(principal);
-  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 100`)
+  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL AND repositories.archived_at IS NULL ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 100`)
     .bind(...access.values)
     .all<RepositoryRow>();
   return result.results.map(({ organizationId: _, defaultBranch: __, ...repository }) => repository);

@@ -1,11 +1,12 @@
 <script lang="ts">
-  import type { ApiError, ReleaseAsset } from '@marl/contracts';
+  import type { ReleaseAsset } from '@marl/contracts';
   import Download from 'lucide-svelte/icons/download';
   import FileArchive from 'lucide-svelte/icons/file-archive';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Upload from 'lucide-svelte/icons/upload';
   import Button from '$lib/components/Button.svelte';
   import { api, MarlApiError } from '$lib/api';
+  import { uploadReleaseAsset } from './release-upload';
 
   let { owner, repository, releaseId, assets = $bindable(), editable = false }: { owner: string; repository: string; releaseId: string; assets: ReleaseAsset[]; editable?: boolean } = $props();
   let input = $state<HTMLInputElement>();
@@ -23,20 +24,8 @@
     uploading = [...uploading, { name: file.name, progress: 0 }];
     error = '';
     try {
-      const started = await api<{ upload: { id: string; partBytes: number; parts: number } }>(`/repositories/${owner}/${repository}/releases/${releaseId}/asset-uploads`, { method: 'POST', body: JSON.stringify({ name: file.name, byteSize: file.size, contentType: file.type || 'application/octet-stream' }) });
-      try {
-        for (let part = 1; part <= started.upload.parts; part += 1) {
-          const offset = (part - 1) * started.upload.partBytes;
-          const response = await fetch(`/api/v1/release-asset-uploads/${started.upload.id}/parts/${part}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: file.slice(offset, Math.min(file.size, offset + started.upload.partBytes)) });
-          if (!response.ok) throw await responseError(response);
-          uploading = uploading.map((item) => item.name === file.name ? { ...item, progress: part / started.upload.parts } : item);
-        }
-        const completed = await api<{ asset: ReleaseAsset }>(`/release-asset-uploads/${started.upload.id}/complete`, { method: 'POST' });
-        assets = [...assets, completed.asset];
-      } catch (cause) {
-        await api(`/release-asset-uploads/${started.upload.id}`, { method: 'DELETE' }).catch(() => undefined);
-        throw cause;
-      }
+      const asset = await uploadReleaseAsset(owner, repository, releaseId, file, (progress) => (uploading = uploading.map((item) => item.name === file.name ? { ...item, progress } : item)));
+      assets = [...assets, asset];
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : `Could not upload ${file.name}.`;
     } finally {
@@ -56,11 +45,6 @@
     } finally {
       deleting = null;
     }
-  }
-
-  async function responseError(response: Response) {
-    const value = await response.json().catch(() => null) as ApiError | null;
-    return new MarlApiError(response.status, value?.error.code ?? 'upload_failed', value?.error.message ?? `Upload failed (${response.status}).`);
   }
 
   function size(bytes: number) {

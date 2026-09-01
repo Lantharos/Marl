@@ -237,6 +237,7 @@ CREATE TABLE jobs (
   started_at TEXT,
   completed_at TEXT,
   artifact_paths_json TEXT NOT NULL DEFAULT '[]',
+  release_json TEXT,
   runtime_json TEXT NOT NULL DEFAULT '{"image":"ubuntu:24.04","timeoutMinutes":360,"services":[]}',
   needs_json TEXT NOT NULL DEFAULT '[]',
   UNIQUE (run_id, job_key)
@@ -538,6 +539,22 @@ CREATE TABLE users (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 , email TEXT, avatar_url TEXT, auth_user_id TEXT, bio TEXT NOT NULL DEFAULT '', website TEXT);
 
+CREATE TABLE user_emails (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  primary_email INTEGER NOT NULL DEFAULT 0 CHECK (primary_email IN (0, 1)),
+  verified_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_email_verifications (
+  user_email_id TEXT PRIMARY KEY REFERENCES user_emails(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE workflows (
   id TEXT PRIMARY KEY,
   repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
@@ -576,6 +593,12 @@ CREATE UNIQUE INDEX auth_two_factor_by_user ON auth_two_factor(user_id);
 CREATE UNIQUE INDEX auth_user_username_unique ON auth_user(username COLLATE NOCASE) WHERE username IS NOT NULL;
 
 CREATE INDEX auth_verifications_by_identifier ON auth_verification(identifier, expires_at);
+
+CREATE INDEX user_emails_by_user ON user_emails(user_id, primary_email DESC, created_at);
+
+CREATE UNIQUE INDEX user_emails_primary ON user_emails(user_id) WHERE primary_email = 1;
+
+CREATE INDEX user_email_verifications_by_expiry ON user_email_verifications(expires_at);
 
 CREATE INDEX branches_by_index_version ON branches(repository_id, index_version);
 
@@ -818,6 +841,7 @@ CREATE TABLE releases (
   name TEXT NOT NULL DEFAULT '',
   body TEXT NOT NULL DEFAULT '',
   author_id TEXT NOT NULL REFERENCES users(id),
+  source_job_id TEXT UNIQUE REFERENCES jobs(id) ON DELETE SET NULL,
   draft INTEGER NOT NULL DEFAULT 1 CHECK (draft IN (0, 1)),
   prerelease INTEGER NOT NULL DEFAULT 0 CHECK (prerelease IN (0, 1)),
   latest INTEGER NOT NULL DEFAULT 0 CHECK (latest IN (0, 1)),

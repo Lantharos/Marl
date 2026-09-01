@@ -9,6 +9,7 @@ import { publishRunLog } from './run-realtime';
 import { auditStatement } from './audit';
 import { jobSecrets } from './secrets';
 import { reserveArtifactUploadSql, reserveEmptyArtifactSql, reserveLogChunkSql, runnerQuotas } from './runner-quotas';
+import { publishJobRelease } from './releases';
 
 type Runner = { id: string; organizationId: string; name: string; labelsJson: string; concurrency: number; platform: string; architecture: string; version: string };
 const runnerSelect = `SELECT runners.id,runners.name,runners.labels_json AS labelsJson,runners.active_jobs AS activeJobs,runners.concurrency,runners.platform,runners.architecture,runners.version,runners.last_seen_at AS lastSeenAt,CASE WHEN runners.disabled_at IS NOT NULL OR runners.last_seen_at < datetime('now','-90 seconds') THEN 'offline' WHEN runners.active_jobs > 0 THEN 'busy' ELSE 'idle' END AS state FROM runners JOIN organization_members ON organization_members.organization_id=runners.organization_id`;
@@ -325,16 +326,25 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
   const job = await ownsLease(env, runner, jobId, request.headers.get('x-marl-job-lease'));
   const body = await readJson(request, completeJobBody);
   if (!job || !body || !['success', 'failure', 'canceled'].includes(String(body.state)) || !Number.isInteger(body.exitCode)) return problem(409, 'lease_lost', 'This job lease is no longer valid.');
-  const state = job.cancelRequested || job.runState === 'canceled' ? 'canceled' : String(body.state);
+  let state = job.cancelRequested || job.runState === 'canceled' ? 'canceled' : String(body.state);
+  let releaseFailure = '';
+  if (state === 'success') {
+    const releaseError = await publishJobRelease(env, jobId);
+    if (releaseError) {
+      const payload = await releaseError.json().catch(() => null) as { error?: { message?: string } } | null;
+      state = 'failure';
+      releaseFailure = payload?.error?.message ?? 'The declared release could not be published.';
+    }
+  }
   const summary = state === 'canceled'
     ? job.cancellationReason === 'superseded'
       ? 'Superseded by a newer push.'
       : job.cancellationReason === 'developer'
         ? 'Canceled by a developer.'
         : typeof body.summary === 'string' ? body.summary.slice(0, 1000) : 'Canceled by the runner.'
-    : typeof body.summary === 'string' ? body.summary.slice(0, 1000) : '';
+    : releaseFailure || (typeof body.summary === 'string' ? body.summary.slice(0, 1000) : '');
   await env.DB.batch([
-    env.DB.prepare(`UPDATE jobs SET state=?,exit_code=?,completed_at=CURRENT_TIMESTAMP,lease_token_hash=NULL,lease_expires_at=NULL WHERE id=? AND state='running'`).bind(state, state === 'canceled' ? 130 : body.exitCode, jobId),
+    env.DB.prepare(`UPDATE jobs SET state=?,exit_code=?,completed_at=CURRENT_TIMESTAMP,lease_token_hash=NULL,lease_expires_at=NULL WHERE id=? AND state='running'`).bind(state, state === 'canceled' ? 130 : releaseFailure ? 1 : body.exitCode, jobId),
     env.DB.prepare(`UPDATE runners SET active_jobs=MAX(active_jobs-1,0),last_seen_at=CURRENT_TIMESTAMP WHERE id=?`).bind(runner.id),
     env.DB.prepare(`UPDATE checks SET state=?,summary=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE ${checkForJobSql}`).bind(state, summary, jobId)
   ]);

@@ -128,6 +128,7 @@ export interface PublicUserProfile {
   stats: { repositories: number; contributions: number; pullRequests: number };
   contributions: Array<{ date: string; count: number }>;
   repositories: PublicProfileRepository[];
+  archivedRepositories: PublicProfileRepository[];
   organizations: Array<{
     slug: string;
     name: string;
@@ -155,6 +156,7 @@ export interface PublicOrganizationProfile {
   };
   stats: { repositories: number; members: number; contributions: number };
   repositories: PublicProfileRepository[];
+  archivedRepositories: PublicProfileRepository[];
   members: Array<{
     handle: string;
     displayName: string;

@@ -6,4 +6,4 @@
 </script>
 
 <svelte:head><title>Edit {data.release.name || data.release.tagName} · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
-<ReleaseForm owner={$page.params.owner ?? ''} repository={$page.params.repo ?? ''} branches={data.branches} tags={data.tags} release={data.release} />
+{#key `${$page.params.owner}/${$page.params.repo}/${data.release.id}`}<ReleaseForm owner={$page.params.owner ?? ''} repository={$page.params.repo ?? ''} branches={data.branches} tags={data.tags} release={data.release} />{/key}

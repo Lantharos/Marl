@@ -69,13 +69,13 @@
 
 <main class="page">
   <PageHeader title="Repositories" description="The projects you own and collaborate on." actionHref="/repositories/new" actionLabel="New repository" />
-  <FilterBar placeholder="Find a repository" tabs={['All', 'Public', 'Private']} bind:active={activeFilter} bind:query onActiveChange={() => navigate()} onQueryChange={changeQuery} />
+  <FilterBar placeholder="Find a repository" tabs={['All', 'Public', 'Private', 'Archived']} bind:active={activeFilter} bind:query onActiveChange={() => navigate()} onQueryChange={changeQuery} />
   <section class="list" aria-label="Repositories">
     {#each items as repository (repository.id)}
       <a class="row" href="/{repository.owner}/{repository.name}">
         <RepositoryIcon name={repository.name} src={repository.iconUrl} size={36} />
         <span class="main">
-          <strong><i>{repository.owner}/</i>{repository.name}{#if repository.visibility === 'private'}<Lock size={12} aria-label="Private repository" />{/if}</strong>
+          <strong><i>{repository.owner}</i><span class="separator">/</span>{repository.name}{#if repository.visibility === 'private'}<Lock size={12} aria-label="Private repository" />{/if}</strong>
           <p>{repository.description || 'No description yet.'}</p>
         </span>
         <Time value={repository.updatedAt} />

@@ -1,6 +1,6 @@
 import type { Principal } from './auth';
 import { workflowCheckName } from './check-provenance';
-import { identifier } from './domain';
+import { identifier, validTagName } from './domain';
 import { pageResult, pageSize, readCursor } from './cursor';
 import { json, problem } from './http';
 import { readListQuery } from './list-query';
@@ -11,7 +11,8 @@ import { authorizeRepository, authorizeRepositoryId, repositoryListFilter, type 
 type Repository = { id: string; organizationId: string; owner: string; name: string };
 export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
 export type RunService = { name: string; image: string; environment: Record<string, string> };
-export type RunJob = { key: string; name: string; labels: string[]; needs: string[]; steps: RunStep[]; environment: Record<string, string>; artifacts: string[]; runtime: { image: string; timeoutMinutes: number; services: RunService[] } };
+export type RunRelease = { tag: string; name: string; body: string; draft: boolean; prerelease: boolean; makeLatest: boolean; files: string[] };
+export type RunJob = { key: string; name: string; labels: string[]; needs: string[]; steps: RunStep[]; environment: Record<string, string>; artifacts: string[]; release?: RunRelease; runtime: { image: string; timeoutMinutes: number; services: RunService[] } };
 type QueueRun = { repositoryId: string; workflowId: string; name: string; trigger: 'workflow_dispatch' | 'retry' | 'push'; branch: string; commitId: string; actorId: string | null; jobs: RunJob[]; supersede?: boolean };
 export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
@@ -110,7 +111,11 @@ export function parseRunJobs(value: unknown): JobParseResult {
     }
     const artifacts = Array.isArray(job.artifacts) ? job.artifacts.map(String) : [];
     if (artifacts.length > 32 || artifacts.some((path) => !artifactPath(path))) return { error: { code: 'invalid_artifacts', detail: 'Artifact paths must stay inside the job workspace.' } };
-    jobs.push({ key: job.key, name: job.name, labels, needs, steps: parsedSteps, environment: jobEnvironment, artifacts, runtime: { image: runtimeImage, timeoutMinutes, services } });
+    const release = parseRelease(job.release);
+    if (release === null) return { error: { code: 'invalid_release', detail: 'Job releases need a valid tag, optional notes, and workspace-relative files.' } };
+    const artifactPaths = [...new Set([...artifacts, ...(release?.files ?? [])])];
+    if (artifactPaths.length > 32) return { error: { code: 'invalid_artifacts', detail: 'A job can upload at most 32 artifact paths.' } };
+    jobs.push({ key: job.key, name: job.name, labels, needs, steps: parsedSteps, environment: jobEnvironment, artifacts: artifactPaths, ...(release ? { release } : {}), runtime: { image: runtimeImage, timeoutMinutes, services } });
   }
   if (new Set(jobs.map((job) => job.key)).size !== jobs.length) return { error: { code: 'duplicate_job', detail: 'Job keys must be unique.' } };
   if (jobs.some((job) => job.needs.includes(job.key) || job.needs.some((need) => !jobs.some((candidate) => candidate.key === need)))) return { error: { code: 'invalid_dependency', detail: 'Every job dependency must refer to another job in this run.' } };
@@ -121,6 +126,20 @@ export function parseRunJobs(value: unknown): JobParseResult {
     for (const job of ready) resolved.add(job.key);
   }
   return { jobs };
+}
+
+function parseRelease(value: unknown): RunRelease | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const release = value as Record<string, unknown>;
+  const files = release.files === undefined ? [] : Array.isArray(release.files) ? release.files.map(String) : [String(release.files)];
+  const tag = typeof release.tag === 'string' ? release.tag.trim() : '';
+  const name = typeof release.name === 'string' ? release.name.trim() : '';
+  const body = typeof release.body === 'string' ? release.body : '';
+  if (!validTagName(tag) || name.length > 240 || body.length > 100_000 || files.length > 32 || files.some((path) => !artifactPath(path))) return null;
+  const draft = release.draft === true;
+  const prerelease = release.prerelease === true;
+  return { tag, name, body, draft, prerelease, makeLatest: !draft && !prerelease && release.makeLatest !== false, files };
 }
 
 export async function queueRun(env: Env, input: QueueRun): Promise<Record<string, unknown> | null> {
@@ -136,7 +155,8 @@ export async function queueRun(env: Env, input: QueueRun): Promise<Record<string
   statements.push(env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,? FROM runs WHERE repository_id=?`).bind(runId, input.repositoryId, input.workflowId, input.name, input.trigger, input.branch, input.commitId, input.actorId, input.repositoryId));
   for (const job of input.jobs) {
     const checkName = workflowCheckName(input.name, job.name);
-    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), runId, job.key, job.name, checkName, JSON.stringify(job.labels), JSON.stringify(job.steps), JSON.stringify(job.environment), JSON.stringify(job.artifacts), JSON.stringify(job.runtime), JSON.stringify(job.needs)));
+    const release = job.release ? { ...job.release, tag: job.release.tag.replaceAll('$MARL_COMMIT', input.commitId).replaceAll('$MARL_BRANCH', input.branch) } : undefined;
+    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,release_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), runId, job.key, job.name, checkName, JSON.stringify(job.labels), JSON.stringify(job.steps), JSON.stringify(job.environment), JSON.stringify(job.artifacts), release ? JSON.stringify(release) : null, JSON.stringify(job.runtime), JSON.stringify(job.needs)));
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key,name,state,summary) VALUES (?,?,?,?,?,?,?,?, 'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key) DO UPDATE SET name=excluded.name,state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), input.repositoryId, input.commitId, input.repositoryId, input.workflowId, job.key, checkName, 'queued'));
   }
   const results = await env.DB.batch(statements);
@@ -193,11 +213,11 @@ export async function retryRun(env: Env, principal: Principal, owner: string, na
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const previous = await env.DB.prepare(`SELECT id,workflow_id AS workflowId,name,branch,commit_id AS commitId FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; workflowId: string; name: string; branch: string; commitId: string }>();
   if (!previous) return problem(409, 'run_not_retryable', 'This run cannot be retried yet.');
-  const jobs = await env.DB.prepare(`SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson,runtime_json AS runtimeJson,needs_json AS needsJson FROM jobs WHERE run_id=? ORDER BY created_at`).bind(previous.id).all<{ jobKey: string; name: string; checkName: string; labelsJson: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; runtimeJson: string; needsJson: string }>();
+  const jobs = await env.DB.prepare(`SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson,release_json AS releaseJson,runtime_json AS runtimeJson,needs_json AS needsJson FROM jobs WHERE run_id=? ORDER BY created_at`).bind(previous.id).all<{ jobKey: string; name: string; checkName: string; labelsJson: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; releaseJson: string | null; runtimeJson: string; needsJson: string }>();
   const id = identifier('run');
   const statements = [env.DB.prepare(`INSERT INTO runs (id,repository_id,workflow_id,number,name,trigger_name,branch,commit_id,actor_id) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,'retry',?,?,? FROM runs WHERE repository_id=?`).bind(id, repo.id, previous.workflowId, previous.name, previous.branch, previous.commitId, principal.id, repo.id)];
   for (const job of jobs.results) {
-    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), id, job.jobKey, job.name, job.checkName, job.labelsJson, job.stepsJson, job.environmentJson, job.artifactPathsJson, job.runtimeJson, job.needsJson));
+    statements.push(env.DB.prepare(`INSERT INTO jobs (id,run_id,job_key,name,check_name,required_labels_json,steps_json,environment_json,artifact_paths_json,release_json,runtime_json,needs_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(identifier('job'), id, job.jobKey, job.name, job.checkName, job.labelsJson, job.stepsJson, job.environmentJson, job.artifactPathsJson, job.releaseJson, job.runtimeJson, job.needsJson));
     statements.push(env.DB.prepare(`INSERT INTO checks (id,repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key,name,state,summary) VALUES (?,?,?,?,?,?,?,?, 'Waiting for a self-hosted runner.') ON CONFLICT(repository_id,commit_id,producer_repository_id,producer_workflow_id,producer_job_key) DO UPDATE SET name=excluded.name,state='queued',summary=excluded.summary,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP`).bind(identifier('check'), repo.id, previous.commitId, repo.id, previous.workflowId, job.jobKey, job.checkName, 'queued'));
   }
   await env.DB.batch(statements);

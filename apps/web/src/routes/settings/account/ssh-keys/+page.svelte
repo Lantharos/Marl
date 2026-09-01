@@ -50,13 +50,13 @@
 <svelte:head><title>SSH keys · Marl</title></svelte:head>
 <header class="page-head"><h2>SSH keys</h2><p>Use public keys to clone, push, and verify commits signed with your Marl identity.</p></header>
 <form onsubmit={(event) => { event.preventDefault(); void addKey(); }}>
-  <label><span>Name</span><input bind:value={name} placeholder="Work laptop" autocomplete="off" /></label>
-  <label><span>Public key</span><textarea bind:value={publicKey} placeholder="ssh-ed25519 AAAA…" rows="3"></textarea></label>
+  <label><span>Name</span><input bind:value={name} placeholder="Work laptop" autocomplete="off" data-1p-ignore /></label>
+  <label><span>Public key</span><textarea bind:value={publicKey} placeholder="ssh-ed25519 AAAA…" rows="3" data-1p-ignore></textarea></label>
   <Button type="submit" variant="primary" disabled={busy || !name.trim() || !publicKey.trim()}>{busy ? 'Adding…' : 'Add SSH key'}</Button>
 </form>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 <div class="key-list">
-  {#each sshKeys as key}
+  {#each sshKeys as key (key.id)}
     <article><span class="key-icon"><KeyRound size={17} /></span><div><strong>{key.name}</strong><code>{key.fingerprint}</code><small>Added <Time value={key.createdAt} />{#if key.lastUsedAt} · last used <Time value={key.lastUsedAt} />{:else} · never used{/if}</small></div><Button variant="danger-soft" icon aria-label={`Remove ${key.name}`} onclick={() => removeKey(key)}><Trash2 size={15} /></Button></article>
   {:else}<div class="empty"><KeyRound size={24} /><strong>No SSH keys</strong><p>Add a public key to use the SSH clone URL shown on repositories.</p></div>{/each}
 </div>

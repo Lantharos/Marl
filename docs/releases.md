@@ -21,6 +21,11 @@ up to 100 assets. Each asset may be at most 2 GiB and uploads in 8 MiB parts, wi
 part size. Incomplete uploads expire after 24 hours and are aborted before their reserved name can
 be reused. Downloads use the original safe filename and increment a per-asset count.
 
+Files can be selected while creating a release; Marl first saves a recoverable draft, uploads every
+file, and only then publishes the tag. Self-hosted workflows can publish releases with
+`marl/release@v1`. Runner assets are copied into release-owned storage after the declared job
+succeeds, while the original run artifacts remain available from the run.
+
 Draft releases and their assets require repository push access. Published release visibility and
 downloads follow repository read access. All create, publish, edit, asset, and delete mutations are
 recorded in the repository audit log.

@@ -4,6 +4,7 @@ import { acceptOrganizationInvitation, addTeamMember, createOrganization, create
 import type { Env } from './platform';
 import { getProfile, listSessions, updateProfile, uploadAvatar } from './profile';
 import { deleteRepositoryCollaborator, deleteRepositoryTeamGrant, getRepositoryAccess, putRepositoryCollaborator, putRepositoryTeamGrant } from './repository-access-api';
+import { addUserEmail, deleteUserEmail, listUserEmails, resendUserEmailVerification, verifyUserEmail } from './user-emails';
 
 export async function handleAccessRoute(request: Request, env: Env, principal: Principal, url: URL): Promise<Response | null> {
   if (url.pathname === '/api/v1/profile') {
@@ -11,6 +12,16 @@ export async function handleAccessRoute(request: Request, env: Env, principal: P
     if (request.method === 'PATCH') return updateProfile(request, env, principal);
   }
   if (url.pathname === '/api/v1/profile/avatar' && request.method === 'PUT') return uploadAvatar(request, env, principal);
+  if (url.pathname === '/api/v1/emails') {
+    if (request.method === 'GET') return listUserEmails(env, principal);
+    if (request.method === 'POST') return addUserEmail(request, env, principal);
+  }
+  if (url.pathname === '/api/v1/emails/verify' && request.method === 'POST') return verifyUserEmail(request, env, principal);
+  const emailRoute = url.pathname.match(/^\/api\/v1\/emails\/(email_[a-z0-9]+)(?:\/(resend))?$/);
+  if (emailRoute) {
+    if (emailRoute[2] === 'resend' && request.method === 'POST') return resendUserEmailVerification(env, principal, emailRoute[1]);
+    if (!emailRoute[2] && request.method === 'DELETE') return deleteUserEmail(request, env, principal, emailRoute[1]);
+  }
   if (url.pathname === '/api/v1/sessions' && request.method === 'GET') return listSessions(env, principal);
   if (url.pathname === '/api/v1/organizations') {
     if (request.method === 'GET') return listOrganizations(env, principal);

@@ -105,9 +105,9 @@
     <div class="branch-group">
       <div class="branch-anchor" use:dismissable={() => (branchOpen = false)}>
         <Button class="branch-button" aria-expanded={branchOpen} onclick={() => (branchOpen = !branchOpen)}><GitBranch size={15} /><span>{selectedBranch}</span><ChevronDown size={13} /></Button>
-        {#if branchOpen}<div class="branch-menu"><label><Search size={13} /><input bind:value={branchQuery} placeholder="Find a branch" /></label>{#each matchingBranches as branch}<button class:chosen={branch.name === selectedBranch} onclick={() => void chooseBranch(branch.name)}><span><strong>{branch.name}</strong><small>{branch.commit} · <Time value={branch.updatedAt} /></small></span>{#if branch.name === selectedBranch}<Check size={14} />{/if}</button>{:else}<p>No matching branches</p>{/each}</div>{/if}
+        {#if branchOpen}<div class="branch-menu"><label><Search size={13} /><input bind:value={branchQuery} placeholder="Find a branch" data-1p-ignore /></label>{#each matchingBranches as branch (branch.name)}<button class:chosen={branch.name === selectedBranch} onclick={() => void chooseBranch(branch.name)}><span><strong>{branch.name}</strong><small>{branch.commit} · <Time value={branch.updatedAt} /></small></span>{#if branch.name === selectedBranch}<Check size={14} />{/if}</button>{:else}<p>No matching branches</p>{/each}</div>{/if}
       </div>
-      <a href="/{owner}/{repo}/branches"><GitBranch size={14} /><span>{branchItems.length} branches</span></a>
+      <a href="/{owner}/{repo}/branches"><GitBranch size={14} /><span>{branchItems.length} {branchItems.length === 1 ? 'branch' : 'branches'}</span></a>
     </div>
     <Button onclick={openFinder}>Go to file</Button>
   </div>
@@ -121,7 +121,7 @@
       <a class="history" href="/{owner}/{repo}/commits/{revisionPath}"><History size={14} />History</a>
     </header>
     <div>
-      {#each fileItems as item}
+      {#each fileItems as item (item.path)}
         <a class="file-row" href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(item.path)}">
           <span class="file-name">{#if item.kind === 'folder'}<Folder size={16} fill="currentColor" />{:else}<File size={16} />{/if}<strong>{item.name}</strong></span>
           <span class="file-meta">{#if item.message}<span>{item.message}</span>{/if}{#if item.updatedAt}<Time class="file-time" value={item.updatedAt} />{/if}</span>
@@ -138,8 +138,8 @@
 {#if finderOpen}
   <div class="finder-layer" role="presentation" onclick={(event) => event.currentTarget === event.target && (finderOpen = false)}>
     <div class="finder" role="dialog" aria-modal="true" aria-label="Go to file">
-      <header><Search size={17} /><input bind:this={finderInput} value={fileQuery} oninput={(event) => searchFiles(event.currentTarget.value)} placeholder="Search files in this repository" /><Button icon size="small" aria-label="Close file finder" onclick={() => (finderOpen = false)}><X size={16} /></Button></header>
-      <div>{#each finderItems as item}<a href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(item.path)}"><span>{#if item.kind === 'folder'}<Folder size={15} />{:else}<File size={15} />{/if}{item.path}</span><small>{item.kind}</small></a>{/each}</div>
+      <header><Search size={17} /><input bind:this={finderInput} value={fileQuery} oninput={(event) => searchFiles(event.currentTarget.value)} placeholder="Search files in this repository" data-1p-ignore /><Button icon size="small" aria-label="Close file finder" onclick={() => (finderOpen = false)}><X size={16} /></Button></header>
+      <div>{#each finderItems as item (item.path)}<a href="/{owner}/{repo}/{item.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(item.path)}"><span>{#if item.kind === 'folder'}<Folder size={15} />{:else}<File size={15} />{/if}{item.path}</span><small>{item.kind}</small></a>{/each}</div>
     </div>
   </div>
 {/if}

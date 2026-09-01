@@ -128,6 +128,7 @@ function githubRuntime(job: ObjectValue, matrix: Record<string, string>) {
 function githubSteps(job: ObjectValue, matrix: Record<string, string>) {
   const steps: Array<Record<string, unknown>> = [];
   const artifacts: string[] = [];
+  let release: Record<string, unknown> | undefined;
   for (const [index, raw] of (Array.isArray(job.steps) ? job.steps : []).entries()) {
     if (!raw || typeof raw !== 'object') throw new Error('Every GitHub Actions step must be an object.');
     const step = raw as ObjectValue;
@@ -139,6 +140,22 @@ function githubSteps(job: ObjectValue, matrix: Record<string, string>) {
         artifacts.push(...path.split(/\r?\n/).map((item) => item.trim()).filter(Boolean));
         continue;
       }
+      if (action === 'marl/release@v1') {
+        if (release) throw new Error('A job can publish only one release.');
+        const input = step.with && typeof step.with === 'object' ? step.with as ObjectValue : {};
+        const files = String(input.files ?? input.path ?? '').split(/\r?\n/).map((item) => interpolate(item.trim(), matrix)).filter(Boolean);
+        release = {
+          tag: interpolate(String(input.tag ?? ''), matrix).replaceAll('${{ github.sha }}', '$MARL_COMMIT').replaceAll('${{ github.ref_name }}', '$MARL_BRANCH'),
+          name: interpolate(String(input.name ?? ''), matrix),
+          body: String(input.body ?? ''),
+          draft: String(input.draft ?? 'false') === 'true',
+          prerelease: String(input.prerelease ?? 'false') === 'true',
+          makeLatest: String(input.latest ?? 'true') !== 'false',
+          files
+        };
+        artifacts.push(...files);
+        continue;
+      }
       throw new Error(`Action ${step.uses} is not supported yet. Use a run step or a supported Marl action.`);
     }
     if (typeof step.run !== 'string') throw new Error('Every GitHub Actions step needs run or uses.');
@@ -148,7 +165,7 @@ function githubSteps(job: ObjectValue, matrix: Record<string, string>) {
     steps.push({ name: String(step.name ?? `Step ${index + 1}`), run, shell, environment: stringEnvironment(step.env), ...(typeof step['working-directory'] === 'string' ? { workingDirectory: interpolate(step['working-directory'], matrix) } : {}), ...(step['timeout-minutes'] !== undefined ? { timeoutMinutes: Number(step['timeout-minutes']) } : {}), ...(step['continue-on-error'] === true ? { continueOnError: true } : {}) });
   }
   if (!steps.length) steps.push({ name: 'Finalize', run: 'printf "Workflow has no executable steps.\\n"', shell: 'sh' });
-  return { steps, artifacts };
+  return { steps, artifacts, release };
 }
 
 function githubJobs(value: unknown, globalEnvironment: Record<string, string>): unknown {
@@ -167,7 +184,7 @@ function githubJobs(value: unknown, globalEnvironment: Record<string, string>): 
       const matrixLabel = Object.values(matrix).join(', ');
       const rawNeeds = typeof job.needs === 'string' ? [job.needs] : Array.isArray(job.needs) ? job.needs.map(String) : [];
       const containerEnvironment = job.container && typeof job.container === 'object' ? stringEnvironment((job.container as ObjectValue).env) : {};
-      jobs.push({ key, name: interpolate(String(job.name ?? baseKey), matrix) + (matrixLabel ? ` (${matrixLabel})` : ''), labels: runtime.labels, needs: rawNeeds.map((need) => need.toLowerCase().replace(/[^a-z0-9_-]/g, '-')), steps: translated.steps, environment: { ...globalEnvironment, ...stringEnvironment(job.env), ...containerEnvironment, ...Object.fromEntries(Object.entries(matrix).map(([name, item]) => [`MATRIX_${name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}`, item])) }, artifacts: translated.artifacts, runtime: runtime.runtime });
+      jobs.push({ key, name: interpolate(String(job.name ?? baseKey), matrix) + (matrixLabel ? ` (${matrixLabel})` : ''), labels: runtime.labels, needs: rawNeeds.map((need) => need.toLowerCase().replace(/[^a-z0-9_-]/g, '-')), steps: translated.steps, environment: { ...globalEnvironment, ...stringEnvironment(job.env), ...containerEnvironment, ...Object.fromEntries(Object.entries(matrix).map(([name, item]) => [`MATRIX_${name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}`, item])) }, artifacts: translated.artifacts, ...(translated.release ? { release: translated.release } : {}), runtime: runtime.runtime });
     }
   }
   if (jobs.length > 32) throw new Error('Matrix expansion produced more than 32 jobs.');

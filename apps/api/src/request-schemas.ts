@@ -223,3 +223,9 @@ export const profileBody = strictObject({
   bio: pipe(string(), maxLength(280)),
   website: pipe(string(), maxLength(200))
 });
+export const userEmailBody = strictObject({
+  email: pipe(string(), minLength(3), maxLength(320))
+});
+export const verifyUserEmailBody = strictObject({
+  token: pipe(string(), minLength(32), maxLength(256))
+});

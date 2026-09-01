@@ -91,6 +91,33 @@ environments, timeouts, working directories, continue-on-error, `actions/checkou
 `uses:` actions are rejected with a workflow warning; Marl never reports an unsupported
 action as successful.
 
+`marl/release@v1` publishes the exact successful job commit and promotes matching workspace
+files into durable release assets. The release declaration is stored with the leased job, so a
+runner cannot choose another tag, commit, or repository. If an asset upload or release publish
+fails, the job fails instead of exposing a partial published release.
+
+```yaml
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bun run build
+      - uses: marl/release@v1
+        with:
+          tag: v1.4.0
+          name: Marl 1.4.0
+          body: Production release built by Marl.
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+```
+
+Native workflows can use the equivalent `release` object on a job with `tag`, `name`, `body`,
+`files`, `draft`, `prerelease`, and `makeLatest` fields. Release files also remain visible as
+ordinary run artifacts; Marl copies them to release-owned R2 keys so deleting a release cannot
+break the run record.
+
 Environment values in workflow files are ordinary repository content and must not contain
 credentials. Organization administrators can define shared CI secrets, and repository
 administrators can define repository-specific values. Repository values override organization

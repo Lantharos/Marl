@@ -1,8 +1,12 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { untrack } from 'svelte';
   import type { ReleaseDetail, RepositoryTag } from '@marl/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
+  import FileArchive from 'lucide-svelte/icons/file-archive';
+  import Trash2 from 'lucide-svelte/icons/trash-2';
+  import Upload from 'lucide-svelte/icons/upload';
   import Tag from 'lucide-svelte/icons/tag';
   import BackLink from '$lib/components/BackLink.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -13,6 +17,7 @@
   import ReleaseAssets from './ReleaseAssets.svelte';
   import TagPicker from './TagPicker.svelte';
   import { releasePath } from './release-path';
+  import { uploadReleaseAsset } from './release-upload';
 
   type Branch = { name: string; commitId: string };
   let { owner, repository, branches, tags, release }: { owner: string; repository: string; branches: Branch[]; tags: RepositoryTag[]; release?: ReleaseDetail } = $props();
@@ -24,10 +29,12 @@
   let prerelease = $state(untrack(() => release?.prerelease ?? false));
   let makeLatest = $state(untrack(() => release?.latest ?? true));
   let assets = $state(untrack(() => release?.assets ?? []));
+  let pendingFiles = $state<File[]>([]);
+  let fileInput = $state<HTMLInputElement>();
   let saving = $state(false);
   let deleting = $state(false);
   let confirmDelete = $state(false);
-  let error = $state('');
+  let error = $state(untrack(() => $page.url.searchParams.get('upload') === 'failed' ? 'The release was kept as a draft because one or more files could not be uploaded.' : $page.url.searchParams.get('publish') === 'failed' ? 'The files were uploaded, but the Git tag could not be published. The release remains a draft.' : ''));
   const published = $derived(Boolean(release && !release.draft));
   const targetOptions = $derived.by(() => {
     const options = branches.map((branch) => ({ value: branch.name, label: branch.name, description: branch.commitId.slice(0, 8) }));
@@ -47,15 +54,39 @@
     try {
       const payload = published
         ? { name: name.trim(), body, prerelease, makeLatest }
-        : { tagName: tagName.trim(), target, name: name.trim(), body, draft, prerelease, makeLatest };
+        : { tagName: tagName.trim(), target, name: name.trim(), body, draft: release ? draft : pendingFiles.length ? true : draft, prerelease, makeLatest: release || !pendingFiles.length ? makeLatest : false };
       const result = release
-        ? await api<{ release: { tagName: string } }>(`/repositories/${owner}/${repository}/releases/${release.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-        : await api<{ release: { tagName: string } }>(`/repositories/${owner}/${repository}/releases`, { method: 'POST', body: JSON.stringify(payload) });
+        ? await api<{ release: { id: string; tagName: string } }>(`/repositories/${owner}/${repository}/releases/${release.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await api<{ release: { id: string; tagName: string } }>(`/repositories/${owner}/${repository}/releases`, { method: 'POST', body: JSON.stringify(payload) });
+      if (!release && pendingFiles.length) {
+        try {
+          for (const file of pendingFiles) await uploadReleaseAsset(owner, repository, result.release.id, file);
+        } catch {
+          await goto(`/${owner}/${repository}/releases/edit/${result.release.id}?upload=failed`);
+          return;
+        }
+        if (!draft) {
+          try { await api(`/repositories/${owner}/${repository}/releases/${result.release.id}`, { method: 'PATCH', body: JSON.stringify({ tagName: tagName.trim(), target, name: name.trim(), body, draft: false, prerelease, makeLatest }) }); }
+          catch { await goto(`/${owner}/${repository}/releases/edit/${result.release.id}?publish=failed`); return; }
+        }
+      }
       await goto(releasePath(owner, repository, result.release.tagName));
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'The release could not be saved.';
       saving = false;
     }
+  }
+
+  function chooseFiles(event: Event) {
+    const chosen = [...((event.currentTarget as HTMLInputElement).files ?? [])];
+    const names = new Set(pendingFiles.map((file) => file.name));
+    pendingFiles = [...pendingFiles, ...chosen.filter((file) => file.size > 0 && !names.has(file.name))].slice(0, 32);
+    if (fileInput) fileInput.value = '';
+  }
+
+  function fileSize(bytes: number) {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
   async function remove() {
@@ -81,8 +112,9 @@
       <label class="field"><span>Tag</span>{#if published}<div class="fixed"><Tag size={13} />{tagName}</div>{:else}<TagPicker bind:value={tagName} {tags} onchoose={chooseTag} />{/if}<small>Choose an existing tag or enter a new one.</small></label>
       <label class="field"><span>Target</span>{#if published}<div class="fixed"><code>{release?.targetBranch ?? release?.targetCommitId.slice(0, 12)}</code></div>{:else}<Select bind:value={target} options={targetOptions} ariaLabel="Release target" />{/if}<small>New tags point to this branch or commit.</small></label>
     </div>
-    <label class="field"><span>Release title</span><input bind:value={name} maxlength="240" placeholder={tagName || 'Release title'} /></label>
+    <label class="field"><span>Release title</span><input bind:value={name} maxlength="240" placeholder={tagName || 'Release title'} data-1p-ignore /></label>
     <div class="field"><span>Release notes</span><MarkdownComposer bind:value={body} {context} placeholder="What changed in this release?" minHeight={220} /></div>
+    {#if !release}<section class="pending-assets"><header><div><strong>Assets</strong><p>Attach installers, binaries, checksums, or other release files.</p></div><Button size="small" onclick={() => fileInput?.click()}><Upload size={13} />Add files</Button><input bind:this={fileInput} type="file" multiple onchange={chooseFiles} /></header>{#each pendingFiles as file (file.name)}<div class="pending"><FileArchive size={15} /><span>{file.name}</span><small>{fileSize(file.size)}</small><Button icon size="small" variant="ghost" aria-label={`Remove ${file.name}`} onclick={() => (pendingFiles = pendingFiles.filter((item) => item !== file))}><Trash2 size={13} /></Button></div>{:else}<p class="no-assets">No files attached.</p>{/each}</section>{/if}
     <div class="options"><Checkbox bind:checked={draft} disabled={published} onchange={(checked) => { if (checked) makeLatest = false; }} label="Save as draft" description="Only repository collaborators can see drafts." /><Checkbox bind:checked={prerelease} onchange={(checked) => { if (checked) makeLatest = false; }} label="Mark as prerelease" description="Use this for preview, beta, and release-candidate builds." /><Checkbox bind:checked={makeLatest} disabled={draft || prerelease} label="Set as latest release" description="Feature this release as the recommended version." /></div>
     <div class="actions"><a href={release ? releasePath(owner, repository, release.tagName) : `/${owner}/${repository}/releases`}>Cancel</a><Button type="submit" variant="primary" loading={saving} disabled={!tagName.trim() || !target}>{draft ? 'Save draft' : release ? 'Save release' : 'Publish release'}</Button></div>
   </form>
@@ -92,5 +124,5 @@
 </main>
 
 <style>
-  .page{width:min(820px,100%);margin:0 auto}.page>header{margin-bottom:26px}.page>header>div{display:flex;align-items:center;gap:9px;margin-top:19px;color:var(--brand)}h1{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.035em}.page>header p{margin:7px 0 0;color:var(--text-muted);font-size:12px}.error{display:flex;align-items:center;gap:7px;margin-bottom:18px;padding:10px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:11px}form{display:grid;gap:19px;padding:24px 0;border-top:1px solid var(--border-subtle)}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:13px}.field{display:grid;gap:7px}.field>span{color:var(--text-strong);font-size:12px;font-weight:620}.field>small{color:var(--text-faint);font-size:9px}.field>input{height:38px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.field>input:focus{border-color:var(--brand)}.fixed{display:flex;height:38px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border-subtle);border-radius:6px;background:var(--surface-muted);color:var(--text-muted);font-size:12px}.fixed code{font-size:11px}.options{display:grid}.options :global(.checkbox+.checkbox){border-top:0}.actions{display:flex;justify-content:flex-end;gap:7px;padding-top:18px;border-top:1px solid var(--border-subtle)}.actions>a{display:inline-flex;height:36px;align-items:center;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;font-weight:630;text-decoration:none}.danger{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:28px;padding:22px 0;border-top:1px solid var(--border-subtle)}.danger strong{color:var(--text-strong);font-size:12px}.danger p{margin:4px 0 0;color:var(--text-faint);font-size:10px}.confirm{display:flex;gap:6px}@media(max-width:700px){.field-row{grid-template-columns:1fr}.danger{align-items:flex-start;flex-direction:column}}
+  .page{width:min(820px,100%);margin:0 auto}.page>header{margin-bottom:26px}.page>header>div{display:flex;align-items:center;gap:9px;margin-top:19px;color:var(--brand)}h1{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.035em}.page>header p{margin:7px 0 0;color:var(--text-muted);font-size:12px}.error{display:flex;align-items:center;gap:7px;margin-bottom:18px;padding:10px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:11px}form{display:grid;gap:19px;padding:24px 0;border-top:1px solid var(--border-subtle)}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:13px}.field{display:grid;gap:7px}.field>span{color:var(--text-strong);font-size:12px;font-weight:620}.field>small{color:var(--text-faint);font-size:9px}.field>input{height:38px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.field>input:focus{border-color:var(--brand)}.fixed{display:flex;height:38px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border-subtle);border-radius:6px;background:var(--surface-muted);color:var(--text-muted);font-size:12px}.fixed code{font-size:11px}.pending-assets{display:grid;gap:0}.pending-assets>header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:8px}.pending-assets strong{color:var(--text-strong);font-size:12px}.pending-assets header p{margin:3px 0 0;color:var(--text-faint);font-size:9px}.pending-assets input{display:none}.pending{display:grid;grid-template-columns:20px minmax(0,1fr) auto 32px;align-items:center;gap:8px;min-height:44px;border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:11px}.pending small{color:var(--text-faint);font-size:9px}.no-assets{margin:0;padding:13px 0;color:var(--text-faint);font-size:10px}.options{display:grid}.options :global(.checkbox+.checkbox){border-top:0}.actions{display:flex;justify-content:flex-end;gap:7px;padding-top:18px;border-top:1px solid var(--border-subtle)}.actions>a{display:inline-flex;height:36px;align-items:center;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;font-weight:630;text-decoration:none}.danger{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:28px;padding:22px 0;border-top:1px solid var(--border-subtle)}.danger strong{color:var(--text-strong);font-size:12px}.danger p{margin:4px 0 0;color:var(--text-faint);font-size:10px}.confirm{display:flex;gap:6px}@media(max-width:700px){.field-row{grid-template-columns:1fr}.danger{align-items:flex-start;flex-direction:column}}
 </style>

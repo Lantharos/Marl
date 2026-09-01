@@ -65,7 +65,7 @@ export async function signingKeys(request: Request, env: Env) {
   const emails = [...new Set(body.emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
   if (!emails.length) return json({ signingKeys: [] });
   const placeholders = emails.map(() => '?').join(',');
-  const rows = await env.DB.prepare(`SELECT users.id AS userId,users.email,ssh_keys.public_key AS publicKey,ssh_keys.fingerprint FROM ssh_keys JOIN users ON users.id=ssh_keys.user_id JOIN auth_user ON auth_user.id=users.auth_user_id AND auth_user.email=users.email COLLATE NOCASE WHERE auth_user.email_verified=1 AND lower(users.email) IN (${placeholders}) ORDER BY users.id,ssh_keys.created_at`).bind(...emails).all();
+  const rows = await env.DB.prepare(`SELECT users.id AS userId,user_emails.email,ssh_keys.public_key AS publicKey,ssh_keys.fingerprint FROM user_emails JOIN users ON users.id=user_emails.user_id JOIN ssh_keys ON ssh_keys.user_id=users.id WHERE user_emails.verified_at IS NOT NULL AND lower(user_emails.email) IN (${placeholders}) ORDER BY users.id,ssh_keys.created_at`).bind(...emails).all();
   return json({ signingKeys: rows.results });
 }
 

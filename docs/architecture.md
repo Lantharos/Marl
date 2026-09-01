@@ -71,15 +71,18 @@ R2; replacing an avatar publishes the new reference before removing the previous
 changes update the linked authentication identity and any owned personal-organization slug in the
 same D1 batch.
 
-Public user and organization profile projections contain only public repositories and activity.
-Commit attribution links to a Marl account only when its signature is verified against a signing
-key owned by that account. Unsigned author names and emails remain Git metadata and never become a
-profile link or contribution signal. Organization descriptions and websites share the same
-settings-owned identity record used by the public profile.
+Public user and organization profile projections prioritize active public repositories and keep
+archived repositories in a separate section. Commit attribution links to a Marl account when its
+signature is verified against an owned signing key or its author email is among that account's
+verified addresses. A verified signature takes precedence. Attribution is resolved when a commit
+is read, so historic commits immediately use the account's current username, display name, and
+avatar after an address is verified. Unverified author emails remain inert Git metadata.
+Organization descriptions and websites share the same settings-owned identity record used by the
+public profile.
 
-Verification, recovery, and organization invitation email is sent directly by the API Worker
+Account, commit-email, recovery, and organization invitation email is sent directly by the API Worker
 through a sender-restricted Cloudflare Email Service binding. Local development writes action URLs
-to the API log instead of delivering mail.
+to the API log and immediately verifies added commit addresses instead of delivering mail.
 
 Authorization has one repository capability resolver. It combines organization ownership, the
 organization's base repository role, direct collaborators, team grants, repository visibility,
