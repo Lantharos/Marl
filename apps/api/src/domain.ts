@@ -15,10 +15,17 @@ export function identifier(prefix: string): string {
 
 export function safeRepositoryPath(value: string): boolean {
   if (!value || value.startsWith('/') || value.startsWith('\\') || /^[a-z]:/i.test(value)) return false;
-  return !value.replaceAll('\\', '/').split('/').some((part) => part === '..' || part === '');
+  return !value
+    .replaceAll('\\', '/')
+    .split('/')
+    .some((part) => part === '..' || part === '');
 }
 
 export function validBranchName(value: unknown): value is string {
   if (typeof value !== 'string' || !value || value.length > 255 || value === '@' || value.startsWith('/') || value.endsWith('/') || value.endsWith('.') || value.includes('..') || value.includes('@{') || value.includes('//')) return false;
   return !/[\u0000-\u0020\u007f~^:?*\[\\]/.test(value) && value.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'));
+}
+
+export function validTagName(value: unknown): value is string {
+  return typeof value === 'string' && !value.startsWith('-') && validBranchName(value) && value !== 'HEAD';
 }

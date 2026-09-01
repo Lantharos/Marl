@@ -15,11 +15,16 @@ import { commitAuthorIdSql } from './commit-authors';
 import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 import { rawBlobHeaders } from './raw-content';
 
-type RepositoryRow = RepositorySummary & { organizationId: string; defaultBranch: string; archivedAt: string | null; deletionScheduledAt: string | null };
+type RepositoryRow = RepositorySummary & {
+  organizationId: string;
+  defaultBranch: string;
+  archivedAt: string | null;
+  deletionScheduledAt: string | null;
+};
 
 const selectRepository = `SELECT repositories.id, organizations.slug AS owner, repositories.name, repositories.description, repositories.icon_url AS iconUrl, repositories.visibility, repositories.default_branch AS defaultBranch, repositories.updated_at AS updatedAt, repositories.organization_id AS organizationId, repositories.archived_at AS archivedAt, repositories.deletion_scheduled_at AS deletionScheduledAt FROM repositories JOIN organizations ON organizations.id = repositories.organization_id`;
 
-export async function authorizeGit(env: Env, principal: Principal | null, owner: string, name: string, service: string, gatewayTrusted = false): Promise<Response> {
+export async function authorizeGit(env: Env, principal: Principal | null, owner: string, name: string, service: string, gatewayTrusted = false, gatewayActorId?: string): Promise<Response> {
   const repo = await lookupRepository(env, owner, name, principal);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const read = gatewayTrusted || Boolean(await authorizeRepository(env, principal, owner, name, 'repository.read'));
@@ -27,7 +32,15 @@ export async function authorizeGit(env: Env, principal: Principal | null, owner:
   if (repo.deletionScheduledAt) return problem(404, 'repository_not_found', 'Repository not found.');
   if (repo.archivedAt && service === 'git-receive-pack') return problem(409, 'repository_archived', 'Archived repositories are read-only.');
   if (!read || (service === 'git-receive-pack' && !write)) return problem(principal ? 403 : 401, 'git_access_denied', 'You do not have access to this repository.');
-  return json({ repositoryId: repo.id, storageKey: repo.id, organizationId: repo.organizationId, actorId: principal?.id, visibility: repo.visibility, read, write });
+  return json({
+    repositoryId: repo.id,
+    storageKey: repo.id,
+    organizationId: repo.organizationId,
+    actorId: gatewayTrusted ? gatewayActorId : principal?.id,
+    visibility: repo.visibility,
+    read,
+    write
+  });
 }
 
 export async function listPendingGitIndexes(env: Env): Promise<Response> {
@@ -39,10 +52,14 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const body = await readJson(request, gitIndexBody);
   if (!body || typeof body.repositoryId !== 'string' || !Array.isArray(body.commits) || !Array.isArray(body.branches) || !Array.isArray(body.entries) || !Array.isArray(body.changes)) return problem(422, 'invalid_git_index', 'Git index payload is invalid.');
   if (body.commits.length > 250 || body.changes.length > 250 || body.branches.length > 250 || body.entries.length > 1_000) return problem(413, 'git_index_page_too_large', 'Git index pages exceed the negotiated batch size.');
-  const owned = gatewayTrusted || (principal && await authorizeRepositoryId(env, principal, body.repositoryId, 'repository.push'));
+  const owned = gatewayTrusted || (principal && (await authorizeRepositoryId(env, principal, body.repositoryId, 'repository.push')));
   if (!owned) return problem(403, 'git_access_denied', 'You cannot index this repository.');
-  const changeIds = body.changes.flatMap((value) => value && typeof value === 'object' && typeof (value as Record<string, unknown>).commitId === 'string' ? [(value as Record<string, unknown>).commitId as string] : []);
-  const storedChanges = await queryInChunks(changeIds, 90, (chunk) => env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ commitId: string }>());
+  const changeIds = body.changes.flatMap((value) => (value && typeof value === 'object' && typeof (value as Record<string, unknown>).commitId === 'string' ? [(value as Record<string, unknown>).commitId as string] : []));
+  const storedChanges = await queryInChunks(changeIds, 90, (chunk) =>
+    env.DB.prepare(`SELECT commit_id AS commitId FROM indexed_commit_changes WHERE repository_id=? AND commit_id IN (${placeholders(chunk)})`)
+      .bind(body.repositoryId, ...chunk)
+      .all<{ commitId: string }>()
+  );
   const indexedChanges = new Set(storedChanges.map((commit) => commit.commitId));
   const statements = [];
   const branchStatements = [];
@@ -85,7 +102,14 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     if (![entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId].every((field) => typeof field === 'string')) continue;
     statements.push(env.DB.prepare(`INSERT INTO repository_entries (repository_id, tree_id, path, parent_path, name, kind, object_id, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(repository_id, tree_id, path) DO UPDATE SET kind=excluded.kind, object_id=excluded.object_id, byte_size=excluded.byte_size`).bind(body.repositoryId, entry.treeId, entry.path, entry.parentPath, entry.name, entry.kind, entry.objectId, typeof entry.byteSize === 'number' ? entry.byteSize : null));
   }
-  const previous = await queryInChunks(indexedBranches.map((branch) => branch.name), 90, (chunk) => env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ name: string; commitId: string }>());
+  const previous = await queryInChunks(
+    indexedBranches.map((branch) => branch.name),
+    90,
+    (chunk) =>
+      env.DB.prepare(`SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name IN (${placeholders(chunk)})`)
+        .bind(body.repositoryId, ...chunk)
+        .all<{ name: string; commitId: string }>()
+  );
   const previousHeads = new Map(previous.map((branch) => [branch.name, branch.commitId]));
   for (let offset = 0; offset < statements.length; offset += 100) await env.DB.batch(statements.slice(offset, offset + 100));
   let changedBranches;
@@ -100,9 +124,27 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
   const actorId = (gatewayTrusted ? body.actorId : principal?.id) ?? (await env.DB.prepare('SELECT created_by AS createdBy FROM repositories WHERE id=?').bind(body.repositoryId).first<{ createdBy: string }>())?.createdBy ?? null;
   if (changedBranches.length) {
     const auditRepository = await env.DB.prepare('SELECT organization_id AS organizationId FROM repositories WHERE id=?').bind(body.repositoryId).first<{ organizationId: string }>();
-    if (auditRepository) await auditStatement(env, { organizationId: auditRepository.organizationId, repositoryId: body.repositoryId, actor: principal, action: 'repository.refs.indexed', subjectType: 'repository', subjectId: body.repositoryId, details: { refs: changedBranches.map((branch) => ({ name: branch.name, commitId: branch.commitId })) } }).run();
+    if (auditRepository)
+      await auditStatement(env, {
+        organizationId: auditRepository.organizationId,
+        repositoryId: body.repositoryId,
+        actor: principal,
+        action: 'repository.refs.indexed',
+        subjectType: 'repository',
+        subjectId: body.repositoryId,
+        details: {
+          refs: changedBranches.map((branch) => ({
+            name: branch.name,
+            commitId: branch.commitId
+          }))
+        }
+      }).run();
   }
-  const branchCommits = await queryInChunks([...new Set(indexedBranches.map((branch) => branch.commitId))], 90, (chunk) => env.DB.prepare(`SELECT id,tree_id AS treeId FROM commits WHERE repository_id=? AND id IN (${placeholders(chunk)})`).bind(body.repositoryId, ...chunk).all<{ id: string; treeId: string }>());
+  const branchCommits = await queryInChunks([...new Set(indexedBranches.map((branch) => branch.commitId))], 90, (chunk) =>
+    env.DB.prepare(`SELECT id,tree_id AS treeId FROM commits WHERE repository_id=? AND id IN (${placeholders(chunk)})`)
+      .bind(body.repositoryId, ...chunk)
+      .all<{ id: string; treeId: string }>()
+  );
   const trees = new Map(branchCommits.map((commit) => [commit.id, commit.treeId]));
   let workflowsQueued = 0;
   const workflowWarnings = [];
@@ -114,7 +156,16 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     workflowsQueued += result.queued;
     workflowWarnings.push(...result.warnings);
   }
-  return json({ indexed: { commits: body.commits.length, branches: indexedBranches.length, entries: body.entries.length, changes: body.changes.length, complete: Boolean(body.complete) }, workflows: { queued: workflowsQueued, warnings: workflowWarnings } });
+  return json({
+    indexed: {
+      commits: body.commits.length,
+      branches: indexedBranches.length,
+      entries: body.entries.length,
+      changes: body.changes.length,
+      complete: Boolean(body.complete)
+    },
+    workflows: { queued: workflowsQueued, warnings: workflowWarnings }
+  });
 }
 
 export async function listRepositories(env: Env, principal: Principal, url: URL): Promise<Response> {
@@ -130,14 +181,24 @@ export async function listRepositories(env: Env, principal: Principal, url: URL)
   const after = cursor ? 'AND (repositories.updated_at<? OR (repositories.updated_at=? AND repositories.id<?))' : '';
   const filters = [...access.values, ...(visibility === 'all' ? [] : [visibility]), ...(search.query ? [search.like, search.like, search.like] : [])];
   const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
-  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ${visibilitySql} ${querySql} ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`).bind(...values).all<RepositoryRow>();
-  const page = pageResult(result.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
-  return json({ repositories: page.items.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo), nextCursor: page.nextCursor });
+  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ${visibilitySql} ${querySql} ${after} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT ?`)
+    .bind(...values)
+    .all<RepositoryRow>();
+  const page = pageResult(result.results, limit, (row) => ({
+    value: row.updatedAt,
+    id: row.id
+  }));
+  return json({
+    repositories: page.items.map(({ organizationId: _, defaultBranch: __, ...repo }) => repo),
+    nextCursor: page.nextCursor
+  });
 }
 
 export async function listShellRepositories(env: Env, principal: Principal): Promise<RepositorySummary[]> {
   const access = repositoryListFilter(principal);
-  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 100`).bind(...access.values).all<RepositoryRow>();
+  const result = await env.DB.prepare(`${selectRepository} WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 100`)
+    .bind(...access.values)
+    .all<RepositoryRow>();
   return result.results.map(({ organizationId: _, defaultBranch: __, ...repository }) => repository);
 }
 
@@ -161,13 +222,34 @@ export async function createRepository(request: Request, env: Env, principal: Pr
     await env.DB.batch([
       env.DB.prepare('INSERT INTO repositories (id, organization_id, name, description, visibility, created_by) VALUES (?, ?, ?, ?, ?, ?)').bind(id, organization.id, name, description, visibility, principal.id),
       ...defaults.map(([label, color, detail]) => env.DB.prepare('INSERT INTO repository_labels (id,repository_id,name,color,description) VALUES (?,?,?,?,?)').bind(identifier('label'), id, label, color, detail)),
-      auditStatement(env, { organizationId: organization.id, repositoryId: id, actor: principal, action: 'repository.created', subjectType: 'repository', subjectId: id, details: { owner, name, visibility } })
+      auditStatement(env, {
+        organizationId: organization.id,
+        repositoryId: id,
+        actor: principal,
+        action: 'repository.created',
+        subjectType: 'repository',
+        subjectId: id,
+        details: { owner, name, visibility }
+      })
     ]);
   } catch (error) {
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
     throw error;
   }
-  return json({ repository: { id, owner, name, description, iconUrl: null, visibility, updatedAt: new Date().toISOString() } }, { status: 201 });
+  return json(
+    {
+      repository: {
+        id,
+        owner,
+        name,
+        description,
+        iconUrl: null,
+        visibility,
+        updatedAt: new Date().toISOString()
+      }
+    },
+    { status: 201 }
+  );
 }
 
 export async function uploadRepositoryIcon(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -177,7 +259,9 @@ export async function uploadRepositoryIcon(request: Request, env: Env, principal
   if (!image) return problem(422, 'invalid_repository_icon', 'Choose a valid PNG, JPEG, or WebP image under 2 MB.');
   const key = `repository-icons/${repository.id}/${image.version}.${image.extension}`;
   const iconUrl = `/api/v1/repository-icons/${repository.id}/${image.version}.${image.extension}`;
-  await env.OBJECTS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
+  await env.OBJECTS.put(key, image.bytes, {
+    httpMetadata: { contentType: image.contentType }
+  });
   try {
     await env.DB.prepare('UPDATE repositories SET icon_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(iconUrl, repository.id).run();
   } catch (error) {
@@ -199,17 +283,25 @@ export async function getRepository(env: Env, principal: Principal, owner: strin
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const { organizationId: _, ...visible } = repo;
   const sshBase = env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
-  const social = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred,upstream_organizations.slug AS upstreamOwner,upstream.name AS upstreamName FROM repositories LEFT JOIN repositories AS upstream ON upstream.id=repositories.forked_from_repository_id LEFT JOIN organizations AS upstream_organizations ON upstream_organizations.id=upstream.organization_id WHERE repositories.id=?`).bind(principal.id, repo.id).first<{ starCount: number; forkCount: number; starred: number; upstreamOwner: string | null; upstreamName: string | null }>();
-  return json({ repository: {
-    ...visible,
-    permissions: repositoryPermissions(repo.role, true),
-    starred: Boolean(social?.starred),
-    starCount: Number(social?.starCount ?? 0),
-    forkCount: Number(social?.forkCount ?? 0),
-    upstream: social?.upstreamOwner && social.upstreamName ? { owner: social.upstreamOwner, name: social.upstreamName } : null,
-    cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git`,
-    sshCloneUrl: sshBase ? `${sshBase.replace(/\/$/, '')}/${owner}/${name}.git` : null
-  } });
+  const social = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred,upstream_organizations.slug AS upstreamOwner,upstream.name AS upstreamName FROM repositories LEFT JOIN repositories AS upstream ON upstream.id=repositories.forked_from_repository_id LEFT JOIN organizations AS upstream_organizations ON upstream_organizations.id=upstream.organization_id WHERE repositories.id=?`).bind(principal.id, repo.id).first<{
+    starCount: number;
+    forkCount: number;
+    starred: number;
+    upstreamOwner: string | null;
+    upstreamName: string | null;
+  }>();
+  return json({
+    repository: {
+      ...visible,
+      permissions: repositoryPermissions(repo.role, true),
+      starred: Boolean(social?.starred),
+      starCount: Number(social?.starCount ?? 0),
+      forkCount: Number(social?.forkCount ?? 0),
+      upstream: social?.upstreamOwner && social.upstreamName ? { owner: social.upstreamOwner, name: social.upstreamName } : null,
+      cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${owner}/${name}.git`,
+      sshCloneUrl: sshBase ? `${sshBase.replace(/\/$/, '')}/${owner}/${name}.git` : null
+    }
+  });
 }
 
 type OverviewDocument = { path: string; label: string };
@@ -228,10 +320,12 @@ export async function getRepositoryOverview(env: Env, principal: Principal, owne
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const available = await overviewCandidates(env, repository.id, repository.defaultBranch);
   const stored = await env.DB.prepare('SELECT overview_documents_json AS documentsJson FROM repositories WHERE id=?').bind(repository.id).first<{ documentsJson: string | null }>();
-  const selected = stored?.documentsJson === null || stored?.documentsJson === undefined
-    ? automaticOverviewDocuments(available)
-    : selectedOverviewDocuments(available, stored.documentsJson);
-  return json({ documents: selected, availableDocuments: available, canManage: repository.role === 'maintain' || repository.role === 'admin' });
+  const selected = stored?.documentsJson === null || stored?.documentsJson === undefined ? automaticOverviewDocuments(available) : selectedOverviewDocuments(available, stored.documentsJson);
+  return json({
+    documents: selected,
+    availableDocuments: available,
+    canManage: repository.role === 'maintain' || repository.role === 'admin'
+  });
 }
 
 export async function updateRepositoryOverview(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -246,14 +340,27 @@ export async function updateRepositoryOverview(request: Request, env: Env, princ
   if (paths.some((path) => !availablePaths.has(path))) return problem(422, 'overview_document_not_found', 'Every overview document must exist on the default branch and use Markdown or plain text.');
   await env.DB.batch([
     env.DB.prepare('UPDATE repositories SET overview_documents_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(JSON.stringify(paths), repository.id),
-    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.overview.updated', subjectType: 'repository', subjectId: repository.id, details: { documents: paths } })
+    auditStatement(env, {
+      organizationId: repository.organizationId,
+      repositoryId: repository.id,
+      actor: principal,
+      action: 'repository.overview.updated',
+      subjectType: 'repository',
+      subjectId: repository.id,
+      details: { documents: paths }
+    })
   ]);
-  return json({ documents: paths.map((path) => available.find((document) => document.path === path)!) });
+  return json({
+    documents: paths.map((path) => available.find((document) => document.path === path)!)
+  });
 }
 
 async function overviewCandidates(env: Env, repositoryId: string, defaultBranch: string): Promise<OverviewDocument[]> {
   const rows = await env.DB.prepare(`SELECT repository_entries.path,repository_entries.name FROM branches JOIN commits ON commits.repository_id=branches.repository_id AND commits.id=branches.commit_id JOIN repository_entries ON repository_entries.repository_id=branches.repository_id AND repository_entries.tree_id=commits.tree_id WHERE branches.repository_id=? AND branches.name=? AND repository_entries.kind='blob' AND (lower(repository_entries.name) LIKE '%.md' OR lower(repository_entries.name) LIKE '%.markdown' OR lower(repository_entries.name) LIKE '%.txt' OR instr(repository_entries.name,'.')=0) ORDER BY repository_entries.path COLLATE NOCASE LIMIT 500`).bind(repositoryId, defaultBranch).all<{ path: string; name: string }>();
-  return rows.results.map((entry) => ({ path: entry.path, label: overviewLabel(entry.name) }));
+  return rows.results.map((entry) => ({
+    path: entry.path,
+    label: overviewLabel(entry.name)
+  }));
 }
 
 function automaticOverviewDocuments(available: OverviewDocument[]) {
@@ -265,16 +372,23 @@ function automaticOverviewDocuments(available: OverviewDocument[]) {
 
 function selectedOverviewDocuments(available: OverviewDocument[], value: string) {
   let paths: unknown;
-  try { paths = JSON.parse(value); } catch { return automaticOverviewDocuments(available); }
+  try {
+    paths = JSON.parse(value);
+  } catch {
+    return automaticOverviewDocuments(available);
+  }
   if (!Array.isArray(paths)) return automaticOverviewDocuments(available);
   const documents = new Map(available.map((document) => [document.path, document]));
-  return paths.flatMap((path) => typeof path === 'string' && documents.has(path) ? [documents.get(path)!] : []);
+  return paths.flatMap((path) => (typeof path === 'string' && documents.has(path) ? [documents.get(path)!] : []));
 }
 
 function overviewLabel(name: string) {
   const known = overviewNames.find(([pattern]) => pattern.test(name));
   if (known) return known[1];
-  return name.replace(/\.(?:md|markdown|txt)$/i, '').replaceAll(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return name
+    .replace(/\.(?:md|markdown|txt)$/i, '')
+    .replaceAll(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export async function setRepositoryStar(env: Env, principal: Principal, owner: string, name: string, starred: boolean): Promise<Response> {
@@ -298,23 +412,68 @@ export async function forkRepository(request: Request, env: Env, principal: Prin
   const existingFork = await env.DB.prepare(`SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.organization_id=? AND COALESCE(repositories.fork_root_repository_id,repositories.id)=? AND repositories.deletion_scheduled_at IS NULL`).bind(destination.id, rootId).first<{ owner: string; name: string }>();
   if (existingFork) return problem(409, 'fork_exists', `This organization already has the fork ${existingFork.owner}/${existingFork.name}.`);
   const id = identifier('repo');
-  const defaults = [['bug', '#e16f73', 'Something is not working'], ['enhancement', '#8c7ad8', 'New or improved functionality'], ['documentation', '#68a7b8', 'Documentation changes'], ['needs review', '#d3a45f', 'Ready for reviewer attention']];
+  const defaults = [
+    ['bug', '#e16f73', 'Something is not working'],
+    ['enhancement', '#8c7ad8', 'New or improved functionality'],
+    ['documentation', '#68a7b8', 'Documentation changes'],
+    ['needs review', '#d3a45f', 'Ready for reviewer attention']
+  ];
   try {
     await env.DB.batch([
       env.DB.prepare('INSERT INTO repositories (id,organization_id,name,description,visibility,default_branch,created_by,forked_from_repository_id,fork_root_repository_id) VALUES (?,?,?,?,?,?,?,?,?)').bind(id, destination.id, body.name, source.description, source.visibility, source.defaultBranch, principal.id, source.id, rootId),
       ...defaults.map(([label, color, detail]) => env.DB.prepare('INSERT INTO repository_labels (id,repository_id,name,color,description) VALUES (?,?,?,?,?)').bind(identifier('label'), id, label, color, detail)),
-      auditStatement(env, { organizationId: destination.id, repositoryId: id, actor: principal, action: 'repository.forked', subjectType: 'repository', subjectId: id, details: { source: `${owner}/${name}` } })
+      auditStatement(env, {
+        organizationId: destination.id,
+        repositoryId: id,
+        actor: principal,
+        action: 'repository.forked',
+        subjectType: 'repository',
+        subjectId: id,
+        details: { source: `${owner}/${name}` }
+      })
     ]);
   } catch (error) {
     if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
     throw error;
   }
-  const copied = await requestGitGateway(env, '/_marl/repositories/fork', { repositoryId: id, sourceRepositoryId: source.id, sourceOwner: owner, sourceRepository: name, destinationOrganizationId: destination.id, destinationOwner: body.owner, destinationRepository: body.name, actorId: principal.id }, { attempts: 2, timeoutMs: 120_000 }).catch(() => new Response(null, { status: 502 }));
+  const copied = await requestGitGateway(
+    env,
+    '/_marl/repositories/fork',
+    {
+      repositoryId: id,
+      sourceRepositoryId: source.id,
+      sourceOwner: owner,
+      sourceRepository: name,
+      destinationOrganizationId: destination.id,
+      destinationOwner: body.owner,
+      destinationRepository: body.name,
+      actorId: principal.id
+    },
+    { attempts: 2, timeoutMs: 120_000 }
+  ).catch(() => new Response(null, { status: 502 }));
   if (!copied.ok) {
     await env.DB.prepare('DELETE FROM repositories WHERE id=?').bind(id).run();
     return problem(502, 'repository_fork_failed', 'Repository storage could not be forked safely.');
   }
-  return json({ repository: { id, owner: body.owner, name: body.name, description: source.description, iconUrl: null, visibility: source.visibility, defaultBranch: source.defaultBranch, upstream: { owner, name }, starred: false, starCount: 0, forkCount: 0, updatedAt: new Date().toISOString() } }, { status: 201 });
+  return json(
+    {
+      repository: {
+        id,
+        owner: body.owner,
+        name: body.name,
+        description: source.description,
+        iconUrl: null,
+        visibility: source.visibility,
+        defaultBranch: source.defaultBranch,
+        upstream: { owner, name },
+        starred: false,
+        starCount: 0,
+        forkCount: 0,
+        updatedAt: new Date().toISOString()
+      }
+    },
+    { status: 201 }
+  );
 }
 
 export async function detachRepositoryFork(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -325,7 +484,14 @@ export async function detachRepositoryFork(request: Request, env: Env, principal
   await env.DB.batch([
     env.DB.prepare(`WITH RECURSIVE descendants(id) AS (SELECT ? UNION ALL SELECT repositories.id FROM repositories JOIN descendants ON repositories.forked_from_repository_id=descendants.id) UPDATE repositories SET fork_root_repository_id=? WHERE id IN (SELECT id FROM descendants)`).bind(repository.id, repository.id),
     env.DB.prepare('UPDATE repositories SET forked_from_repository_id=NULL,fork_root_repository_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(repository.id),
-    auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'repository.fork.detached', subjectType: 'repository', subjectId: repository.id })
+    auditStatement(env, {
+      organizationId: repository.organizationId,
+      repositoryId: repository.id,
+      actor: principal,
+      action: 'repository.fork.detached',
+      subjectType: 'repository',
+      subjectId: repository.id
+    })
   ]);
   return json({ detached: true });
 }
@@ -335,7 +501,10 @@ export async function getRepositorySettings(env: Env, principal: Principal, owne
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const organizations = await env.DB.prepare(`SELECT organizations.slug,organizations.name FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organization_members.role='owner' ORDER BY organizations.slug`).bind(principal.id).all<{ slug: string; name: string }>();
   const upstream = access.forkedFromRepositoryId ? await env.DB.prepare('SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.id=?').bind(access.forkedFromRepositoryId).first<{ owner: string; name: string }>() : null;
-  return json({ repository: { ...access, upstream }, organizations: organizations.results });
+  return json({
+    repository: { ...access, upstream },
+    organizations: organizations.results
+  });
 }
 
 export async function updateRepositorySettings(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -354,9 +523,30 @@ export async function updateRepositorySettings(request: Request, env: Env, princ
   const archivedAt = typeof body.archived === 'boolean' ? (body.archived ? new Date().toISOString() : null) : access.archivedAt;
   await env.DB.batch([
     env.DB.prepare('UPDATE repositories SET description=?,visibility=?,default_branch=?,archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(description, visibility, defaultBranch, archivedAt, access.id),
-    auditStatement(env, { organizationId: access.organizationId, repositoryId: access.id, actor: principal, action: 'repository.settings.updated', subjectType: 'repository', subjectId: access.id, details: { descriptionChanged: description !== access.description, visibility: { from: access.visibility, to: visibility }, defaultBranch: { from: access.defaultBranch, to: defaultBranch }, archived: Boolean(archivedAt) } })
+    auditStatement(env, {
+      organizationId: access.organizationId,
+      repositoryId: access.id,
+      actor: principal,
+      action: 'repository.settings.updated',
+      subjectType: 'repository',
+      subjectId: access.id,
+      details: {
+        descriptionChanged: description !== access.description,
+        visibility: { from: access.visibility, to: visibility },
+        defaultBranch: { from: access.defaultBranch, to: defaultBranch },
+        archived: Boolean(archivedAt)
+      }
+    })
   ]);
-  return json({ repository: { ...access, description, visibility, defaultBranch, archivedAt } });
+  return json({
+    repository: {
+      ...access,
+      description,
+      visibility,
+      defaultBranch,
+      archivedAt
+    }
+  });
 }
 
 export async function renameRepository(request: Request, env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -367,8 +557,24 @@ export async function renameRepository(request: Request, env: Env, principal: Pr
   if (!body || !validSlug(body.name)) return problem(422, 'invalid_repository_name', 'Repository names must be URL-safe slugs.');
   const moved = await relocateStorage(env, owner, name, owner, body.name);
   if (!moved.ok) return problem(502, 'repository_storage_move_failed', 'Repository storage could not be renamed safely.');
-  try { await env.DB.batch([env.DB.prepare('UPDATE repositories SET name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(body.name, access.id), auditStatement(env, { organizationId: access.organizationId, repositoryId: access.id, actor: principal, action: 'repository.renamed', subjectType: 'repository', subjectId: access.id, details: { from: name, to: body.name } })]); }
-  catch (error) { await relocateStorage(env, owner, body.name, owner, name); if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.'); throw error; }
+  try {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE repositories SET name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(body.name, access.id),
+      auditStatement(env, {
+        organizationId: access.organizationId,
+        repositoryId: access.id,
+        actor: principal,
+        action: 'repository.renamed',
+        subjectType: 'repository',
+        subjectId: access.id,
+        details: { from: name, to: body.name }
+      })
+    ]);
+  } catch (error) {
+    await relocateStorage(env, owner, body.name, owner, name);
+    if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'A repository with this name already exists.');
+    throw error;
+  }
   return json({ repository: { owner, name: body.name } });
 }
 
@@ -382,8 +588,24 @@ export async function transferRepository(request: Request, env: Env, principal: 
   if (!destination) return problem(403, 'destination_owner_required', 'You must own the destination organization.');
   const moved = await relocateStorage(env, owner, name, body.owner, name);
   if (!moved.ok) return problem(502, 'repository_storage_move_failed', 'Repository storage could not be transferred safely.');
-  try { await env.DB.batch([env.DB.prepare('UPDATE repositories SET organization_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(destination.id, access.id), auditStatement(env, { organizationId: access.organizationId, repositoryId: access.id, actor: principal, action: 'repository.transferred', subjectType: 'repository', subjectId: access.id, details: { from: owner, to: body.owner } })]); }
-  catch (error) { await relocateStorage(env, body.owner, name, owner, name); if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'The destination already has a repository with this name.'); throw error; }
+  try {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE repositories SET organization_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(destination.id, access.id),
+      auditStatement(env, {
+        organizationId: access.organizationId,
+        repositoryId: access.id,
+        actor: principal,
+        action: 'repository.transferred',
+        subjectType: 'repository',
+        subjectId: access.id,
+        details: { from: owner, to: body.owner }
+      })
+    ]);
+  } catch (error) {
+    await relocateStorage(env, body.owner, name, owner, name);
+    if (String(error).toLowerCase().includes('unique')) return problem(409, 'repository_exists', 'The destination already has a repository with this name.');
+    throw error;
+  }
   return json({ repository: { owner: body.owner, name } });
 }
 
@@ -396,7 +618,15 @@ export async function scheduleRepositoryDeletion(request: Request, env: Env, pri
   const deletionScheduledAt = new Date(Date.now() + 30 * 86400000).toISOString();
   await env.DB.batch([
     env.DB.prepare('UPDATE repositories SET deletion_scheduled_at=?,archived_at=COALESCE(archived_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(deletionScheduledAt, access.id),
-    auditStatement(env, { organizationId: access.organizationId, repositoryId: access.id, actor: principal, action: 'repository.deletion_scheduled', subjectType: 'repository', subjectId: access.id, details: { deletionScheduledAt } })
+    auditStatement(env, {
+      organizationId: access.organizationId,
+      repositoryId: access.id,
+      actor: principal,
+      action: 'repository.deletion_scheduled',
+      subjectType: 'repository',
+      subjectId: access.id,
+      details: { deletionScheduledAt }
+    })
   ]);
   return json({ deletionScheduledAt });
 }
@@ -423,9 +653,22 @@ export async function listPullSources(env: Env, principal: Principal, owner: str
     const capability = candidate.id === target.id ? 'repository.triage' : 'repository.push';
     if (!(await authorizeRepositoryId(env, principal, candidate.id, capability))) continue;
     const branches = await env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? ORDER BY name').bind(candidate.id).all<{ name: string; commitId: string }>();
-    sources.push({ owner: candidate.owner, name: candidate.name, defaultBranch: candidate.defaultBranch, branches: branches.results });
+    sources.push({
+      owner: candidate.owner,
+      name: candidate.name,
+      defaultBranch: candidate.defaultBranch,
+      branches: branches.results
+    });
   }
-  return json({ target: { owner, name, defaultBranch: target.defaultBranch, branches: targetBranches.results }, sources });
+  return json({
+    target: {
+      owner,
+      name,
+      defaultBranch: target.defaultBranch,
+      branches: targetBranches.results
+    },
+    sources
+  });
 }
 
 export async function listCommits(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
@@ -438,23 +681,55 @@ export async function listCommits(env: Env, principal: Principal, owner: string,
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
   const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
   const values = cursor ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [resolved.id, repo.id, repo.id, limit + 1];
-  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,commit_rows.signature_status AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`).bind(...values).all<{ id: string; shortId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string; total: number }>();
+  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,commit_rows.signature_status AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`)
+    .bind(...values)
+    .all<{
+      id: string;
+      shortId: string;
+      title: string;
+      author: string;
+      authorHandle: string | null;
+      authorDisplayName: string | null;
+      authorAvatarUrl: string | null;
+      authoredAt: string;
+      signatureStatus: string;
+      total: number;
+    }>();
   const total = result.results[0]?.total ?? 0;
-  const page = pageResult(result.results, limit, (commit) => ({ value: commit.authoredAt, id: commit.id }));
-  return json({ commits: page.items.map(({ total: _, ...commit }) => commit), total, nextCursor: page.nextCursor });
+  const page = pageResult(result.results, limit, (commit) => ({
+    value: commit.authoredAt,
+    id: commit.id
+  }));
+  return json({
+    commits: page.items.map(({ total: _, ...commit }) => commit),
+    total,
+    nextCursor: page.nextCursor
+  });
 }
 
 export async function getCommit(env: Env, principal: Principal, owner: string, name: string, commitId: string): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
-  const indexed = await env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=?) SELECT commit_row.id,commit_row.signature_status AS signatureStatus,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repo.id, commitId).first<{ id: string; signatureStatus: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null }>();
+  const indexed = await env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=?) SELECT commit_row.id,commit_row.signature_status AS signatureStatus,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repo.id, commitId).first<{
+    id: string;
+    signatureStatus: string;
+    authorHandle: string | null;
+    authorDisplayName: string | null;
+    authorAvatarUrl: string | null;
+  }>();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
   const response = await requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 });
   if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   const commit = await readJsonValue<{ author?: string; authorEmail?: string }>(response, 16 * 1024 * 1024);
   if (!commit || typeof commit.author !== 'string') return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
-  return json({ ...commit, signatureStatus: indexed.signatureStatus, authorHandle: indexed.authorHandle, authorDisplayName: indexed.authorDisplayName, authorAvatarUrl: indexed.authorAvatarUrl });
+  return json({
+    ...commit,
+    signatureStatus: indexed.signatureStatus,
+    authorHandle: indexed.authorHandle,
+    authorDisplayName: indexed.authorDisplayName,
+    authorAvatarUrl: indexed.authorAvatarUrl
+  });
 }
 
 export async function readCommitPatch(env: Env, principal: Principal, owner: string, name: string, commitId: string, url: URL): Promise<Response> {
@@ -466,11 +741,21 @@ export async function readCommitPatch(env: Env, principal: Principal, owner: str
   if (!resolved) return problem(404, 'commit_not_found', 'Commit not found.');
   const commit = await env.DB.prepare('SELECT parent_ids AS parentIds FROM commits WHERE repository_id=? AND id=?').bind(repo.id, resolved.id).first<{ parentIds: string }>();
   let parents: unknown = [];
-  try { parents = JSON.parse(commit?.parentIds ?? '[]'); } catch { return problem(500, 'commit_metadata_invalid', 'Stored commit metadata is invalid.'); }
+  try {
+    parents = JSON.parse(commit?.parentIds ?? '[]');
+  } catch {
+    return problem(500, 'commit_metadata_invalid', 'Stored commit metadata is invalid.');
+  }
   const base = Array.isArray(parents) && typeof parents[0] === 'string' ? parents[0] : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
   const response = await requestGitGateway(env, '/_marl/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
-  return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
+  return new Response(response.body, {
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff'
+    }
+  });
 }
 
 export async function listTree(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
@@ -483,9 +768,7 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
   if (query.length > 120) return problem(422, 'invalid_query', 'File search is too long.');
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const indexed = query
-    ? await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND instr(lower(path), lower(?)) > 0 ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, path COLLATE NOCASE LIMIT 100').bind(repo.id, resolved.treeId, query).all()
-    : await env.DB.prepare('SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND parent_path = ? ORDER BY CASE kind WHEN \'tree\' THEN 0 ELSE 1 END, name COLLATE NOCASE').bind(repo.id, resolved.treeId, parentPath).all();
+  const indexed = query ? await env.DB.prepare("SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND instr(lower(path), lower(?)) > 0 ORDER BY CASE kind WHEN 'tree' THEN 0 ELSE 1 END, path COLLATE NOCASE LIMIT 100").bind(repo.id, resolved.treeId, query).all() : await env.DB.prepare("SELECT path, name, kind, object_id AS objectId, byte_size AS byteSize FROM repository_entries WHERE repository_id = ? AND tree_id = ? AND parent_path = ? ORDER BY CASE kind WHEN 'tree' THEN 0 ELSE 1 END, name COLLATE NOCASE").bind(repo.id, resolved.treeId, parentPath).all();
   let entries = indexed.results;
   if (!query && entries.length === 0) {
     const historical = await readGatewayTree(env, owner, name, resolved.id, parentPath);
@@ -494,10 +777,34 @@ export async function listTree(env: Env, principal: Principal, owner: string, na
   }
   const paths = entries.map((entry) => entry.path).filter((path): path is string => typeof path === 'string');
   const lastChanges = paths.length
-    ? await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`).bind(resolved.id, repo.id, JSON.stringify(paths), repo.id).all<{ path: string; commitId: string; message: string; author: string; updatedAt: string }>()
+    ? await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`).bind(resolved.id, repo.id, JSON.stringify(paths), repo.id).all<{
+        path: string;
+        commitId: string;
+        message: string;
+        author: string;
+        updatedAt: string;
+      }>()
     : { results: [] };
   const metadata = new Map(lastChanges.results.map((change) => [change.path, change]));
-  return json({ revision, path: parentPath, commit: { id: resolved.id, shortId: resolved.id.slice(0, 7), title: resolved.title, author: resolved.author, authorHandle: resolved.authorHandle, authorDisplayName: resolved.authorDisplayName, authorAvatarUrl: resolved.authorAvatarUrl, authoredAt: resolved.authoredAt, signatureStatus: resolved.signatureStatus }, entries: entries.map((entry) => ({ ...entry, ...metadata.get(entry.path as string) })) });
+  return json({
+    revision,
+    path: parentPath,
+    commit: {
+      id: resolved.id,
+      shortId: resolved.id.slice(0, 7),
+      title: resolved.title,
+      author: resolved.author,
+      authorHandle: resolved.authorHandle,
+      authorDisplayName: resolved.authorDisplayName,
+      authorAvatarUrl: resolved.authorAvatarUrl,
+      authoredAt: resolved.authoredAt,
+      signatureStatus: resolved.signatureStatus
+    },
+    entries: entries.map((entry) => ({
+      ...entry,
+      ...metadata.get(entry.path as string)
+    }))
+  });
 }
 
 export async function readBlob(env: Env, principal: Principal, owner: string, name: string, revision: string, path: string, ctx: ExecutionContext): Promise<Response> {
@@ -520,16 +827,22 @@ export async function readBlob(env: Env, principal: Principal, owner: string, na
     const cached = await publicCache.match(cacheKey);
     if (cached) return cached;
   }
-  const response = await (env.ENVIRONMENT === 'development'
-    ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 3 })
-    : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 3 })).catch(() => null);
+  const response = await (env.ENVIRONMENT === 'development' ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 3 }) : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 3 })).catch(() => null);
   if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob') return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
-  const result = new Response(response.body, { headers: rawBlobHeaders(path, repo.visibility, response.headers.get('content-length')) });
+  const result = new Response(response.body, {
+    headers: rawBlobHeaders(path, repo.visibility, response.headers.get('content-length'))
+  });
   if (repo.visibility === 'public') ctx.waitUntil(publicCache.put(cacheKey, result.clone()));
   return result;
 }
 
-type TreeEntry = { path: string; name: string; kind: string; objectId: string; byteSize?: number };
+type TreeEntry = {
+  path: string;
+  name: string;
+  kind: string;
+  objectId: string;
+  byteSize?: number;
+};
 
 async function readGatewayTree(env: Env, owner: string, repository: string, commitId: string, path: string): Promise<TreeEntry[] | null> {
   const response = await requestGitGateway(env, '/_marl/tree', { owner, repository, commitId, path }, { attempts: 2 }).catch(() => null);
@@ -539,8 +852,32 @@ async function readGatewayTree(env: Env, owner: string, repository: string, comm
   return body.entries.filter((entry) => entry && typeof entry.path === 'string' && safeRepositoryPath(entry.path) && typeof entry.name === 'string' && ['tree', 'blob'].includes(entry.kind) && typeof entry.objectId === 'string' && /^[0-9a-f]{40,64}$/.test(entry.objectId));
 }
 
-async function resolveRevision(env: Env, repositoryId: string, revision: string): Promise<{ id: string; treeId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string } | null> {
-  return env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)) SELECT commit_row.id,commit_row.tree_id AS treeId,commit_row.title,commit_row.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_row.authored_at AS authoredAt,commit_row.signature_status AS signatureStatus FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repositoryId, repositoryId, revision, revision).first<{ id: string; treeId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string }>();
+async function resolveRevision(
+  env: Env,
+  repositoryId: string,
+  revision: string
+): Promise<{
+  id: string;
+  treeId: string;
+  title: string;
+  author: string;
+  authorHandle: string | null;
+  authorDisplayName: string | null;
+  authorAvatarUrl: string | null;
+  authoredAt: string;
+  signatureStatus: string;
+} | null> {
+  return env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)) SELECT commit_row.id,commit_row.tree_id AS treeId,commit_row.title,commit_row.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_row.authored_at AS authoredAt,commit_row.signature_status AS signatureStatus FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repositoryId, repositoryId, revision, revision).first<{
+    id: string;
+    treeId: string;
+    title: string;
+    author: string;
+    authorHandle: string | null;
+    authorDisplayName: string | null;
+    authorAvatarUrl: string | null;
+    authoredAt: string;
+    signatureStatus: string;
+  }>();
 }
 
 function placeholders(values: readonly unknown[]) {

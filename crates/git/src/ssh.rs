@@ -1,7 +1,7 @@
 use crate::{
     metadata::index_local_repository,
     process::Command,
-    receive,
+    receive, remote_storage,
     repository_files::{ensure_bare_repository, repair_head},
     state::{AppState, repository_path, safe_segment},
 };
@@ -63,6 +63,8 @@ pub(crate) async fn serve(state: Arc<AppState>, address: String) -> Result<()> {
     );
     let host_key = if host_key_path.exists() {
         load_secret_key(&host_key_path, None).context("load SSH host key")?
+    } else if !state.local_storage {
+        anyhow::bail!("MARL_SSH_HOST_KEY must point to a persistent Ed25519 host key in production")
     } else {
         let key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519)
             .context("generate SSH host key")?;
@@ -185,6 +187,35 @@ impl server::Handler for SshSession {
             session.channel_failure(channel)?;
             return Ok(());
         }
+        let repository_guard = self
+            .state
+            .lock_repository(&command.owner, &command.repository)
+            .await;
+        let snapshot = if self.state.local_storage {
+            None
+        } else {
+            match remote_storage::hydrate(
+                &self.state,
+                &command.owner,
+                &command.repository,
+                authorization.actor_id.as_deref(),
+            )
+            .await
+            {
+                Ok(snapshot) => Some(snapshot),
+                Err(error) => {
+                    eprintln!("SSH canonical repository hydration failed: {error:#}");
+                    session.channel_failure(channel)?;
+                    session.extended_data(
+                        channel,
+                        1,
+                        "Repository storage is temporarily unavailable.\n",
+                    )?;
+                    session.eof(channel)?;
+                    return Ok(());
+                }
+            }
+        };
         let repository = repository_path(
             &self.state.repositories,
             &command.owner,
@@ -192,9 +223,6 @@ impl server::Handler for SshSession {
         )?;
         ensure_bare_repository(&repository).await?;
         let receives_pack = command.service == "git-receive-pack";
-        if receives_pack {
-            let _ = fs::remove_file(repository.join("marl-generation")).await;
-        }
         let mut child_command = Command::new(command.service);
         child_command
             .arg(&repository)
@@ -222,12 +250,13 @@ impl server::Handler for SshSession {
         let state = self.state.clone();
         tokio::spawn(async move {
             let status = child.wait().await;
-            if receives_pack && status.as_ref().is_ok_and(|status| status.success()) {
+            let mut succeeded = status.as_ref().is_ok_and(|status| status.success());
+            if receives_pack && succeeded {
                 if let Err(error) = repair_head(&repository).await {
                     eprintln!("SSH Git push HEAD repair failed: {error:#}");
                 }
-                if state.local_storage
-                    && let Err(error) = index_local_repository(
+                let publication = if state.local_storage {
+                    index_local_repository(
                         &state,
                         authorization.repository_id,
                         command.owner,
@@ -235,14 +264,45 @@ impl server::Handler for SshSession {
                         authorization.actor_id,
                     )
                     .await
-                {
-                    eprintln!("local SSH Git push indexing failed: {error:#}");
+                } else {
+                    remote_storage::publish(
+                        state.clone(),
+                        command.owner,
+                        command.repository,
+                        authorization.actor_id,
+                        snapshot.expect("production SSH hydration snapshot missing"),
+                    )
+                    .await
+                };
+                if let Err(error) = publication {
+                    succeeded = false;
+                    eprintln!("SSH Git push publication failed: {error:#}");
+                    let _ = handle
+                        .extended_data(
+                            channel,
+                            1,
+                            b"Push could not be committed to canonical storage. Fetch and retry.\n"
+                                .to_vec(),
+                        )
+                        .await;
+                }
+                if !state.local_storage {
+                    let _ = fs::remove_file(repository.join("marl-generation")).await;
                 }
             }
+            drop(repository_guard);
             let _ = handle
                 .exit_status_request(
                     channel,
-                    status.ok().and_then(|value| value.code()).unwrap_or(1) as u32,
+                    if succeeded {
+                        0
+                    } else {
+                        status
+                            .ok()
+                            .and_then(|value| value.code())
+                            .unwrap_or(1)
+                            .max(1) as u32
+                    },
                 )
                 .await;
             let _ = handle.eof(channel).await;

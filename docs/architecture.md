@@ -45,7 +45,7 @@ The TypeScript API begins with a new database schema. It owns:
 - pull requests, reviews, threads, checks, immutable timeline events, and merge state;
 - runs, jobs, runner registrations, leases, logs, and artifacts.
 
-Canonical Git packs, log chunks, and artifacts live in object storage. Repository file
+Canonical Git packs, release assets, log chunks, and artifacts live in object storage. Repository file
 contents are read with exact R2 range requests from canonical packs instead of being copied into
 one object-storage entry per blob. Relational state is derived from published repository
 generations and lives in the database. Runners claim label-compatible jobs through authenticated
@@ -141,12 +141,15 @@ commit record and completes accounting instead of deleting possibly published ob
 Native fetch reads refs and a generation manifest from the Worker, then downloads the pack
 and index files for that exact generation. Source blob reads resolve the validated object catalog
 and fetch only the packed byte range required for the object and its bounded delta chain. Missing
-derived locator rows are rebuilt from the canonical R2 object index. Old packs remain available for a 31-day recovery
-window so an in-flight fetch can finish after compaction. Standard `git clone`, `git fetch`,
-and `git push` use a compatibility Container. It hydrates an exact generation from R2 packs,
-runs Git Smart HTTP, captures only newly reachable objects, and publishes through the same
-validation and manifest path as a native push. Containers never own durable repository state
-and Git never operates on an R2 FUSE mount.
+derived locator rows are rebuilt from the canonical R2 object index. Old packs remain available
+for a 31-day recovery window so an in-flight fetch can finish after compaction. Standard
+`git clone`, `git fetch`, and `git push` over HTTPS use a compatibility Container. It hydrates an
+exact generation from R2 packs, runs Git Smart HTTP, captures only newly reachable objects, and
+publishes through the same validation and manifest path as a native push. Public SSH runs the same
+repository engine on a persistent TCP origin because Workers cannot accept inbound SSH. It
+hydrates the exact canonical generation before each command and submits every captured push
+through the native publication protocol before returning success. The origin's disk is a reusable
+cache, never durable repository authority, and Git never operates on an R2 FUSE mount.
 
 Generations compact in an alarm-backed maintenance job when they reach twelve packs. Indexing
 and compaction share a persisted operation model with queued, running, retrying, and completed

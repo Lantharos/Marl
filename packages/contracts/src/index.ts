@@ -69,6 +69,49 @@ export interface RepositoryPermissions {
   admin: boolean;
 }
 
+export interface RepositoryTag {
+  name: string;
+  objectId: string;
+  targetCommitId: string;
+  annotated: boolean;
+}
+
+export interface ReleaseAsset {
+  id: Identifier;
+  name: string;
+  byteSize: number;
+  contentType: string;
+  downloadCount: number;
+  createdAt: string;
+  downloadUrl: string;
+  canDelete: boolean;
+}
+
+export interface ReleaseSummary {
+  id: Identifier;
+  repository: Pick<RepositorySummary, 'owner' | 'name'>;
+  tagName: string;
+  targetCommitId: string;
+  targetBranch: string | null;
+  name: string;
+  body: string;
+  author: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string | null;
+  draft: boolean;
+  prerelease: boolean;
+  latest: boolean;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+  assetCount: number;
+}
+
+export interface ReleaseDetail extends ReleaseSummary {
+  assets: ReleaseAsset[];
+  canEdit: boolean;
+}
+
 export interface PublicProfileRepository extends RepositorySummary {
   defaultBranch: string;
 }
@@ -85,8 +128,19 @@ export interface PublicUserProfile {
   stats: { repositories: number; contributions: number; pullRequests: number };
   contributions: Array<{ date: string; count: number }>;
   repositories: PublicProfileRepository[];
-  organizations: Array<{ slug: string; name: string; avatarUrl: string | null; description: string }>;
-  activity: Array<{ id: string; title: string; authoredAt: string; owner: string; repository: string }>;
+  organizations: Array<{
+    slug: string;
+    name: string;
+    avatarUrl: string | null;
+    description: string;
+  }>;
+  activity: Array<{
+    id: string;
+    title: string;
+    authoredAt: string;
+    owner: string;
+    repository: string;
+  }>;
 }
 
 export interface PublicOrganizationProfile {
@@ -101,8 +155,20 @@ export interface PublicOrganizationProfile {
   };
   stats: { repositories: number; members: number; contributions: number };
   repositories: PublicProfileRepository[];
-  members: Array<{ handle: string; displayName: string; avatarUrl: string | null; role: string }>;
-  activity: Array<{ id: string; title: string; authoredAt: string; author: string | null; authorAvatarUrl: string | null; repository: string }>;
+  members: Array<{
+    handle: string;
+    displayName: string;
+    avatarUrl: string | null;
+    role: string;
+  }>;
+  activity: Array<{
+    id: string;
+    title: string;
+    authoredAt: string;
+    author: string | null;
+    authorAvatarUrl: string | null;
+    repository: string;
+  }>;
 }
 
 export type PublicIdentityProfile = PublicUserProfile | PublicOrganizationProfile;
@@ -230,9 +296,19 @@ export interface WorkItemReferenceEvent {
 }
 
 export type IssueTimelineItem =
-  | { sequence: number; kind: 'comment'; createdAt: string; value: IssueComment }
+  | {
+      sequence: number;
+      kind: 'comment';
+      createdAt: string;
+      value: IssueComment;
+    }
   | { sequence: number; kind: 'event'; createdAt: string; value: IssueEvent }
-  | { sequence: number; kind: 'reference'; createdAt: string; value: WorkItemReferenceEvent };
+  | {
+      sequence: number;
+      kind: 'reference';
+      createdAt: string;
+      value: WorkItemReferenceEvent;
+    };
 
 export interface IssueTimelineWindow {
   items: IssueTimelineItem[];
@@ -272,7 +348,17 @@ export interface PullRequestDetail extends PullRequestSummary {
     conversationsPass: boolean;
     unresolvedConversations: number;
   };
-  commits: Array<{ id: string; shortId: string; title: string; author: string; authorHandle?: string | null; authorDisplayName?: string | null; authorAvatarUrl?: string | null; authoredAt: string; signatureStatus: string }>;
+  commits: Array<{
+    id: string;
+    shortId: string;
+    title: string;
+    author: string;
+    authorHandle?: string | null;
+    authorDisplayName?: string | null;
+    authorAvatarUrl?: string | null;
+    authoredAt: string;
+    signatureStatus: string;
+  }>;
   comments: PullRequestComment[];
   reviews: PullRequestReview[];
   checks: CheckSummary[];
@@ -290,11 +376,31 @@ export interface PullRequestDetail extends PullRequestSummary {
 }
 
 export type PullTimelineItem =
-  | { sequence: number; kind: 'comment'; createdAt: string; value: PullRequestComment }
-  | { sequence: number; kind: 'review'; createdAt: string; value: PullRequestReview }
+  | {
+      sequence: number;
+      kind: 'comment';
+      createdAt: string;
+      value: PullRequestComment;
+    }
+  | {
+      sequence: number;
+      kind: 'review';
+      createdAt: string;
+      value: PullRequestReview;
+    }
   | { sequence: number; kind: 'thread'; createdAt: string; value: ReviewThread }
-  | { sequence: number; kind: 'event'; createdAt: string; value: PullRequestEvent }
-  | { sequence: number; kind: 'reference'; createdAt: string; value: WorkItemReferenceEvent };
+  | {
+      sequence: number;
+      kind: 'event';
+      createdAt: string;
+      value: PullRequestEvent;
+    }
+  | {
+      sequence: number;
+      kind: 'reference';
+      createdAt: string;
+      value: WorkItemReferenceEvent;
+    };
 
 export interface PullTimelineWindow {
   items: PullTimelineItem[];
@@ -314,23 +420,7 @@ export interface PullRealtimeUpdate {
   createdAt: string;
 }
 
-export type PullRequestEventKind =
-  | 'title_changed'
-  | 'description_changed'
-  | 'locked'
-  | 'unlocked'
-  | 'assigned'
-  | 'unassigned'
-  | 'label_added'
-  | 'label_removed'
-  | 'ready'
-  | 'closed'
-  | 'reopened'
-  | 'merged'
-  | 'commits_added'
-  | 'force_pushed'
-  | 'thread_resolved'
-  | 'thread_reopened';
+export type PullRequestEventKind = 'title_changed' | 'description_changed' | 'locked' | 'unlocked' | 'assigned' | 'unassigned' | 'label_added' | 'label_removed' | 'ready' | 'closed' | 'reopened' | 'merged' | 'commits_added' | 'force_pushed' | 'thread_resolved' | 'thread_reopened';
 
 export interface PullRequestEvent {
   id: Identifier;
@@ -390,7 +480,18 @@ export interface ReviewThread {
   createdAt: string;
   outdated: boolean;
   resolved: boolean;
-  comments: Array<{ id: Identifier; authorId: Identifier; author: string; authorDisplayName: string; authorAvatarUrl?: string | null; body: string; createdAt: string; updatedAt: string; deleted: boolean; canEdit: boolean }>;
+  comments: Array<{
+    id: Identifier;
+    authorId: Identifier;
+    author: string;
+    authorDisplayName: string;
+    authorAvatarUrl?: string | null;
+    body: string;
+    createdAt: string;
+    updatedAt: string;
+    deleted: boolean;
+    canEdit: boolean;
+  }>;
 }
 
 export interface CheckSummary {
@@ -408,7 +509,15 @@ export interface PullRequestDiff {
   base: string;
   head: string;
   mergeBase: string;
-  files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string; patchOmitted?: 'deleted' | 'large' | 'lazy' }>;
+  files: Array<{
+    path: string;
+    oldPath?: string;
+    status: 'added' | 'modified' | 'deleted' | 'renamed';
+    additions: number;
+    deletions: number;
+    patch: string;
+    patchOmitted?: 'deleted' | 'large' | 'lazy';
+  }>;
   threads?: ReviewThread[];
 }
 
@@ -466,7 +575,12 @@ export interface RunJob {
   startedAt?: string;
   completedAt?: string;
   logBytes: number;
-  artifacts: Array<{ id: Identifier; name: string; byteSize: number; contentType: string }>;
+  artifacts: Array<{
+    id: Identifier;
+    name: string;
+    byteSize: number;
+    contentType: string;
+  }>;
 }
 
 export interface RunDetail extends RunSummary {

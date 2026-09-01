@@ -22,6 +22,8 @@ import { getShell } from './shell';
 import { addIssueComment, createIssue, createIssueLabel, deleteIssueComment, setIssueState, updateIssue, updateIssueComment, updateIssueMetadata } from './issues';
 import { getIssue, getIssueTimeline, listAllIssues, listIssues } from './issue-queries';
 import { listInbox, markInboxRead, updateInboxState } from './inbox';
+import { createRelease, deleteRelease, downloadReleaseArchive, getRelease, getReleaseByTag, listReleases, listRepositoryTags, updateRelease } from './releases';
+import { abortReleaseAssetUpload, beginReleaseAssetUpload, completeReleaseAssetUpload, deleteReleaseAsset, downloadReleaseAsset, uploadReleaseAssetPart } from './release-assets';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -34,7 +36,10 @@ const worker = {
     if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) return handleAuth(request, _env);
 
     if (!url.pathname.startsWith('/api/v1/')) return problem(404, 'not_found', 'The requested Marl API route does not exist.');
-    if (request.method === 'GET' && url.pathname === '/api/v1/auth/config') return json({ emailVerificationRequired: _env.ENVIRONMENT !== 'development' });
+    if (request.method === 'GET' && url.pathname === '/api/v1/auth/config')
+      return json({
+        emailVerificationRequired: _env.ENVIRONMENT !== 'development'
+      });
     const gatewayTrusted = Boolean(_env.GIT_GATEWAY_TOKEN && request.headers.get('x-marl-gateway-token') === _env.GIT_GATEWAY_TOKEN);
     if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') return listPendingGitIndexes(_env);
     if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
@@ -47,7 +52,9 @@ const worker = {
     const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
     const publicGet = request.method === 'GET' && (avatar || organizationAvatar || repositoryIcon || publicIdentity);
     if (publicGet) {
-      const rate = await _env.RATE_LIMITER.limit({ key: request.headers.get('cf-connecting-ip') ?? 'anonymous' });
+      const rate = await _env.RATE_LIMITER.limit({
+        key: request.headers.get('cf-connecting-ip') ?? 'anonymous'
+      });
       if (!rate.success) return problem(429, 'rate_limited', 'Too many requests. Try again shortly.');
       if (avatar) return readAvatar(_env, avatar[1], avatar[2]);
       if (organizationAvatar) return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
@@ -59,7 +66,9 @@ const worker = {
     const runner = runnerCredential ? await authenticateRunner(request, _env) : null;
     const principal = !runnerCredential || !runner || request.headers.has('cookie') ? await authenticate(request, _env) : null;
     if (!gatewayTrusted) {
-      const rate = await _env.RATE_LIMITER.limit({ key: principal?.id ?? runner?.id ?? request.headers.get('cf-connecting-ip') ?? 'anonymous' });
+      const rate = await _env.RATE_LIMITER.limit({
+        key: principal?.id ?? runner?.id ?? request.headers.get('cf-connecting-ip') ?? 'anonymous'
+      });
       if (!rate.success) return problem(429, 'rate_limited', 'Too many requests. Try again shortly.');
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') {
@@ -86,7 +95,8 @@ const worker = {
       const service = url.searchParams.get('service') ?? 'git-upload-pack';
       if (!owner || !repository || !['git-upload-pack', 'git-receive-pack'].includes(service)) return problem(422, 'invalid_git_request', 'Owner, repository, or Git service is invalid.');
       if (runner && service === 'git-upload-pack') return authorizeRunnerGit(_env, runner, owner, repository);
-      return authorizeGit(_env, principal, owner, repository, service, gatewayTrusted);
+      const gatewayActorId = gatewayTrusted && /^[a-z]+_[a-z0-9]{16,128}$/.test(request.headers.get('x-marl-actor-id') ?? '') ? request.headers.get('x-marl-actor-id')! : undefined;
+      return authorizeGit(_env, principal, owner, repository, service, gatewayTrusted, gatewayActorId);
     }
     if (request.method === 'POST' && url.pathname === '/api/v1/git/index') {
       if (!principal && !gatewayTrusted) return problem(401, 'authentication_required', 'Authenticate the Git gateway.');
@@ -128,13 +138,27 @@ const worker = {
     if (request.method === 'GET' && jobLive) return connectRunRealtime(request, _env, principal, jobLive[1]);
     const artifact = url.pathname.match(/^\/api\/v1\/artifacts\/(artifact_[a-z0-9]+)$/);
     if (request.method === 'GET' && artifact) return downloadArtifact(_env, principal, artifact[1]);
+    const releaseUpload = url.pathname.match(/^\/api\/v1\/release-asset-uploads\/(releaseupload_[a-z0-9]+)(?:\/(parts\/(\d+)|complete))?$/);
+    if (releaseUpload) {
+      if (!releaseUpload[2] && request.method === 'DELETE') return abortReleaseAssetUpload(_env, principal, releaseUpload[1]);
+      if (releaseUpload[2]?.startsWith('parts/') && request.method === 'PUT') return uploadReleaseAssetPart(request, _env, principal, releaseUpload[1], Number(releaseUpload[3]));
+      if (releaseUpload[2] === 'complete' && request.method === 'POST') return completeReleaseAssetUpload(_env, principal, releaseUpload[1]);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
+    const releaseAsset = url.pathname.match(/^\/api\/v1\/release-assets\/(releaseasset_[a-z0-9]+)(?:\/(download))?$/);
+    if (releaseAsset) {
+      if (releaseAsset[2] === 'download' && request.method === 'GET') return downloadReleaseAsset(_env, principal, releaseAsset[1]);
+      if (!releaseAsset[2] && request.method === 'DELETE') return deleteReleaseAsset(_env, principal, releaseAsset[1]);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
 
     const compareRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/compare$/);
     if (compareRoute && request.method === 'GET') return compareBranches(_env, principal, decodeURIComponent(compareRoute[1]), decodeURIComponent(compareRoute[2]), url);
 
     const runRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/runs(?:\/(\d+)(?:\/(cancel|retry|state))?)?$/);
     if (runRoute) {
-      const owner = decodeURIComponent(runRoute[1]); const repository = decodeURIComponent(runRoute[2]);
+      const owner = decodeURIComponent(runRoute[1]);
+      const repository = decodeURIComponent(runRoute[2]);
       if (!runRoute[3] && request.method === 'GET') return listRepositoryRuns(_env, principal, owner, repository, url);
       if (runRoute[3] && !runRoute[4] && request.method === 'GET') return getRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'state' && request.method === 'GET') return getRunState(_env, principal, owner, repository, Number(runRoute[3]));
@@ -144,7 +168,10 @@ const worker = {
 
     const workflowRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/workflows(?:\/(workflow_[a-z0-9]+)(?:\/(dispatch))?)?$/);
     if (workflowRoute) {
-      const owner = decodeURIComponent(workflowRoute[1]); const repository = decodeURIComponent(workflowRoute[2]); const workflowId = workflowRoute[3]; const action = workflowRoute[4];
+      const owner = decodeURIComponent(workflowRoute[1]);
+      const repository = decodeURIComponent(workflowRoute[2]);
+      const workflowId = workflowRoute[3];
+      const action = workflowRoute[4];
       if (!workflowId && request.method === 'GET') return listWorkflows(_env, principal, owner, repository);
       if (workflowId && !action && request.method === 'GET') return getWorkflow(_env, principal, owner, repository, workflowId, url);
       if (workflowId && action === 'dispatch' && request.method === 'POST') return dispatchWorkflow(_env, principal, owner, repository, workflowId);
@@ -154,7 +181,9 @@ const worker = {
     if (url.pathname === '/api/v1/repositories') {
       if (request.method === 'GET') return listRepositories(_env, principal, url);
       if (request.method === 'POST') return createRepository(request, _env, principal);
-      return problem(405, 'method_not_allowed', 'This method is not allowed.', { allow: ['GET', 'POST'] });
+      return problem(405, 'method_not_allowed', 'This method is not allowed.', {
+        allow: ['GET', 'POST']
+      });
     }
 
     const repositorySecretsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/secrets(?:\/([^/]+))?$/);
@@ -164,14 +193,16 @@ const worker = {
 
     const branchRulesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/branch-rules$/);
     if (branchRulesRoute) {
-      const owner = decodeURIComponent(branchRulesRoute[1]); const repository = decodeURIComponent(branchRulesRoute[2]);
+      const owner = decodeURIComponent(branchRulesRoute[1]);
+      const repository = decodeURIComponent(branchRulesRoute[2]);
       if (request.method === 'GET') return listBranchRules(_env, principal, owner, repository);
       if (request.method === 'PUT') return putBranchRule(request, _env, principal, owner, repository);
     }
 
     const socialRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/(star|forks)$/);
     if (socialRoute) {
-      const owner = decodeURIComponent(socialRoute[1]); const repository = decodeURIComponent(socialRoute[2]);
+      const owner = decodeURIComponent(socialRoute[1]);
+      const repository = decodeURIComponent(socialRoute[2]);
       if (socialRoute[3] === 'star' && request.method === 'PUT') return setRepositoryStar(_env, principal, owner, repository, true);
       if (socialRoute[3] === 'star' && request.method === 'DELETE') return setRepositoryStar(_env, principal, owner, repository, false);
       if (socialRoute[3] === 'forks' && request.method === 'POST') return forkRepository(request, _env, principal, owner, repository);
@@ -179,6 +210,27 @@ const worker = {
     }
     const pullSourcesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pull-sources$/);
     if (pullSourcesRoute && request.method === 'GET') return listPullSources(_env, principal, decodeURIComponent(pullSourcesRoute[1]), decodeURIComponent(pullSourcesRoute[2]));
+
+    const releaseTagLookup = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/by-tag$/);
+    if (releaseTagLookup && request.method === 'GET') return getReleaseByTag(_env, principal, decodeURIComponent(releaseTagLookup[1]), decodeURIComponent(releaseTagLookup[2]), url);
+    const releaseTags = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/tags$/);
+    if (releaseTags && request.method === 'GET') return listRepositoryTags(_env, principal, decodeURIComponent(releaseTags[1]), decodeURIComponent(releaseTags[2]));
+    const releaseUploadRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/(release_[a-z0-9]+)\/asset-uploads$/);
+    if (releaseUploadRoute && request.method === 'POST') return beginReleaseAssetUpload(request, _env, principal, decodeURIComponent(releaseUploadRoute[1]), decodeURIComponent(releaseUploadRoute[2]), releaseUploadRoute[3]);
+    const releaseArchiveRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/(release_[a-z0-9]+)\/archive\/(zip|tar\.gz)$/);
+    if (releaseArchiveRoute && request.method === 'GET') return downloadReleaseArchive(_env, principal, decodeURIComponent(releaseArchiveRoute[1]), decodeURIComponent(releaseArchiveRoute[2]), releaseArchiveRoute[3], releaseArchiveRoute[4] as 'zip' | 'tar.gz');
+    const releaseRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases(?:\/(release_[a-z0-9]+))?$/);
+    if (releaseRoute) {
+      const owner = decodeURIComponent(releaseRoute[1]);
+      const repository = decodeURIComponent(releaseRoute[2]);
+      const releaseId = releaseRoute[3];
+      if (!releaseId && request.method === 'GET') return listReleases(_env, principal, owner, repository, url);
+      if (!releaseId && request.method === 'POST') return createRelease(request, _env, principal, owner, repository);
+      if (releaseId && request.method === 'GET') return getRelease(_env, principal, owner, repository, releaseId);
+      if (releaseId && request.method === 'PATCH') return updateRelease(request, _env, principal, owner, repository, releaseId);
+      if (releaseId && request.method === 'DELETE') return deleteRelease(_env, principal, owner, repository, releaseId);
+      return problem(405, 'method_not_allowed', 'This method is not allowed.');
+    }
 
     const issueRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/issues(?:\/(\d+)(?:\/(comments|metadata|labels|state|timeline))?)?$/);
     if (issueRoute) {
@@ -200,7 +252,8 @@ const worker = {
 
     const overviewRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/overview$/);
     if (overviewRoute) {
-      const owner = decodeURIComponent(overviewRoute[1]); const repository = decodeURIComponent(overviewRoute[2]);
+      const owner = decodeURIComponent(overviewRoute[1]);
+      const repository = decodeURIComponent(overviewRoute[2]);
       if (request.method === 'GET') return getRepositoryOverview(_env, principal, owner, repository);
       if (request.method === 'PUT') return updateRepositoryOverview(request, _env, principal, owner, repository);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
@@ -208,7 +261,9 @@ const worker = {
 
     const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|detach-fork|delete))?$/);
     if (settingsRoute) {
-      const owner = decodeURIComponent(settingsRoute[1]); const repository = decodeURIComponent(settingsRoute[2]); const action = settingsRoute[3];
+      const owner = decodeURIComponent(settingsRoute[1]);
+      const repository = decodeURIComponent(settingsRoute[2]);
+      const action = settingsRoute[3];
       if (!action && request.method === 'GET') return getRepositorySettings(_env, principal, owner, repository);
       if (!action && request.method === 'PATCH') return updateRepositorySettings(request, _env, principal, owner, repository);
       if (action === 'rename' && request.method === 'POST') return renameRepository(request, _env, principal, owner, repository);

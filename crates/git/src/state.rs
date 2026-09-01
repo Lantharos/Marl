@@ -1,14 +1,38 @@
 use crate::process::Command;
 use anyhow::{Context, Result};
-use std::path::{Component, Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Component, Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
-#[derive(Clone)]
 pub(crate) struct AppState {
     pub repositories: PathBuf,
     pub control_plane: String,
     pub client: reqwest::Client,
     pub gateway_token: String,
     pub local_storage: bool,
+    pub git_edge: Option<String>,
+    pub repository_locks: Mutex<HashMap<String, Arc<AsyncMutex<()>>>>,
+}
+
+impl AppState {
+    pub(crate) async fn lock_repository(
+        &self,
+        owner: &str,
+        repository: &str,
+    ) -> OwnedMutexGuard<()> {
+        let key = format!("{owner}/{repository}");
+        let lock = self
+            .repository_locks
+            .lock()
+            .expect("repository lock registry poisoned")
+            .entry(key)
+            .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+            .clone();
+        lock.lock_owned().await
+    }
 }
 
 pub(crate) fn safe_segment(value: &str) -> bool {

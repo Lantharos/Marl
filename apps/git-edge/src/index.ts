@@ -13,17 +13,14 @@ export { UploadSessionObject } from './upload-session-object';
 export { CompactionObject } from './compaction';
 export { RepositoryIndexObject } from './indexing';
 
-type RepositoryRoute = { owner: string; repository: string; writes: boolean; body?: Record<string, unknown> };
+type RepositoryRoute = {
+  owner: string;
+  repository: string;
+  writes: boolean;
+  body?: Record<string, unknown>;
+};
 
-const INTERNAL_REPOSITORY_ROUTES = new Set([
-  '/_marl/blob',
-  '/_marl/commit',
-  '/_marl/compare',
-  '/_marl/merge',
-  '/_marl/patch',
-  '/_marl/pulls/pin',
-  '/_marl/tree'
-]);
+const INTERNAL_REPOSITORY_ROUTES = new Set(['/_marl/archive', '/_marl/blob', '/_marl/commit', '/_marl/compare', '/_marl/merge', '/_marl/patch', '/_marl/pulls/pin', '/_marl/tags/create', '/_marl/tags/list', '/_marl/tree']);
 
 export class GitContainer extends Container<GitEdgeEnv> {
   defaultPort = 8788;
@@ -38,8 +35,12 @@ export class GitContainer extends Container<GitEdgeEnv> {
   };
 }
 
-export class ValidatorContainer extends GitContainer { enableInternet = false; }
-export class MaintenanceContainer extends GitContainer { enableInternet = false; }
+export class ValidatorContainer extends GitContainer {
+  enableInternet = false;
+}
+export class MaintenanceContainer extends GitContainer {
+  enableInternet = false;
+}
 
 export { ContainerProxy };
 
@@ -49,15 +50,27 @@ export default {
       const path = new URL(request.url).pathname;
       if (path.startsWith('/_marl/') && request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
       if (path === '/_marl/repositories/relocate' && request.method === 'POST') {
-        return new Response(null, { status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404 });
+        return new Response(null, {
+          status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404
+        });
       }
       if (path === '/_marl/repositories/fork' && request.method === 'POST') return forkRepositoryStorage(request, env);
       if (path === '/_marl/object' && request.method === 'POST') {
         if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
-        const body = await readBoundedJson<{ repositoryId?: unknown; objectId?: unknown }>(request, 64 * 1024);
+        const body = await readBoundedJson<{
+          repositoryId?: unknown;
+          objectId?: unknown;
+        }>(request, 64 * 1024);
         if (!body || typeof body !== 'object' || typeof body.repositoryId !== 'string' || typeof body.objectId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.objectId)) return new Response(null, { status: 422 });
         const object = await readPackedObject(env, body.repositoryId, body.objectId);
-        return new Response(new Uint8Array(object.bytes).buffer, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(object.bytes.byteLength), 'x-marl-git-object-type': object.kind, 'cache-control': 'private, max-age=31536000, immutable' } });
+        return new Response(new Uint8Array(object.bytes).buffer, {
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-length': String(object.bytes.byteLength),
+            'x-marl-git-object-type': object.kind,
+            'cache-control': 'private, max-age=31536000, immutable'
+          }
+        });
       }
       const nativeRoute = nativePushRoute(request);
       if (nativeRoute) return handleNativePush(request, env, nativeRoute);
@@ -75,7 +88,9 @@ export default {
       return container.fetch(request);
     } catch (error) {
       if (error instanceof AuthorizationError) {
-        const response = new Response('Git access denied\n', { status: error.status });
+        const response = new Response('Git access denied\n', {
+          status: error.status
+        });
         if (error.status === 401) response.headers.set('www-authenticate', 'Basic realm="Marl", charset="UTF-8"');
         return response;
       }
@@ -91,12 +106,21 @@ async function repositoryRoute(request: Request): Promise<RepositoryRoute | null
     if (request.method !== 'POST' || !INTERNAL_REPOSITORY_ROUTES.has(url.pathname)) return null;
     const body = await readBoundedJson<Record<string, unknown>>(request.clone(), 1024 * 1024);
     if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
-    return { owner: body.owner, repository: body.repository, writes: url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin', body };
+    return {
+      owner: body.owner,
+      repository: body.repository,
+      writes: url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin' || url.pathname === '/_marl/tags/create',
+      body
+    };
   }
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\.git\//);
   if (!match || !safeSegment(match[1]) || !safeSegment(match[2])) return null;
   const service = url.searchParams.get('service') ?? url.pathname.split('/').at(-1);
-  return { owner: match[1], repository: match[2], writes: service === 'git-receive-pack' };
+  return {
+    owner: match[1],
+    repository: match[2],
+    writes: service === 'git-receive-pack'
+  };
 }
 
 function safeSegment(value: string | undefined): value is string {

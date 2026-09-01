@@ -3,15 +3,15 @@
 Marl accepts Ed25519 and ECDSA OpenSSH public keys from **Settings -> SSH keys**. Once a key is
 registered, use the SSH URL from a repository's **Clone** menu:
 
-```powershell
-git clone ssh://git@marl.example.com/organization/repository.git
+```sh
+git clone ssh://git@ssh.marl.sh/organization/repository.git
 ```
 
 The gateway authenticates only public keys registered to a Marl account. It authorizes every
 `git-upload-pack` and `git-receive-pack` request against current organization, team, repository,
 and token-independent user permissions. It does not provide an interactive shell or accept other
-commands. The host key is generated once under the Git data directory; set `MARL_SSH_HOST_KEY`
-to keep it at an explicit persistent path.
+commands. Production refuses to start SSH without `MARL_SSH_HOST_KEY` pointing to an existing
+persistent private host key.
 
 Smart HTTP and SSH pushes accept at most 256 MiB of incoming pack data. The `refs/marl/`
 namespace is reserved for Marl's pull-request retention refs; clients cannot create, update, or
@@ -42,12 +42,14 @@ Override the SSH listener with `MARL_SSH_LISTEN` and the URL shown by the API wi
 
 ## Production topology
 
-Production currently advertises HTTPS Git only. Cloudflare Container SSH is an operator
-connection reached through Wrangler, not a public TCP listener, and the persistent Rust gateway
-writes a local bare repository rather than Marl's canonical R2 generations. Publishing it as a
-second writable origin would split repository state.
+Workers cannot accept inbound raw TCP, so production SSH runs the Rust gateway on a small
+persistent origin behind the unproxied `ssh.marl.sh` DNS record. Before each command it downloads
+the exact active generation and activates it in its local cache. An SSH push is captured after
+`git-receive-pack`, then sent through the Git Worker's normal reservation, multipart upload,
+validation, compare-and-swap, and R2 publication path. SSH returns success only after publication
+finishes. A competing push fails instead of replacing newer refs.
 
-Do not set `GIT_SSH_PUBLIC_URL` until the SSH receive path participates in the same repository
-lease, validation, and R2 publication protocol as HTTPS. A future public TCP origin must also keep
-the gateway token and host private key outside its image, restrict control-plane access, persist
-the host key, and fail startup when either listener cannot bind.
+The local repository directory is disposable caching. Only the host key must persist there; Git
+packs and refs remain canonical in R2 and the repository Durable Object. Use the checked
+`deploy/ssh/compose.yaml` definition and deployment instructions in
+[`deployment.md`](deployment.md).

@@ -1,12 +1,16 @@
 # Deployment
 
-Marl deploys as three Cloudflare Workers:
+Marl deploys as three Cloudflare Workers and one persistent SSH origin:
 
 - `marl-web` serves the SvelteKit application from `marl.sh`.
 - `marl-api` owns `marl.sh/api/*` and `marl.sh/health`.
 - `marl-git` serves Smart HTTP Git from `git.marl.sh`. Git authorization reaches the API through a
   private service binding. The API reaches Git's Custom Domain for repository operations, avoiding
   a circular first-deployment dependency between the two Workers.
+- `git-ssh` serves standard Git over SSH from `ssh.marl.sh`. It keeps only a reusable local pack
+  cache and a persistent host key; every fetch hydrates a specific canonical R2 generation and
+  every push completes the same lease, validation, and publication protocol as HTTPS before it
+  reports success.
 
 Server-rendered web requests also reach the API through a service binding. Browser requests remain
 same-origin on `marl.sh/api/*`; a Worker cannot target that same-zone route with a public `fetch`.
@@ -43,6 +47,22 @@ random bytes encoded as base64. Wrangler declares these names as required bindin
 development warns when one is missing and production deployment fails before publishing an
 incomplete Worker.
 
+Provision the SSH origin on a host with a persistent public TCP address. Cloudflare Workers do not
+accept inbound raw SSH connections, so `ssh.marl.sh` must be an unproxied A or AAAA record pointing
+at that host. Generate one persistent host key and keep the gateway token outside the image:
+
+```sh
+install -d -m 700 secrets
+ssh-keygen -q -t ed25519 -N '' -f secrets/ssh_host_ed25519_key
+export MARL_SSH_HOST_KEY_FILE="$PWD/secrets/ssh_host_ed25519_key"
+export MARL_GIT_GATEWAY_TOKEN='the same value configured on both Workers'
+docker compose -f deploy/ssh/compose.yaml up -d --build
+```
+
+The named volume is a performance cache, not repository authority. It can be replaced without
+losing a published repository. The host key must remain stable so clients do not receive host-key
+change warnings. Restrict TCP port 22 to Git clients and do not expose the container's HTTP port.
+
 Cloudflare Email Sending must be active for `marl.sh`; the API binding is restricted to
 `noreply@marl.sh`. Before deploying the API route, `marl.sh` must have a proxied DNS record. Use an
 originless `AAAA` record pointing to `100::` if the web Custom Domain has not created the record
@@ -62,21 +82,19 @@ cargo clippy --workspace --all-targets -- -D warnings
 bunx wrangler d1 migrations apply marl --remote --config apps/api/wrangler.jsonc
 ```
 
-Deploy the API first because both other Workers have service bindings to it. Deploy Git and the web
-app after the API service exists:
+Deploy the API first because both other Workers have service bindings to it. Deploy Git next so
+the SSH origin can hydrate and publish canonical generations, then start SSH and deploy the web:
 
 ```sh
 bun run --cwd apps/git-edge build:container
 bunx wrangler deploy --config apps/api/wrangler.jsonc
 bunx wrangler deploy --config apps/git-edge/wrangler.jsonc
+docker compose -f deploy/ssh/compose.yaml up -d --build
 bun run --cwd apps/web deploy
 ```
 
-The current canonical production Git path is HTTPS through `marl-git`. Do not set
-`GIT_SSH_PUBLIC_URL` in production until the persistent SSH origin publishes into the same R2
-generation model; advertising a separate writable repository would split repository state.
-
 After deployment, verify the web origin, `/health`, password and passkey sign-in, a clone and
-push through `git.marl.sh`, repository browsing, and a self-hosted runner job. The local
-qualification command does not exercise live R2, Durable Objects, Containers, DNS, email, or
-retention settings.
+push through both `git.marl.sh` and `ssh.marl.sh`, cross-protocol fetch visibility, release
+publication, release asset download, repository browsing, and a self-hosted runner job. The local
+qualification command does not exercise live Cloudflare R2, Durable Objects, Containers, DNS,
+email, or retention settings.

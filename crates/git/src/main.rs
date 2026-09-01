@@ -1,3 +1,4 @@
+mod archive;
 mod blob;
 mod compare;
 mod cross_repository;
@@ -11,6 +12,7 @@ mod process;
 mod receive;
 mod refs;
 mod relocate;
+mod remote_storage;
 mod repository_files;
 mod repository_storage;
 mod smart_http;
@@ -20,7 +22,11 @@ mod state;
 use anyhow::{Context, Result};
 use axum::{Router, routing::any};
 use state::AppState;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tokio::fs;
 
 #[tokio::main]
@@ -39,12 +45,18 @@ async fn main() -> Result<()> {
         gateway_token: std::env::var("MARL_GIT_GATEWAY_TOKEN")
             .expect("MARL_GIT_GATEWAY_TOKEN is required"),
         local_storage,
+        git_edge: std::env::var("MARL_GIT_EDGE_URL")
+            .ok()
+            .map(|value| value.trim_end_matches('/').to_owned()),
+        repository_locks: Mutex::new(HashMap::new()),
     });
     let repository_root = state.repositories.display().to_string();
     if state.local_storage {
         tokio::spawn(metadata::backfill_pending_repositories(state.clone()));
     }
-    let ssh_address = std::env::var("MARL_SSH_LISTEN").unwrap_or_else(|_| "127.0.0.1:42621".into());
+    let ssh_address = std::env::var("MARL_SSH_LISTEN")
+        .ok()
+        .or_else(|| state.local_storage.then(|| "127.0.0.1:42621".into()));
     let app = Router::new()
         .route("/health", axum::routing::get(|| async { "ok\n" }))
         .route(
@@ -94,6 +106,8 @@ async fn main() -> Result<()> {
         )
         .route("/_marl/merge", axum::routing::post(merge::merge_request))
         .route("/_marl/pulls/pin", axum::routing::post(refs::pin_pull))
+        .route("/_marl/tags/list", axum::routing::post(refs::list_tags))
+        .route("/_marl/tags/create", axum::routing::post(refs::create_tag))
         .route(
             "/_marl/repositories/relocate",
             axum::routing::post(relocate::relocate_repository),
@@ -103,6 +117,10 @@ async fn main() -> Result<()> {
             axum::routing::post(fork::fork_repository),
         )
         .route("/_marl/blob", axum::routing::post(blob::read_blob))
+        .route(
+            "/_marl/archive",
+            axum::routing::post(archive::repository_archive),
+        )
         .route("/_marl/tree", axum::routing::post(metadata::read_tree))
         .route(
             "/_marl/index",
@@ -132,6 +150,10 @@ async fn main() -> Result<()> {
             .await
             .context("serve Git gateway")
     };
-    tokio::try_join!(http, ssh::serve(state, ssh_address))?;
+    if let Some(ssh_address) = ssh_address {
+        tokio::try_join!(http, ssh::serve(state, ssh_address))?;
+    } else {
+        http.await?;
+    }
     Ok(())
 }

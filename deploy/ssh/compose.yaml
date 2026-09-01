@@ -1,0 +1,36 @@
+services:
+  git-ssh:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.git
+    restart: unless-stopped
+    read_only: true
+    ports:
+      - "${MARL_SSH_PORT:-22}:2222"
+    environment:
+      MARL_API_URL: https://marl.sh
+      MARL_GIT_EDGE_URL: https://git.marl.sh
+      MARL_GIT_GATEWAY_TOKEN: ${MARL_GIT_GATEWAY_TOKEN:?Set MARL_GIT_GATEWAY_TOKEN}
+      MARL_GIT_ROOT: /var/lib/marl/repositories
+      MARL_GIT_LOCAL: "0"
+      MARL_GIT_LISTEN: 0.0.0.0:8788
+      MARL_SSH_LISTEN: 0.0.0.0:2222
+      MARL_SSH_HOST_KEY: /run/secrets/marl_ssh_host_key
+    volumes:
+      - git-cache:/var/lib/marl/repositories
+    secrets:
+      - marl_ssh_host_key
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+volumes:
+  git-cache:
+
+secrets:
+  marl_ssh_host_key:
+    file: ${MARL_SSH_HOST_KEY_FILE:?Set MARL_SSH_HOST_KEY_FILE}

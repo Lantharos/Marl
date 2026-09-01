@@ -428,6 +428,8 @@ mod tests {
             client: reqwest::Client::new(),
             gateway_token: String::new(),
             local_storage: false,
+            git_edge: None,
+            repository_locks: std::sync::Mutex::new(std::collections::HashMap::new()),
         };
         let commit = perform_commit(
             &state,

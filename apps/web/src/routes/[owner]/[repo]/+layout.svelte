@@ -14,6 +14,7 @@
   import PlayCircle from 'lucide-svelte/icons/play-circle';
   import Settings from 'lucide-svelte/icons/settings';
   import Star from 'lucide-svelte/icons/star';
+  import Tag from 'lucide-svelte/icons/tag';
   import { api, MarlApiError } from '$lib/api';
   import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
   import Button from '$lib/components/Button.svelte';
@@ -193,6 +194,7 @@
     <span class="active-island" style={`--island-x:${islandX}px`} aria-hidden="true"><svg viewBox="0 0 1 43" preserveAspectRatio="none"><path class="island-fill" d={islandFill}></path><path class="island-outline" d={islandBoundary} stroke-width={islandStrokeWidth}></path></svg></span>
     <a class:active={tabActive('overview')} href={base}><BookOpen size={14} />Overview</a>
     <a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a>
+    <a class:active={tabActive('releases')} href="{base}/releases"><Tag size={14} />Releases</a>
     <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
     <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a>
     <a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a>

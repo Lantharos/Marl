@@ -19,6 +19,7 @@
     "ENVIRONMENT": "production",
     "PUBLIC_URL": "https://marl.sh",
     "GIT_PUBLIC_URL": "https://git.marl.sh",
+    "GIT_SSH_PUBLIC_URL": "ssh://git@ssh.marl.sh",
     "EMAIL_FROM": "noreply@marl.sh"
   },
   "secrets": {

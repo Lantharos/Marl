@@ -35,6 +35,7 @@ The public vocabulary is deliberately familiar:
 | Repository | One codebase and its revision history. |
 | Branch | A named line of work. |
 | Commit | A saved revision. |
+| Release | A named, downloadable version of a repository. |
 | Issue | A tracked unit of repository work or discussion. |
 | Pull request | A proposed merge from one branch into another. |
 | Review | An approval, request for changes, or review comment. |
@@ -60,6 +61,7 @@ The global application contains:
 A repository contains:
 
 - Code
+- Releases
 - Issues
 - Pull requests
 - Runs
@@ -134,6 +136,19 @@ Repository owners configure merge rules from the branches surface: required appr
 successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,
 squash, or rebase methods. These rules are enforcement policy, not UI suggestions.
 
+## Releases
+
+Releases turn an existing branch or commit into a durable version identified by a real Git tag.
+Drafts are visible only to repository collaborators, while published releases can be marked as a
+prerelease or as the repository's single latest release. Publishing a draft creates its tag
+through the same canonical Git publication path as a push, so the database cannot advertise a tag
+that Git clients cannot fetch.
+
+A release has Markdown notes, automatic ZIP and tar.gz source archives, and optional binary
+assets. Asset uploads are resumable multipart transfers with bounded sizes and exact part
+validation. Deleting a release removes its uploaded assets but deliberately leaves the Git tag in
+history. See [`releases.md`](releases.md) for lifecycle and limits.
+
 ## Runs and runners
 
 Runs expose queue time, execution time, job dependencies, live logs, runner identity,
@@ -149,7 +164,7 @@ planned.
 - Social following
 - Project appearance customization
 - Components and monorepo dashboards
-- Releases and package registries
+- Package registries
 - OAuth applications and integration marketplaces
 
 Deferred means absent from navigation, schemas, and initial APIs—not implemented and hidden.

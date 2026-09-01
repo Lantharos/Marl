@@ -33,10 +33,10 @@ struct RepositoryStatus {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Capture {
-    refs: BTreeMap<String, String>,
-    pack_bytes: u64,
-    has_pack: bool,
+pub(crate) struct Capture {
+    pub(crate) refs: BTreeMap<String, String>,
+    pub(crate) pack_bytes: u64,
+    pub(crate) has_pack: bool,
     pack_id: Option<String>,
     expanded_bytes: u64,
     object_count: usize,
@@ -46,16 +46,16 @@ struct Capture {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CaptureRequest {
-    known_refs: BTreeMap<String, String>,
+    pub(crate) known_refs: BTreeMap<String, String>,
     #[serde(default)]
     full: bool,
 }
 
 #[derive(Deserialize)]
 pub(crate) struct Activation {
-    generation: u64,
-    refs: BTreeMap<String, String>,
-    packs: Vec<String>,
+    pub(crate) generation: u64,
+    pub(crate) refs: BTreeMap<String, String>,
+    pub(crate) packs: Vec<String>,
 }
 
 pub(crate) async fn repository_status(
@@ -164,6 +164,16 @@ async fn capture_inner(
     request: CaptureRequest,
 ) -> Result<Response> {
     authorize(&state, &headers)?;
+    Ok(axum::Json(capture_value(state, owner, repository, push, request).await?).into_response())
+}
+
+async fn capture_value(
+    state: Arc<AppState>,
+    owner: String,
+    repository: String,
+    push: String,
+    request: CaptureRequest,
+) -> Result<Capture> {
     validate_repository(&owner, &repository)?;
     validate_push(&push)?;
     for (name, object_id) in &request.known_refs {
@@ -258,7 +268,7 @@ async fn capture_inner(
     } else {
         (None, 0, 0, 0)
     };
-    Ok(axum::Json(Capture {
+    Ok(Capture {
         refs,
         pack_bytes: metadata.len(),
         has_pack,
@@ -267,7 +277,26 @@ async fn capture_inner(
         object_count,
         largest_blob_bytes,
     })
-    .into_response())
+}
+
+pub(crate) async fn capture_repository_state(
+    state: Arc<AppState>,
+    owner: String,
+    repository: String,
+    push: String,
+    known_refs: BTreeMap<String, String>,
+) -> Result<Capture> {
+    capture_value(
+        state,
+        owner,
+        repository,
+        push,
+        CaptureRequest {
+            known_refs,
+            full: false,
+        },
+    )
+    .await
 }
 
 pub(crate) async fn read_capture(
@@ -329,7 +358,17 @@ async fn activate_inner(
     activation: Activation,
 ) -> Result<Response> {
     authorize(&state, &headers)?;
-    validate_repository(&owner, &repository)?;
+    activate_repository_state(&state, &owner, &repository, activation).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+pub(crate) async fn activate_repository_state(
+    state: &AppState,
+    owner: &str,
+    repository: &str,
+    activation: Activation,
+) -> Result<()> {
+    validate_repository(owner, repository)?;
     if activation.packs.len() > 16 {
         bail!("repository generation has too many packs")
     }
@@ -338,10 +377,10 @@ async fn activate_inner(
             bail!("repository generation contains an invalid ref")
         }
     }
-    let repository_path = repository_path(&state.repositories, &owner, &repository)?;
+    let repository_path = repository_path(&state.repositories, owner, repository)?;
     ensure_bare_repository(&repository_path).await?;
     let target = repository_path.join("objects/pack");
-    let cache = pack_cache(&state, &owner, &repository)?;
+    let cache = pack_cache(state, owner, repository)?;
     fs::create_dir_all(&target).await?;
     for pack in &activation.packs {
         if !is_object_id(pack) {
@@ -374,7 +413,7 @@ async fn activate_inner(
         activation.generation.to_string(),
     )
     .await?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok(())
 }
 
 fn validate_repository(owner: &str, repository: &str) -> Result<()> {
@@ -384,7 +423,7 @@ fn validate_repository(owner: &str, repository: &str) -> Result<()> {
     Ok(())
 }
 
-fn pack_cache(state: &AppState, owner: &str, repository: &str) -> Result<PathBuf> {
+pub(crate) fn pack_cache(state: &AppState, owner: &str, repository: &str) -> Result<PathBuf> {
     validate_repository(owner, repository)?;
     Ok(state
         .repositories
@@ -394,7 +433,7 @@ fn pack_cache(state: &AppState, owner: &str, repository: &str) -> Result<PathBuf
         .join("packs"))
 }
 
-fn capture_path(state: &AppState, push: &str) -> Result<PathBuf> {
+pub(crate) fn capture_path(state: &AppState, push: &str) -> Result<PathBuf> {
     validate_push(push)?;
     Ok(state.repositories.join(".marl-captures").join(push))
 }

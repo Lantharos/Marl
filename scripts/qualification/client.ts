@@ -23,7 +23,7 @@ export class MarlClient {
   async response(path: string, init: RequestInit = {}) {
     const headers = new Headers(init.headers);
     if (this.cookie) headers.set('cookie', this.cookie);
-    if (init.body) headers.set('content-type', 'application/json');
+    if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
     return fetch(`${this.apiUrl}${path}`, { ...init, headers });
   }
 
@@ -58,16 +58,19 @@ export class MarlClient {
   async waitFor<T>(operation: () => Promise<T>, ready: (value: T) => boolean, message: string, timeoutMs = 30_000): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     let lastError: unknown;
+    let lastValue: T | undefined;
     while (Date.now() < deadline) {
       try {
         const value = await operation();
+        lastValue = value;
         if (ready(value)) return value;
       } catch (error) {
         lastError = error;
       }
       await Bun.sleep(200);
     }
-    throw new Error(`${message}${lastError ? `: ${String(lastError)}` : ''}`);
+    const detail = lastError ? String(lastError) : lastValue === undefined ? 'no response' : JSON.stringify(lastValue);
+    throw new Error(`${message}: ${detail}`);
   }
 }
 

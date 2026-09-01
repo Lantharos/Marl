@@ -3,5 +3,4 @@ export type D1Result<T = Record<string, unknown>> = Awaited<ReturnType<D1Prepare
 
 export interface Env extends CloudflareBindings {
   GIT_GATEWAY_URL?: string;
-  GIT_SSH_PUBLIC_URL?: string;
 }

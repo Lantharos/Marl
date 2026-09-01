@@ -13,6 +13,6 @@ COPY --from=builder /build/target/release/git-gateway /usr/local/bin/git-gateway
 ENV MARL_GIT_LISTEN=0.0.0.0:8788
 ENV MARL_GIT_ROOT=/var/lib/marl/repositories
 ENV MARL_GIT_LOCAL=0
-EXPOSE 8788
+EXPOSE 8788 2222
 USER marl
 ENTRYPOINT ["/usr/local/bin/git-gateway"]

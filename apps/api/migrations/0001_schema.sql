@@ -809,6 +809,62 @@ CREATE TABLE work_item_references (
   CHECK ((target_issue_id IS NOT NULL) != (target_pull_id IS NOT NULL))
 );
 
+CREATE TABLE releases (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+  tag_name TEXT NOT NULL,
+  target_commit_id TEXT NOT NULL,
+  target_branch TEXT,
+  name TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  author_id TEXT NOT NULL REFERENCES users(id),
+  draft INTEGER NOT NULL DEFAULT 1 CHECK (draft IN (0, 1)),
+  prerelease INTEGER NOT NULL DEFAULT 0 CHECK (prerelease IN (0, 1)),
+  latest INTEGER NOT NULL DEFAULT 0 CHECK (latest IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  published_at TEXT,
+  UNIQUE (repository_id, tag_name),
+  CHECK ((draft = 1 AND published_at IS NULL AND latest = 0) OR (draft = 0 AND published_at IS NOT NULL)),
+  CHECK (latest = 0 OR prerelease = 0)
+);
+
+CREATE TABLE release_assets (
+  id TEXT PRIMARY KEY,
+  release_id TEXT NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+  uploader_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  object_key TEXT NOT NULL UNIQUE,
+  byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+  content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+  download_count INTEGER NOT NULL DEFAULT 0 CHECK (download_count >= 0),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (release_id, name)
+);
+
+CREATE TABLE release_asset_uploads (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL UNIQUE,
+  release_id TEXT NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+  uploader_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  object_key TEXT NOT NULL UNIQUE,
+  multipart_upload_id TEXT NOT NULL,
+  expected_size INTEGER NOT NULL CHECK (expected_size > 0),
+  content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (release_id, name)
+);
+
+CREATE TABLE release_asset_upload_parts (
+  upload_id TEXT NOT NULL REFERENCES release_asset_uploads(id) ON DELETE CASCADE,
+  part_number INTEGER NOT NULL CHECK (part_number > 0),
+  etag TEXT NOT NULL,
+  byte_size INTEGER NOT NULL CHECK (byte_size > 0),
+  PRIMARY KEY (upload_id, part_number)
+);
+
 CREATE INDEX issues_by_state ON issues(repository_id, state, updated_at DESC, id DESC);
 CREATE INDEX issues_by_author ON issues(author_id, updated_at DESC);
 CREATE INDEX issue_comments_issue_created ON issue_comments(issue_id, created_at, id);
@@ -825,6 +881,10 @@ CREATE INDEX work_item_references_source_pull ON work_item_references(source_pul
 CREATE INDEX work_item_references_target_issue ON work_item_references(target_issue_id);
 CREATE INDEX work_item_references_target_pull ON work_item_references(target_pull_id);
 CREATE INDEX work_item_references_content ON work_item_references(source_content_kind, source_content_id);
+CREATE INDEX releases_by_repository ON releases(repository_id, draft, published_at DESC, created_at DESC);
+CREATE UNIQUE INDEX releases_latest ON releases(repository_id) WHERE latest = 1;
+CREATE INDEX release_assets_by_release ON release_assets(release_id, created_at);
+CREATE INDEX release_asset_uploads_by_expiry ON release_asset_uploads(expires_at);
 CREATE UNIQUE INDEX work_item_references_issue_target ON work_item_references(source_content_kind, source_content_id, target_issue_id) WHERE target_issue_id IS NOT NULL;
 CREATE UNIQUE INDEX work_item_references_pull_target ON work_item_references(source_content_kind, source_content_id, target_pull_id) WHERE target_pull_id IS NOT NULL;
 
