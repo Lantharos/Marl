@@ -214,10 +214,12 @@
     </span>
     <div><h1>{run.name}</h1><p>Run #{run.number} · {run.trigger}{run.actor ? ` by ${run.actor}` : ''}</p></div>
   </div>
-  {#if run.state === 'queued' || run.state === 'running'}
-    <Button loading={actionBusy} onclick={() => action('cancel')}><Square size={14} />Cancel</Button>
-  {:else}
-    <Button loading={actionBusy} onclick={() => action('retry')}><RotateCcw size={14} />Run again</Button>
+  {#if data.repository.permissions.push}
+    {#if run.state === 'queued' || run.state === 'running'}
+      <Button loading={actionBusy} onclick={() => action('cancel')}><Square size={14} />Cancel</Button>
+    {:else}
+      <Button loading={actionBusy} onclick={() => action('retry')}><RotateCcw size={14} />Run again</Button>
+    {/if}
   {/if}
 </header>
 

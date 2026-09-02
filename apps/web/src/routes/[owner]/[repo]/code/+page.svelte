@@ -13,6 +13,7 @@
   import { dismissable } from '$lib/actions/dismissable';
   import { api } from '$lib/api';
   import Button from '$lib/components/Button.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import EmptyRepository from '$lib/repositories/EmptyRepository.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
@@ -97,7 +98,7 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-<svelte:head><title>Code · {owner}/{repo} · Marl</title></svelte:head>
+<Seo title={`Code · ${owner}/${repo} · Marl`} description={`Browse the source, branches, and commit history for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 <div class="code-page">
   {#if latestCommit}

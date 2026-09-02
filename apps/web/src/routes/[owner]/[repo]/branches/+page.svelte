@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import Search from 'lucide-svelte/icons/search';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import { encodeRevision } from '$lib/repository-path';
   import type { PageData } from './$types';
@@ -20,7 +21,7 @@
   }
 </script>
 
-<svelte:head><title>Branches · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<Seo title={`Branches · ${owner}/${repo} · Marl`} description={`Browse branches and active lines of work for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <header><h1>Branches</h1><p>Browse active lines of work and compare them with the default branch.</p></header>
 <label class="search"><Search size={14} /><input bind:value={query} placeholder="Find a branch" /></label>
 <section class="list">

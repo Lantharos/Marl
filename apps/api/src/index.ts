@@ -5,13 +5,12 @@ import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
-import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getCommit, getRepository, getRepositoryOverview, getRepositorySettings, indexGit, listBranches, listCommits, listPendingGitIndexes, listPullSources, listRepositories, listTree, readBlob, readCommitPatch, readRepositoryIcon, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings, uploadRepositoryIcon } from './repositories';
+import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getRepositorySettings, indexGit, listPendingGitIndexes, listPullSources, listRepositories, readRepositoryIcon, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings, uploadRepositoryIcon } from './repositories';
 import { addPullComment, addThreadComment, createPull, createPullLabel, createThread, deletePullComment, deleteReviewComment, mergePull, resolveThread, reviewPull, transitionPull, updatePullComment, updatePullDetails, updatePullMetadata, updateReviewComment } from './pulls';
-import { compareBranches, connectPullRealtime, getPull, getPullDiff, getPullPatch, getPullState, getPullTimeline, getPullUpdates, listAllPulls, listPulls } from './pull-queries';
+import { compareBranches, listAllPulls } from './pull-queries';
 import { authenticateRunner, authorizeRunnerGit, beginArtifactUpload, claimJob, completeArtifactUpload, completeJob, createEnrollment, getRunner, hasRunnerCredential, heartbeatRunner, listRunners, registerRunner, renewJob, uploadArtifactPart, uploadLog } from './runners';
-import { cancelRun, downloadArtifact, getRun, getRunState, listRepositoryRuns, listRuns, readJobLogs, retryRun } from './runs';
-import { connectRunRealtime } from './run-realtime';
-import { dispatchWorkflow, getWorkflow, listWorkflows } from './workflows';
+import { cancelRun, listRuns, retryRun } from './runs';
+import { dispatchWorkflow } from './workflows';
 import { search } from './search';
 import { organizationSecrets, repositorySecrets } from './secrets';
 import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys, signingKeys } from './ssh-keys';
@@ -21,10 +20,11 @@ import { readAvatar } from './profile';
 import { readOrganizationAvatar } from './organizations';
 import { getShell } from './shell';
 import { addIssueComment, createIssue, createIssueLabel, deleteIssueComment, setIssueState, updateIssue, updateIssueComment, updateIssueMetadata } from './issues';
-import { getIssue, getIssueTimeline, listAllIssues, listIssues } from './issue-queries';
+import { listAllIssues } from './issue-queries';
 import { listInbox, markInboxRead, updateInboxState } from './inbox';
-import { createRelease, deleteRelease, downloadReleaseArchive, getRelease, getReleaseByTag, listReleases, listRepositoryTags, updateRelease } from './releases';
-import { abortReleaseAssetUpload, beginReleaseAssetUpload, completeReleaseAssetUpload, deleteReleaseAsset, downloadReleaseAsset, uploadReleaseAssetPart } from './release-assets';
+import { createRelease, deleteRelease, updateRelease } from './releases';
+import { abortReleaseAssetUpload, beginReleaseAssetUpload, completeReleaseAssetUpload, deleteReleaseAsset, uploadReleaseAssetPart } from './release-assets';
+import { readRepositoryRequest } from './repository-reads';
 
 const worker = {
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -109,28 +109,8 @@ const worker = {
     if (request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') {
       return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     }
-    if (request.method === 'GET') {
-      const repositoryOverview = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/overview$/);
-      if (repositoryOverview) return getRepositoryOverview(_env, principal, decodeURIComponent(repositoryOverview[1]), decodeURIComponent(repositoryOverview[2]));
-      const repositoryRead = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob)(?:\/(.*))?)?$/);
-      if (repositoryRead) {
-        const [, encodedOwner, encodedName, resource, rest] = repositoryRead;
-        const owner = decodeURIComponent(encodedOwner);
-        const name = decodeURIComponent(encodedName);
-        if (!resource) return getRepository(_env, principal, owner, name);
-        if (resource === 'branches') return listBranches(_env, principal, owner, name);
-        if (resource === 'commits') {
-          if (!rest) return listCommits(_env, principal, owner, name, url);
-          if (rest.endsWith('/patch')) return readCommitPatch(_env, principal, owner, name, decodeURIComponent(rest.slice(0, -6)), url);
-          return getCommit(_env, principal, owner, name, decodeURIComponent(rest));
-        }
-        if (resource === 'tree') return listTree(_env, principal, owner, name, url);
-        if (resource === 'blob' && rest) {
-          const separator = rest.indexOf('/');
-          if (separator > 0) return readBlob(_env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)), ctx);
-        }
-      }
-    }
+    const repositoryRead = await readRepositoryRequest(request, _env, principal, ctx);
+    if (repositoryRead) return repositoryRead;
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });
@@ -157,12 +137,6 @@ const worker = {
     if (request.method === 'GET' && runnerDetail) return getRunner(_env, principal, runnerDetail[1]);
     if (request.method === 'POST' && url.pathname === '/api/v1/runner-enrollments') return createEnrollment(request, _env, principal);
     if (request.method === 'GET' && url.pathname === '/api/v1/runs') return listRuns(_env, principal, url);
-    const jobLogs = url.pathname.match(/^\/api\/v1\/jobs\/(job_[a-z0-9]+)\/logs$/);
-    if (request.method === 'GET' && jobLogs) return readJobLogs(_env, principal, jobLogs[1], url);
-    const jobLive = url.pathname.match(/^\/api\/v1\/jobs\/(job_[a-z0-9]+)\/live$/);
-    if (request.method === 'GET' && jobLive) return connectRunRealtime(request, _env, principal, jobLive[1]);
-    const artifact = url.pathname.match(/^\/api\/v1\/artifacts\/(artifact_[a-z0-9]+)$/);
-    if (request.method === 'GET' && artifact) return downloadArtifact(_env, principal, artifact[1]);
     const releaseUpload = url.pathname.match(/^\/api\/v1\/release-asset-uploads\/(releaseupload_[a-z0-9]+)(?:\/(parts\/(\d+)|complete))?$/);
     if (releaseUpload) {
       if (!releaseUpload[2] && request.method === 'DELETE') return abortReleaseAssetUpload(_env, principal, releaseUpload[1]);
@@ -172,7 +146,6 @@ const worker = {
     }
     const releaseAsset = url.pathname.match(/^\/api\/v1\/release-assets\/(releaseasset_[a-z0-9]+)(?:\/(download))?$/);
     if (releaseAsset) {
-      if (releaseAsset[2] === 'download' && request.method === 'GET') return downloadReleaseAsset(_env, principal, releaseAsset[1]);
       if (!releaseAsset[2] && request.method === 'DELETE') return deleteReleaseAsset(_env, principal, releaseAsset[1]);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
@@ -184,9 +157,6 @@ const worker = {
     if (runRoute) {
       const owner = decodeURIComponent(runRoute[1]);
       const repository = decodeURIComponent(runRoute[2]);
-      if (!runRoute[3] && request.method === 'GET') return listRepositoryRuns(_env, principal, owner, repository, url);
-      if (runRoute[3] && !runRoute[4] && request.method === 'GET') return getRun(_env, principal, owner, repository, Number(runRoute[3]));
-      if (runRoute[3] && runRoute[4] === 'state' && request.method === 'GET') return getRunState(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'cancel' && request.method === 'POST') return cancelRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'retry' && request.method === 'POST') return retryRun(_env, principal, owner, repository, Number(runRoute[3]));
     }
@@ -197,8 +167,6 @@ const worker = {
       const repository = decodeURIComponent(workflowRoute[2]);
       const workflowId = workflowRoute[3];
       const action = workflowRoute[4];
-      if (!workflowId && request.method === 'GET') return listWorkflows(_env, principal, owner, repository);
-      if (workflowId && !action && request.method === 'GET') return getWorkflow(_env, principal, owner, repository, workflowId, url);
       if (workflowId && action === 'dispatch' && request.method === 'POST') return dispatchWorkflow(_env, principal, owner, repository, workflowId);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
@@ -236,22 +204,14 @@ const worker = {
     const pullSourcesRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pull-sources$/);
     if (pullSourcesRoute && request.method === 'GET') return listPullSources(_env, principal, decodeURIComponent(pullSourcesRoute[1]), decodeURIComponent(pullSourcesRoute[2]));
 
-    const releaseTagLookup = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/by-tag$/);
-    if (releaseTagLookup && request.method === 'GET') return getReleaseByTag(_env, principal, decodeURIComponent(releaseTagLookup[1]), decodeURIComponent(releaseTagLookup[2]), url);
-    const releaseTags = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/tags$/);
-    if (releaseTags && request.method === 'GET') return listRepositoryTags(_env, principal, decodeURIComponent(releaseTags[1]), decodeURIComponent(releaseTags[2]));
     const releaseUploadRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/(release_[a-z0-9]+)\/asset-uploads$/);
     if (releaseUploadRoute && request.method === 'POST') return beginReleaseAssetUpload(request, _env, principal, decodeURIComponent(releaseUploadRoute[1]), decodeURIComponent(releaseUploadRoute[2]), releaseUploadRoute[3]);
-    const releaseArchiveRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases\/(release_[a-z0-9]+)\/archive\/(zip|tar\.gz)$/);
-    if (releaseArchiveRoute && request.method === 'GET') return downloadReleaseArchive(_env, principal, decodeURIComponent(releaseArchiveRoute[1]), decodeURIComponent(releaseArchiveRoute[2]), releaseArchiveRoute[3], releaseArchiveRoute[4] as 'zip' | 'tar.gz');
     const releaseRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/releases(?:\/(release_[a-z0-9]+))?$/);
     if (releaseRoute) {
       const owner = decodeURIComponent(releaseRoute[1]);
       const repository = decodeURIComponent(releaseRoute[2]);
       const releaseId = releaseRoute[3];
-      if (!releaseId && request.method === 'GET') return listReleases(_env, principal, owner, repository, url);
       if (!releaseId && request.method === 'POST') return createRelease(request, _env, principal, owner, repository);
-      if (releaseId && request.method === 'GET') return getRelease(_env, principal, owner, repository, releaseId);
       if (releaseId && request.method === 'PATCH') return updateRelease(request, _env, principal, owner, repository, releaseId);
       if (releaseId && request.method === 'DELETE') return deleteRelease(_env, principal, owner, repository, releaseId);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
@@ -263,15 +223,12 @@ const worker = {
       const repository = decodeURIComponent(issueRoute[2]);
       const number = issueRoute[3] ? Number(issueRoute[3]) : null;
       const action = issueRoute[4];
-      if (number === null && request.method === 'GET') return listIssues(_env, principal, owner, repository, url);
       if (number === null && request.method === 'POST') return createIssue(request, _env, principal, owner, repository);
-      if (number !== null && !action && request.method === 'GET') return getIssue(_env, principal, owner, repository, number);
       if (number !== null && !action && request.method === 'PATCH') return updateIssue(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'comments' && request.method === 'POST') return addIssueComment(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'metadata' && request.method === 'PATCH') return updateIssueMetadata(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'labels' && request.method === 'POST') return createIssueLabel(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'state' && request.method === 'POST') return setIssueState(request, _env, principal, owner, repository, number);
-      if (number !== null && action === 'timeline' && request.method === 'GET') return getIssueTimeline(_env, principal, owner, repository, number, url);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
@@ -279,7 +236,6 @@ const worker = {
     if (overviewRoute) {
       const owner = decodeURIComponent(overviewRoute[1]);
       const repository = decodeURIComponent(overviewRoute[2]);
-      if (request.method === 'GET') return getRepositoryOverview(_env, principal, owner, repository);
       if (request.method === 'PUT') return updateRepositoryOverview(request, _env, principal, owner, repository);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
@@ -306,18 +262,10 @@ const worker = {
       const repository = decodeURIComponent(pullRoute[2]);
       const number = pullRoute[3] ? Number(pullRoute[3]) : null;
       const action = pullRoute[4];
-      if (number === null && request.method === 'GET') return listPulls(_env, principal, owner, repository, url);
       if (number === null && request.method === 'POST') return createPull(request, _env, principal, owner, repository);
-      if (number !== null && !action && request.method === 'GET') return getPull(_env, principal, owner, repository, number);
       if (number !== null && !action && request.method === 'PATCH') return updatePullDetails(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'reviews' && request.method === 'POST') return reviewPull(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'merge' && request.method === 'POST') return mergePull(request, _env, principal, owner, repository, number);
-      if (number !== null && action === 'diff' && request.method === 'GET') return getPullDiff(_env, principal, owner, repository, number);
-      if (number !== null && action === 'patch' && request.method === 'GET') return getPullPatch(_env, principal, owner, repository, number, url);
-      if (number !== null && action === 'timeline' && request.method === 'GET') return getPullTimeline(_env, principal, owner, repository, number, url);
-      if (number !== null && action === 'updates' && request.method === 'GET') return getPullUpdates(_env, principal, owner, repository, number, url);
-      if (number !== null && action === 'live' && request.method === 'GET') return connectPullRealtime(request, _env, principal, owner, repository, number);
-      if (number !== null && action === 'state' && request.method === 'GET') return getPullState(_env, principal, owner, repository, number);
       if (number !== null && action === 'threads' && request.method === 'POST') return createThread(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'comments' && request.method === 'POST') return addPullComment(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'metadata' && request.method === 'PATCH') return updatePullMetadata(request, _env, principal, owner, repository, number);

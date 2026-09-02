@@ -5,7 +5,7 @@ import { hydrateReferenceEvents } from './work-item-references';
 
 type TimelineRow = { sequence: number; kind: PullTimelineItem['kind']; entityId: string; createdAt: string };
 
-export async function initialPullTimeline(env: Env, principal: Principal, pullId: string): Promise<PullTimelineWindow> {
+export async function initialPullTimeline(env: Env, principal: Principal | null, pullId: string): Promise<PullTimelineWindow> {
   const [first, recent, count] = await Promise.all([
     timelineRows(env, pullId, 'ORDER BY sequence LIMIT 2'),
     timelineRows(env, pullId, 'ORDER BY sequence DESC LIMIT 30'),
@@ -23,7 +23,7 @@ export async function initialPullTimeline(env: Env, principal: Principal, pullId
   };
 }
 
-export async function olderPullTimeline(env: Env, principal: Principal, pullId: string, before: number, after: number): Promise<PullTimelineWindow> {
+export async function olderPullTimeline(env: Env, principal: Principal | null, pullId: string, before: number, after: number): Promise<PullTimelineWindow> {
   const rows = await env.DB.prepare(`SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM pull_timeline WHERE pull_request_id=? AND sequence<? AND sequence>? ORDER BY sequence DESC LIMIT 30`).bind(pullId, before, after).all<TimelineRow>();
   const ordered = rows.results.reverse();
   const oldest = ordered[0]?.sequence ?? before;
@@ -38,7 +38,7 @@ export async function olderPullTimeline(env: Env, principal: Principal, pullId: 
   };
 }
 
-export async function allPullThreads(env: Env, principal: Principal, pullId: string): Promise<PullTimelineItem[]> {
+export async function allPullThreads(env: Env, principal: Principal | null, pullId: string): Promise<PullTimelineItem[]> {
   const rows = await env.DB.prepare(`SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM pull_timeline WHERE pull_request_id=? AND kind='thread' ORDER BY sequence`).bind(pullId).all<TimelineRow>();
   return hydrateTimeline(env, principal, rows.results);
 }
@@ -51,7 +51,7 @@ function uniqueRows(rows: TimelineRow[]): TimelineRow[] {
   return [...new Map(rows.map((row) => [row.sequence, row])).values()];
 }
 
-async function hydrateTimeline(env: Env, principal: Principal, rows: TimelineRow[]): Promise<PullTimelineItem[]> {
+async function hydrateTimeline(env: Env, principal: Principal | null, rows: TimelineRow[]): Promise<PullTimelineItem[]> {
   const ids = (kind: TimelineRow['kind']) => rows.filter((row) => row.kind === kind).map((row) => row.entityId);
   const commentIds = ids('comment');
   const reviewIds = ids('review');
@@ -71,10 +71,10 @@ async function hydrateTimeline(env: Env, principal: Principal, rows: TimelineRow
   for (const comment of threadComments) {
     const threadId = comment.threadId as string;
     const values = commentsByThread.get(threadId) ?? [];
-    values.push({ ...comment, body: comment.deletedAt ? '' : comment.body, deleted: Boolean(comment.deletedAt), canEdit: comment.authorId === principal.id });
+    values.push({ ...comment, body: comment.deletedAt ? '' : comment.body, deleted: Boolean(comment.deletedAt), canEdit: comment.authorId === principal?.id });
     commentsByThread.set(threadId, values);
   }
-  for (const comment of comments) entities.set(comment.id as string, { ...comment, body: comment.deletedAt ? '' : comment.body, deleted: Boolean(comment.deletedAt), canEdit: comment.authorId === principal.id });
+  for (const comment of comments) entities.set(comment.id as string, { ...comment, body: comment.deletedAt ? '' : comment.body, deleted: Boolean(comment.deletedAt), canEdit: comment.authorId === principal?.id });
   for (const review of reviews) entities.set(review.id as string, review);
   for (const thread of threads) entities.set(thread.id as string, {
     ...thread,

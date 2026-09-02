@@ -5,6 +5,7 @@
   import { api } from '$lib/api';
   import Button from '$lib/components/Button.svelte';
   import LinkButton from '$lib/components/LinkButton.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
   import { encodeRevision } from '$lib/repository-path';
@@ -50,7 +51,7 @@
   }
 </script>
 
-<svelte:head><title>Commits · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<Seo title={`Commits · ${$page.params.owner}/${$page.params.repo} · Marl`} description={`Browse the commit history for ${revision} in ${$page.params.owner}/${$page.params.repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <svelte:window onscroll={loadIfNearEnd} />
 
 <header class="page-head">
@@ -59,7 +60,7 @@
 </header>
 
 <div class="history">
-  {#each groups as [label, commits]}
+  {#each groups as [label, commits] (label)}
     <section>
       <h2>{label}</h2>
       <div class="commit-list">

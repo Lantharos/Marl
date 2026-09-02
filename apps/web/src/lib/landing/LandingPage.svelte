@@ -1,10 +1,6 @@
 <script lang="ts">
   import ArrowDown from 'lucide-svelte/icons/arrow-down';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import Code2 from 'lucide-svelte/icons/code-2';
-  import Inbox from 'lucide-svelte/icons/inbox';
-  import Tag from 'lucide-svelte/icons/tag';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import LinkButton from '$lib/components/LinkButton.svelte';
   import Seo from '$lib/components/Seo.svelte';
@@ -95,31 +91,27 @@
       </div>
     </section>
 
-    <section class="details">
-      <h2>The inbox is allowed to be empty.</h2>
-
-      <div class="detail-list">
-        <article>
-          <Inbox size={21} aria-hidden="true" />
-          <h3>Only what involves you.</h3>
-          <p>Mentions, assignments, conversations you joined, and failed runs you started—nothing just because you belong to a repository.</p>
-        </article>
-        <article>
-          <CircleDot size={21} aria-hidden="true" />
-          <h3>See how the issue got here.</h3>
-          <p>Edits, references, assignments, labels, and conversations stay in one actor-attributed timeline.</p>
-        </article>
-        <article>
-          <Tag size={21} aria-hidden="true" />
-          <h3>A release starts with a real tag.</h3>
-          <p>Turn it into release notes, source archives, and downloadable assets.</p>
-        </article>
-        <article>
-          <Code2 size={21} aria-hidden="true" />
-          <h3>Marl is open source.</h3>
-          <p>It is licensed AGPL-3.0-or-later. Read it, run it, change it.</p>
-        </article>
+    <section class="publication">
+      <div class="publication-copy">
+        <h2>If Marl says your push landed, it landed.</h2>
+        <p>Marl does not return success until the new refs and every object behind them have been durably published. If the response disappears, Marl recovers the committed push instead of throwing it away. Replaced generations stay recoverable for 31 days.</p>
       </div>
+
+      <figure class="ref-transition">
+        <div class="ref-status">
+          <span>main</span>
+          <span>published</span>
+        </div>
+        <div class="ref-move" aria-label="The main branch moved from commit 7f3aff2 to commit 4b68808">
+          <code>7f3aff2</code>
+          <span class="ref-rail" aria-hidden="true"><i></i></span>
+          <code>4b68808</code>
+        </div>
+        <figcaption>
+          <span>The response comes after publication.</span>
+          <span><small>Previous generation</small>Recoverable for 31 days</span>
+        </figcaption>
+      </figure>
     </section>
 
     <section class="closing">
@@ -162,7 +154,7 @@
   .scroll-cue :global(svg){animation:scroll-nudge 1.8s cubic-bezier(.3,.7,.3,1) infinite}
   .scroll-cue:hover{color:var(--brand)}
 
-  .uptime,.open-section,.git-section,.details,.closing{width:min(1220px,calc(100% - 48px));margin:0 auto;border-top:1px solid var(--border-subtle)}
+  .uptime,.open-section,.git-section,.publication,.closing{width:min(1220px,calc(100% - 48px));margin:0 auto;border-top:1px solid var(--border-subtle)}
   .uptime{padding:154px 0 164px}
   .uptime h2{max-width:1080px;margin:0;color:var(--text-strong);font-size:clamp(56px,7.7vw,108px);font-weight:600;letter-spacing:-.068em;line-height:.9;text-wrap:balance}
   .uptime-copy{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:70px;margin:92px 0 0 auto;width:min(760px,72%)}
@@ -170,7 +162,7 @@
   .uptime-copy a,.open-section a{color:var(--text);text-decoration-color:var(--border-strong);text-underline-offset:3px}
   .uptime-copy a:hover,.open-section a:hover{color:var(--brand-strong);text-decoration-color:var(--brand)}
   .open-section{display:grid;grid-template-columns:minmax(520px,1fr) minmax(340px,.58fr);align-items:end;gap:120px;padding:168px 0 176px}
-  .open-section h2,.git-copy h2,.details h2,.closing h2{max-width:980px;margin:0;color:var(--text-strong);font-size:clamp(48px,6.4vw,88px);font-weight:600;letter-spacing:-.06em;line-height:.94;text-wrap:balance}
+  .open-section h2,.git-copy h2,.publication h2,.closing h2{max-width:980px;margin:0;color:var(--text-strong);font-size:clamp(48px,6.4vw,88px);font-weight:600;letter-spacing:-.06em;line-height:.94;text-wrap:balance}
 
   .git-section{display:flex;flex-direction:column;align-items:center;padding:168px 0 176px}
   .git-copy{text-align:center}
@@ -186,13 +178,22 @@
   .terminal-body .success{margin-bottom:13px;color:var(--success)}
   .terminal-cursor{display:block;width:8px;height:13px;margin-left:20px;border-radius:1px;background:var(--brand);animation:cursor-blink 1.1s step-end infinite}
 
-  .details{padding:158px 0 166px}
-  .detail-list{margin-top:92px;border-top:1px solid var(--border)}
-  .detail-list article{display:grid;grid-template-columns:64px minmax(280px,.72fr) minmax(340px,1fr);align-items:center;gap:28px;min-height:126px;padding:30px 8px;border-bottom:1px solid var(--border-subtle);transition:background-color 140ms ease}
-  .detail-list article:hover{background:var(--surface-hover)}
-  .detail-list article>:global(svg){color:var(--brand)}
-  .detail-list h3{margin:0;color:var(--text-strong);font-size:20px;font-weight:600;letter-spacing:-.03em}
-  .detail-list p{max-width:590px;margin:0;color:var(--text-muted);font-size:13px;line-height:1.65}
+  .publication{padding:158px 0 172px}
+  .publication-copy{display:grid;grid-template-columns:minmax(520px,1fr) minmax(340px,.54fr);align-items:end;gap:120px}
+  .publication-copy p{margin:0 0 5px;color:var(--text-muted);font-size:15px;line-height:1.72;text-wrap:pretty}
+  .ref-transition{margin:118px 0 0;border-top:1px solid var(--border-strong);border-bottom:1px solid var(--border-strong)}
+  .ref-status{display:flex;align-items:center;justify-content:space-between;padding:18px 2px 0;color:var(--text-faint);font-family:var(--font-mono);font-size:10px}
+  .ref-status span:last-child{color:var(--success)}
+  .ref-move{display:grid;grid-template-columns:auto minmax(80px,1fr) auto;align-items:center;gap:32px;padding:48px 2px 58px}
+  .ref-move code{color:var(--text-strong);font-family:var(--font-mono);font-size:clamp(28px,4.4vw,56px);font-weight:500;letter-spacing:-.045em}
+  .ref-move code:last-child{color:var(--brand-strong)}
+  .ref-rail{position:relative;height:1px;background:var(--border-strong)}
+  .ref-rail::before{position:absolute;top:50%;left:0;width:7px;height:7px;border:1px solid var(--border-strong);border-radius:50%;background:var(--canvas);content:'';transform:translate(-50%,-50%)}
+  .ref-rail::after{position:absolute;top:50%;right:0;width:11px;height:11px;border:2px solid var(--brand);border-radius:50%;background:var(--canvas);content:'';transform:translate(50%,-50%)}
+  .ref-rail i{position:absolute;top:50%;right:1px;width:34%;height:1px;background:var(--brand);transform:translateY(-50%)}
+  .ref-transition figcaption{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;padding:0 2px 20px;color:var(--text-faint);font-size:11px}
+  .ref-transition figcaption>span:last-child{display:grid;justify-items:end;color:var(--text-muted);font-size:13px;font-weight:600}
+  .ref-transition figcaption small{margin-bottom:4px;color:var(--text-faint);font-size:9px;font-weight:400}
 
   .closing{display:flex;align-items:flex-end;justify-content:space-between;gap:80px;padding:156px 0 164px}
   .closing h2{max-width:780px}
@@ -210,19 +211,20 @@
   @media(max-width:1100px){
     .open-section{grid-template-columns:1fr;gap:42px}
     .open-section p{max-width:600px;margin-left:auto}
+    .publication-copy{grid-template-columns:1fr;gap:42px}
+    .publication-copy p{max-width:600px;margin-left:auto}
   }
   @media(max-width:900px){
     .landing-nav{width:calc(100% - 32px)}
-    .hero,.uptime,.open-section,.git-section,.details,.closing,.landing>footer{width:calc(100% - 32px)}
+    .hero,.uptime,.open-section,.git-section,.publication,.closing,.landing>footer{width:calc(100% - 32px)}
     .hero{min-height:calc(100svh - 64px);padding:82px 0 114px}
     .hero h1{font-size:clamp(62px,14vw,94px)}
     .hero h1 span{margin-left:0}
-    .uptime,.open-section,.git-section,.details{padding:112px 0 122px}
+    .uptime,.open-section,.git-section,.publication{padding:112px 0 122px}
     .uptime-copy{width:100%;margin-top:64px}
     .open-section p{margin-left:0}
     .terminal{margin-top:64px}
-    .detail-list{margin-top:66px}
-    .detail-list article{grid-template-columns:44px minmax(220px,.72fr) minmax(280px,1fr);gap:18px}
+    .ref-transition{margin-top:78px}
     .closing{align-items:flex-start;padding:112px 0;flex-direction:column}
     .closing-actions{justify-items:start}
     .landing>footer{grid-template-columns:1fr auto}
@@ -234,15 +236,15 @@
     .scroll-cue{top:calc(100svh - 201px)}
     .hero h1{font-size:clamp(52px,15vw,70px);line-height:.89}
     .hero-actions{align-items:flex-start;flex-direction:column;gap:16px}
-    .uptime h2,.open-section h2,.git-copy h2,.details h2,.closing h2{font-size:45px}
+    .uptime h2,.open-section h2,.git-copy h2,.publication h2,.closing h2{font-size:45px}
     .uptime-copy{grid-template-columns:1fr;gap:24px;margin-top:48px}
     .terminal-body{min-height:300px;padding:20px 2px;font-size:8px}
     .terminal-body p{overflow:hidden}
     .terminal-body code{white-space:nowrap}
-    .detail-list article{grid-template-columns:34px 1fr;gap:7px 12px;padding:25px 3px}
-    .detail-list article>p{grid-column:2}
-    .detail-list h3{font-size:17px}
-    .detail-list p{font-size:12px}
+    .ref-move{gap:14px;padding:39px 2px 44px}
+    .ref-move code{font-size:clamp(19px,6.5vw,28px)}
+    .ref-transition figcaption{align-items:flex-start;flex-direction:column;gap:20px}
+    .ref-transition figcaption>span:last-child{justify-items:start}
     .landing>footer{grid-template-columns:1fr}
     .landing>footer nav{flex-wrap:wrap}
     .landing>footer>small{grid-column:auto}

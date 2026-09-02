@@ -13,6 +13,7 @@
   import FilterBar from '$lib/components/FilterBar.svelte';
   import Button from '$lib/components/Button.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
@@ -80,9 +81,9 @@
   onDestroy(() => clearTimeout(queryTimer));
 </script>
 
-<svelte:head><title>Pull requests · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<Seo title={`Pull requests · ${owner}/${repo} · Marl`} description={`Review proposed changes, discussion, and merge state for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <div class="page">
-<PageHeader title="Pull requests" description="Propose, review, and merge changes to this repository." actionHref={data.repository?.upstream ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}` : `/pulls/new?repository=${owner}/${repo}`} actionLabel={data.repository?.upstream ? 'Contribute upstream' : 'New pull request'} />
+<PageHeader title="Pull requests" description="Propose, review, and merge changes to this repository." actionHref={data.shellUser ? data.repository?.upstream ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}` : `/pulls/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? data.repository?.upstream ? 'Contribute upstream' : 'New pull request' : undefined} />
 <FilterBar placeholder="Search this repository" tabs={['Open', 'Merged', 'Closed']} labelOptions={data.availableLabels} bind:active={activeFilter} bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(activeFilter, query, labels)} />
 <section class="list">
   {#each items as pull (pull.id)}

@@ -10,7 +10,7 @@ import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositoryOverviewBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { synchronizePullsForBranchUpdates } from './pull-synchronization';
 import { queuePushWorkflows } from './workflows';
-import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter, repositoryPermissions } from './repository-access';
+import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter, repositoryPermissions, repositoryReadFilter } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
 import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 import { rawBlobHeaders } from './raw-content';
@@ -282,9 +282,9 @@ export async function getRepository(env: Env, principal: Principal | null, owner
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const sshBase = env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
-  const forkVisibility = principal ? '' : "AND forks.visibility='public'";
+  const forkAccess = repositoryReadFilter(principal, 'forks');
   const [social, upstream] = await Promise.all([
-    env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id ${forkVisibility} AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred FROM repositories WHERE repositories.id=?`).bind(principal?.id ?? '', repo.id).first<{
+    env.DB.prepare(`SELECT (SELECT COUNT(*) FROM repository_stars WHERE repository_id=repositories.id) AS starCount,(SELECT COUNT(*) FROM repositories AS forks WHERE forks.forked_from_repository_id=repositories.id AND ${forkAccess.sql} AND forks.deletion_scheduled_at IS NULL) AS forkCount,EXISTS(SELECT 1 FROM repository_stars WHERE repository_id=repositories.id AND user_id=?) AS starred FROM repositories WHERE repositories.id=?`).bind(...forkAccess.values, principal?.id ?? '', repo.id).first<{
     starCount: number;
     forkCount: number;
     starred: number;

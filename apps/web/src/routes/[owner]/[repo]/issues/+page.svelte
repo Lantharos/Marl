@@ -6,6 +6,7 @@
   import Button from '$lib/components/Button.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import IssueList from '$lib/issues/IssueList.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
@@ -29,9 +30,9 @@
   onDestroy(() => clearTimeout(timer));
 </script>
 
-<svelte:head><title>Issues · {owner}/{repo} · Marl</title></svelte:head>
+<Seo title={`Issues · ${owner}/${repo} · Marl`} description={`Track bugs, ideas, and project work for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <div class="page">
-  <PageHeader title="Issues" description="Track bugs, ideas, and work for this repository." actionHref="/issues/new?repository={owner}/{repo}" actionLabel="New issue" />
+  <PageHeader title="Issues" description="Track bugs, ideas, and work for this repository." actionHref={data.shellUser ? `/issues/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? 'New issue' : undefined} />
   <FilterBar placeholder="Search issues" tabs={['Open', 'Closed', 'All']} labelOptions={data.availableLabels} bind:active bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(active, query, labels)} />
   <IssueList {issues} emptyTitle={query || selectedLabels.length ? 'No matching issues' : `No ${active.toLowerCase()} issues`} emptyDescription={query || selectedLabels.length ? 'Try another search or remove a label filter.' : 'New issues will appear here.'} />
   {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}

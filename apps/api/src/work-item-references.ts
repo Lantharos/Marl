@@ -2,7 +2,7 @@ import type { Principal } from './auth';
 import { auditStatement } from './audit';
 import { identifier } from './domain';
 import type { D1PreparedStatement, Env } from './platform';
-import { authorizeRepositoryId } from './repository-access';
+import { authorizeRepositoryId, repositoryReadFilter } from './repository-access';
 
 type WorkItemKind = 'issue' | 'pull';
 type ContentKind = 'body' | 'comment';
@@ -109,7 +109,7 @@ export function deleteReferenceStatements(env: Env, contentKind: ContentKind, co
   return [env.DB.prepare('DELETE FROM work_item_references WHERE source_content_kind=? AND source_content_id=?').bind(contentKind, contentId)];
 }
 
-export async function linkedWorkItems(env: Env, principal: Principal, kind: WorkItemKind, id: string): Promise<LinkedWorkItem[]> {
+export async function linkedWorkItems(env: Env, principal: Principal | null, kind: WorkItemKind, id: string): Promise<LinkedWorkItem[]> {
   const rows = await env.DB.prepare(`SELECT id,source_issue_id AS sourceIssueId,source_pull_id AS sourcePullId,target_issue_id AS targetIssueId,target_pull_id AS targetPullId,closes_target AS closesTarget,created_at AS createdAt FROM work_item_references WHERE ${kind === 'issue' ? 'source_issue_id=? OR target_issue_id=?' : 'source_pull_id=? OR target_pull_id=?'}`).bind(id, id).all<ReferenceRow>();
   const issueIds = new Set<string>();
   const pullIds = new Set<string>();
@@ -149,7 +149,7 @@ export async function linkedWorkItems(env: Env, principal: Principal, kind: Work
   return [...linked.values()].sort((left, right) => left.kind.localeCompare(right.kind) || left.repository.owner.localeCompare(right.repository.owner) || left.repository.name.localeCompare(right.repository.name) || left.number - right.number);
 }
 
-export async function hydrateReferenceEvents(env: Env, principal: Principal, ids: string[]): Promise<ReferenceEvent[]> {
+export async function hydrateReferenceEvents(env: Env, principal: Principal | null, ids: string[]): Promise<ReferenceEvent[]> {
   if (!ids.length) return [];
   const rows = await env.DB.prepare(`SELECT id,source_issue_id AS sourceIssueId,source_pull_id AS sourcePullId,target_issue_id AS targetIssueId,target_pull_id AS targetPullId,closes_target AS closesTarget,created_at AS createdAt FROM work_item_references WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<ReferenceRow>();
   const issueIds = new Set(rows.results.flatMap((row) => row.sourceIssueId ? [row.sourceIssueId] : []));
@@ -225,7 +225,7 @@ function referenceKey(reference: Pick<ParsedReference, 'owner' | 'repository' | 
 
 async function resolveRepositories(env: Env, principal: Principal, references: ParsedReference[]) {
   const names = [...new Map(references.map((reference) => [`${reference.owner.toLowerCase()}/${reference.repository.toLowerCase()}`, reference])).values()];
-  const access = readableRepositoryFilter(principal);
+  const access = repositoryReadFilter(principal);
   if (access.sql === '0=1') return new Map<string, string>();
   const pairs = names.map(() => '(organizations.slug=? COLLATE NOCASE AND repositories.name=? COLLATE NOCASE)').join(' OR ');
   const values = names.flatMap((reference) => [reference.owner, reference.repository]);
@@ -266,18 +266,8 @@ async function loadItemKind(env: Env, table: 'issues' | 'pull_requests', ids: Se
   return env.DB.prepare(`SELECT ${table}.id,${table}.repository_id AS repositoryId,organizations.slug AS owner,repositories.name AS repository,${table}.number,${table}.title,${table}.state FROM ${table} JOIN repositories ON repositories.id=${table}.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${table}.id IN (${[...ids].map(() => '?').join(',')})`).bind(...ids).all<ItemRow>().then((result) => result.results);
 }
 
-async function readableItems(env: Env, principal: Principal, items: Map<string, ItemRow>) {
+async function readableItems(env: Env, principal: Principal | null, items: Map<string, ItemRow>) {
   const repositoryIds = [...new Set([...items.values()].map((item) => item.repositoryId))];
   const access = new Map(await Promise.all(repositoryIds.map(async (id) => [id, Boolean(await authorizeRepositoryId(env, principal, id, 'repository.read'))] as const)));
   return new Map([...items].filter(([, item]) => access.get(item.repositoryId)));
-}
-
-function readableRepositoryFilter(principal: Principal) {
-  if (principal.authType === 'token' && !principal.tokenScopes?.some((scope) => ['repo:read', 'repo:write', 'repo:admin'].includes(scope))) return { sql: '0=1', values: [] };
-  const member = `(EXISTS (SELECT 1 FROM organization_members WHERE organization_members.organization_id=repositories.organization_id AND organization_members.user_id=?) OR EXISTS (SELECT 1 FROM repository_collaborators WHERE repository_collaborators.repository_id=repositories.id AND repository_collaborators.user_id=?) OR EXISTS (SELECT 1 FROM repository_team_grants JOIN team_members ON team_members.team_id=repository_team_grants.team_id WHERE repository_team_grants.repository_id=repositories.id AND team_members.user_id=?))`;
-  const values = [principal.id, principal.id, principal.id];
-  const base = `(repositories.visibility='public' OR ${member})`;
-  if (principal.authType !== 'token' || !principal.tokenRepositoryIds) return { sql: base, values };
-  if (!principal.tokenRepositoryIds.length) return { sql: '0=1', values: [] };
-  return { sql: `${base} AND repositories.id IN (${principal.tokenRepositoryIds.map(() => '?').join(',')})`, values: [...values, ...principal.tokenRepositoryIds] };
 }

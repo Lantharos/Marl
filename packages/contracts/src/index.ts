@@ -62,6 +62,7 @@ export interface RepositorySummary {
 }
 
 export interface RepositoryPermissions {
+  member: boolean;
   read: boolean;
   triage: boolean;
   push: boolean;

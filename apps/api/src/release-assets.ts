@@ -155,7 +155,7 @@ export async function abortReleaseAssetUpload(env: Env, principal: Principal, up
   return new Response(null, { status: 204 });
 }
 
-export async function downloadReleaseAsset(env: Env, principal: Principal, assetId: string): Promise<Response> {
+export async function downloadReleaseAsset(env: Env, principal: Principal | null, assetId: string): Promise<Response> {
   const asset = await env.DB.prepare('SELECT release_assets.id,release_assets.name,release_assets.object_key AS objectKey,release_assets.content_type AS contentType,releases.repository_id AS repositoryId,releases.draft FROM release_assets JOIN releases ON releases.id=release_assets.release_id WHERE release_assets.id=?').bind(assetId).first<{
     id: string;
     name: string;

@@ -9,7 +9,7 @@ import type { Env } from './platform';
 import { authorizeRepository, repositoryListFilter } from './repository-access';
 import { linkedWorkItems } from './work-item-references';
 
-export async function listIssues(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
+export async function listIssues(env: Env, principal: Principal | null, owner: string, name: string, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const state = url.searchParams.get('state') ?? 'open';
@@ -53,7 +53,7 @@ export async function listAllIssues(env: Env, principal: Principal, url: URL): P
   return json({ issues: await summarizeIssueRows(env, page.items), nextCursor: page.nextCursor });
 }
 
-export async function getIssue(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
+export async function getIssue(env: Env, principal: Principal | null, owner: string, name: string, number: number): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const row = await env.DB.prepare(`${issueSelect} WHERE issues.repository_id=? AND issues.number=?`).bind(repository.id, number).first<IssueRow>();
@@ -62,15 +62,17 @@ export async function getIssue(env: Env, principal: Principal, owner: string, na
   const [summary, availableLabels, availableAssignees, timeline, linkedItems] = await Promise.all([
     summarizeIssueRows(env, [row]),
     env.DB.prepare('SELECT id,name,color,description FROM repository_labels WHERE repository_id=? ORDER BY name').bind(repository.id).all<IssueLabel>(),
-    env.DB.prepare('SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle').bind(repository.organizationId).all<IssuePerson>(),
+    repository.role
+      ? env.DB.prepare('SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle').bind(repository.organizationId).all<IssuePerson>()
+      : Promise.resolve({ results: [] as IssuePerson[] }),
     initialIssueTimeline(env, principal, row.id, canManage),
     linkedWorkItems(env, principal, 'issue', row.id)
   ]);
-  const issue: IssueDetail = { ...summary[0], body: row.body, authorId: row.authorId, locked: Boolean(row.lockedAt), canEdit: canManage || row.authorId === principal.id, canManage, availableLabels: availableLabels.results, availableAssignees: availableAssignees.results, linkedItems, timeline };
+  const issue: IssueDetail = { ...summary[0], body: row.body, authorId: row.authorId, locked: Boolean(row.lockedAt), canEdit: canManage || row.authorId === principal?.id, canManage, availableLabels: availableLabels.results, availableAssignees: availableAssignees.results, linkedItems, timeline };
   return json({ issue });
 }
 
-export async function getIssueTimeline(env: Env, principal: Principal, owner: string, name: string, number: number, url: URL): Promise<Response> {
+export async function getIssueTimeline(env: Env, principal: Principal | null, owner: string, name: string, number: number, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const issue = await env.DB.prepare('SELECT id FROM issues WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string }>();

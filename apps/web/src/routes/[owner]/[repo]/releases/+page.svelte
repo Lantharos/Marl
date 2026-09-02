@@ -7,6 +7,7 @@
   import Tag from 'lucide-svelte/icons/tag';
   import Button from '$lib/components/Button.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
   import { api, MarlApiError } from '$lib/api';
@@ -40,7 +41,7 @@
   }
 </script>
 
-<svelte:head><title>Releases · {owner}/{repository} · Marl</title></svelte:head>
+<Seo title={`Releases · ${owner}/${repository} · Marl`} description={`Browse releases, release notes, source archives, and downloadable files for ${owner}/${repository} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <main class="page">
   <PageHeader title="Releases" description="Versioned builds, release notes, and downloadable files." actionHref={data.canCreate ? `/${owner}/${repository}/releases/new` : undefined} actionLabel={data.canCreate ? 'New release' : undefined} />
   <div class="list">

@@ -56,7 +56,7 @@
 
 <header class="workflow-head">
   <div><BackLink href="/{owner}/{repo}/runs" label="Workflows" /><div class="title"><span><Zap size={18} /></span><div><h1>{workflow.name}</h1><p><FileCode2 size={11} />{workflow.path}</p></div></div></div>
-  {#if manual}<Button variant="primary" disabled={!workflow.active || workflow.status !== 'valid'} onclick={() => (dispatchOpen = true)}><Play size={13} />Run workflow</Button>{/if}
+  {#if manual && data.repository.permissions.push}<Button variant="primary" disabled={!workflow.active || workflow.status !== 'valid'} onclick={() => (dispatchOpen = true)}><Play size={13} />Run workflow</Button>{/if}
 </header>
 
 <div class="definition">

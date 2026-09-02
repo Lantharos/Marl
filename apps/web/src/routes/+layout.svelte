@@ -7,6 +7,7 @@
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import NavigationProgress from '$lib/components/shell/NavigationProgress.svelte';
+  import { isIndexableRepositoryPath } from '$lib/repository-route';
   import type { LayoutData } from './$types';
 
   let { data, children } = $props<{ data: LayoutData; children: import('svelte').Snippet }>();
@@ -14,7 +15,10 @@
   const privateRoots = new Set(['forgot-password', 'inbox', 'invitations', 'issues', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
   const indexable = $derived.by(() => {
     const parts = $page.url.pathname.split('/').filter(Boolean);
-    return parts.length === 0 || (parts.length <= 2 && !privateRoots.has(parts[0]));
+    const repository = ($page.data as { repository?: { visibility?: string } }).repository;
+    return parts.length === 0
+      || (parts.length <= 2 && !privateRoots.has(parts[0]))
+      || (repository?.visibility === 'public' && isIndexableRepositoryPath($page.url.pathname));
   });
 
   onMount(() => registerElevationHandler(confirmation.confirm));

@@ -161,6 +161,7 @@ export async function removeOrganizationMember(request: Request, env: Env, princ
   if (!organization || !(await requireOrganizationRole(env, principal, organization.id, 'owner'))) return problem(404, 'organization_not_found', 'Organization not found.');
   if (!(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity as an organization owner.');
   await env.DB.batch([
+    env.DB.prepare(`DELETE FROM team_members WHERE user_id=? AND team_id IN (SELECT id FROM teams WHERE organization_id=?) AND EXISTS (SELECT 1 FROM organization_members WHERE organization_id=? AND user_id=? AND role!='owner')`).bind(userId, organization.id, organization.id, userId),
     env.DB.prepare(`DELETE FROM organization_members WHERE organization_id=? AND user_id=? AND role!='owner'`).bind(organization.id, userId),
     auditStatement(env, { organizationId: organization.id, actor: principal, action: 'organization.member.removed', subjectType: 'user', subjectId: userId, details: {} })
   ]);

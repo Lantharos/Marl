@@ -7,7 +7,7 @@ type TimelineRow = { sequence: number; kind: IssueTimelineItem['kind']; entityId
 type CommentRow = Omit<IssueComment, 'deleted' | 'canEdit'> & { deletedAt: string | null };
 type EventRow = Omit<IssueEvent, 'details'> & { details: string };
 
-export async function initialIssueTimeline(env: Env, principal: Principal, issueId: string, canManage = false): Promise<IssueTimelineWindow> {
+export async function initialIssueTimeline(env: Env, principal: Principal | null, issueId: string, canManage = false): Promise<IssueTimelineWindow> {
   const [first, recent, count] = await Promise.all([
     timelineRows(env, issueId, 'ORDER BY sequence LIMIT 2'),
     timelineRows(env, issueId, 'ORDER BY sequence DESC LIMIT 30'),
@@ -18,7 +18,7 @@ export async function initialIssueTimeline(env: Env, principal: Principal, issue
   return { items: await hydrate(env, principal, rows, canManage), total, hidden: Math.max(0, total - rows.length), loadBeforeSequence: recent.length ? Math.min(...recent.map((row) => row.sequence)) : undefined, firstBoundarySequence: first.at(-1)?.sequence };
 }
 
-export async function olderIssueTimeline(env: Env, principal: Principal, issueId: string, before: number, after: number, canManage = false): Promise<IssueTimelineWindow> {
+export async function olderIssueTimeline(env: Env, principal: Principal | null, issueId: string, before: number, after: number, canManage = false): Promise<IssueTimelineWindow> {
   const result = await env.DB.prepare('SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM issue_timeline WHERE issue_id=? AND sequence<? AND sequence>? ORDER BY sequence DESC LIMIT 30').bind(issueId, before, after).all<TimelineRow>();
   const rows = result.results.reverse();
   const oldest = rows[0]?.sequence ?? before;
@@ -34,7 +34,7 @@ function uniqueRows(rows: TimelineRow[]) {
   return [...new Map(rows.map((row) => [row.sequence, row])).values()];
 }
 
-async function hydrate(env: Env, principal: Principal, rows: TimelineRow[], canManage: boolean): Promise<IssueTimelineItem[]> {
+async function hydrate(env: Env, principal: Principal | null, rows: TimelineRow[], canManage: boolean): Promise<IssueTimelineItem[]> {
   const commentIds = rows.filter((row) => row.kind === 'comment').map((row) => row.entityId);
   const eventIds = rows.filter((row) => row.kind === 'event').map((row) => row.entityId);
   const referenceIds = rows.filter((row) => row.kind === 'reference').map((row) => row.entityId);
@@ -44,7 +44,7 @@ async function hydrate(env: Env, principal: Principal, rows: TimelineRow[], canM
     hydrateReferenceEvents(env, principal, referenceIds)
   ]);
   const values = new Map<string, IssueComment | IssueEvent | WorkItemReferenceEvent>();
-  for (const { deletedAt, ...comment } of comments) values.set(comment.id, { ...comment, body: deletedAt ? '' : comment.body, deleted: Boolean(deletedAt), canEdit: canManage || comment.authorId === principal.id });
+  for (const { deletedAt, ...comment } of comments) values.set(comment.id, { ...comment, body: deletedAt ? '' : comment.body, deleted: Boolean(deletedAt), canEdit: canManage || comment.authorId === principal?.id });
   for (const event of events) values.set(event.id, { ...event, details: parseDetails(event.details) });
   for (const reference of references) values.set(reference.id, reference);
   const hydrated: IssueTimelineItem[] = [];

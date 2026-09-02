@@ -8,6 +8,7 @@
   import History from 'lucide-svelte/icons/history';
   import Button from '$lib/components/Button.svelte';
   import LinkButton from '$lib/components/LinkButton.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
   import type { PageData } from './$types';
 
@@ -29,7 +30,7 @@
   }
   onDestroy(() => clearTimeout(copiedTimer));
 </script>
-<svelte:head><title>{filePath} · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<Seo title={`${filePath} · ${$page.params.owner}/${$page.params.repo} · Marl`} description={`View ${filePath} at ${revision} in ${$page.params.owner}/${$page.params.repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <nav class="crumbs"><a href="{base}/code">{$page.params.repo}</a><span>/</span>{#each filePath.split('/') as part, index (`${index}:${part}`)}<a href="{base}/{index === filePath.split('/').length - 1 ? 'blob' : 'tree'}/{revisionPath}/{encodeRepositoryPath(filePath.split('/').slice(0,index+1).join('/'))}">{part}</a>{#if index < filePath.split('/').length - 1}<span>/</span>{/if}{/each}</nav>
 <header class="file-head"><div><FileCode2 size={16} /><strong>{filePath.split('/').at(-1)}</strong><span>{lines.length} lines</span></div><div><LinkButton size="small" href="{base}/commits/{revisionPath}"><History size={14} />History</LinkButton><Button icon size="small" aria-label="Copy file" onclick={copyFile}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</Button><Button icon size="small" aria-label="Download file" onclick={downloadFile}><Download size={14} /></Button></div></header>
 <section class="code"><table><tbody>{#each lines as line, index (index)}<tr><td><a href="#L{index + 1}" id="L{index + 1}">{index + 1}</a></td><td><pre>{line || ' '}</pre></td></tr>{/each}</tbody></table></section>

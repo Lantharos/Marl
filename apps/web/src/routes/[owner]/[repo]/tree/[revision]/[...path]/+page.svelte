@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import File from 'lucide-svelte/icons/file';
   import Folder from 'lucide-svelte/icons/folder';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
   import type { PageData } from './$types';
@@ -17,7 +18,7 @@
   const parentHref = $derived(`${base}/tree/${revisionPath}${parentPath ? `/${encodeRepositoryPath(parentPath)}` : ''}`);
   const entries = $derived(data.entries.map((entry: TreeEntry) => ({ name: entry.name, kind: entry.kind === 'tree' ? 'folder' as const : 'file' as const, message: entry.message ?? '', updatedAt: entry.updatedAt ?? '' })));
 </script>
-<svelte:head><title>{current || revision} · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<Seo title={`${current || revision} · ${$page.params.owner}/${$page.params.repo} · Marl`} description={`Browse ${current || 'the repository root'} at ${revision} in ${$page.params.owner}/${$page.params.repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <div class="tree-page">
   <nav class="crumbs"><a href="{base}/code">{$page.params.repo}</a><span>/</span>{#each current.split('/').filter(Boolean) as part, index (`${index}:${part}`)}<a href="{base}/tree/{revisionPath}/{encodeRepositoryPath(current.split('/').slice(0,index+1).join('/'))}">{part}</a><span>/</span>{/each}</nav>
   <section class="tree"><header><strong>{revision}</strong><span>{current || 'Repository root'}</span></header>{#if current}<a class="row parent" href={parentHref}><span><Folder size={15} />..</span><small>Parent directory</small></a>{/if}{#each entries as entry (entry.name)}<a class="row" href="{base}/{entry.kind === 'folder' ? 'tree' : 'blob'}/{revisionPath}/{encodeRepositoryPath(current ? `${current}/${entry.name}` : entry.name)}"><span>{#if entry.kind === 'folder'}<Folder size={15} fill="currentColor" />{:else}<File size={15} />{/if}<strong>{entry.name}</strong></span><span class="meta">{#if entry.message}<small>{entry.message}</small>{/if}{#if entry.updatedAt}<Time class="file-time" value={entry.updatedAt} />{/if}</span></a>{/each}</section>

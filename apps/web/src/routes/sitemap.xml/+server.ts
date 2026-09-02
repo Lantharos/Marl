@@ -8,7 +8,10 @@ export const GET: RequestHandler = async ({ fetch }) => {
   const urls = [
     sitemapEntry('https://marl.sh/'),
     ...index.identities.map((identity) => sitemapEntry(`https://marl.sh/${encodeURIComponent(identity.handle)}`)),
-    ...index.repositories.map((repository) => sitemapEntry(`https://marl.sh/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}`, repository.updatedAt))
+    ...index.repositories.flatMap((repository) => {
+      const root = `https://marl.sh/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}`;
+      return ['', '/code', '/releases', '/issues', '/pulls'].map((section) => sitemapEntry(`${root}${section}`, repository.updatedAt));
+    })
   ];
   const document = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

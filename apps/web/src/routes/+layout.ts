@@ -1,6 +1,7 @@
 import type { InboxItem, RepositorySummary, RunSummary } from '@marl/contracts';
 import { error, redirect } from '@sveltejs/kit';
 import { apiWith, MarlApiError } from '$lib/api';
+import { isPublicRepositoryPath } from '$lib/repository-route';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ fetch, url }) => {
@@ -9,15 +10,8 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
   const publicHandle = url.pathname.match(/^\/([^/]+)\/?$/)?.[1];
   const privateRoots = new Set(['forgot-password', 'inbox', 'invitations', 'issues', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
   const isPublicProfile = Boolean(publicHandle && !privateRoots.has(publicHandle));
-  const repositoryRoute = url.pathname.match(/^\/([^/]+)\/[^/]+(?:\/(.*))?$/);
-  const repositorySection = (repositoryRoute?.[2] ?? '').replace(/\/+$/, '');
-  const isPublicSource = !repositorySection
-    || repositorySection === 'code'
-    || repositorySection === 'branches'
-    || /^(?:tree|blob)\/[^/]+(?:\/.*)?$/.test(repositorySection)
-    || /^commits\/[^/]+$/.test(repositorySection)
-    || /^commit\/[^/]+$/.test(repositorySection);
-  const isPublicRepository = Boolean(repositoryRoute && !privateRoots.has(repositoryRoute[1]) && isPublicSource);
+  const repositoryRoute = url.pathname.match(/^\/([^/]+)\/[^/]+/);
+  const isPublicRepository = Boolean(repositoryRoute && !privateRoots.has(repositoryRoute[1]) && isPublicRepositoryPath(url.pathname));
   type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
   type ShellOrganization = { slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string };
   type ShellData = { user: ShellUser; repositories: RepositorySummary[]; repositoryOwners: ShellOrganization[] };

@@ -35,7 +35,7 @@ type ReleaseRow = {
 
 const releaseSelect = (body = 'releases.body') => `SELECT releases.id,releases.repository_id AS repositoryId,organizations.slug AS owner,repositories.name AS repository,releases.tag_name AS tagName,releases.target_commit_id AS targetCommitId,releases.target_branch AS targetBranch,releases.name,${body} AS body,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,releases.draft,releases.prerelease,releases.latest,releases.created_at AS createdAt,releases.updated_at AS updatedAt,releases.published_at AS publishedAt,(SELECT COUNT(*) FROM release_assets WHERE release_assets.release_id=releases.id) AS assetCount FROM releases JOIN repositories ON repositories.id=releases.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=releases.author_id`;
 
-export async function listReleases(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
+export async function listReleases(env: Env, principal: Principal | null, owner: string, name: string, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const canEdit = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.push'));
@@ -61,7 +61,7 @@ export async function listReleases(env: Env, principal: Principal, owner: string
   });
 }
 
-export async function getRelease(env: Env, principal: Principal, owner: string, name: string, releaseId: string): Promise<Response> {
+export async function getRelease(env: Env, principal: Principal | null, owner: string, name: string, releaseId: string): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const row = await env.DB.prepare(`${releaseSelect()} WHERE releases.repository_id=? AND releases.id=?`).bind(repository.id, releaseId).first<ReleaseRow>();
@@ -76,7 +76,7 @@ export async function getRelease(env: Env, principal: Principal, owner: string, 
   return json({ release });
 }
 
-export async function getReleaseByTag(env: Env, principal: Principal, owner: string, name: string, url: URL): Promise<Response> {
+export async function getReleaseByTag(env: Env, principal: Principal | null, owner: string, name: string, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const tag = url.searchParams.get('tag');
@@ -93,7 +93,7 @@ export async function getReleaseByTag(env: Env, principal: Principal, owner: str
   return json({ release });
 }
 
-export async function listRepositoryTags(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+export async function listRepositoryTags(env: Env, principal: Principal | null, owner: string, name: string): Promise<Response> {
   if (!(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
   const response = await requestGitGateway(env, '/_marl/tags/list', { owner, repository: name }, { attempts: 2 });
   if (!response.ok) return problem(502, 'release_tags_unavailable', 'Repository tags could not be loaded.');
@@ -224,7 +224,7 @@ export async function deleteRelease(env: Env, principal: Principal, owner: strin
   return new Response(null, { status: 204 });
 }
 
-export async function downloadReleaseArchive(env: Env, principal: Principal, owner: string, name: string, releaseId: string, format: 'zip' | 'tar.gz'): Promise<Response> {
+export async function downloadReleaseArchive(env: Env, principal: Principal | null, owner: string, name: string, releaseId: string, format: 'zip' | 'tar.gz'): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const release = await env.DB.prepare('SELECT tag_name AS tagName,target_commit_id AS targetCommitId,draft FROM releases WHERE repository_id=? AND id=?').bind(repository.id, releaseId).first<{ tagName: string; targetCommitId: string; draft: number }>();

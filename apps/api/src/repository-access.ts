@@ -30,16 +30,31 @@ type RepositoryRow = Omit<RepositoryAccess, 'role'> & {
   teamRoleWeight: number | null;
 };
 
-const repositorySelect = `SELECT repositories.id,repositories.organization_id AS organizationId,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt,repositories.archived_at AS archivedAt,repositories.deletion_scheduled_at AS deletionScheduledAt,repositories.forked_from_repository_id AS forkedFromRepositoryId,repositories.fork_root_repository_id AS forkRootRepositoryId,organization_members.role AS organizationRole,CASE WHEN organization_members.user_id IS NOT NULL THEN organizations.base_repository_role END AS baseRole,(SELECT role FROM repository_collaborators WHERE repository_id=repositories.id AND user_id=?) AS directRole,(SELECT MAX(CASE repository_team_grants.role WHEN 'read' THEN 1 WHEN 'triage' THEN 2 WHEN 'write' THEN 3 WHEN 'maintain' THEN 4 WHEN 'admin' THEN 5 ELSE 0 END) FROM repository_team_grants JOIN team_members ON team_members.team_id=repository_team_grants.team_id WHERE repository_team_grants.repository_id=repositories.id AND team_members.user_id=?) AS teamRoleWeight FROM repositories JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN organization_members ON organization_members.organization_id=repositories.organization_id AND organization_members.user_id=?`;
+const repositorySelect = `SELECT repositories.id,repositories.organization_id AS organizationId,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt,repositories.archived_at AS archivedAt,repositories.deletion_scheduled_at AS deletionScheduledAt,repositories.forked_from_repository_id AS forkedFromRepositoryId,repositories.fork_root_repository_id AS forkRootRepositoryId,organization_members.role AS organizationRole,CASE WHEN organization_members.user_id IS NOT NULL THEN organizations.base_repository_role END AS baseRole,(SELECT role FROM repository_collaborators WHERE repository_id=repositories.id AND user_id=?) AS directRole,(SELECT MAX(CASE repository_team_grants.role WHEN 'read' THEN 1 WHEN 'triage' THEN 2 WHEN 'write' THEN 3 WHEN 'maintain' THEN 4 WHEN 'admin' THEN 5 ELSE 0 END) FROM repository_team_grants JOIN team_members ON team_members.team_id=repository_team_grants.team_id JOIN organization_members AS team_access_members ON team_access_members.organization_id=repositories.organization_id AND team_access_members.user_id=team_members.user_id WHERE repository_team_grants.repository_id=repositories.id AND team_members.user_id=?) AS teamRoleWeight FROM repositories JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN organization_members ON organization_members.organization_id=repositories.organization_id AND organization_members.user_id=?`;
 
-export const accessibleRepositoryPredicate = `(EXISTS (SELECT 1 FROM organization_members AS access_members WHERE access_members.organization_id=repositories.organization_id AND access_members.user_id=?) OR EXISTS (SELECT 1 FROM repository_collaborators AS access_collaborators WHERE access_collaborators.repository_id=repositories.id AND access_collaborators.user_id=?) OR EXISTS (SELECT 1 FROM repository_team_grants AS access_grants JOIN team_members AS access_team_members ON access_team_members.team_id=access_grants.team_id WHERE access_grants.repository_id=repositories.id AND access_team_members.user_id=?))`;
+function accessibleRepositoryPredicate(alias: string) {
+  if (!/^[a-z_]+$/.test(alias)) throw new Error('Invalid repository SQL alias.');
+  return `(EXISTS (SELECT 1 FROM organization_members AS access_members WHERE access_members.organization_id=${alias}.organization_id AND access_members.user_id=?) OR EXISTS (SELECT 1 FROM repository_collaborators AS access_collaborators WHERE access_collaborators.repository_id=${alias}.id AND access_collaborators.user_id=?) OR EXISTS (SELECT 1 FROM repository_team_grants AS access_grants JOIN team_members AS access_team_members ON access_team_members.team_id=access_grants.team_id JOIN organization_members AS access_team_organization_members ON access_team_organization_members.organization_id=${alias}.organization_id AND access_team_organization_members.user_id=access_team_members.user_id WHERE access_grants.repository_id=${alias}.id AND access_team_members.user_id=?))`;
+}
 
-export function repositoryListFilter(principal: Principal) {
+export function repositoryListFilter(principal: Principal, alias = 'repositories') {
   if (principal.authType === 'token' && !principal.tokenScopes?.some((scope) => ['repo:read', 'repo:write', 'repo:admin'].includes(scope))) return { sql: '0=1', values: [] };
+  const accessible = accessibleRepositoryPredicate(alias);
+  const visible = `${accessible} AND ${alias}.deletion_scheduled_at IS NULL`;
   const values: string[] = [principal.id, principal.id, principal.id];
-  if (principal.authType !== 'token' || !principal.tokenRepositoryIds) return { sql: accessibleRepositoryPredicate, values };
+  if (principal.authType !== 'token' || !principal.tokenRepositoryIds) return { sql: visible, values };
   if (principal.tokenRepositoryIds.length === 0) return { sql: '0=1', values: [] };
-  return { sql: `${accessibleRepositoryPredicate} AND repositories.id IN (${principal.tokenRepositoryIds.map(() => '?').join(',')})`, values: [...values, ...principal.tokenRepositoryIds] };
+  return { sql: `${visible} AND ${alias}.id IN (${principal.tokenRepositoryIds.map(() => '?').join(',')})`, values: [...values, ...principal.tokenRepositoryIds] };
+}
+
+export function repositoryReadFilter(principal: Principal | null, alias = 'repositories') {
+  if (!principal) return { sql: `${alias}.visibility='public' AND ${alias}.deletion_scheduled_at IS NULL`, values: [] as string[] };
+  if (principal.authType === 'token' && !principal.tokenScopes?.some((scope) => ['repo:read', 'repo:write', 'repo:admin'].includes(scope))) return { sql: '0=1', values: [] as string[] };
+  const values = [principal.id, principal.id, principal.id];
+  const readable = `(${alias}.visibility='public' OR ${accessibleRepositoryPredicate(alias)}) AND ${alias}.deletion_scheduled_at IS NULL`;
+  if (principal.authType !== 'token' || !principal.tokenRepositoryIds) return { sql: readable, values };
+  if (principal.tokenRepositoryIds.length === 0) return { sql: '0=1', values: [] as string[] };
+  return { sql: `${readable} AND ${alias}.id IN (${principal.tokenRepositoryIds.map(() => '?').join(',')})`, values: [...values, ...principal.tokenRepositoryIds] };
 }
 
 export async function lookupRepository(env: Env, owner: string, name: string, principal: Principal | null = null) {
@@ -104,7 +119,7 @@ function roleWeight(role: RepositoryRole | null) {
 
 export function repositoryPermissions(role: RepositoryRole | null, read = Boolean(role)): RepositoryPermissions {
   const weight = roleWeight(role);
-  return { read, triage: weight >= 2, push: weight >= 3, maintain: weight >= 4, admin: weight >= 5 };
+  return { member: Boolean(role), read, triage: weight >= 2, push: weight >= 3, maintain: weight >= 4, admin: weight >= 5 };
 }
 
 function roleFromWeight(weight: number): RepositoryRole | null {

@@ -8,9 +8,11 @@
   import { api } from '$lib/api';
   import DiffViewer from '$lib/components/DiffViewer.svelte';
   import Button from '$lib/components/Button.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
   import { encodeRevision } from '$lib/repository-path';
+  import { seoExcerpt } from '$lib/seo';
   import type { CommitDetail } from './+page';
   import type { PageData } from './$types';
 
@@ -32,17 +34,17 @@
   }
 </script>
 
-<svelte:head><title>{commit.id.slice(0, 7)} · {owner}/{repo} · Marl</title></svelte:head>
+<Seo title={`${commit.id.slice(0, 7)} · ${owner}/${repo} · Marl`} description={seoExcerpt(commit.body || commit.title, `View commit ${commit.id.slice(0, 7)} in ${owner}/${repo} on Marl.`)} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 <header class="commit-head">
   <div class="heading"><GitCommitHorizontal size={20} /><div><h1>{commit.title}</h1>{#if commit.body}<p>{commit.body}</p>{/if}</div></div>
   <div class="meta"><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatarUrl={commit.authorAvatarUrl} size={24} /><span>&lt;{commit.authorEmail}&gt;</span><Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={13} />Verified</i>{/if}</div>
   <div class="identity"><code>{commit.id}</code><Button icon size="small" aria-label="Copy commit hash" onclick={copy}>{#if copied}<Check size={13} />{:else}<Copy size={13} />{/if}</Button></div>
-  <div class="parents">{#each commit.parents as parent}<a href="{base}/commit/{parent}">Parent {parent.slice(0, 7)}</a>{/each}<a href="{base}/tree/{encodeRevision(commit.id)}">Browse files</a></div>
+  <div class="parents">{#each commit.parents as parent (parent)}<a href="{base}/commit/{parent}">Parent {parent.slice(0, 7)}</a>{/each}<a href="{base}/tree/{encodeRevision(commit.id)}">Browse files</a></div>
 </header>
 
 {#if commit.files.some((file) => file.oldPath)}
-  <div class="renames">{#each commit.files.filter((file) => file.oldPath) as file}<span><code>{file.oldPath}</code><ArrowRight size={12} /><code>{file.path}</code></span>{/each}</div>
+  <div class="renames">{#each commit.files.filter((file) => file.oldPath) as file (file.path)}<span><code>{file.oldPath}</code><ArrowRight size={12} /><code>{file.path}</code></span>{/each}</div>
 {/if}
 {#if commit.files.length}<DiffViewer files={commit.files} reviewable={false} onLoadPatch={loadPatch} />{:else}<div class="empty"><strong>No file changes</strong><p>This commit does not change the tree relative to its first parent.</p></div>{/if}
 

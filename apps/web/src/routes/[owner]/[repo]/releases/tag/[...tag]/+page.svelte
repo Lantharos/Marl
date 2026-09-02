@@ -8,9 +8,11 @@
   import Tag from 'lucide-svelte/icons/tag';
   import LinkButton from '$lib/components/LinkButton.svelte';
   import MarkdownBody from '$lib/components/MarkdownBody.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
   import ReleaseAssets from '$lib/releases/ReleaseAssets.svelte';
+  import { seoExcerpt } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -21,7 +23,7 @@
   const title = $derived(release.name || release.tagName);
 </script>
 
-<svelte:head><title>{title} · {owner}/{repository} · Marl</title></svelte:head>
+<Seo title={`${title} · ${owner}/${repository} · Marl`} description={seoExcerpt(release.body, `${title} is a release of ${owner}/${repository}, hosted on Marl.`)} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <main class="page">
   <header><div class="heading"><div class="tag-icon"><Tag size={19} /></div><div><div class="status">{#if release.latest}<span class="latest">Latest release</span>{/if}{#if release.draft}<span>Draft</span>{:else if release.prerelease}<span>Prerelease</span>{/if}</div><h1>{title}</h1><div class="meta"><code>{release.tagName}</code><span>·</span><GitCommitHorizontal size={13} /><a href="/{owner}/{repository}/commit/{release.targetCommitId}">{release.targetCommitId.slice(0, 8)}</a><span>·</span><UserProfileLink handle={release.author} displayName={release.authorDisplayName} avatarUrl={release.authorAvatarUrl} size={19} /><span>published</span><Time value={release.publishedAt ?? release.createdAt} /></div></div></div>{#if release.canEdit}<LinkButton href="/{owner}/{repository}/releases/edit/{release.id}"><Pencil size={13} />Edit</LinkButton>{/if}</header>
   <section class="notes">{#if release.body}<MarkdownBody source={release.body} context={{ owner, repository }} />{:else}<p>No release notes provided.</p>{/if}</section>

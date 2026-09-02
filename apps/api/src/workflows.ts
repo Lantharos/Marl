@@ -288,9 +288,9 @@ async function workflowRows(env: Env, repositoryId: string, workflowId?: string)
   return rows.results;
 }
 
-export async function listWorkflows(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
+export async function listWorkflows(env: Env, principal: Principal | null, owner: string, name: string): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
-  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository?.role) return problem(404, 'repository_not_found', 'Repository not found.');
   const rows = await workflowRows(env, repository.id);
   const lastRunIds = rows.map((row) => row.lastRunId).filter((id): id is string => typeof id === 'string');
   const lastRuns = new Map<string, Record<string, unknown>>();
@@ -302,9 +302,9 @@ export async function listWorkflows(env: Env, principal: Principal, owner: strin
   return json({ workflows: rows.map((row) => workflowSummary(row, row.lastRunId ? lastRuns.get(row.lastRunId) : null)) });
 }
 
-export async function getWorkflow(env: Env, principal: Principal, owner: string, name: string, workflowId: string, url: URL): Promise<Response> {
+export async function getWorkflow(env: Env, principal: Principal | null, owner: string, name: string, workflowId: string, url: URL): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
-  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repository?.role) return problem(404, 'repository_not_found', 'Repository not found.');
   const workflow = (await workflowRows(env, repository.id, workflowId))[0];
   if (!workflow) return problem(404, 'workflow_not_found', 'Workflow not found.');
   const limit = pageSize(url);

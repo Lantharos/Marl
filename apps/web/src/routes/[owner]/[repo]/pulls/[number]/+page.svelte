@@ -29,11 +29,13 @@
   import ReviewChangesPopover from '$lib/components/ReviewChangesPopover.svelte';
   import PullTimelineEvent from '$lib/components/PullTimelineEvent.svelte';
   import ReviewThread from '$lib/components/ReviewThread.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
   import WorkItemLinks from '$lib/components/WorkItemLinks.svelte';
   import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
   import { connectPullLive } from '$lib/pulls/pull-live';
+  import { seoExcerpt } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -373,7 +375,7 @@
 
 </script>
 
-<svelte:head><title>{pull?.title ?? `Pull request !${number}`} · {owner}/{repo} · Marl</title></svelte:head>
+<Seo title={`${pull?.title ?? `Pull request !${number}`} · ${owner}/${repo} · Marl`} description={seoExcerpt(pull?.body, `${pull?.title ?? `Pull request !${number}`} — proposed changes for ${owner}/${repo}.`)} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 {#if !pull}
   <div class="fatal"><CircleAlert size={24} /><strong>Pull request unavailable</strong><p>{error}</p><a href="/{owner}/{repo}/pulls">Back to pull requests</a></div>
@@ -413,7 +415,7 @@
           {/if}
           {/if}
         {/each}
-        <PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser?.displayName ?? pull.author} avatarUrl={data.shellUser?.avatarUrl} onComment={addPullComment} onAction={composerAction} />
+        {#if data.shellUser}<PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser.displayName} avatarUrl={data.shellUser.avatarUrl} onComment={addPullComment} onAction={composerAction} />{/if}
       </main>
       <aside class="sidebar"><section class="merge-panel">
         <header>{#if pull.state === 'merged'}<span class="merge-icon merged"><GitMerge size={18} /></span><div><strong>Merged</strong><p>Commit <code>{pull.mergedCommitId?.slice(0,7)}</code> is on {pull.targetBranch}.</p></div>{:else}<span class="merge-icon"><GitMerge size={18} /></span><div><strong>{pull.state === 'mergeable' ? 'Ready to merge' : 'Merge requirements'}</strong><p>Review the current head before merging.</p></div>{/if}</header>
