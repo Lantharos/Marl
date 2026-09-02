@@ -1,6 +1,6 @@
 import type { Principal } from './auth';
 import { requireFreshSession } from './auth';
-import { validSlug } from './domain';
+import { validIdentitySlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { profileBody } from './request-schemas';
@@ -29,7 +29,7 @@ export async function updateProfile(request: Request, env: Env, principal: Princ
   const username = body.username.trim().toLowerCase();
   const bio = body.bio.trim();
   const website = body.website.trim();
-  if (!displayName || displayName.length > 80 || username.length < 2 || username.length > 39 || !validSlug(username) || bio.length > 280 || website.length > 200 || !validWebsite(website)) return problem(422, 'invalid_profile', 'Profile details are invalid.');
+  if (!displayName || displayName.length > 80 || username.length < 2 || username.length > 39 || !validIdentitySlug(username) || bio.length > 280 || website.length > 200 || !validWebsite(website)) return problem(422, 'invalid_profile', 'Profile details are invalid.');
 
   const current = await env.DB.prepare('SELECT handle,auth_user_id AS authUserId FROM users WHERE id=?').bind(principal.id).first<{ handle: string; authUserId: string | null }>();
   if (!current) return problem(404, 'profile_not_found', 'Profile not found.');

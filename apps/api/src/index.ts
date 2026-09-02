@@ -16,6 +16,7 @@ import { search } from './search';
 import { organizationSecrets, repositorySecrets } from './secrets';
 import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys, signingKeys } from './ssh-keys';
 import { getPublicIdentityProfile } from './public-profiles';
+import { getPublicIndex } from './public-index';
 import { readAvatar } from './profile';
 import { readOrganizationAvatar } from './organizations';
 import { getShell } from './shell';
@@ -50,7 +51,8 @@ const worker = {
     const organizationAvatar = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
     const repositoryIcon = url.pathname.match(/^\/api\/v1\/repository-icons\/([^/]+)\/([^/]+)$/);
     const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
-    const publicGet = request.method === 'GET' && (avatar || organizationAvatar || repositoryIcon || publicIdentity);
+    const publicIndex = url.pathname === '/api/v1/public-index';
+    const publicGet = request.method === 'GET' && (avatar || organizationAvatar || repositoryIcon || publicIdentity || publicIndex);
     if (publicGet) {
       const rate = await _env.RATE_LIMITER.limit({
         key: request.headers.get('cf-connecting-ip') ?? 'anonymous'
@@ -60,6 +62,7 @@ const worker = {
       if (organizationAvatar) return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
       if (repositoryIcon) return readRepositoryIcon(_env, repositoryIcon[1], repositoryIcon[2]);
       if (publicIdentity) return getPublicIdentityProfile(_env, decodeURIComponent(publicIdentity[1]));
+      if (publicIndex) return getPublicIndex(_env);
     }
 
     const runnerCredential = hasRunnerCredential(request);
@@ -105,6 +108,28 @@ const worker = {
     if (request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
     if (request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') {
       return problem(404, 'not_found', 'The requested Marl API route does not exist.');
+    }
+    if (request.method === 'GET') {
+      const repositoryOverview = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/overview$/);
+      if (repositoryOverview) return getRepositoryOverview(_env, principal, decodeURIComponent(repositoryOverview[1]), decodeURIComponent(repositoryOverview[2]));
+      const repositoryRead = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob)(?:\/(.*))?)?$/);
+      if (repositoryRead) {
+        const [, encodedOwner, encodedName, resource, rest] = repositoryRead;
+        const owner = decodeURIComponent(encodedOwner);
+        const name = decodeURIComponent(encodedName);
+        if (!resource) return getRepository(_env, principal, owner, name);
+        if (resource === 'branches') return listBranches(_env, principal, owner, name);
+        if (resource === 'commits') {
+          if (!rest) return listCommits(_env, principal, owner, name, url);
+          if (rest.endsWith('/patch')) return readCommitPatch(_env, principal, owner, name, decodeURIComponent(rest.slice(0, -6)), url);
+          return getCommit(_env, principal, owner, name, decodeURIComponent(rest));
+        }
+        if (resource === 'tree') return listTree(_env, principal, owner, name, url);
+        if (resource === 'blob' && rest) {
+          const separator = rest.indexOf('/');
+          if (separator > 0) return readBlob(_env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)), ctx);
+        }
+      }
     }
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
 
@@ -312,25 +337,6 @@ const worker = {
     const issueCommentRoute = url.pathname.match(/^\/api\/v1\/issue-comments\/(comment_[a-z0-9]+)$/);
     if (issueCommentRoute && request.method === 'PATCH') return updateIssueComment(request, _env, principal, issueCommentRoute[1]);
     if (issueCommentRoute && request.method === 'DELETE') return deleteIssueComment(_env, principal, issueCommentRoute[1]);
-
-    const match = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob)(?:\/(.*))?)?$/);
-    if (match) {
-      const [, encodedOwner, encodedName, resource, rest] = match;
-      const owner = decodeURIComponent(encodedOwner);
-      const name = decodeURIComponent(encodedName);
-      if (!resource && request.method === 'GET') return getRepository(_env, principal, owner, name);
-      if (resource === 'branches' && request.method === 'GET') return listBranches(_env, principal, owner, name);
-      if (resource === 'commits' && request.method === 'GET') {
-        if (!rest) return listCommits(_env, principal, owner, name, url);
-        if (rest.endsWith('/patch')) return readCommitPatch(_env, principal, owner, name, decodeURIComponent(rest.slice(0, -6)), url);
-        return getCommit(_env, principal, owner, name, decodeURIComponent(rest));
-      }
-      if (resource === 'tree' && request.method === 'GET') return listTree(_env, principal, owner, name, url);
-      if (resource === 'blob' && rest && request.method === 'GET') {
-        const separator = rest.indexOf('/');
-        if (separator > 0) return readBlob(_env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)), ctx);
-      }
-    }
 
     return problem(404, 'not_found', 'The requested Marl API route does not exist.');
   }

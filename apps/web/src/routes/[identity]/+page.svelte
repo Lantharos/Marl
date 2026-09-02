@@ -9,6 +9,8 @@
   import OrganizationAvatar from '$lib/components/OrganizationAvatar.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import LinkButton from '$lib/components/LinkButton.svelte';
+  import Seo from '$lib/components/Seo.svelte';
+  import { isoTimestamp } from '$lib/time';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -19,12 +21,36 @@
   const viewerOrganization = $derived(organization ? data.shellOrganizations?.find((item: { slug: string; role: string }) => item.slug.toLowerCase() === organization.slug.toLowerCase()) : null);
   const canManage = $derived(Boolean(viewerOrganization && viewerOrganization.role !== 'member'));
   const websiteLabel = $derived((userProfile?.website || organization?.website) ? new URL((userProfile?.website || organization?.website)!).host : '');
+  const canonicalIdentity = $derived(userProfile?.handle ?? organization?.slug ?? '');
+  const seoName = $derived(userProfile?.displayName ?? organization?.name ?? canonicalIdentity);
+  const seoDescription = $derived(userProfile ? (userProfile.bio || `${userProfile.displayName}'s public work on Marl.`) : (organization?.description || `${organization?.name}'s public projects on Marl.`));
+  const profileUrl = $derived(`https://marl.sh/${encodeURIComponent(canonicalIdentity)}`);
+  const profileImage = $derived(userProfile?.avatarUrl ?? organization?.avatarUrl ?? null);
+  const profileWebsite = $derived(userProfile?.website ?? organization?.website ?? null);
+  const profileCreatedAt = $derived(isoTimestamp(userProfile?.joinedAt ?? organization?.createdAt ?? ''));
 </script>
 
-<svelte:head>
-  <title>{userProfile ? `${userProfile.displayName} (@${userProfile.handle})` : organization?.name} · Marl</title>
-  <meta name="description" content={userProfile ? (userProfile.bio || `${userProfile.displayName}'s work on Marl.`) : (organization?.description || `${organization?.name}'s public work on Marl.`)} />
-</svelte:head>
+<Seo
+  title={`${userProfile ? `${userProfile.displayName} (@${userProfile.handle})` : organization?.name} · Marl`}
+  description={seoDescription}
+  path={`/${encodeURIComponent(canonicalIdentity)}`}
+  type={userProfile ? 'profile' : 'website'}
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'ProfilePage',
+    url: profileUrl,
+    ...(profileCreatedAt ? { dateCreated: profileCreatedAt } : {}),
+    mainEntity: {
+      '@type': userProfile ? 'Person' : 'Organization',
+      name: seoName,
+      url: profileUrl,
+      ...(userProfile ? { alternateName: `@${userProfile.handle}` } : {}),
+      ...(seoDescription ? { description: seoDescription } : {}),
+      ...(profileImage ? { image: new URL(profileImage, 'https://marl.sh').href } : {}),
+      ...(profileWebsite ? { sameAs: [profileWebsite] } : {})
+    }
+  }}
+/>
 <PublicProfileNav visible={!data.shellUser} />
 
 {#if userProfile}

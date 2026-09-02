@@ -21,7 +21,7 @@
   }
 </script>
 
-<svelte:head><title>{copy.title} · Marl</title></svelte:head>
+<svelte:head><title>{copy.title} · Marl</title><meta name="robots" content="noindex, nofollow" /></svelte:head>
 
 <section class="error-page">
   <img class="illustration" src={copy.image} alt="" width="960" height="640" fetchpriority="high" />

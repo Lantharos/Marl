@@ -25,7 +25,7 @@
 <label class="search"><Search size={14} /><input bind:value={query} placeholder="Find a branch" /></label>
 <section class="list">
   {#each visible as branch (branch.name)}
-    <div class="row"><span class="icon"><GitBranch size={16} /></span><span class="main"><a href="{base}/tree/{encodeRevision(branch.name)}">{branch.name}</a><small><code>{branch.commit}</code> {branch.title} · <Time value={branch.updatedAt} /></small></span>{#if branch.isDefault}<span class="default">Default</span>{:else}<a class="compare" href={compareHref(branch.name)}>Compare</a>{/if}</div>
+    <div class="row"><span class="icon"><GitBranch size={16} /></span><span class="main"><a href="{base}/tree/{encodeRevision(branch.name)}">{branch.name}</a><small><code>{branch.commit}</code> {branch.title} · <Time value={branch.updatedAt} /></small></span>{#if branch.isDefault}<span class="default">Default</span>{:else if data.shellUser}<a class="compare" href={compareHref(branch.name)}>Compare</a>{/if}</div>
   {/each}
 </section>
 

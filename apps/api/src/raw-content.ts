@@ -1,9 +1,11 @@
 const textExtensions = new Set(['md', 'txt', 'rs', 'ts', 'tsx', 'js', 'jsx', 'svelte', 'toml', 'yaml', 'yml', 'css', 'html', 'json']);
 
-export function rawBlobHeaders(path: string, visibility: 'public' | 'private', contentLength: string | null) {
+export function rawBlobHeaders(path: string, visibility: 'public' | 'private', contentLength: string | null, immutableRevision: boolean) {
   const headers = new Headers({
     'content-type': rawContentType(path),
-    'cache-control': visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, no-store',
+    'cache-control': visibility === 'public'
+      ? immutableRevision ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate'
+      : 'private, no-store',
     'content-security-policy': "default-src 'none'; sandbox",
     'x-content-type-options': 'nosniff'
   });

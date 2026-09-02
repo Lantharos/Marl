@@ -1,4 +1,4 @@
-import { validSlug } from './domain';
+import { validIdentitySlug } from './domain';
 import { json, problem } from './http';
 import type { Env } from './platform';
 import { commitAuthorIdSql } from './commit-authors';
@@ -11,13 +11,13 @@ const activePublicRepositories = `${publicRepositories} AND repositories.archive
 const archivedPublicRepositories = `${publicRepositories} AND repositories.archived_at IS NOT NULL`;
 
 export async function getPublicIdentityProfile(env: Env, handle: string) {
-  if (!validSlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
+  if (!validIdentitySlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
   const user = await env.DB.prepare('SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<UserRow>();
   return user ? getPublicUserProfile(env, handle, user) : getPublicOrganizationProfile(env, handle);
 }
 
 async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserRow) {
-  if (!validSlug(handle)) return notFound('user');
+  if (!validIdentitySlug(handle)) return notFound('user');
   const user = loadedUser ?? await env.DB.prepare('SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE').bind(handle).first<UserRow>();
   if (!user) return notFound('user');
 
@@ -45,7 +45,7 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
 }
 
 async function getPublicOrganizationProfile(env: Env, slug: string) {
-  if (!validSlug(slug)) return notFound('organization');
+  if (!validIdentitySlug(slug)) return notFound('organization');
   const organization = await env.DB.prepare('SELECT id,slug,name,avatar_url AS avatarUrl,description,website,kind,created_at AS createdAt FROM organizations WHERE slug=? COLLATE NOCASE').bind(slug).first<{ id: string; slug: string; name: string; avatarUrl: string | null; description: string; website: string | null; kind: 'personal' | 'team'; createdAt: string }>();
   if (!organization) return notFound('organization');
 

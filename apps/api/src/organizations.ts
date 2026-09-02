@@ -1,7 +1,7 @@
 import type { Principal } from './auth';
 import { requireFreshSession, sha256 } from './auth';
 import { auditStatement } from './audit';
-import { identifier, validSlug } from './domain';
+import { identifier, validIdentitySlug, validSlug } from './domain';
 import { json, problem, readJson } from './http';
 import type { Env } from './platform';
 import { createOrganizationBody, createTeamBody, organizationInvitationBody, organizationMemberBody, organizationSettingsBody, teamMemberBody } from './request-schemas';
@@ -26,7 +26,7 @@ export async function listOrganizations(env: Env, principal: Principal) {
 export async function createOrganization(request: Request, env: Env, principal: Principal) {
   if (principal.authType === 'token') return problem(403, 'browser_session_required', 'Organizations can only be managed from a browser session.');
   const body = await readJson(request, createOrganizationBody);
-  if (!body || !validSlug(body.slug)) return problem(422, 'invalid_organization', 'Organization details are invalid.');
+  if (!body || !validIdentitySlug(body.slug)) return problem(422, 'invalid_organization', 'Organization details are invalid.');
   const id = identifier('org');
   try {
     await env.DB.batch([

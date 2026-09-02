@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import '../app.css';
   import { registerElevationHandler } from '$lib/auth/elevation';
   import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
@@ -10,9 +11,16 @@
 
   let { data, children } = $props<{ data: LayoutData; children: import('svelte').Snippet }>();
   const confirmation = new IdentityConfirmation();
+  const privateRoots = new Set(['forgot-password', 'inbox', 'invitations', 'issues', 'organizations', 'pulls', 'repositories', 'reset-password', 'runners', 'runs', 'settings', 'sign-in', 'sign-up', 'two-factor']);
+  const indexable = $derived.by(() => {
+    const parts = $page.url.pathname.split('/').filter(Boolean);
+    return parts.length === 0 || (parts.length <= 2 && !privateRoots.has(parts[0]));
+  });
 
   onMount(() => registerElevationHandler(confirmation.confirm));
 </script>
+
+<svelte:head>{#if !indexable}<meta name="robots" content="noindex, nofollow" />{/if}</svelte:head>
 
 <NavigationProgress />
 {#if data.shellUser}

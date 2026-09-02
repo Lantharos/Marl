@@ -11,7 +11,9 @@
   import Button from '$lib/components/Button.svelte';
   import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import Seo from '$lib/components/Seo.svelte';
   import { encodeRepositoryPath } from '$lib/repository-path';
+  import { isoTimestamp } from '$lib/time';
   import type { RepositoryDocument } from './+page';
   import type { PageData } from './$types';
 
@@ -29,6 +31,12 @@
   let saving = $state(false);
   let saveError = $state('');
   const remainingDocuments = $derived((data.availableDocuments as RepositoryDocument[]).filter((candidate) => !draftDocuments.some((document) => document.path === candidate.path)));
+  const canonicalOwner = $derived(data.repository.owner);
+  const canonicalRepository = $derived(data.repository.name);
+  const repositoryPath = $derived(`/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`);
+  const repositoryUrl = $derived(`https://marl.sh${repositoryPath}`);
+  const seoDescription = $derived(data.repository.description || `${canonicalOwner}/${canonicalRepository} is a public Git repository hosted on Marl.`);
+  const repositoryUpdatedAt = $derived(isoTimestamp(data.repository.updatedAt));
 
   async function selectDocument(document: RepositoryDocument) {
     activeDocument = document;
@@ -74,13 +82,27 @@
   }
 </script>
 
-<svelte:head><title>{owner}/{repo} · Marl</title></svelte:head>
+<Seo
+  title={`${canonicalOwner}/${canonicalRepository} · Marl`}
+  description={seoDescription}
+  path={repositoryPath}
+  robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareSourceCode',
+    name: `${canonicalOwner}/${canonicalRepository}`,
+    description: seoDescription,
+    url: repositoryUrl,
+    codeRepository: repositoryUrl,
+    ...(repositoryUpdatedAt ? { dateModified: repositoryUpdatedAt } : {})
+  }}
+/>
 
 <article class="overview">
   {#if documents.length || data.canManage}
     <header>
       <nav aria-label="Repository documents">
-        {#each documents as document}
+        {#each documents as document (document.path)}
           <button class:active={activeDocument?.path === document.path} onclick={() => void selectDocument(document)}><FileText size={13} />{document.label}</button>
         {/each}
         {#if data.canManage}<button class="add" aria-label="Manage showcased files" title="Manage showcased files" onclick={openEditor}><Plus size={14} /></button>{/if}
@@ -92,7 +114,7 @@
       </div>
     {:else}<div class="empty compact"><BookOpen size={24} /><strong>No showcased files</strong><p>Choose a Markdown or text file from the default branch.</p></div>{/if}
   {:else}
-    <div class="empty"><BookOpen size={24} /><strong>No project overview yet</strong><p>Add a README, license, contributing guide, security policy, or code of conduct to introduce this repository.</p><a href="/{owner}/{repo}/code">Browse the code</a></div>
+    <div class="empty"><BookOpen size={24} /><strong>No project overview yet</strong><p>Add a README, license, contributing guide, security policy, or code of conduct to introduce this repository.</p>{#if data.shellUser}<a href="/{owner}/{repo}/code">Browse the code</a>{/if}</div>
   {/if}
 </article>
 
@@ -100,11 +122,11 @@
   {#snippet children()}
     <div class="showcase-editor">
       <div class="selected-files">
-        {#each draftDocuments as document, index}
+        {#each draftDocuments as document, index (document.path)}
           <div><FileText size={14} /><span><strong>{document.label}</strong><small>{document.path}</small></span><Button icon size="small" variant="ghost" disabled={index === 0} aria-label={`Move ${document.label} up`} onclick={() => moveDocument(index, -1)}><ArrowUp size={13} /></Button><Button icon size="small" variant="ghost" disabled={index === draftDocuments.length - 1} aria-label={`Move ${document.label} down`} onclick={() => moveDocument(index, 1)}><ArrowDown size={13} /></Button><Button icon size="small" variant="ghost" aria-label={`Remove ${document.label}`} onclick={() => (draftDocuments = draftDocuments.filter((candidate) => candidate.path !== document.path))}><Trash2 size={13} /></Button></div>
         {:else}<p>No files selected.</p>{/each}
       </div>
-      {#if remainingDocuments.length}<div class="available-files"><strong>Add a file</strong>{#each remainingDocuments as document}<button onclick={() => (draftDocuments = [...draftDocuments, document])}><Plus size={13} /><span>{document.label}<small>{document.path}</small></span></button>{/each}</div>{/if}
+      {#if remainingDocuments.length}<div class="available-files"><strong>Add a file</strong>{#each remainingDocuments as document (document.path)}<button onclick={() => (draftDocuments = [...draftDocuments, document])}><Plus size={13} /><span>{document.label}<small>{document.path}</small></span></button>{/each}</div>{/if}
       {#if saveError}<p class="save-error" role="alert">{saveError}</p>{/if}
     </div>
   {/snippet}

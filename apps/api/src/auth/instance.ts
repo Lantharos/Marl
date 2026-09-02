@@ -4,7 +4,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { twoFactor, username } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/d1';
-import { validSlug } from '../domain';
+import { validIdentitySlug } from '../domain';
 import { sendTransactionalEmail } from '../email';
 import type { Env } from '../platform';
 import { authSchema } from './schema';
@@ -30,7 +30,7 @@ export function createAuth(env: Env, request: Request) {
         if (context.path === '/update-user' && context.body?.username !== undefined) throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
         if (context.path !== '/sign-up/email') return;
         const candidate = typeof context.body?.username === 'string' ? context.body.username.toLowerCase() : '';
-        if (!validSlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
+        if (!validIdentitySlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
         const unavailable = await usernameUnavailable(env, candidate);
         if (unavailable) throw new APIError('BAD_REQUEST', { message: 'That username is unavailable.' });
       }),
@@ -96,7 +96,7 @@ export function createAuth(env: Env, request: Request) {
     plugins: [
       passkey({ rpID: publicUrl.hostname, rpName: 'Marl', origin: publicUrl.origin }),
       twoFactor({ issuer: 'Marl', allowPasswordless: true }),
-      username({ minUsernameLength: 2, maxUsernameLength: 39, usernameValidator: validSlug }),
+      username({ minUsernameLength: 2, maxUsernameLength: 39, usernameValidator: validIdentitySlug }),
       stepUp(env)
     ]
   });

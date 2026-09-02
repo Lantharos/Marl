@@ -10,6 +10,10 @@ function parsed(value: string | Date) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+export function isoTimestamp(value: string | Date) {
+  return parsed(value)?.toISOString() ?? null;
+}
+
 function ordinal(dayOfMonth: number) {
   const remainder = dayOfMonth % 100;
   if (remainder >= 11 && remainder <= 13) return `${dayOfMonth}th`;

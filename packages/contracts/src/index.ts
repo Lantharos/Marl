@@ -175,6 +175,11 @@ export interface PublicOrganizationProfile {
 
 export type PublicIdentityProfile = PublicUserProfile | PublicOrganizationProfile;
 
+export interface PublicIndex {
+  identities: Array<{ handle: string }>;
+  repositories: Array<{ owner: string; name: string; updatedAt: string }>;
+}
+
 export interface BranchSummary {
   name: string;
   commit: string;

@@ -23,6 +23,7 @@
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
+  import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
   import { dismissable } from '$lib/actions/dismissable';
   import { interfaceScale } from '$lib/ui/floating';
 
@@ -61,7 +62,7 @@
   const organizationOptions = $derived((data.shellOrganizations ?? [])
     .filter((organization: { role: string }) => organization.role !== 'member')
     .toSorted((left: { kind: string; name: string }, right: { kind: string; name: string }) => Number(right.kind === 'personal') - Number(left.kind === 'personal') || left.name.localeCompare(right.name))
-    .map((organization: { slug: string; name: string; kind: string }) => ({ value: organization.slug, label: organization.kind === 'personal' ? data.shellUser.displayName : organization.name, description: organization.kind === 'personal' ? `@${organization.slug} · Personal account` : `@${organization.slug} · Organization` })));
+    .map((organization: { slug: string; name: string; kind: string }) => ({ value: organization.slug, label: organization.kind === 'personal' ? data.shellUser?.displayName ?? organization.name : organization.name, description: organization.kind === 'personal' ? `@${organization.slug} · Personal account` : `@${organization.slug} · Organization` })));
 
   const islandBoundary = $derived(buildIslandBoundary(islandWidth, islandStrokeWidth));
   const islandFill = $derived(buildIslandFill(islandWidth, islandStrokeWidth));
@@ -189,20 +190,24 @@
   });
 </script>
 
+<PublicProfileNav visible={!data.shellUser} />
+
 <section class="repo-bar">
   <div class="repo-line">
     <div class="repo-identity"><RepositoryIcon name={repo} src={repository?.iconUrl} size={34} /><div class="identity"><div class="crumb"><a href="/{owner}">{owner}</a><span>/</span><a href={base}>{repo}</a>{#if repository?.visibility === 'private'}<span class="private"><Lock size={11} />Private</span>{/if}</div>{#if repository?.upstream}<p class="upstream"><GitFork size={11} />Forked from <a href="/{repository.upstream.owner}/{repository.upstream.name}">{repository.upstream.owner}/{repository.upstream.name}</a></p>{:else if repository?.description}<p>{repository.description}</p>{/if}</div></div>
-    <div class="repo-actions"><Button size="small" loading={starring} aria-label={starred ? 'Unstar repository' : 'Star repository'} onclick={toggleStar}><Star size={14} fill={starred ? 'currentColor' : 'none'} />Star{#if starCount}<span class="count">{starCount}</span>{/if}</Button><Button size="small" disabled={!organizationOptions.length} onclick={() => { forkOwner = organizationOptions[0]?.value ?? ''; forkName = repositoryName(repo); forkError = ''; forkOpen = true; }}><GitFork size={14} />Fork{#if repository?.forkCount}<span class="count">{repository.forkCount}</span>{/if}</Button><div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><Button size="small" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></Button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong>{#if repository?.sshCloneUrl}<div class="protocols"><button class:active={cloneProtocol === 'https'} onclick={() => { cloneProtocol = 'https'; copied = false; }}>HTTPS</button><button class:active={cloneProtocol === 'ssh'} onclick={() => { cloneProtocol = 'ssh'; copied = false; }}>SSH</button></div>{/if}<p>{cloneProtocol === 'ssh' ? 'Uses a public key registered to your Marl account.' : 'Use your Marl username and a developer token as the password.'} <a href={resolve(cloneProtocol === 'ssh' ? '/settings/account/ssh-keys' : '/settings/account/tokens')}>{cloneProtocol === 'ssh' ? 'Manage SSH keys' : 'Developer access'}</a></p><div class="clone-value"><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div></div>
+    <div class="repo-actions">{#if data.shellUser}<Button size="small" loading={starring} aria-label={starred ? 'Unstar repository' : 'Star repository'} onclick={toggleStar}><Star size={14} fill={starred ? 'currentColor' : 'none'} />Star{#if starCount}<span class="count">{starCount}</span>{/if}</Button><Button size="small" disabled={!organizationOptions.length} onclick={() => { forkOwner = organizationOptions[0]?.value ?? ''; forkName = repositoryName(repo); forkError = ''; forkOpen = true; }}><GitFork size={14} />Fork{#if repository?.forkCount}<span class="count">{repository.forkCount}</span>{/if}</Button>{/if}<div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><Button size="small" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></Button>{#if cloneOpen}<div class="clone-menu"><strong>Clone this repository</strong>{#if repository?.sshCloneUrl}<div class="protocols"><button class:active={cloneProtocol === 'https'} onclick={() => { cloneProtocol = 'https'; copied = false; }}>HTTPS</button><button class:active={cloneProtocol === 'ssh'} onclick={() => { cloneProtocol = 'ssh'; copied = false; }}>SSH</button></div>{/if}<p>{#if !data.shellUser && cloneProtocol === 'https'}No account needed for a public repository.{:else}{cloneProtocol === 'ssh' ? 'Uses a public key registered to your Marl account.' : 'Use your Marl username and a developer token as the password.'} <a href={resolve(cloneProtocol === 'ssh' ? '/settings/account/ssh-keys' : '/settings/account/tokens')}>{cloneProtocol === 'ssh' ? 'Manage SSH keys' : 'Developer access'}</a>{/if}</p><div class="clone-value"><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div></div>
   </div>
   <nav use:trackRepositoryNav aria-label="Repository" onscroll={() => repositoryNav && updateIsland(repositoryNav, false)}>
     <span class="active-island" style={`--island-x:${islandX}px`} aria-hidden="true"><svg viewBox="0 0 1 43" preserveAspectRatio="none"><path class="island-fill" d={islandFill}></path><path class="island-outline" d={islandBoundary} stroke-width={islandStrokeWidth}></path></svg></span>
     <a class:active={tabActive('overview')} href="{base}?overview=1"><BookOpen size={14} />Overview</a>
     <a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a>
-    <a class:active={tabActive('releases')} href="{base}/releases"><Tag size={14} />Releases</a>
-    <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
-    <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a>
-    <a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a>
-    {#if canManageSettings}<a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a>{/if}
+    {#if data.shellUser}
+      <a class:active={tabActive('releases')} href="{base}/releases"><Tag size={14} />Releases</a>
+      <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
+      <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a>
+      <a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a>
+      {#if canManageSettings}<a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a>{/if}
+    {/if}
   </nav>
 </section>
 
