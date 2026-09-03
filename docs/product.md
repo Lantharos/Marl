@@ -113,8 +113,9 @@ assignment, labels, and locks, while issue authors
 can edit and close their own work. References in descriptions, comments, reviews, and review
 conversations create durable links and backlink timeline entries. References may use the current
 repository shorthand or a qualified form such as `lantharos/marl#12` and `lantharos/marl!7`.
-Authored discussion carries the strongest visual weight; mechanical changes remain available as
-compact events without breaking the pace of the conversation.
+Authored discussion uses restrained surfaces so comment boundaries and reply groups remain easy to
+scan; mechanical changes remain available as compact events without breaking the pace of the
+conversation.
 
 ## Pulls
 
@@ -130,8 +131,8 @@ activity includes replies, editable comments, durable deletion
 tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
 start line or range conversations directly from the changes view; those conversations also
 appear in the timeline with their exact file, line range, and a capped excerpt of the relevant code,
-then collapse when resolved. Authored reviews and comments lead the activity rhythm while commit and
-metadata events remain compact. Title,
+then collapse when resolved. Each review, comment, and line conversation is visually contained while
+commit and metadata events remain compact. Title,
 description, lifecycle, lock, assignment, label, merge, and thread-resolution changes are durable
 timeline events. The conversation composer keeps comment, review, every allowed merge method,
 close, and reopen actions together without navigating away. Choosing an action makes it the
