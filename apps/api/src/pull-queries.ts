@@ -9,7 +9,7 @@ import type { Env } from './platform';
 import { latestReviews, pullCommits, pullRepository as repo, pullSelect, pullSummary as summary, reviewStatusFor, summarizePullRows as summarizeRows, type PullRow } from './pull-context';
 import { mergeRequirements } from './pull-requirements';
 import { pullUpdatesAfter } from './pull-realtime';
-import { allPullThreads, initialPullTimeline, olderPullTimeline } from './pull-timeline';
+import { allPullThreads, initialPullTimeline, pullRevisionTimeline } from './pull-timeline';
 import { authorizeRepository, repositoryListFilter, repositoryPermissions } from './repository-access';
 import { linkedWorkItems } from './work-item-references';
 
@@ -85,7 +85,7 @@ export async function getPull(env: Env, principal: Principal | null, owner: stri
     repository.role
       ? env.DB.prepare(`SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle`).bind(repository.organizationId).all()
       : Promise.resolve({ results: [] }),
-    initialPullTimeline(env, principal, pull.id),
+    initialPullTimeline(env, principal, pull.id, pull.sourceCommitId),
     linkedWorkItems(env, principal, 'pull', pull.id)
   ]);
   const checkSummary = { total: checks.results.length, passed: checks.results.filter((item) => item.state === 'success').length, failed: checks.results.filter((item) => item.state === 'failure' || item.state === 'canceled').length, running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length, items: checks.results.map(({ name, state, producerWorkflowId: workflowId, producerJobKey: jobKey }) => ({ name, state, workflowId, jobKey })) };
@@ -94,23 +94,21 @@ export async function getPull(env: Env, principal: Principal | null, owner: stri
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, unresolved);
   const pullSummary = summary(pull, checkSummary, reviewStatus, unresolved);
   const state = pull.state === 'open' ? (requirements.ready ? 'mergeable' : 'blocked') : pullSummary.state;
-  const comments = timeline.items.filter((item) => item.kind === 'comment').map((item) => item.value);
-  const timelineReviews = timeline.items.filter((item) => item.kind === 'review').map((item) => item.value);
-  const threads = timeline.items.filter((item) => item.kind === 'thread').map((item) => item.value);
-  const events = timeline.items.filter((item) => item.kind === 'event').map((item) => item.value);
   const permissions = repositoryPermissions(repository.role, true);
-  return json({ pullRequest: { ...pullSummary, state, body: pull.body, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, authorId: pull.authorId, createdAt: pull.createdAt, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, mergeRequirements: requirements, allowedMergeMethods: rule.allowedMergeMethods, commits: commits.results, comments, reviews: timelineReviews, checks: checks.results, threads, events, labels: labels.results, availableLabels: availableLabels.results, assignees: assignees.results, availableAssignees: availableAssignees.results, locked: Boolean(pull.lockedAt), canManage: permissions.triage, canMerge: permissions.push, realtimeVersion: Number(pull.realtimeVersion), linkedItems, timeline } });
+  return json({ pullRequest: { ...pullSummary, state, body: pull.body, sourceCommitId: pull.sourceCommitId, targetCommitId: pull.targetCommitId, authorId: pull.authorId, createdAt: pull.createdAt, mergedCommitId: pull.mergedCommitId, mergeMethod: pull.mergeMethod, mergeRequirements: requirements, allowedMergeMethods: rule.allowedMergeMethods, commits: commits.results, checks: checks.results, labels: labels.results, availableLabels: availableLabels.results, assignees: assignees.results, availableAssignees: availableAssignees.results, locked: Boolean(pull.lockedAt), canManage: permissions.triage, canMerge: permissions.push, realtimeVersion: Number(pull.realtimeVersion), linkedItems, timeline } });
 }
 
 export async function getPullTimeline(env: Env, principal: Principal | null, owner: string, name: string, number: number, url: URL): Promise<Response> {
   const repository = await repo(env, owner, name);
   if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read'))) return problem(404, 'repository_not_found', 'Repository not found.');
-  const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string }>();
+  const pull = await env.DB.prepare('SELECT id,source_commit_id AS sourceCommitId FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; sourceCommitId: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const before = Number(url.searchParams.get('before'));
-  const after = Number(url.searchParams.get('after'));
-  if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after) || before <= after) return problem(422, 'invalid_timeline_cursor', 'Timeline cursors are invalid.');
-  return json({ timeline: await olderPullTimeline(env, principal, pull.id, before, after) });
+  const revision = url.searchParams.get('revision');
+  if (revision === null) return json({ timeline: await initialPullTimeline(env, principal, pull.id, pull.sourceCommitId) });
+  const sequence = Number(revision);
+  if (!Number.isSafeInteger(sequence) || sequence < 1) return problem(422, 'invalid_revision', 'Revision is invalid.');
+  const timeline = await pullRevisionTimeline(env, principal, pull.id, sequence);
+  return timeline ? json({ timeline }) : problem(404, 'revision_not_found', 'Revision not found.');
 }
 
 export async function getPullUpdates(env: Env, principal: Principal | null, owner: string, name: string, number: number, url: URL): Promise<Response> {
@@ -172,7 +170,13 @@ export async function getPullPatch(env: Env, principal: Principal | null, owner:
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
   const pull = await env.DB.prepare('SELECT source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ sourceCommitId: string; targetCommitId: string }>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
-  const response = await requestGitGateway(env, '/_marl/patch', { owner, repository: name, base: pull.targetCommitId, head: pull.sourceCommitId, path }, { attempts: 2 }).catch(() => null);
+  const requestedRevision = url.searchParams.get('revision');
+  if (requestedRevision && !/^[0-9a-f]{40,64}$/.test(requestedRevision)) return problem(422, 'invalid_revision', 'Revision is invalid.');
+  const revision = requestedRevision && requestedRevision !== pull.sourceCommitId
+    ? await env.DB.prepare(`SELECT json_extract(details,'$.head') AS head,json_extract(details,'$.base') AS base FROM pull_request_events WHERE pull_request_id=(SELECT id FROM pull_requests WHERE repository_id=? AND number=?) AND kind='commits_added' AND json_extract(details,'$.head')=? ORDER BY created_at DESC LIMIT 1`).bind(repository.id, number, requestedRevision).first<{ head: string; base: string }>()
+    : { head: pull.sourceCommitId, base: pull.targetCommitId };
+  if (!revision?.head || !revision.base) return problem(404, 'revision_not_found', 'Revision not found.');
+  const response = await requestGitGateway(env, '/_marl/patch', { owner, repository: name, base: revision.base, head: revision.head, path }, { attempts: 2 }).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
   return new Response(response.body, { headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
 }

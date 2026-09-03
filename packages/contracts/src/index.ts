@@ -367,11 +367,7 @@ export interface PullRequestDetail extends PullRequestSummary {
     authoredAt: string;
     signatureStatus: string;
   }>;
-  comments: PullRequestComment[];
-  reviews: PullRequestReview[];
   checks: CheckSummary[];
-  threads: ReviewThread[];
-  events: PullRequestEvent[];
   assignees: PullRequestPerson[];
   availableAssignees: PullRequestPerson[];
   availableLabels: PullRequestLabel[];
@@ -410,13 +406,31 @@ export type PullTimelineItem =
       value: WorkItemReferenceEvent;
     };
 
+export interface PullRevisionSummary {
+  sequence: number;
+  number: number;
+  commitId: string;
+  title: string;
+  actor: string;
+  actorDisplayName: string;
+  createdAt: string;
+  commitCount: number;
+  activityCount: number;
+  conversationCount: number;
+  reviewState: 'none' | 'commented' | 'approved' | 'changes_requested';
+  forcePushed: boolean;
+  current: boolean;
+}
+
 export interface PullTimelineWindow {
   items: PullTimelineItem[];
   total: number;
-  hidden: number;
-  loadBeforeSequence?: number;
-  firstBoundarySequence?: number;
-  newestLoadedSequence?: number;
+  revisions: PullRevisionSummary[];
+}
+
+export interface PullRevisionWindow {
+  sequence: number;
+  items: PullTimelineItem[];
 }
 
 export interface PullRealtimeUpdate {

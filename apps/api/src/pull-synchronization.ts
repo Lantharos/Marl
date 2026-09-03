@@ -46,33 +46,28 @@ export async function synchronizePullsForBranchUpdates(env: Env, repositoryId: s
     if (!pinned.ok) throw new Error(`Pull request !${pull.number} could not preserve its updated commits.`);
 
     const events = [];
-    const statements = [];
-    const timelineRemoved: Array<{ kind: 'event'; id: string }> = [];
     if (sourceCommitId !== pull.sourceCommitId) {
       const forcePushed = !await isAncestor(env, pull.sourceRepositoryId, pull.sourceCommitId, sourceCommitId);
-      if (forcePushed) {
-        const previousCommitEvents = await env.DB.prepare("SELECT id FROM pull_request_events WHERE pull_request_id=? AND kind='commits_added'").bind(pull.id).all<{ id: string }>();
-        timelineRemoved.push(...previousCommitEvents.results.map((event) => ({ kind: 'event' as const, id: event.id })));
-        statements.push(
-          env.DB.prepare("DELETE FROM pull_timeline WHERE pull_request_id=? AND kind='event' AND entity_id IN (SELECT id FROM pull_request_events WHERE pull_request_id=? AND kind='commits_added')").bind(pull.id, pull.id),
-          env.DB.prepare("DELETE FROM pull_request_events WHERE pull_request_id=? AND kind='commits_added'").bind(pull.id)
-        );
-        events.push(createPullEvent(env, pull.id, actor, 'force_pushed', { branch: pull.sourceBranch, from: pull.sourceCommitId.slice(0, 7), to: sourceCommitId.slice(0, 7) }));
-      }
       const commits = forcePushed
         ? await currentPullCommits(env, pull.sourceRepositoryId, sourceCommitId, pull.repositoryId, targetCommitId)
         : await commitsIntroducedByHead(env, pull.sourceRepositoryId, sourceCommitId, pull.sourceCommitId);
-      if (commits.length) events.push(createPullEvent(env, pull.id, actor, 'commits_added', { commits: JSON.stringify(commits), owner: pull.sourceOwner, repository: pull.sourceRepository }));
+      events.push(createPullEvent(env, pull.id, actor, 'commits_added', {
+        commits: JSON.stringify(commits),
+        owner: pull.sourceOwner,
+        repository: pull.sourceRepository,
+        head: sourceCommitId,
+        base: targetCommitId,
+        previousHead: pull.sourceCommitId,
+        forcePushed: String(forcePushed)
+      }));
     }
     const pullPatch = { sourceCommitId, targetCommitId };
     await commitPullUpdate(env, pull.id, 'pull.synchronized', {
       pull: pullPatch,
-      timelineRemoved,
       timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })),
       refreshState: true
     }, [
       env.DB.prepare(`UPDATE pull_requests SET source_commit_id=?,target_commit_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND state IN ('draft','open')`).bind(sourceCommitId, targetCommitId, pull.id),
-      ...statements,
       ...events.map((event) => event.statement)
     ]);
   }

@@ -201,11 +201,14 @@ does not own or duplicate pull-request state. Reconnecting clients catch up from
 lost WebSocket delivery cannot lose a review action. Check transitions and synchronized branch
 heads publish through the same delta stream.
 
-Pull-request detail initially includes the first two and latest thirty timeline entries. The
-middle is represented by an exact hidden count and loaded backward by sequence cursor on demand.
-Diffs and their review threads load only when the Changes tab is opened. Local mutations patch the
-returned entities directly and request the small merge-state projection only when an action can
-change merge eligibility.
+Each pushed pull-request head creates an immutable revision boundary with its head, base, commits,
+actor, and force-push state. Pull detail returns compact summaries for historical revisions and the
+current revision's activity. Opening a historical revision loads only that revision's comments,
+reviews, and threads; old line threads request their original pinned head and base so their code
+context remains accurate. Force pushes preserve earlier revision boundaries instead of rewriting
+the discussion record. Diffs and their review threads load only when the Changes tab is opened.
+Local mutations patch the returned entities directly and request the small merge-state projection
+only when an action can change merge eligibility.
 
 Issues use their own repository-local number sequence instead of sharing pull-request numbers.
 Issue detail follows the same bounded timeline shape: the first two and latest thirty entries are

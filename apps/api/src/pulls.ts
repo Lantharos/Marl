@@ -45,7 +45,7 @@ export async function createPull(request: Request, env: Env, principal: Principa
   const description = typeof body.body === 'string' ? body.body.slice(0, 100_000) : '';
   const mentions = await mentionStatements(env, principal, { kind: 'pull', id }, 'pull_body', id, description, new Date().toISOString());
   const commits = await pullCommits(env, repository.id, sourceRepository.id, source.commitId, target.commitId);
-  const commitEvent = commits.results.length ? createPullEvent(env, id, principal, 'commits_added', { commits: JSON.stringify(commits.results.map((commit) => ({ id: commit.id, title: commit.title }))), owner: sourceOwner, repository: sourceName }) : null;
+  const commitEvent = commits.results.length ? createPullEvent(env, id, principal, 'commits_added', { commits: JSON.stringify(commits.results.map((commit) => ({ id: commit.id, title: commit.title }))), owner: sourceOwner, repository: sourceName, head: source.commitId, base: target.commitId, forcePushed: 'false' }) : null;
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO pull_requests (id,repository_id,source_repository_id,number,title,body,author_id,source_branch,target_branch,source_commit_id,target_commit_id,state) SELECT ?,?,?,COALESCE(MAX(number),0)+1,?,?,?,?,?,?,?,? FROM pull_requests WHERE repository_id=?`).bind(id, repository.id, sameRepository ? null : sourceRepository.id, body.title.trim(), description, principal.id, body.sourceBranch, body.targetBranch, source.commitId, target.commitId, state, repository.id),
     ...mentions,

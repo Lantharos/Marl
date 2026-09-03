@@ -39,12 +39,12 @@
   async function submitReply() { if (!replyBody.trim()) return; await onReply(thread.id, replyBody); replyBody = ''; replying = false; }
   async function submitEdit(id: string) { if (!editBody.trim()) return; await onEdit(id, editBody); editing = null; editBody = ''; }
   async function loadCodeContext() {
-    if (!onLoadContext || inline || thread.outdated || codeLines.length || contextLoading) return;
+    if (!onLoadContext || inline || codeLines.length || contextLoading) return;
     contextLoading = true;
     try { codeLines = await onLoadContext(thread); } catch { codeLines = []; } finally { contextLoading = false; }
   }
   function nearViewport(node: HTMLElement) {
-    if (!onLoadContext || inline || thread.outdated) return;
+    if (!onLoadContext || inline) return;
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
       observer.disconnect();

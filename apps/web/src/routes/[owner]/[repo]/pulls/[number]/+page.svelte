@@ -1,12 +1,13 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { tick, untrack } from 'svelte';
-  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@marl/contracts';
+  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullRevisionSummary, PullRevisionWindow, PullTimelineItem, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@marl/contracts';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
+  import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import FileDiff from 'lucide-svelte/icons/file-diff';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import MessageSquare from 'lucide-svelte/icons/message-square';
@@ -62,8 +63,11 @@
   let editedTitle = $state('');
   let editedBody = $state('');
   let changesView = $state<HTMLElement>();
+  let expandedRevisions = $state<number[]>([]);
+  let loadingRevisions = $state<number[]>([]);
   let pullGeneration = 0;
   let diffRequest = 0;
+  let timelineRequest = 0;
   const patchRequests: Record<string, Promise<string>> = {};
 
   let stateRefreshQueued = false;
@@ -131,14 +135,15 @@
         patchDiffThread(change.threadId, { comments: exists ? diffThread.comments.map((comment) => comment.id === change.comment.id ? { ...comment, ...change.comment } : comment) : [...diffThread.comments, change.comment] });
       }
     }
-    if (Array.isArray(payload.timelineRemoved)) timeline.remove(payload.timelineRemoved);
     if (Array.isArray(payload.timeline)) timeline.append(payload.timeline);
     pull = { ...pull, realtimeVersion: update.version };
     if (pull.sourceCommitId !== previousSource || pull.targetCommitId !== previousTarget) {
       diff = null;
       diffLoading = false;
       diffRequest += 1;
+      timelineRequest += 1;
       clearPatchRequests();
+      void refreshTimeline(pullGeneration, { owner, repo, number });
       if (tab === 'changes') void selectTab('changes');
     }
     if (payload.refreshState) scheduleStateRefresh();
@@ -188,6 +193,8 @@
       editingDetails = false;
       editedTitle = '';
       editedBody = '';
+      expandedRevisions = [];
+      loadingRevisions = [];
       stateRefreshQueued = false;
       catchUpRequest = null;
     });
@@ -207,16 +214,54 @@
     return Object.values(threads);
   });
 
-  async function loadOlderTimeline() {
-    const before = timeline.loadBeforeSequence;
-    const after = timeline.firstBoundarySequence;
-    if (!before || !after || busy) return;
-    busy = true;
+  async function refreshTimeline(generation: number, route: { owner: string; repo: string; number: number }) {
+    const request = ++timelineRequest;
     try {
-      const result = await api<{ timeline: PullTimelineWindow }>(`/repositories/${owner}/${repo}/pulls/${number}/timeline?before=${before}&after=${after}`);
-      timeline.mergeOlder(result.timeline);
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Older conversation could not be loaded.'; }
-    finally { busy = false; }
+      const result = await api<{ timeline: PullTimelineWindow }>(`/repositories/${route.owner}/${route.repo}/pulls/${route.number}/timeline`);
+      if (generation === pullGeneration && request === timelineRequest) {
+        timeline.replace(result.timeline);
+        expandedRevisions = [];
+        loadingRevisions = [];
+      }
+    } catch (cause) {
+      if (generation === pullGeneration && request === timelineRequest) error = cause instanceof MarlApiError ? cause.message : 'Revision history could not be refreshed.';
+    }
+  }
+
+  async function toggleRevision(revision: PullRevisionSummary) {
+    if (expandedRevisions.includes(revision.sequence)) {
+      expandedRevisions = expandedRevisions.filter((sequence) => sequence !== revision.sequence);
+      return;
+    }
+    expandedRevisions = [...expandedRevisions, revision.sequence];
+    if (timeline.revisionLoaded(revision.sequence) || loadingRevisions.includes(revision.sequence)) return;
+    const generation = pullGeneration;
+    const route = { owner, repo, number };
+    loadingRevisions = [...loadingRevisions, revision.sequence];
+    try {
+      const result = await api<{ timeline: PullRevisionWindow }>(`/repositories/${route.owner}/${route.repo}/pulls/${route.number}/timeline?revision=${revision.sequence}`);
+      if (generation === pullGeneration) timeline.loadRevision(result.timeline);
+    } catch (cause) {
+      if (generation !== pullGeneration) return;
+      expandedRevisions = expandedRevisions.filter((sequence) => sequence !== revision.sequence);
+      error = cause instanceof MarlApiError ? cause.message : 'Revision activity could not be loaded.';
+    } finally {
+      if (generation === pullGeneration) loadingRevisions = loadingRevisions.filter((sequence) => sequence !== revision.sequence);
+    }
+  }
+
+  const previousRevisions = $derived(timeline.revisions.filter((revision) => !revision.current));
+  const currentRevision = $derived(timeline.revisions.find((revision) => revision.current));
+
+  function revisionReviewCopy(state: PullRevisionSummary['reviewState']) {
+    if (state === 'changes_requested') return 'Changes requested';
+    if (state === 'approved') return 'Approved';
+    if (state === 'commented') return 'Reviewed';
+    return 'Not reviewed';
+  }
+
+  function countCopy(count: number, singular: string) {
+    return `${count} ${singular}${count === 1 ? '' : 's'}`;
   }
 
   async function selectTab(next: Tab) {
@@ -301,18 +346,19 @@
   async function loadPatch(file: PullRequestDiff['files'][number]) {
     return loadPatchPath(file.path);
   }
-  function loadPatchPath(path: string) {
-    const cached = patchRequests[path];
+  function loadPatchPath(path: string, revision = pull.sourceCommitId) {
+    const key = `${revision}:${path}`;
+    const cached = patchRequests[key];
     if (cached) return cached;
-    const request = api<{ patch: string }>(`/repositories/${owner}/${repo}/pulls/${number}/patch?path=${encodeURIComponent(path)}`)
+    const request = api<{ patch: string }>(`/repositories/${owner}/${repo}/pulls/${number}/patch?path=${encodeURIComponent(path)}&revision=${revision}`)
       .then((result) => result.patch);
-    patchRequests[path] = request;
-    void request.catch(() => { if (patchRequests[path] === request) delete patchRequests[path]; });
+    patchRequests[key] = request;
+    void request.catch(() => { if (patchRequests[key] === request) delete patchRequests[key]; });
     return request;
   }
   function clearPatchRequests() { for (const path of Object.keys(patchRequests)) delete patchRequests[path]; }
   async function loadThreadContext(thread: ReviewThreadType): Promise<ThreadCodeLine[]> {
-    const patch = await loadPatchPath(thread.path);
+    const patch = await loadPatchPath(thread.path, thread.commitId);
     return reviewThreadContext(patch, thread.side, thread.startLine, thread.line);
   }
 
@@ -384,6 +430,20 @@
 
 </script>
 
+{#snippet timelineEntry(item: PullTimelineItem)}
+  {#if item.kind === 'event'}
+    <PullTimelineEvent event={item.value} />
+  {:else if item.kind === 'reference'}
+    <ReferenceTimelineEvent reference={item.value} />
+  {:else if item.kind === 'review'}
+    <article class="review-entry {item.value.state}"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>{item.value.state === 'approved' ? 'approved this revision' : item.value.state === 'changes_requested' ? 'requested changes' : 'finished a review'}</span><Time class="end" value={item.value.createdAt} /></header>{#if item.value.body}<div class="review-body"><MarkdownBody source={item.value.body} context={markdownContext} /></div>{/if}</article>
+  {:else if item.kind === 'thread'}
+    <ReviewThread thread={item.value} {busy} interactive={pull.canManage && !pull.locked} context={markdownContext} onLoadContext={loadThreadContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
+  {:else}
+    <article class="comment"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} context={markdownContext} compact minHeight={82} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}</div></article>
+  {/if}
+{/snippet}
+
 <Seo title={`${pull?.title ?? `Pull !${number}`} · ${owner}/${repo} · Marl`} description={seoExcerpt(pull?.body, `${pull?.title ?? `Pull !${number}`} — proposed changes for ${owner}/${repo}.`)} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 {#if !pull}
@@ -422,24 +482,50 @@
         <section class="activity">
           <header><h2>Review activity</h2></header>
           <div class="timeline">
-            {#each timeline.order as key, index (key)}
-              {@const item = timeline.items.get(key)}
-              {#if item}
-                {#if timeline.hidden > 0 && index === 2}<Button class="timeline-gap" variant="ghost" block loading={busy} onclick={loadOlderTimeline}>{timeline.hidden} updates hidden <span>Load earlier activity</span></Button>{/if}
-                {#if item.kind === 'event'}
-                  <PullTimelineEvent event={item.value} />
-                {:else if item.kind === 'reference'}
-                  <ReferenceTimelineEvent reference={item.value} />
-                {:else if item.kind === 'review'}
-                  <article class="review-entry {item.value.state}"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>{item.value.state === 'approved' ? 'approved this revision' : item.value.state === 'changes_requested' ? 'requested changes' : 'finished a review'}</span><Time class="end" value={item.value.createdAt} /></header>{#if item.value.body}<div class="review-body"><MarkdownBody source={item.value.body} context={markdownContext} /></div>{/if}</article>
-                {:else if item.kind === 'thread'}
-                  <ReviewThread thread={item.value} {busy} interactive={pull.canManage && !pull.locked} context={markdownContext} onLoadContext={loadThreadContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
-                {:else}
-                  <article class="comment"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} context={markdownContext} compact minHeight={82} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}</div></article>
+            {#each previousRevisions as revision (revision.sequence)}
+              {@const expanded = expandedRevisions.includes(revision.sequence)}
+              <section class="revision-group" class:expanded>
+                <button class="revision-toggle" type="button" aria-expanded={expanded} onclick={() => toggleRevision(revision)}>
+                  <span class="revision-identity"><strong>Revision {revision.number}</strong><code>{revision.commitId.slice(0, 7)}</code>{#if revision.forcePushed}<span>force-pushed</span>{/if}</span>
+                  <span class="revision-title">{revision.title}</span>
+                  <span class="revision-facts">{revision.actorDisplayName || revision.actor} · <Time value={revision.createdAt} /> · {countCopy(revision.commitCount, 'commit')} · {revisionReviewCopy(revision.reviewState)} · {countCopy(revision.conversationCount, 'conversation')}</span>
+                  <ChevronDown class="revision-chevron" size={16} />
+                </button>
+                {#if expanded}
+                  <div class="revision-activity">
+                    {#if loadingRevisions.includes(revision.sequence)}
+                      <div class="revision-loading" aria-label="Loading revision activity"><span></span><span></span></div>
+                    {:else}
+                      {#each timeline.revisionItems(revision.sequence) as item (`${item.kind}:${item.value.id}`)}
+                        {@render timelineEntry(item)}
+                      {:else}
+                        <p class="quiet-activity">No discussion on this revision.</p>
+                      {/each}
+                    {/if}
+                  </div>
                 {/if}
-              {/if}
-            {:else}<p class="quiet-activity">No review activity yet. The brief and latest revision are ready for a first pass.</p>{/each}
-            {#if data.shellUser}<PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser.displayName} avatarUrl={data.shellUser.avatarUrl} onComment={addPullComment} onAction={composerAction} />{/if}
+              </section>
+            {/each}
+            {#if currentRevision}
+              <section class="revision-group current-revision">
+                <header class="current-revision-head">
+                  <div class="revision-identity"><strong>Revision {currentRevision.number}</strong><code>{currentRevision.commitId.slice(0, 7)}</code><span>current{currentRevision.forcePushed ? ' · force-pushed' : ''}</span></div>
+                  <p>{currentRevision.title}</p>
+                  <small><UserProfileLink handle={currentRevision.actor} displayName={currentRevision.actorDisplayName} avatar={false} /> pushed <Time value={currentRevision.createdAt} /> · {countCopy(currentRevision.commitCount, 'commit')}</small>
+                </header>
+                <div class="revision-activity current-activity">
+                  {#each timeline.order as key (key)}
+                    {@const item = timeline.items.get(key)}
+                    {#if item}{@render timelineEntry(item)}{/if}
+                  {:else}
+                    <p class="quiet-activity">No review activity on this revision yet.</p>
+                  {/each}
+                  {#if data.shellUser}<PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser.displayName} avatarUrl={data.shellUser.avatarUrl} onComment={addPullComment} onAction={composerAction} />{/if}
+                </div>
+              </section>
+            {:else}
+              <p class="quiet-activity">No review activity yet. The brief is ready for a first pass.</p>
+            {/if}
           </div>
         </section>
       </main>
@@ -463,14 +549,13 @@
 {/if}
 
 <style>
-  .timeline>.comment,.timeline>.review-entry{content-visibility:auto;contain-intrinsic-size:auto 120px}
-  :global(.timeline-gap.button){height:auto;min-height:36px;background:var(--surface-muted);font-size:9px}:global(.timeline-gap.button span){color:var(--brand);font-weight:650}.changes-loading{height:260px;border-radius:8px;background:var(--surface-muted);animation:changes-loading 1.2s ease-in-out infinite alternate}@keyframes changes-loading{to{opacity:.48}}
+  .revision-activity>.comment,.revision-activity>.review-entry{content-visibility:auto;contain-intrinsic-size:auto 120px}.changes-loading{height:260px;border-radius:8px;background:var(--surface-muted);animation:changes-loading 1.2s ease-in-out infinite alternate}@keyframes changes-loading{to{opacity:.48}}
   .fatal{padding:70px 20px;text-align:center;color:var(--text-faint)}.fatal strong{display:block;margin-top:10px;color:var(--text-strong)}.fatal p{font-size:11px}.fatal a{color:var(--brand);font-size:11px}.pr-header{padding:2px 0 22px}.title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:16px}.title-row h1{margin:0;color:var(--text-strong);font-size:25px;font-weight:680;letter-spacing:-.03em;line-height:1.18;text-wrap:balance}.title-row h1 span{color:var(--text-faint);font-size:16px;font-weight:540;letter-spacing:-.01em;white-space:nowrap}.revision-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:10px 0 0;color:var(--text-faint);font-size:10px}.revision-line .state-copy{color:var(--text-muted);font-weight:650;text-transform:capitalize}.revision-line code{padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text-strong)}.revision-line :global(.user-profile-link){font-size:10px}
   .tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px}.tabs .count{display:inline-grid;min-width:18px;height:18px;place-items:center;padding:0 5px;border-radius:999px;background:var(--surface-muted);color:var(--text-faint);font-size:9px}.tabs :global(.chip.active .count){background:color-mix(in srgb,var(--brand) 13%,var(--surface-muted));color:var(--brand-strong)}.action-error{display:grid;grid-template-columns:18px minmax(0,1fr) 30px;align-items:center;gap:6px;margin:-8px 0 14px;padding:8px 8px 8px 11px;border-left:2px solid var(--danger);border-radius:0 6px 6px 0;background:var(--danger-soft);color:var(--danger);font-size:10px}
-  .overview-layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;align-items:start;gap:46px}.workspace{display:grid;gap:38px}.brief{padding:15px 17px 18px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface)}.brief>header,.activity>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:660;letter-spacing:-.01em}.brief-body{padding-top:15px;color:var(--text);font-size:12px;line-height:1.65;text-wrap:pretty}.activity>header{margin:0 4px 14px}.timeline{display:grid;gap:14px}.comment,.review-entry{padding:11px 13px 13px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface);transition:box-shadow 140ms ease}.comment:hover,.review-entry:hover{box-shadow:var(--shadow-surface-hover)}.comment>header,.review-entry>header{display:flex;align-items:center;gap:6px;min-height:28px;color:var(--text-muted);font-size:10px}.comment>header :global(.user-profile-link),.review-entry>header :global(.user-profile-link){font-size:10px}.comment>div,.review-body{padding:9px 0 0 33px;text-wrap:pretty}.review-entry.approved{box-shadow:inset 2px 0 var(--success),var(--shadow-surface)}.review-entry.changes_requested{box-shadow:inset 2px 0 var(--danger),var(--shadow-surface)}.review-entry.approved:hover{box-shadow:inset 2px 0 var(--success),var(--shadow-surface-hover)}.review-entry.changes_requested:hover{box-shadow:inset 2px 0 var(--danger),var(--shadow-surface-hover)}.review-entry.approved>header>span{color:var(--success)}.review-entry.changes_requested>header>span{color:var(--danger)}.comment-actions{display:flex;gap:3px;margin-left:8px}.comment-edit-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}.deleted,.quiet-activity{margin:0;color:var(--text-faint);font-size:10px;font-style:italic}.quiet-activity{padding:24px 4px;font-style:normal}.sidebar{position:sticky;top:68px}
+  .overview-layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;align-items:start;gap:46px}.workspace{display:grid;gap:38px}.brief{padding:15px 17px 18px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface)}.brief>header,.activity>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:660;letter-spacing:-.01em}.brief-body{padding-top:15px;color:var(--text);font-size:12px;line-height:1.65;text-wrap:pretty}.activity>header{margin:0 4px 14px}.timeline{display:grid;gap:10px}.revision-group{overflow:clip;border-radius:11px;background:color-mix(in srgb,var(--surface-muted) 72%,transparent);box-shadow:var(--shadow-surface)}.revision-toggle{display:grid;width:100%;min-height:74px;grid-template-columns:minmax(0,1fr) 34px;grid-template-areas:'identity chevron' 'title chevron' 'facts chevron';align-items:center;gap:3px 12px;padding:11px 10px 12px 15px;border:0;outline:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition-property:background-color;transition-duration:140ms;transition-timing-function:ease}.revision-toggle:hover{background:var(--surface-hover)}.revision-toggle:focus-visible{box-shadow:inset 0 0 0 2px var(--brand)}.revision-identity{grid-area:identity;display:flex;min-width:0;align-items:center;gap:7px}.revision-identity strong{color:var(--text-strong);font-size:11px;font-weight:680}.revision-identity code{color:var(--brand);font-size:9px;font-variant-numeric:tabular-nums}.revision-identity>span{color:var(--text-faint);font-size:9px}.revision-title{grid-area:title;overflow:hidden;color:var(--text);font-size:11px;font-weight:580;text-overflow:ellipsis;white-space:nowrap}.revision-facts{grid-area:facts;color:var(--text-faint);font-size:9px;font-variant-numeric:tabular-nums}.revision-chevron{grid-area:chevron;justify-self:center;color:var(--text-faint);transition-property:transform,color;transition-duration:180ms;transition-timing-function:cubic-bezier(.2,0,0,1)}.revision-group.expanded .revision-chevron{transform:rotate(180deg);color:var(--text-muted)}.current-revision{padding-top:1px;background:color-mix(in srgb,var(--surface-muted) 84%,transparent)}.current-revision-head{padding:13px 15px 12px}.current-revision-head .revision-identity>span{color:var(--brand);font-weight:650}.current-revision-head p{overflow:hidden;margin:4px 0 0;color:var(--text-strong);font-size:11px;font-weight:620;text-overflow:ellipsis;white-space:nowrap}.current-revision-head small{display:flex;align-items:center;gap:3px;margin-top:4px;color:var(--text-faint);font-size:9px}.current-revision-head small :global(.user-profile-link){color:var(--text-muted);font-size:9px}.revision-activity{display:grid;gap:12px;padding:3px 10px 12px}.revision-loading{display:grid;gap:8px;padding:10px 3px 3px}.revision-loading span{height:48px;border-radius:8px;background:var(--surface);animation:changes-loading 1.2s ease-in-out infinite alternate}.revision-loading span:last-child{width:72%;height:70px}.comment,.review-entry{padding:11px 13px 13px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface);transition-property:box-shadow;transition-duration:140ms;transition-timing-function:ease}.comment:hover,.review-entry:hover{box-shadow:var(--shadow-surface-hover)}.comment>header,.review-entry>header{display:flex;align-items:center;gap:6px;min-height:28px;color:var(--text-muted);font-size:10px}.comment>header :global(.user-profile-link),.review-entry>header :global(.user-profile-link){font-size:10px}.comment>div,.review-body{padding:9px 0 0 33px;text-wrap:pretty}.review-entry.approved{box-shadow:inset 2px 0 var(--success),var(--shadow-surface)}.review-entry.changes_requested{box-shadow:inset 2px 0 var(--danger),var(--shadow-surface)}.review-entry.approved:hover{box-shadow:inset 2px 0 var(--success),var(--shadow-surface-hover)}.review-entry.changes_requested:hover{box-shadow:inset 2px 0 var(--danger),var(--shadow-surface-hover)}.review-entry.approved>header>span{color:var(--success)}.review-entry.changes_requested>header>span{color:var(--danger)}.comment-actions{display:flex;gap:3px;margin-left:8px}.comment-edit-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}.deleted,.quiet-activity{margin:0;color:var(--text-faint);font-size:10px;font-style:italic}.quiet-activity{padding:24px 4px;font-style:normal}.sidebar{position:sticky;top:68px}
   .commit-list{display:grid;gap:4px}.commit-list>article{position:relative;display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;min-height:62px;padding:8px 10px;border-radius:8px;color:inherit}.commit-list>article:hover{background:var(--surface-hover)}.commit-mark{display:grid;width:28px;height:28px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}.commit-list .commit-title,.commit-list small{display:block}.commit-list .commit-title{color:var(--text-strong);font-size:11px;font-weight:650;text-decoration:none}.commit-list .commit-title::after{position:absolute;inset:0;content:''}.commit-list small{display:flex;align-items:center;gap:3px;margin-top:3px;color:var(--text-faint);font-size:9px}.commit-list small :global(.user-profile-link){position:relative;z-index:1;color:var(--text-muted);font-size:9px}.commit-list small i{display:inline-flex;align-items:center;gap:3px;margin-left:7px;color:var(--success);font-style:normal;font-weight:650}.commit-list code{color:var(--text-muted);font-size:9px}.commit-list>div{padding:45px;text-align:center}.commit-list>div strong{font-size:12px}.commit-list>div p{color:var(--text-faint);font-size:10px}
   .changes-view{min-height:calc(100dvh / var(--interface-scale) - 64px);scroll-margin-top:64px}.changes-head{display:flex;min-height:58px;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;padding:0 5px}.changes-head>div:first-child strong,.changes-head>div:first-child span{display:block}.changes-head>div:first-child strong{color:var(--text-strong);font-size:11px}.changes-head>div:first-child span{margin-top:3px;color:var(--text-faint);font-size:9px}
   .checks-page>header{padding:14px 5px}.checks-page h2{margin:0;color:var(--text-strong);font-size:12px}.checks-page header p{margin:4px 0 0;color:var(--text-faint);font-size:9px}.checks-page article{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;min-height:65px;padding:10px 5px}.check-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px}.check-icon.success{background:var(--success-soft);color:var(--success)}.check-icon.failure{background:var(--danger-soft);color:var(--danger)}.check-icon.running,.check-icon.queued{background:var(--brand-soft);color:var(--brand)}.checks-page article strong{color:var(--text-strong);font-size:11px}.checks-page article p{margin:3px 0 0;color:var(--text-faint);font-size:9px}.checks-page article>span:last-child{color:var(--text-muted);font-size:9px;text-transform:capitalize}.empty-checks{padding:50px 20px;color:var(--text-faint);text-align:center}.empty-checks strong{display:block;margin-top:9px;color:var(--text-strong);font-size:12px}.empty-checks p{font-size:10px}
   .details-editor{display:grid;gap:14px}.details-editor label>span{display:block;margin-bottom:6px;color:var(--text-muted);font-size:9px;font-weight:620}.details-editor input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:7px;outline:0;background:var(--surface);color:var(--text-strong);font-size:11px}.details-editor input:focus{border-color:var(--brand)}
-  @media(max-width:900px){.overview-layout{grid-template-columns:1fr;gap:42px}.sidebar{position:static}}@media(max-width:600px){.title-row{grid-template-columns:1fr}.title-row>:global(.button){justify-self:start}.title-row h1{font-size:21px}.title-row h1 span{font-size:14px}.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.brief{padding:13px 14px 16px}.comment,.review-entry{padding:10px 11px 12px}.comment>div,.review-body{padding-left:0}}
+  @media(max-width:900px){.overview-layout{grid-template-columns:1fr;gap:42px}.sidebar{position:static}}@media(max-width:600px){.title-row{grid-template-columns:1fr}.title-row>:global(.button){justify-self:start}.title-row h1{font-size:21px}.title-row h1 span{font-size:14px}.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.brief{padding:13px 14px 16px}.revision-toggle{min-height:78px;padding-left:13px}.revision-facts{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.current-revision-head{padding-inline:13px}.revision-activity{padding-inline:7px}.comment,.review-entry{padding:10px 11px 12px}.comment>div,.review-body{padding-left:0}}
 </style>

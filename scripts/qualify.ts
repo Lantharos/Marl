@@ -203,7 +203,6 @@ try {
     cwd: source
   });
   await commitMarker('timeline first commit');
-  const timelineFirst = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
   await commitMarker('timeline second commit');
   const timelineSecond = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
   await client.git(['push', '--set-upstream', 'origin', 'qualification/timeline'], token);
@@ -236,8 +235,9 @@ try {
   });
   const initialTimeline = await client.request<PullQualificationDetail>(timelinePath);
   assert(initialTimeline.pullRequest.state === 'mergeable', 'Reopened pull request was not mergeable.');
-  assert(initialTimeline.pullRequest.events.some((event) => event.kind === 'ready') && initialTimeline.pullRequest.events.some((event) => event.kind === 'closed') && initialTimeline.pullRequest.events.some((event) => event.kind === 'reopened'), 'Pull request lifecycle events are incomplete.');
-  assertCommitHistory(initialTimeline, [timelineFirst, timelineSecond]);
+  const initialEvents = timelineEvents(initialTimeline);
+  assert(initialEvents.includes('ready') && initialEvents.includes('closed') && initialEvents.includes('reopened'), 'Pull request lifecycle events are incomplete.');
+  assertRevisionHistory(initialTimeline, [timelineSecond]);
 
   await commitMarker('timeline fast-forward commit');
   const timelineFastForward = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
@@ -247,8 +247,8 @@ try {
     (value) => value.pullRequest.sourceCommitId === timelineFastForward,
     'Pull request did not synchronize a fast-forward push'
   );
-  assert(!fastForwardDetail.pullRequest.events.some((event) => event.kind === 'force_pushed'), 'A fast-forward push was recorded as a force push.');
-  assertCommitHistory(fastForwardDetail, [timelineFirst, timelineSecond, timelineFastForward]);
+  assertRevisionHistory(fastForwardDetail, [timelineSecond, timelineFastForward]);
+  assert(!fastForwardDetail.pullRequest.timeline.revisions.at(-1)?.forcePushed, 'A fast-forward push was recorded as a force push.');
 
   await run(['git', 'reset', '--hard', 'origin/main'], { cwd: source });
   await commitMarker('timeline rewritten commit');
@@ -256,17 +256,10 @@ try {
   await client.git(['push', '--force-with-lease', 'origin', 'qualification/timeline'], token);
   const rewrittenDetail = await client.waitFor(
     () => client.request<PullQualificationDetail>(timelinePath),
-    (value) => value.pullRequest.sourceCommitId === timelineRewritten && value.pullRequest.events.some((event) => event.kind === 'force_pushed'),
-    'Pull request did not preserve a force-push timeline event'
+    (value) => value.pullRequest.sourceCommitId === timelineRewritten && value.pullRequest.timeline.revisions.at(-1)?.forcePushed === true,
+    'Pull request did not preserve a force-push revision boundary'
   );
-  assertCommitHistory(rewrittenDetail, [timelineRewritten]);
-  const rewrittenUpdates = await client.request<{
-    updates: Array<{ kind: string; payload: { timelineRemoved?: unknown[] } }>;
-  }>(`${timelinePath}/updates?after=${fastForwardDetail.pullRequest.realtimeVersion}`);
-  assert(
-    rewrittenUpdates.updates.some((update) => update.kind === 'pull.synchronized' && Array.isArray(update.payload.timelineRemoved) && update.payload.timelineRemoved.length > 0),
-    'Force-push realtime updates did not remove the rewritten commit history.'
-  );
+  assertRevisionHistory(rewrittenDetail, [timelineSecond, timelineFastForward, timelineRewritten]);
   assert(rewrittenDetail.pullRequest.commits.length === 1 && rewrittenDetail.pullRequest.commits[0]?.id === timelineRewritten, 'Current pull request commits did not follow the rewritten head.');
   const rewrittenDiff = await client.request<{ files: unknown[] }>(`${timelinePath}/diff`);
   assert(rewrittenDiff.files.length > 0, 'Pull request diff was empty after a force push.');
@@ -310,10 +303,10 @@ try {
     });
     assert(merged.commitId === retried.commitId, `${method} merge retry produced a different commit.`);
     const detail = await client.request<{
-      pullRequest: { events: Array<{ kind: string }> };
+      pullRequest: { timeline: { items: Array<{ kind: string; value: { kind?: string } }> } };
     }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}`);
     assert(
-      detail.pullRequest.events.some((event) => event.kind === 'merged'),
+      detail.pullRequest.timeline.items.some((item) => item.kind === 'event' && item.value.kind === 'merged'),
       `${method} merge was not recorded in the timeline.`
     );
   }
@@ -462,25 +455,20 @@ type PullQualificationDetail = {
     sourceCommitId: string;
     realtimeVersion: number;
     commits: Array<{ id: string }>;
-    events: Array<{ kind: string; details: Record<string, string> }>;
+    timeline: {
+      items: Array<{ kind: string; value: { kind?: string } }>;
+      revisions: Array<{ commitId: string; forcePushed: boolean }>;
+    };
   };
 };
 
-function assertCommitHistory(detail: PullQualificationDetail, expected: string[]) {
-  const recorded = new Set(
-    detail.pullRequest.events.flatMap((event) => {
-      if (event.kind !== 'commits_added') return [];
-      try {
-        const commits = JSON.parse(event.details.commits ?? '[]') as Array<{
-          id?: unknown;
-        }>;
-        return commits.flatMap((commit) => (typeof commit.id === 'string' ? [commit.id] : []));
-      } catch {
-        return [];
-      }
-    })
-  );
-  assert(recorded.size === expected.length && expected.every((commit) => recorded.has(commit)), 'Pull request timeline does not match the current branch history.');
+function assertRevisionHistory(detail: PullQualificationDetail, expected: string[]) {
+  const recorded = detail.pullRequest.timeline.revisions.map((revision) => revision.commitId);
+  assert(recorded.length === expected.length && expected.every((commit, index) => recorded[index] === commit), 'Pull request revision history is incomplete.');
+}
+
+function timelineEvents(detail: PullQualificationDetail) {
+  return detail.pullRequest.timeline.items.flatMap((item) => item.kind === 'event' && item.value.kind ? [item.value.kind] : []);
 }
 
 async function cleanupDockerJobs(ids: Set<string>) {

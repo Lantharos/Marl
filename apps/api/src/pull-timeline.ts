@@ -1,41 +1,35 @@
-import type { PullTimelineItem, PullTimelineWindow } from '@marl/contracts';
+import type { PullRevisionWindow, PullTimelineItem, PullTimelineWindow } from '@marl/contracts';
 import type { Principal } from './auth';
 import type { Env } from './platform';
+import { summarizePullRevisions, type RevisionBoundary, type RevisionReview, type RevisionTimelineRow } from './pull-revisions';
 import { hydrateReferenceEvents } from './work-item-references';
 
-type TimelineRow = { sequence: number; kind: PullTimelineItem['kind']; entityId: string; createdAt: string };
+type TimelineRow = RevisionTimelineRow;
 
-export async function initialPullTimeline(env: Env, principal: Principal | null, pullId: string): Promise<PullTimelineWindow> {
-  const [first, recent, count] = await Promise.all([
-    timelineRows(env, pullId, 'ORDER BY sequence LIMIT 2'),
-    timelineRows(env, pullId, 'ORDER BY sequence DESC LIMIT 30'),
-    env.DB.prepare('SELECT COUNT(*) AS count FROM pull_timeline WHERE pull_request_id=?').bind(pullId).first<{ count: number }>()
+export async function initialPullTimeline(env: Env, principal: Principal | null, pullId: string, currentHead: string): Promise<PullTimelineWindow> {
+  const [rows, boundaries, reviews] = await Promise.all([
+    timelineRows(env, pullId, 'ORDER BY sequence'),
+    revisionBoundaries(env, pullId),
+    env.DB.prepare('SELECT id,author_id AS authorId,state FROM pull_request_reviews WHERE pull_request_id=? ORDER BY created_at,id').bind(pullId).all<RevisionReview>().then((result) => result.results)
   ]);
-  const rows = uniqueRows([...first, ...recent]).sort((a, b) => a.sequence - b.sequence);
-  const total = Number(count?.count ?? 0);
+  const revisions = summarizePullRevisions(rows, boundaries, reviews, currentHead);
+  const currentRevision = revisions.at(-1);
+  const visibleRows = currentRevision ? rows.filter((row) => row.sequence > currentRevision.sequence) : rows;
   return {
-    items: await hydrateTimeline(env, principal, rows),
-    total,
-    hidden: Math.max(0, total - rows.length),
-    loadBeforeSequence: recent.length ? Math.min(...recent.map((row) => row.sequence)) : undefined,
-    firstBoundarySequence: first.length ? Math.max(...first.map((row) => row.sequence)) : undefined,
-    newestLoadedSequence: rows.at(-1)?.sequence
+    items: await hydrateTimeline(env, principal, visibleRows),
+    total: revisions.length ? revisions.reduce((total, revision) => total + revision.activityCount, 0) : rows.length,
+    revisions
   };
 }
 
-export async function olderPullTimeline(env: Env, principal: Principal | null, pullId: string, before: number, after: number): Promise<PullTimelineWindow> {
-  const rows = await env.DB.prepare(`SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM pull_timeline WHERE pull_request_id=? AND sequence<? AND sequence>? ORDER BY sequence DESC LIMIT 30`).bind(pullId, before, after).all<TimelineRow>();
-  const ordered = rows.results.reverse();
-  const oldest = ordered[0]?.sequence ?? before;
-  const remaining = await env.DB.prepare('SELECT COUNT(*) AS count FROM pull_timeline WHERE pull_request_id=? AND sequence<? AND sequence>?').bind(pullId, oldest, after).first<{ count: number }>();
-  return {
-    items: await hydrateTimeline(env, principal, ordered),
-    total: Number(remaining?.count ?? 0) + ordered.length,
-    hidden: Number(remaining?.count ?? 0),
-    loadBeforeSequence: oldest,
-    firstBoundarySequence: after,
-    newestLoadedSequence: ordered.at(-1)?.sequence
-  };
+export async function pullRevisionTimeline(env: Env, principal: Principal | null, pullId: string, sequence: number): Promise<PullRevisionWindow | null> {
+  const boundary = await env.DB.prepare(`SELECT pull_timeline.sequence FROM pull_timeline JOIN pull_request_events ON pull_request_events.id=pull_timeline.entity_id WHERE pull_timeline.pull_request_id=? AND pull_timeline.sequence=? AND pull_timeline.kind='event' AND pull_request_events.kind='commits_added'`).bind(pullId, sequence).first<{ sequence: number }>();
+  if (!boundary) return null;
+  const next = await env.DB.prepare(`SELECT MIN(pull_timeline.sequence) AS sequence FROM pull_timeline JOIN pull_request_events ON pull_request_events.id=pull_timeline.entity_id WHERE pull_timeline.pull_request_id=? AND pull_timeline.sequence>? AND pull_timeline.kind='event' AND pull_request_events.kind='commits_added'`).bind(pullId, sequence).first<{ sequence?: number }>();
+  const result = next?.sequence
+    ? await env.DB.prepare('SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM pull_timeline WHERE pull_request_id=? AND sequence>? AND sequence<? ORDER BY sequence').bind(pullId, sequence, next.sequence).all<TimelineRow>()
+    : await env.DB.prepare('SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM pull_timeline WHERE pull_request_id=? AND sequence>? ORDER BY sequence').bind(pullId, sequence).all<TimelineRow>();
+  return { sequence, items: await hydrateTimeline(env, principal, result.results) };
 }
 
 export async function allPullThreads(env: Env, principal: Principal | null, pullId: string): Promise<PullTimelineItem[]> {
@@ -47,8 +41,8 @@ function timelineRows(env: Env, pullId: string, suffix: string): Promise<Timelin
   return env.DB.prepare(`SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM pull_timeline WHERE pull_request_id=? ${suffix}`).bind(pullId).all<TimelineRow>().then((result) => result.results);
 }
 
-function uniqueRows(rows: TimelineRow[]): TimelineRow[] {
-  return [...new Map(rows.map((row) => [row.sequence, row])).values()];
+function revisionBoundaries(env: Env, pullId: string): Promise<RevisionBoundary[]> {
+  return env.DB.prepare(`SELECT pull_timeline.sequence,users.handle AS actor,users.display_name AS actorDisplayName,pull_request_events.details,pull_request_events.created_at AS createdAt FROM pull_timeline JOIN pull_request_events ON pull_request_events.id=pull_timeline.entity_id JOIN users ON users.id=pull_request_events.actor_id WHERE pull_timeline.pull_request_id=? AND pull_timeline.kind='event' AND pull_request_events.kind='commits_added' ORDER BY pull_timeline.sequence`).bind(pullId).all<Omit<RevisionBoundary, 'details'> & { details: string }>().then((result) => result.results.map((boundary) => ({ ...boundary, details: parseDetails(boundary.details) })));
 }
 
 async function hydrateTimeline(env: Env, principal: Principal | null, rows: TimelineRow[]): Promise<PullTimelineItem[]> {
