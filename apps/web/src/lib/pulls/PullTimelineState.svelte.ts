@@ -59,7 +59,7 @@ export class PullTimelineState {
       added.push(key);
     }
     if (!added.length) return;
-    this.order = [...this.order, ...added];
+    this.order = [...added.toReversed(), ...this.order];
     this.total += added.length;
   }
 
@@ -81,7 +81,7 @@ export class PullTimelineState {
 
   private sortedKeys(items: PullTimelineItem[]) {
     return [...items]
-      .sort((left, right) => left.sequence - right.sequence)
+      .sort((left, right) => right.sequence - left.sequence)
       .map((item) => timelineKey(item.kind, item.value.id));
   }
 }

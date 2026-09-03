@@ -250,7 +250,7 @@
     }
   }
 
-  const previousRevisions = $derived(timeline.revisions.filter((revision) => !revision.current));
+  const previousRevisions = $derived(timeline.revisions.filter((revision) => !revision.current).toReversed());
   const currentRevision = $derived(timeline.revisions.find((revision) => revision.current));
 
   function revisionReviewCopy(state: PullRevisionSummary['reviewState']) {
@@ -482,6 +482,24 @@
         <section class="activity">
           <header><h2>Review activity</h2></header>
           <div class="timeline">
+            {#if currentRevision}
+              <section class="revision-group current-revision">
+                <header class="current-revision-head">
+                  <div class="revision-identity"><strong>Revision {currentRevision.number}</strong><code>{currentRevision.commitId.slice(0, 7)}</code><span>current{currentRevision.forcePushed ? ' · force-pushed' : ''}</span></div>
+                  <p>{currentRevision.title}</p>
+                  <small><UserProfileLink handle={currentRevision.actor} displayName={currentRevision.actorDisplayName} avatar={false} /> pushed <Time value={currentRevision.createdAt} /> · {countCopy(currentRevision.commitCount, 'commit')}</small>
+                </header>
+                <div class="revision-activity current-activity">
+                  {#if data.shellUser}<PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser.displayName} avatarUrl={data.shellUser.avatarUrl} onComment={addPullComment} onAction={composerAction} />{/if}
+                  {#each timeline.order as key (key)}
+                    {@const item = timeline.items.get(key)}
+                    {#if item}{@render timelineEntry(item)}{/if}
+                  {:else}
+                    <p class="quiet-activity">No review activity on this revision yet.</p>
+                  {/each}
+                </div>
+              </section>
+            {/if}
             {#each previousRevisions as revision (revision.sequence)}
               {@const expanded = expandedRevisions.includes(revision.sequence)}
               <section class="revision-group" class:expanded>
@@ -506,26 +524,7 @@
                 {/if}
               </section>
             {/each}
-            {#if currentRevision}
-              <section class="revision-group current-revision">
-                <header class="current-revision-head">
-                  <div class="revision-identity"><strong>Revision {currentRevision.number}</strong><code>{currentRevision.commitId.slice(0, 7)}</code><span>current{currentRevision.forcePushed ? ' · force-pushed' : ''}</span></div>
-                  <p>{currentRevision.title}</p>
-                  <small><UserProfileLink handle={currentRevision.actor} displayName={currentRevision.actorDisplayName} avatar={false} /> pushed <Time value={currentRevision.createdAt} /> · {countCopy(currentRevision.commitCount, 'commit')}</small>
-                </header>
-                <div class="revision-activity current-activity">
-                  {#each timeline.order as key (key)}
-                    {@const item = timeline.items.get(key)}
-                    {#if item}{@render timelineEntry(item)}{/if}
-                  {:else}
-                    <p class="quiet-activity">No review activity on this revision yet.</p>
-                  {/each}
-                  {#if data.shellUser}<PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} avatarName={data.shellUser.displayName} avatarUrl={data.shellUser.avatarUrl} onComment={addPullComment} onAction={composerAction} />{/if}
-                </div>
-              </section>
-            {:else}
-              <p class="quiet-activity">No review activity yet. The brief is ready for a first pass.</p>
-            {/if}
+            {#if !currentRevision}<p class="quiet-activity">No review activity yet. The brief is ready for a first pass.</p>{/if}
           </div>
         </section>
       </main>

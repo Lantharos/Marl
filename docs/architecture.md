@@ -203,17 +203,19 @@ heads publish through the same delta stream.
 
 Each pushed pull-request head creates an immutable revision boundary with its head, base, commits,
 actor, and force-push state. Pull detail returns compact summaries for historical revisions and the
-current revision's activity. Opening a historical revision loads only that revision's comments,
-reviews, and threads; old line threads request their original pinned head and base so their code
-context remains accurate. Force pushes preserve earlier revision boundaries instead of rewriting
-the discussion record. Diffs and their review threads load only when the Changes tab is opened.
-Local mutations patch the returned entities directly and request the small merge-state projection
-only when an action can change merge eligibility.
+current revision's activity. The current revision and composer appear first, with top-level activity
+ordered newest-first; replies within a review thread remain chronological. Opening a historical
+revision loads only that revision's comments, reviews, and threads; old line threads request their
+original pinned head and base so their code context remains accurate. Force pushes preserve earlier
+revision boundaries instead of rewriting the discussion record. Diffs and their review threads load
+only when the Changes tab is opened. Local mutations patch the returned entities directly and
+request the small merge-state projection only when an action can change merge eligibility.
 
 Issues use their own repository-local number sequence instead of sharing pull-request numbers.
 Issue detail follows the same bounded timeline shape: the first two and latest thirty entries are
 server-rendered, with the exact middle window loaded backward by sequence cursor. List queries use
-keyset pagination and indexed repository, state, and update-time predicates. Metadata changes are
+keyset pagination and indexed repository, state, and update-time predicates. The composer and
+top-level activity are presented newest-first. Metadata changes are
 batched with their actor-attributed timeline events, while permission checks reuse the repository
 capability resolver rather than duplicating access rules.
 
