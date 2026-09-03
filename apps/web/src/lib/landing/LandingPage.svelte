@@ -5,7 +5,7 @@
   import LinkButton from '$lib/components/LinkButton.svelte';
   import Seo from '$lib/components/Seo.svelte';
 
-  const description = 'Marl is a code hosting platform for Git repositories, issues, pull requests, releases, and CI on self-hosted runners.';
+  const description = 'Marl is a code hosting platform for Git repositories, issues, pulls, releases, and CI on self-hosted runners.';
 </script>
 
 <Seo

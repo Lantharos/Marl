@@ -165,7 +165,7 @@
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" loading={busy === 'visibility'} onclick={changeVisibility}>Make {nextVisibility}</Button>{/snippet}
 </Modal>
 
-<Modal open={dialog === 'transfer'} title="Transfer ownership" description="The repository, pull requests, settings, and Git storage move together." onClose={() => (dialog = null)}>
+<Modal open={dialog === 'transfer'} title="Transfer ownership" description="The repository, pulls, settings, and Git storage move together." onClose={() => (dialog = null)}>
   {#snippet children()}<label class="modal-field"><span>Destination organization</span><Select bind:value={destination} ariaLabel="Destination organization" options={ownerOptions} /></label>{/snippet}
   {#snippet actions()}<Button size="small" onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy === 'transfer' || destination === owner} onclick={transfer}>Transfer repository</Button>{/snippet}
 </Modal>

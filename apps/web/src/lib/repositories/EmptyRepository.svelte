@@ -26,7 +26,7 @@
 <section class="empty-repository">
   <header>
     <span class="repository-mark"><GitBranch size={18} /></span>
-    <div><h1>This repository is empty</h1><p>Push the first branch to start browsing files, commits, pull requests, and releases in {name}.</p></div>
+    <div><h1>This repository is empty</h1><p>Push the first branch to start browsing files, commits, pulls, and releases in {name}.</p></div>
   </header>
 
   {#if canPush}

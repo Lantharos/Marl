@@ -26,7 +26,7 @@
   }));
 
   function triggerLabel(trigger: WorkflowTrigger) {
-    return trigger === 'workflow_dispatch' ? 'Manual' : trigger === 'pull_request' ? 'Pull request' : trigger[0].toUpperCase() + trigger.slice(1);
+    return trigger === 'workflow_dispatch' ? 'Manual' : trigger === 'pull_request' ? 'Pull' : trigger[0].toUpperCase() + trigger.slice(1);
   }
 </script>
 
@@ -36,14 +36,14 @@
 <PageHeader title="Workflows" description="Automation defined alongside your code." />
 <FilterBar placeholder="Search workflows" tabs={['All', 'Active', 'Success', 'Failure']} bind:active={activeFilter} bind:query />
 <section class="catalog">
-  {#each filtered as workflow}
+  {#each filtered as workflow (workflow.id)}
     <a class="workflow" href="/{owner}/{repo}/runs/workflows/{workflow.id}">
       <span class="workflow-icon" class:invalid={workflow.status === 'invalid'}><Zap size={17} /></span>
       <span class="identity">
         <strong>{workflow.name}</strong>
         <span class="path"><FileCode2 size={11} />{workflow.path}</span>
         <span class="triggers">
-          {#each workflow.triggers as trigger}
+          {#each workflow.triggers as trigger (trigger)}
             <span>{#if trigger === 'workflow_dispatch'}<MousePointerClick size={11} />{:else if trigger === 'schedule'}<Timer size={11} />{:else}<GitBranch size={11} />{/if}{triggerLabel(trigger)}</span>
           {/each}
         </span>

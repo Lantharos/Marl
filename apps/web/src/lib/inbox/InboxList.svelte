@@ -14,10 +14,10 @@
 
   function reason(item: InboxItem) {
     if (item.reason === 'mention') return 'mentioned you';
-    if (item.reason === 'assignment') return `assigned this ${item.kind === 'pull' ? 'pull request' : 'issue'} to you`;
+    if (item.reason === 'assignment') return `assigned this ${item.kind === 'pull' ? 'pull' : 'issue'} to you`;
     if (item.reason === 'failure') return 'run you triggered failed';
-    if (item.reason === 'authored') return `updated ${item.kind === 'pull' ? 'a pull request' : 'an issue'} you opened`;
-    return `updated ${item.kind === 'pull' ? 'a pull request' : 'an issue'} you joined`;
+    if (item.reason === 'authored') return `updated ${item.kind === 'pull' ? 'a pull' : 'an issue'} you opened`;
+    return `updated ${item.kind === 'pull' ? 'a pull' : 'an issue'} you joined`;
   }
 
   async function open(event: MouseEvent, item: InboxItem) {

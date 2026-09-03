@@ -32,10 +32,10 @@
 
 <Seo title={`Issues · ${owner}/${repo} · Marl`} description={`Track bugs, ideas, and project work for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <div class="page">
-  <PageHeader title="Issues" description="Track bugs, ideas, and work for this repository." actionHref={data.shellUser ? `/issues/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? 'New issue' : undefined} />
+  <PageHeader title="Issues" description="Turn questions and proposals into owned work." actionHref={data.shellUser ? `/issues/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? 'New issue' : undefined} />
   <FilterBar placeholder="Search issues" tabs={['Open', 'Closed', 'All']} labelOptions={data.availableLabels} bind:active bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(active, query, labels)} />
-  <IssueList {issues} emptyTitle={query || selectedLabels.length ? 'No matching issues' : `No ${active.toLowerCase()} issues`} emptyDescription={query || selectedLabels.length ? 'Try another search or remove a label filter.' : 'New issues will appear here.'} />
+  <IssueList {issues} grouped={active === 'Open'} emptyTitle={query || selectedLabels.length ? 'No matching issues' : `No ${active.toLowerCase()} issues`} emptyDescription={query || selectedLabels.length ? 'Try another search or remove a label filter.' : 'New issues will appear here.'} />
   {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}
   {#if nextCursor}<Button class="load" loading={loading} onclick={loadMore}>Load more</Button>{/if}
 </div>
-<style>.page{width:min(920px,100%);margin:0 auto}.load-error{margin:16px 0 0;color:var(--danger);font-size:10px;text-align:center}.page :global(.load.button){display:flex;margin:18px auto 0}</style>
+<style>.page{width:min(1040px,100%);margin:0 auto}.load-error{margin:16px 0 0;color:var(--danger);font-size:10px;text-align:center}.page :global(.load.button){display:flex;margin:20px auto 0}</style>

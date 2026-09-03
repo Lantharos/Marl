@@ -1,6 +1,6 @@
 # Marl
 
-Marl is a focused code-hosting platform for repositories, issues, pull requests, and self-hosted CI.
+Marl is a focused code-hosting platform for repositories, issues, pulls, and self-hosted CI.
 
 This repository is undergoing a ground-up rebuild. The current product contract lives in
 [`docs/product.md`](docs/product.md), and the implementation boundaries live in
@@ -103,7 +103,7 @@ Marl has six primary product surfaces:
 - Inbox: mentions, assignments, and relevant updates.
 - Code: repositories, files, branches, and history.
 - Issues: repository work, discussion, assignment, and triage.
-- Pull requests: review, checks, and merging.
+- Pulls: review, checks, and merging.
 - Runs: self-hosted CI jobs, live logs, and artifacts.
 
 Features outside that loop are intentionally deferred.

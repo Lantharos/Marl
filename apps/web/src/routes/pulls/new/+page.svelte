@@ -5,6 +5,7 @@
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import FileDiff from 'lucide-svelte/icons/file-diff';
+  import CircleDot from 'lucide-svelte/icons/circle-dot';
   import Checkbox from '$lib/components/Checkbox.svelte';
   import Button from '$lib/components/Button.svelte';
   import FormShell from '$lib/components/FormShell.svelte';
@@ -22,8 +23,8 @@
   let repository = $state(untrack(() => data.repository));
   let base = $state(untrack(() => data.base));
   let compare = $state(untrack(() => data.compare));
-  let title = $state('');
-  let body = $state('');
+  let title = $state(untrack(() => data.linkedIssue?.title ?? ''));
+  let body = $state(untrack(() => data.linkedIssue ? `Fixes #${data.linkedIssue.number}\n\n` : ''));
   let draft = $state(false);
   let comparison = $state<PullRequestDiff | null>(untrack(() => data.comparison));
   let comparing = $state(false);
@@ -102,19 +103,24 @@
     try {
       const result = await api<{ pullRequest: { number: number } }>(`/repositories/${owner}/${name}/pulls`, { method: 'POST', body: JSON.stringify({ title, body, sourceRepository, sourceBranch: compare, targetBranch: base, draft }) });
       await goto(`/${owner}/${name}/pulls/${result.pullRequest.number}`);
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull request could not be created.'; creating = false; }
+    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull could not be created.'; creating = false; }
   }
 
 </script>
 
-<svelte:head><title>New pull request · Marl</title></svelte:head>
+<svelte:head><title>New pull · Marl</title></svelte:head>
 
-<FormShell title="Open a pull request" description="Compare live Git branches, describe the change, then open it for review.">
+<FormShell title="Open a pull" description="Choose the branches, frame the change, and give reviewers a clear starting point.">
   {#if error}<div class="error" role="alert"><CircleAlert size={15} />{error}</div>{/if}
   {#if repositories.length === 0}
-    <div class="empty"><strong>No repositories yet</strong><p>Create a repository and push branches before opening a pull request.</p><a href="/repositories/new">Create repository</a></div>
+    <div class="empty"><strong>No repositories yet</strong><p>Create a repository and push branches before opening a pull.</p><a href="/repositories/new">Create repository</a></div>
   {:else}
     <form class="form-grid" onsubmit={(event) => { event.preventDefault(); createPull(); }}>
+      {#if data.linkedIssue}
+        <a class="issue-context" href="/{data.linkedIssue.repository.owner}/{data.linkedIssue.repository.name}/issues/{data.linkedIssue.number}">
+          <CircleDot size={15} /><span><small>Moving issue #{data.linkedIssue.number} forward</small><strong>{data.linkedIssue.title}</strong></span>
+        </a>
+      {/if}
       <label class="field"><span>Repository</span><Select bind:value={repository} options={repositoryOptions} ariaLabel="Repository" onchange={loadBranches} /></label>
       <label class="field"><span>Source repository</span><Select bind:value={sourceRepository} options={sourceOptions} ariaLabel="Source repository" onchange={loadSource} /></label>
       <div class="compare">
@@ -128,13 +134,13 @@
       </div>
       <label class="field"><span>Title</span><input bind:value={title} maxlength="240" required placeholder="What changes, and why?" /></label>
       <label class="field"><span>Description</span><textarea bind:value={body} maxlength="100000" placeholder="Give reviewers the context they need."></textarea></label>
-      <Checkbox bind:checked={draft} label="Open as draft" description="Mark this pull request as not ready to merge." />
-      <div class="form-actions"><a href="/pulls">Cancel</a><Button type="submit" variant="primary" loading={creating} disabled={!comparison || !title.trim()}>{draft ? 'Open draft' : 'Open pull request'}</Button></div>
+      <Checkbox bind:checked={draft} label="Open as draft" description="Keep this pull out of the landing queue until it is ready." />
+      <div class="form-actions"><a href="/pulls">Cancel</a><Button type="submit" variant="primary" loading={creating} disabled={!comparison || !title.trim()}>{draft ? 'Open draft' : 'Open pull'}</Button></div>
     </form>
   {/if}
 </FormShell>
 
 <style>
-  .compare{display:grid;grid-template-columns:1fr 18px 1fr;align-items:center;gap:10px}.compare>:global(svg){margin-top:18px;color:var(--text-faint)}.comparison{display:flex;min-height:42px;align-items:center;gap:8px;padding:0 12px;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:10px}.comparison.busy{opacity:.65}.comparison small{display:flex;gap:6px;margin-left:auto}.comparison b{color:var(--success)}.comparison i{color:var(--danger);font-style:normal}.field textarea{min-height:130px;resize:vertical}.error{display:flex;align-items:center;gap:7px;padding:10px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:10px}.empty{padding:48px 20px;text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{color:var(--text-faint);font-size:10px}.empty a{color:var(--brand);font-size:10px}
+  .issue-context{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:8px;padding:6px 2px 10px;color:var(--success);text-decoration:none}.issue-context:hover strong{color:var(--brand)}.issue-context small,.issue-context strong{display:block}.issue-context small{color:var(--text-faint);font-size:8px}.issue-context strong{margin-top:2px;overflow:hidden;color:var(--text-strong);font-size:10px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}.compare{display:grid;grid-template-columns:1fr 18px 1fr;align-items:center;gap:10px}.compare>:global(svg){margin-top:18px;color:var(--text-faint)}.comparison{display:flex;min-height:42px;align-items:center;gap:8px;padding:0 2px;color:var(--text-muted);font-size:10px}.comparison.busy{opacity:.65}.comparison small{display:flex;gap:6px;margin-left:auto}.comparison b{color:var(--success)}.comparison i{color:var(--danger);font-style:normal}.field textarea{min-height:130px;resize:vertical}.error{display:flex;align-items:center;gap:7px;padding:10px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:10px}.empty{padding:48px 20px;text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{color:var(--text-faint);font-size:10px}.empty a{color:var(--brand);font-size:10px}
   @media(max-width:600px){.compare{grid-template-columns:1fr}.compare>:global(svg){display:none}.comparison{flex-wrap:wrap;padding-block:10px}}
 </style>

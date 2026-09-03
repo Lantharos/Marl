@@ -18,7 +18,7 @@ Every product decision must improve this loop:
 2. Capture and discuss work in an issue when it needs durable ownership or triage.
 3. Save a meaningful revision.
 4. Push it to Marl.
-5. Open a pull request.
+5. Open a pull.
 6. Review code and discuss specific lines.
 7. Run required checks on self-hosted runners.
 8. Resolve blockers and merge.
@@ -37,9 +37,9 @@ The public vocabulary is deliberately familiar:
 | Commit | A saved revision. |
 | Release | A named, downloadable version of a repository. |
 | Issue | A tracked unit of repository work or discussion. |
-| Pull request | A proposed merge from one branch into another. |
+| Pull | A proposed merge from one branch into another. |
 | Review | An approval, request for changes, or review comment. |
-| Check | One result attached to a commit or pull request. |
+| Check | One result attached to a commit or pull. |
 | Run | A collection of CI jobs triggered together. |
 | Runner | A self-hosted machine that executes jobs. |
 
@@ -53,7 +53,7 @@ The global application contains:
 - Home
 - Inbox
 - Issues
-- Pull requests
+- Pulls
 - Runs
 - Repositories
 - Runners
@@ -63,7 +63,7 @@ A repository contains:
 - Code
 - Releases
 - Issues
-- Pull requests
+- Pulls
 - Runs
 - Settings
 
@@ -83,7 +83,7 @@ personal work.
 ## Inbox
 
 Inbox answers one question: what changed that is relevant to me? It contains direct mentions,
-current issue and pull-request assignments, new activity on work the user authored or joined, and
+current issue and pull assignments, new activity on work the user authored or joined, and
 failed workflow runs triggered by that user. Read state and done state are personal and durable;
 newer activity moves a finished item back into the Inbox. Home previews the newest active items,
 while the full Inbox separates active, unread, and done work.
@@ -94,30 +94,37 @@ it can explain the direct relationship between the user and the work.
 ## Code
 
 Code browsing must preserve repository context while moving through branches, directories,
-files, and commits. The file tree, current branch, latest commit, path, and related pull
-request state should remain easy to reach.
+files, and commits. The file tree, current branch, latest commit, path, and related pull state
+should remain easy to reach.
 
 ## Issues
 
-Issues are repository-scoped work and discussion with numbering independent from pull requests.
-`#12` refers to issue 12 and `!12` refers to pull request 12 in the current repository, so both
+Issues are repository-scoped work and discussion with numbering independent from pulls.
+`#12` refers to issue 12 and `!12` refers to pull 12 in the current repository, so both
 can exist without ambiguity. Issues support open and closed states, editable descriptions and
 comments, durable deletion tombstones, assignees, repository labels, conversation locking, and a
 complete actor-attributed timeline. Global Issues provides one searchable queue across every
 repository the current user can read; repository Issues preserves label filtering and repository
-context. Only repository triage roles manage assignment, labels, and locks, while issue authors
+context. Open queues group work by its actual next move: in motion, needing a decision, or needing
+an owner. The issue page treats its editable work brief as the current source of truth and keeps
+decisions, comments, and references in a separate activity stream. When no pull is linked, an issue
+can open a prefilled pull that preserves the closing reference. Only repository triage roles manage
+assignment, labels, and locks, while issue authors
 can edit and close their own work. References in descriptions, comments, reviews, and review
 conversations create durable links and backlink timeline entries. References may use the current
 repository shorthand or a qualified form such as `lantharos/marl#12` and `lantharos/marl!7`.
 
-## Pull requests
+## Pulls
 
-Pull requests are Marl's flagship surface. A developer must be able to understand the
-proposal, review every file, follow conversations, inspect checks, and identify every merge
-blocker without hunting across unrelated screens.
+Pulls are Marl's flagship surface. The open queue is organized by the next useful action instead
+of chronology alone: ready to land, needing attention, in review, or still taking shape. A
+developer must be able to understand the proposal, review every file, follow conversations,
+inspect checks, and identify every merge blocker without hunting across unrelated screens.
 
-A pull request moves from draft to ready and can be closed or reopened without losing its
-review record. Its conversation includes replies, editable comments, durable deletion
+A pull moves from draft to ready and can be closed or reopened without losing its review record.
+Its overview leads with the current move and its merge requirements, keeps the editable change
+brief distinct from review activity, and names the exact head revision being discussed. Its
+activity includes replies, editable comments, durable deletion
 tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
 start line or range conversations directly from the changes view; those conversations also
 appear in the timeline with their exact file and line range, then collapse when resolved. Title,
@@ -126,9 +133,9 @@ timeline events. The conversation composer keeps comment, review, every allowed 
 close, and reopen actions together without navigating away. Choosing an action makes it the
 composer's primary submit behavior and includes the written comment when present. Assignees and
 repository labels make ownership and triage visible without replacing review state. The commits,
-changes, checks, and conversation views all describe the same pinned head revision.
+changes, checks, and overview views all describe the same pinned head revision.
 
-Pull request descriptions can close linked issues with `fixes`, `closes`, or `resolves`. Closing
+Pull descriptions can close linked issues with `fixes`, `closes`, or `resolves`. Closing
 occurs atomically with a successful merge into the repository's default branch; merging into any
 other branch preserves the link without changing issue state.
 

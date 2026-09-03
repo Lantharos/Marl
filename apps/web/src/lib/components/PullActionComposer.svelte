@@ -59,19 +59,19 @@
       }
       if (ready && canMerge) {
         for (const method of allowedMergeMethods) {
-          const label = method === 'merge' ? 'Merge pull request' : method === 'squash' ? 'Squash and merge' : 'Rebase and merge';
-          const description = method === 'merge' ? 'Create a merge commit on the target branch.' : method === 'squash' ? 'Combine the pull request into one commit.' : 'Replay these commits on the target branch.';
+          const label = method === 'merge' ? 'Merge pull' : method === 'squash' ? 'Squash and merge' : 'Rebase and merge';
+          const description = method === 'merge' ? 'Create a merge commit on the target branch.' : method === 'squash' ? 'Combine the pull into one commit.' : 'Replay these commits on the target branch.';
           items.push({ key: `merge:${method}`, action: 'merge', mergeMethod: method, label, description, tone: 'success' });
         }
       }
-      if (canManage) items.push({ key: 'close', action: 'close', label: 'Close pull request', description: 'Keep its commits and conversation.', tone: 'danger' });
+      if (canManage) items.push({ key: 'close', action: 'close', label: 'Close pull', description: 'Keep its commits and conversation.', tone: 'danger' });
     } else if (pullState === 'draft' && canManage) {
       items.push(
-        { key: 'ready', action: 'ready', label: 'Mark ready for review', description: 'Move this pull request into review.', tone: 'brand' },
-        { key: 'close', action: 'close', label: 'Close pull request', description: 'Keep its commits and conversation.', tone: 'danger' }
+        { key: 'ready', action: 'ready', label: 'Mark ready for review', description: 'Move this pull into review.', tone: 'brand' },
+        { key: 'close', action: 'close', label: 'Close pull', description: 'Keep its commits and conversation.', tone: 'danger' }
       );
     } else if (pullState === 'closed' && canManage) {
-      items.push({ key: 'reopen', action: 'reopen', label: 'Reopen pull request', description: 'Return it to active review.', tone: 'brand' });
+      items.push({ key: 'reopen', action: 'reopen', label: 'Reopen pull', description: 'Return it to active review.', tone: 'brand' });
     }
     return items;
   });
@@ -115,7 +115,7 @@
           {#if selected?.action === 'approve'}<BadgeCheck size={13} />{:else if selected?.action === 'request_changes'}<ShieldAlert size={13} />{:else if selected?.action === 'merge'}<GitMerge size={13} />{:else if selected?.action === 'close'}<X size={13} />{:else if selected?.action === 'reopen'}<RotateCcw size={13} />{:else if selected?.action === 'ready'}<GitPullRequest size={13} />{:else}<MessageSquare size={13} />{/if}
           {primaryLabel}
         </Button>
-        {#if selections.length > 1}<Button class={`more-action ${selected?.tone ?? 'brand'}`} icon size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} aria-label="Choose pull request action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={14} /></Button>{/if}
+        {#if selections.length > 1}<Button class={`more-action ${selected?.tone ?? 'brand'}`} icon size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} aria-label="Choose pull action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={14} /></Button>{/if}
         {#if open && selections.length > 1}<div class="menu" role="menu">
           {#each selections as selection (selection.key)}
             <Button class={`menu-option${selection.tone === 'danger' ? ' danger' : ''}`} variant="ghost" block role="menuitemradio" aria-checked={selection.key === selected?.key} onclick={() => choose(selection)}>

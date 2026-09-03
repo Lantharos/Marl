@@ -37,7 +37,7 @@
   });
 
   function triggerLabel(trigger: WorkflowTrigger) {
-    return trigger === 'workflow_dispatch' ? 'Manual dispatch' : trigger === 'pull_request' ? 'Pull request' : trigger[0].toUpperCase() + trigger.slice(1);
+    return trigger === 'workflow_dispatch' ? 'Manual dispatch' : trigger === 'pull_request' ? 'Pull' : trigger[0].toUpperCase() + trigger.slice(1);
   }
   async function dispatch() {
     if (busy) return;

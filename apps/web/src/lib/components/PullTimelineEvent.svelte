@@ -27,10 +27,10 @@
       case 'unassigned': return `unassigned ${event.details.handle}`;
       case 'label_added': return `added the ${event.details.label} label`;
       case 'label_removed': return `removed the ${event.details.label} label`;
-      case 'ready': return 'marked this pull request ready for review';
-      case 'closed': return 'closed this pull request';
-      case 'reopened': return 'reopened this pull request';
-      case 'merged': return `merged this pull request with ${event.details.method}`;
+      case 'ready': return 'marked this pull ready for review';
+      case 'closed': return 'closed this pull';
+      case 'reopened': return 'reopened this pull';
+      case 'merged': return `merged this pull with ${event.details.method}`;
       case 'commits_added': return `added ${commits.length} commit${commits.length === 1 ? '' : 's'}`;
       case 'force_pushed': return `force-pushed ${event.details.branch} from ${event.details.from} to ${event.details.to}`;
       case 'thread_resolved': return `resolved a conversation on ${event.details.path}:${event.details.lines}`;
@@ -52,7 +52,7 @@
   <div>
     <p><UserProfileLink handle={event.actor} displayName={event.actorDisplayName} avatar={false} /> {message}<Time class="end" value={event.createdAt} /></p>
     {#if event.kind === 'commits_added' && commits.length}
-      <div class="commits">{#each commits as commit}<a href="/{event.details.owner}/{event.details.repository}/commit/{commit.id}"><code>{commit.id.slice(0, 7)}</code><span>{commit.title}</span></a>{/each}</div>
+      <div class="commits">{#each commits as commit (commit.id)}<a href="/{event.details.owner}/{event.details.repository}/commit/{commit.id}"><code>{commit.id.slice(0, 7)}</code><span>{commit.title}</span></a>{/each}</div>
     {/if}
   </div>
 </article>

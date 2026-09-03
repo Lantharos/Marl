@@ -64,7 +64,7 @@
       {#if data.organizations.length}<section class="organizations"><h2>Organizations</h2><div>{#each data.organizations as item (item.slug)}<a href="/{item.slug}" aria-label={item.name} title={item.name}><OrganizationAvatar name={item.name} src={item.avatarUrl} size={34} /></a>{/each}</div></section>{/if}
     </aside>
     <div class="work">
-      <section class="intro"><div><span><strong>{data.stats.repositories}</strong> public repositories</span><span><strong>{data.stats.contributions}</strong> contributions</span><span><strong>{data.stats.pullRequests}</strong> pull requests</span></div></section>
+      <section class="intro"><div><span><strong>{data.stats.repositories}</strong> public repositories</span><span><strong>{data.stats.contributions}</strong> contributions</span><span><strong>{data.stats.pullRequests}</strong> pulls</span></div></section>
       <ContributionGraph contributions={data.contributions} />
       <div class="columns"><section><header><h2>Public repositories</h2>{#if data.shellUser && data.stats.repositories > data.repositories.length}<a href="/repositories?q={userProfile.handle}">View all</a>{/if}</header><ProfileRepositoryList repositories={data.repositories.slice(0, 6)} />{#if data.archivedRepositories.length}<div class="archived"><h3>Archived</h3><ProfileRepositoryList repositories={data.archivedRepositories.slice(0, 6)} /></div>{/if}</section><section><header><h2>Recent work</h2></header><ProfileActivity activity={data.activity} /></section></div>
     </div>

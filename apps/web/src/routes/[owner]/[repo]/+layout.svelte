@@ -215,7 +215,7 @@
     <a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a>
     <a class:active={tabActive('releases')} href="{base}/releases"><Tag size={14} />Releases</a>
     <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
-    <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pull requests</a>
+    <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pulls</a>
     {#if repository?.permissions.member}<a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a>{/if}
     {#if canManageSettings}<a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a>{/if}
   </nav>

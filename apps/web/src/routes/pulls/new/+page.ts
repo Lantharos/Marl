@@ -1,4 +1,4 @@
-import type { PullRequestDiff } from '@marl/contracts';
+import type { IssueDetail, PullRequestDiff } from '@marl/contracts';
 import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
@@ -11,7 +11,7 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
   const repositories = layout.shellRepositories;
   const requested = url.searchParams.get('repository');
   const repository = requested && repositories.some((item: { owner: string; name: string }) => `${item.owner}/${item.name}` === requested) ? requested : repositories[0] ? `${repositories[0].owner}/${repositories[0].name}` : '';
-  if (!repository) return { repositories, repository, sources: [] as PullSource[], sourceRepository: '', targetBranches: [] as Branch[], base: '', compare: '', comparison: null as PullRequestDiff | null };
+  if (!repository) return { repositories, repository, sources: [] as PullSource[], sourceRepository: '', targetBranches: [] as Branch[], base: '', compare: '', comparison: null as PullRequestDiff | null, linkedIssue: null as IssueDetail | null };
   const [owner, name] = repository.split('/');
   const options = await routeLoad(apiWith<{ target: { defaultBranch: string; branches: Branch[] }; sources: PullSource[] }>(fetch, `/repositories/${owner}/${name}/pull-sources`));
   const requestedSource = url.searchParams.get('sourceRepository');
@@ -23,8 +23,16 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
     ? requestedCompare!
     : source?.branches.find((branch) => `${source.owner}/${source.name}` !== repository || branch.name !== base)?.name ?? '';
   let comparison: PullRequestDiff | null = null;
+  let linkedIssue: IssueDetail | null = null;
   if (source && base && compare) {
     try { comparison = await apiWith<PullRequestDiff>(fetch, `/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}&sourceRepository=${encodeURIComponent(`${source.owner}/${source.name}`)}`); } catch {}
   }
-  return { repositories, repository, sources: options.sources, sourceRepository: source ? `${source.owner}/${source.name}` : '', targetBranches: options.target.branches, base, compare, comparison };
+  const issueNumber = Number(url.searchParams.get('issue'));
+  if (Number.isInteger(issueNumber) && issueNumber > 0) {
+    try {
+      const result = await apiWith<{ issue: IssueDetail }>(fetch, `/repositories/${owner}/${name}/issues/${issueNumber}`);
+      linkedIssue = result.issue;
+    } catch {}
+  }
+  return { repositories, repository, sources: options.sources, sourceRepository: source ? `${source.owner}/${source.name}` : '', targetBranches: options.target.branches, base, compare, comparison, linkedIssue };
 };
