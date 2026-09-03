@@ -8,11 +8,7 @@
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import FileDiff from 'lucide-svelte/icons/file-diff';
-  import GitBranch from 'lucide-svelte/icons/git-branch';
-  import GitMerge from 'lucide-svelte/icons/git-merge';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
-  import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
-  import GitPullRequestClosed from 'lucide-svelte/icons/git-pull-request-closed';
   import MessageSquare from 'lucide-svelte/icons/message-square';
   import Pencil from 'lucide-svelte/icons/pencil';
   import X from 'lucide-svelte/icons/x';
@@ -35,6 +31,7 @@
   import PullDecisionStrip from '$lib/pulls/PullDecisionStrip.svelte';
   import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
   import { connectPullLive } from '$lib/pulls/pull-live';
+  import { reviewThreadContext, type ThreadCodeLine } from '$lib/diff';
   import { seoExcerpt } from '$lib/seo';
   import type { PageData } from './$types';
 
@@ -67,6 +64,7 @@
   let changesView = $state<HTMLElement>();
   let pullGeneration = 0;
   let diffRequest = 0;
+  const patchRequests: Record<string, Promise<string>> = {};
 
   let stateRefreshQueued = false;
   function scheduleStateRefresh() {
@@ -140,6 +138,7 @@
       diff = null;
       diffLoading = false;
       diffRequest += 1;
+      clearPatchRequests();
       if (tab === 'changes') void selectTab('changes');
     }
     if (payload.refreshState) scheduleStateRefresh();
@@ -174,6 +173,7 @@
       diff = null;
       diffLoading = false;
       diffRequest += 1;
+      clearPatchRequests();
       tab = 'overview';
       error = '';
       reviewState = 'commented';
@@ -299,8 +299,21 @@
     finally { busy = false; }
   }
   async function loadPatch(file: PullRequestDiff['files'][number]) {
-    const result = await api<{ patch: string }>(`/repositories/${owner}/${repo}/pulls/${number}/patch?path=${encodeURIComponent(file.path)}`);
-    return result.patch;
+    return loadPatchPath(file.path);
+  }
+  function loadPatchPath(path: string) {
+    const cached = patchRequests[path];
+    if (cached) return cached;
+    const request = api<{ patch: string }>(`/repositories/${owner}/${repo}/pulls/${number}/patch?path=${encodeURIComponent(path)}`)
+      .then((result) => result.patch);
+    patchRequests[path] = request;
+    void request.catch(() => { if (patchRequests[path] === request) delete patchRequests[path]; });
+    return request;
+  }
+  function clearPatchRequests() { for (const path of Object.keys(patchRequests)) delete patchRequests[path]; }
+  async function loadThreadContext(thread: ReviewThreadType): Promise<ThreadCodeLine[]> {
+    const patch = await loadPatchPath(thread.path);
+    return reviewThreadContext(patch, thread.side, thread.startLine, thread.line);
   }
 
   async function updateMetadata(body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) {
@@ -377,10 +390,8 @@
   <div class="fatal"><CircleAlert size={24} /><strong>Pull unavailable</strong><p>{error}</p><a href="/{owner}/{repo}/pulls">Back to pulls</a></div>
 {:else}
   <header class="pr-header">
-    <p class="route-context"><a href="/{owner}/{repo}">{owner}/{repo}</a><span>·</span>Pull !{pull.number}</p>
     <div class="title-row">
-      <span class="state {pull.state}">{#if pull.state === 'merged'}<GitMerge size={18} />{:else if pull.state === 'closed'}<GitPullRequestClosed size={18} />{:else}<GitPullRequest size={18} />{/if}</span>
-      <h1>{pull.title}</h1>
+      <h1>{pull.title} <span>!{pull.number}</span></h1>
       {#if pull.canManage}<Button size="small" disabled={busy} onclick={openDetailsEditor}><Pencil size={13} />Edit</Button>{/if}
     </div>
     <div class="revision-line">
@@ -391,7 +402,7 @@
     </div>
   </header>
 
-  <PullDecisionStrip {pull} viewerHandle={data.shellUser?.handle} />
+  <PullDecisionStrip {pull} />
 
   <nav class="tabs" aria-label="Pull sections">
     <Chip active={tab === 'overview'} onclick={() => selectTab('overview')}><MessageSquare size={14} />Overview <span class="count">{timeline.total}</span></Chip>
@@ -409,7 +420,7 @@
           <div class="brief-body"><MarkdownBody source={pull.body || 'No change brief was provided.'} context={markdownContext} /></div>
         </article>
         <section class="activity">
-          <header><h2>Review activity</h2><span>{timeline.total}</span></header>
+          <header><h2>Review activity</h2></header>
           <div class="timeline">
             {#each timeline.order as key, index (key)}
               {@const item = timeline.items.get(key)}
@@ -420,11 +431,11 @@
                 {:else if item.kind === 'reference'}
                   <ReferenceTimelineEvent reference={item.value} />
                 {:else if item.kind === 'review'}
-                  <article class="event"><span class="event-icon {item.value.state}">{#if item.value.state === 'approved'}<CircleCheck size={15} />{:else if item.value.state === 'changes_requested'}<CircleAlert size={15} />{:else}<MessageSquare size={15} />{/if}</span><div><p><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatar={false} /> {item.value.state === 'approved' ? 'approved this revision' : item.value.state === 'changes_requested' ? 'requested changes' : 'finished a review'} <Time class="end" value={item.value.createdAt} /></p>{#if item.value.body}<div class="event-body"><MarkdownBody source={item.value.body} context={markdownContext} /></div>{/if}</div></article>
+                  <article class="review-entry {item.value.state}"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>{item.value.state === 'approved' ? 'approved this revision' : item.value.state === 'changes_requested' ? 'requested changes' : 'finished a review'}</span><Time class="end" value={item.value.createdAt} /></header>{#if item.value.body}<div class="review-body"><MarkdownBody source={item.value.body} context={markdownContext} /></div>{/if}</article>
                 {:else if item.kind === 'thread'}
-                  <ReviewThread thread={item.value} {busy} interactive={pull.canManage && !pull.locked} context={markdownContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
+                  <ReviewThread thread={item.value} {busy} interactive={pull.canManage && !pull.locked} context={markdownContext} onLoadContext={loadThreadContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
                 {:else}
-                  <article class="comment"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} context={markdownContext} minHeight={90} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}</div></article>
+                  <article class="comment"><header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header><div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} context={markdownContext} compact minHeight={82} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}</div></article>
                 {/if}
               {/if}
             {:else}<p class="quiet-activity">No review activity yet. The brief and latest revision are ready for a first pass.</p>{/each}
@@ -452,14 +463,14 @@
 {/if}
 
 <style>
-  .timeline>.comment,.timeline>.event{content-visibility:auto;contain-intrinsic-size:auto 120px}
+  .timeline>.comment,.timeline>.review-entry{content-visibility:auto;contain-intrinsic-size:auto 120px}
   :global(.timeline-gap.button){height:auto;min-height:36px;background:var(--surface-muted);font-size:9px}:global(.timeline-gap.button span){color:var(--brand);font-weight:650}.changes-loading{height:260px;border-radius:8px;background:var(--surface-muted);animation:changes-loading 1.2s ease-in-out infinite alternate}@keyframes changes-loading{to{opacity:.48}}
-  .fatal{padding:70px 20px;text-align:center;color:var(--text-faint)}.fatal strong{display:block;margin-top:10px;color:var(--text-strong)}.fatal p{font-size:11px}.fatal a{color:var(--brand);font-size:11px}.pr-header{padding:3px 0 20px}.route-context{display:flex;align-items:center;gap:5px;margin:0 0 11px;color:var(--text-faint);font-size:9px}.route-context a{color:var(--text-muted);text-decoration:none}.route-context a:hover{color:var(--brand)}.title-row{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:11px}.title-row h1{margin:0;color:var(--text-strong);font-size:25px;font-weight:680;letter-spacing:-.03em;line-height:1.15;text-wrap:balance}.state{display:grid;width:34px;height:34px;place-items:center;border-radius:9px;background:var(--success-soft);color:var(--success)}.state.merged{background:color-mix(in srgb,#8b5cf6 17%,transparent);color:#a78bfa}.state.blocked,.state.closed{background:var(--danger-soft);color:var(--danger)}.state.draft{background:var(--surface-muted);color:var(--text-faint)}.revision-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:10px 0 0 46px;color:var(--text-faint);font-size:9px}.revision-line .state-copy{color:var(--text-muted);font-weight:650;text-transform:capitalize}.revision-line code{padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text-strong)}.revision-line :global(.user-profile-link){font-size:9px}
+  .fatal{padding:70px 20px;text-align:center;color:var(--text-faint)}.fatal strong{display:block;margin-top:10px;color:var(--text-strong)}.fatal p{font-size:11px}.fatal a{color:var(--brand);font-size:11px}.pr-header{padding:2px 0 22px}.title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:16px}.title-row h1{margin:0;color:var(--text-strong);font-size:25px;font-weight:680;letter-spacing:-.03em;line-height:1.18;text-wrap:balance}.title-row h1 span{color:var(--text-faint);font-size:16px;font-weight:540;letter-spacing:-.01em;white-space:nowrap}.revision-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:10px 0 0;color:var(--text-faint);font-size:10px}.revision-line .state-copy{color:var(--text-muted);font-weight:650;text-transform:capitalize}.revision-line code{padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text-strong)}.revision-line :global(.user-profile-link){font-size:10px}
   .tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px}.tabs .count{display:inline-grid;min-width:18px;height:18px;place-items:center;padding:0 5px;border-radius:999px;background:var(--surface-muted);color:var(--text-faint);font-size:9px}.tabs :global(.chip.active .count){background:color-mix(in srgb,var(--brand) 13%,var(--surface-muted));color:var(--brand-strong)}.action-error{display:grid;grid-template-columns:18px minmax(0,1fr) 30px;align-items:center;gap:6px;margin:-8px 0 14px;padding:8px 8px 8px 11px;border-left:2px solid var(--danger);border-radius:0 6px 6px 0;background:var(--danger-soft);color:var(--danger);font-size:10px}
-  .overview-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;align-items:start;gap:24px}.workspace{display:grid;gap:44px}.brief{padding:0 4px}.brief>header,.activity>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:13px;font-weight:660;letter-spacing:-.01em}.brief-body{color:var(--text);font-size:11px}.activity>header{margin:0 4px 14px}.activity>header>span{color:var(--text-faint);font-size:9px;font-variant-numeric:tabular-nums}.timeline{display:grid;gap:16px}.comment{padding:8px 4px 13px}.comment>header{display:flex;align-items:center;gap:6px;min-height:28px;color:var(--text-muted);font-size:10px}.comment>header :global(.user-profile-link){font-size:10px}.comment>div{padding:10px 0 0 33px}.event{display:grid;grid-template-columns:29px 1fr;align-items:start;gap:9px;padding:4px}.event-icon{display:grid;width:27px;height:27px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}.event-icon.approved{background:var(--success-soft);color:var(--success)}.event-icon.changes_requested{background:var(--danger-soft);color:var(--danger)}.event p{display:flex;flex-wrap:wrap;gap:3px;margin:6px 0 0;color:var(--text-muted);font-size:10px}.event p :global(.user-profile-link){font-size:10px}.event-body{margin-top:9px;padding:11px 13px;border-left:2px solid var(--border-strong);background:var(--surface-muted)}.comment-actions{display:flex;gap:3px;margin-left:8px}.comment-edit-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}.deleted,.quiet-activity{margin:0;color:var(--text-faint);font-size:10px;font-style:italic}.quiet-activity{padding:24px 4px;font-style:normal}.sidebar{position:sticky;top:68px}
+  .overview-layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;align-items:start;gap:46px}.workspace{display:grid;gap:50px}.brief{padding:0 4px}.brief>header,.activity>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:660;letter-spacing:-.01em}.brief-body{color:var(--text);font-size:12px;line-height:1.65}.activity>header{margin:0 4px 17px}.timeline{display:grid;gap:21px}.comment,.review-entry{padding:3px 4px 8px}.comment>header,.review-entry>header{display:flex;align-items:center;gap:6px;min-height:28px;color:var(--text-muted);font-size:10px}.comment>header :global(.user-profile-link),.review-entry>header :global(.user-profile-link){font-size:10px}.comment>div,.review-body{padding:10px 0 0 33px}.review-entry.approved>header>span{color:var(--success)}.review-entry.changes_requested>header>span{color:var(--danger)}.comment-actions{display:flex;gap:3px;margin-left:8px}.comment-edit-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}.deleted,.quiet-activity{margin:0;color:var(--text-faint);font-size:10px;font-style:italic}.quiet-activity{padding:24px 4px;font-style:normal}.sidebar{position:sticky;top:68px}
   .commit-list{display:grid;gap:4px}.commit-list>article{position:relative;display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;min-height:62px;padding:8px 10px;border-radius:8px;color:inherit}.commit-list>article:hover{background:var(--surface-hover)}.commit-mark{display:grid;width:28px;height:28px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}.commit-list .commit-title,.commit-list small{display:block}.commit-list .commit-title{color:var(--text-strong);font-size:11px;font-weight:650;text-decoration:none}.commit-list .commit-title::after{position:absolute;inset:0;content:''}.commit-list small{display:flex;align-items:center;gap:3px;margin-top:3px;color:var(--text-faint);font-size:9px}.commit-list small :global(.user-profile-link){position:relative;z-index:1;color:var(--text-muted);font-size:9px}.commit-list small i{display:inline-flex;align-items:center;gap:3px;margin-left:7px;color:var(--success);font-style:normal;font-weight:650}.commit-list code{color:var(--text-muted);font-size:9px}.commit-list>div{padding:45px;text-align:center}.commit-list>div strong{font-size:12px}.commit-list>div p{color:var(--text-faint);font-size:10px}
   .changes-view{min-height:calc(100dvh / var(--interface-scale) - 64px);scroll-margin-top:64px}.changes-head{display:flex;min-height:58px;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;padding:0 5px}.changes-head>div:first-child strong,.changes-head>div:first-child span{display:block}.changes-head>div:first-child strong{color:var(--text-strong);font-size:11px}.changes-head>div:first-child span{margin-top:3px;color:var(--text-faint);font-size:9px}
   .checks-page>header{padding:14px 5px}.checks-page h2{margin:0;color:var(--text-strong);font-size:12px}.checks-page header p{margin:4px 0 0;color:var(--text-faint);font-size:9px}.checks-page article{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;min-height:65px;padding:10px 5px}.check-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px}.check-icon.success{background:var(--success-soft);color:var(--success)}.check-icon.failure{background:var(--danger-soft);color:var(--danger)}.check-icon.running,.check-icon.queued{background:var(--brand-soft);color:var(--brand)}.checks-page article strong{color:var(--text-strong);font-size:11px}.checks-page article p{margin:3px 0 0;color:var(--text-faint);font-size:9px}.checks-page article>span:last-child{color:var(--text-muted);font-size:9px;text-transform:capitalize}.empty-checks{padding:50px 20px;color:var(--text-faint);text-align:center}.empty-checks strong{display:block;margin-top:9px;color:var(--text-strong);font-size:12px}.empty-checks p{font-size:10px}
   .details-editor{display:grid;gap:14px}.details-editor label>span{display:block;margin-bottom:6px;color:var(--text-muted);font-size:9px;font-weight:620}.details-editor input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:7px;outline:0;background:var(--surface);color:var(--text-strong);font-size:11px}.details-editor input:focus{border-color:var(--brand)}
-  @media(max-width:900px){.overview-layout{grid-template-columns:1fr}.sidebar{position:static;grid-row:1}}@media(max-width:600px){.title-row{grid-template-columns:34px minmax(0,1fr)}.title-row>:global(.button){grid-column:2;justify-self:start}.title-row h1{font-size:21px}.revision-line{margin-left:45px}.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.overview-layout{gap:14px}.comment>div{padding-left:0}}
+  @media(max-width:900px){.overview-layout{grid-template-columns:1fr;gap:42px}.sidebar{position:static}}@media(max-width:600px){.title-row{grid-template-columns:1fr}.title-row>:global(.button){justify-self:start}.title-row h1{font-size:21px}.title-row h1 span{font-size:14px}.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.comment>div,.review-body{padding-left:0}}
 </style>

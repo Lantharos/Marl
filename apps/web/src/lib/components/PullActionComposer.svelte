@@ -107,7 +107,7 @@
 <div class="composer-shell">
   <UserAvatar name={avatarName} src={avatarUrl} size={30} />
   <div class="composer">
-    <MarkdownComposer bind:value {context} placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={108} />
+    <MarkdownComposer bind:value {context} compact placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={84} />
     <footer>
       {#if locked}<span>Unlock the conversation to comment.</span>{/if}
       <div class="actions" use:dismissable={() => (open = false)}>

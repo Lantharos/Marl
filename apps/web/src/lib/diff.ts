@@ -8,6 +8,18 @@ export type PatchLine = {
   line: number | null;
 };
 
+export type ThreadCodeLine = {
+  key: number;
+  kind: 'context' | 'added' | 'removed';
+  line: number;
+  text: string;
+  selected: boolean;
+} | {
+  key: number;
+  kind: 'omitted';
+  count: number;
+};
+
 export function parsePatchLines(patch: string): PatchLine[] {
   let oldLine = 0;
   let newLine = 0;
@@ -43,4 +55,28 @@ export function parsePatchLines(patch: string): PatchLine[] {
     }
   }
   return output;
+}
+
+export function reviewThreadContext(patch: string, side: 'old' | 'new', startLine: number, endLine: number, maxSelected = 5): ThreadCodeLine[] {
+  const candidates = parsePatchLines(patch)
+    .filter((line) => line.kind !== 'hunk')
+    .map((line) => ({ line, number: side === 'old' ? line.oldLine : line.newLine }))
+    .filter((entry): entry is { line: PatchLine; number: number } => entry.number !== null);
+  const selected = candidates.filter((entry) => entry.number >= startLine && entry.number <= endLine);
+  if (selected.length === 0) return [];
+
+  const shown = selected.slice(0, Math.max(1, maxSelected));
+  const first = candidates.indexOf(shown[0]);
+  const last = candidates.indexOf(shown[shown.length - 1]);
+  const context = first > 0 ? [candidates[first - 1]] : [];
+  const after = selected.length === shown.length && last < candidates.length - 1 ? [candidates[last + 1]] : [];
+  const lines: ThreadCodeLine[] = [...context, ...shown, ...after].map(({ line, number }) => ({
+    key: line.key,
+    kind: line.kind as Exclude<PatchLine['kind'], 'hunk'>,
+    line: number,
+    text: line.text.slice(1),
+    selected: number >= startLine && number <= endLine
+  }));
+  if (selected.length > shown.length) lines.push({ key: shown[shown.length - 1].line.key + 0.5, kind: 'omitted', count: selected.length - shown.length });
+  return lines;
 }
