@@ -71,7 +71,7 @@
 
 <svelte:head><title>Pulls · Marl</title></svelte:head>
 <main class="page">
-  <PageHeader title="Pulls" description="See the next move, clear blockers, and land changes." actionHref="/pulls/new" actionLabel="New pull" />
+  <PageHeader title="Pulls" actionHref="/pulls/new" actionLabel="New pull" />
   <FilterBar placeholder="Search pulls" tabs={['Open', 'Merged', 'Closed']} labelOptions={data.availableLabels} bind:active={activeFilter} bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(activeFilter, query, labels)} />
   <PullQueue pulls={items} showRepository grouped={activeFilter === 'Open'} emptyTitle={query ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`} emptyDescription={query ? 'Try a different title, branch, author, or repository.' : activeFilter === 'Open' ? 'Open a pull when a change is ready to move through review.' : `Pulls will appear here after they are ${activeFilter.toLowerCase()}.`} createHref={!query && activeFilter === 'Open' ? '/pulls/new' : undefined} />
   {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}

@@ -126,8 +126,13 @@ inspect checks, and identify every merge blocker without hunting across unrelate
 
 A pull moves from draft to ready and can be closed or reopened without losing its review record.
 Its overview states the current review outcome beside concise merge requirements, keeps the editable
-change brief distinct from review activity, and names the exact head revision being discussed. Its
-activity includes replies, editable comments, durable deletion
+change brief distinct from review activity, and names the exact head revision being discussed. The
+latest revision and composer appear first. Earlier revisions stay collapsed until opened, with
+their review outcome and discussion count visible in the header. Each revision's top-level
+activity runs newest-first; replies inside a conversation read in order. Code excerpts scroll
+horizontally when needed so a narrow screen does not hide part of a reviewed line.
+
+Activity includes replies, editable comments, durable deletion
 tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
 start line or range conversations directly from the changes view; those conversations also
 appear in the timeline with their exact file, line range, and a capped excerpt of the relevant code,

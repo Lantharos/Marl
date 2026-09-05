@@ -35,5 +35,5 @@
 </article>
 
 <style>
-  .timeline-event{display:grid;grid-template-columns:10px minmax(0,1fr);align-items:start;gap:9px;padding:3px 5px}.mark{width:5px;height:5px;margin-top:10px;border-radius:50%;background:var(--text-faint)}p{display:flex;flex-wrap:wrap;align-items:center;gap:3px;min-height:24px;margin:0;color:var(--text-muted);font-size:10px;line-height:1.45}p :global(.user-profile-link){font-size:10px;font-weight:650}.closed .mark,.force_pushed .mark{background:var(--danger)}.merged .mark,.commits_added .mark{background:var(--success)}.locked .mark{background:var(--warning)}
+  .timeline-event{display:grid;grid-template-columns:10px minmax(0,1fr);align-items:start;gap:9px;padding:5px 12px}.mark{width:5px;height:5px;margin-top:10px;border-radius:50%;background:var(--text-faint)}p{display:flex;flex-wrap:wrap;align-items:center;gap:3px;min-height:24px;margin:0;color:var(--text-muted);font-size:11px;line-height:1.45}p :global(.user-profile-link){font-size:11px;font-weight:650}.closed .mark,.force_pushed .mark{background:var(--danger)}.merged .mark,.commits_added .mark{background:var(--success)}.locked .mark{background:var(--warning)}
 </style>

@@ -12,7 +12,6 @@
   import { dismissable } from '$lib/actions/dismissable';
   import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
-  import UserAvatar from './UserAvatar.svelte';
   import type { MarkdownContext } from '$lib/markdown';
 
   export type PullComposerAction = 'approve' | 'request_changes' | 'close' | 'reopen' | 'ready' | 'merge';
@@ -26,7 +25,7 @@
   };
 
   let {
-    value = $bindable(''), pullState, ready, locked, busy, canManage, canMerge, allowedMergeMethods, avatarName, avatarUrl,
+    value = $bindable(''), pullState, ready, locked, busy, canManage, canMerge, allowedMergeMethods,
     mergeMethod = $bindable<MergeMethod>('merge'), onComment, onAction, context
   } = $props<{
     value?: string;
@@ -37,8 +36,6 @@
     canManage: boolean;
     canMerge: boolean;
     allowedMergeMethods: MergeMethod[];
-    avatarName: string;
-    avatarUrl?: string | null;
     mergeMethod?: MergeMethod;
     onComment: () => Promise<void>;
     onAction: (action: PullComposerAction) => Promise<void>;
@@ -104,8 +101,6 @@
   }
 </script>
 
-<div class="composer-shell">
-  <UserAvatar name={avatarName} src={avatarUrl} size={30} />
   <div class="composer">
     <MarkdownComposer bind:value {context} compact placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={84} />
     <footer>
@@ -128,8 +123,7 @@
       </div>
     </footer>
   </div>
-</div>
 
 <style>
-  .composer-shell{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:start;gap:10px}.composer{min-width:0}.composer>footer{display:flex;align-items:center;gap:12px;margin-top:8px}.composer>footer>span{color:var(--text-faint);font-size:9px}.actions{position:relative;display:flex;margin-left:auto}.actions :global(.primary-action.button){border-radius:6px 0 0 6px}.actions :global(.primary-action.solo.button){border-radius:6px}.actions :global(.more-action.button){border-left-color:rgb(255 255 255/.22);border-radius:0 6px 6px 0}.actions :global(.button.success){border-color:var(--success);background:var(--success);color:#0d1812}.actions :global(.button.success:hover:not(:disabled)){border-color:color-mix(in srgb,var(--success) 84%,white);background:color-mix(in srgb,var(--success) 84%,white)}.menu{position:absolute;right:0;bottom:38px;z-index:45;width:310px;padding:5px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.menu :global(.menu-option.button){height:auto;min-height:48px;display:grid;grid-template-columns:22px minmax(0,1fr) 18px;gap:6px;padding:8px;text-align:left;white-space:normal}.menu :global(.menu-option.button.danger){color:var(--danger)}.menu strong,.menu small{display:block}.menu strong{color:inherit;font-size:10px}.menu small{margin-top:2px;color:var(--text-faint);font-size:8px;line-height:1.35}.option-icon,.selected{display:grid;place-items:center}.selected{color:var(--brand)}
+  .composer{min-width:0;padding-bottom:4px}.composer>footer{display:flex;align-items:center;gap:12px;margin-top:8px}.composer>footer>span{color:var(--text-faint);font-size:9px}.actions{position:relative;display:flex;margin-left:auto}.actions :global(.primary-action.button){border-radius:6px 0 0 6px}.actions :global(.primary-action.solo.button){border-radius:6px}.actions :global(.more-action.button){border-left-color:rgb(255 255 255/.22);border-radius:0 6px 6px 0}.actions :global(.button.success){border-color:var(--success);background:var(--success);color:#0d1812}.actions :global(.button.success:hover:not(:disabled)){border-color:color-mix(in srgb,var(--success) 84%,white);background:color-mix(in srgb,var(--success) 84%,white)}.menu{position:absolute;right:0;bottom:38px;z-index:45;width:min(310px,calc(100vw - 60px));padding:5px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.menu :global(.menu-option.button){height:auto;min-height:48px;display:grid;grid-template-columns:22px minmax(0,1fr) 18px;gap:6px;padding:8px;text-align:left;white-space:normal}.menu :global(.menu-option.button.danger){color:var(--danger)}.menu strong,.menu small{display:block}.menu strong{color:inherit;font-size:12px}.menu small{margin-top:2px;color:var(--text-faint);font-size:11px;line-height:1.45}.option-icon,.selected{display:grid;place-items:center}.selected{color:var(--brand)}
 </style>

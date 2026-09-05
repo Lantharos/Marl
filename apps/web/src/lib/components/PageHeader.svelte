@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import LinkButton from './LinkButton.svelte';
-  let { title, description, actionHref, actionLabel, action }: { title: string; description: string; actionHref?: string; actionLabel?: string; action?: Snippet } = $props();
+  let { title, description, actionHref, actionLabel, action }: { title: string; description?: string; actionHref?: string; actionLabel?: string; action?: Snippet } = $props();
 </script>
 
 <header class="page-header">
-  <div><h1>{title}</h1><p>{description}</p></div>
+  <div><h1>{title}</h1>{#if description}<p>{description}</p>{/if}</div>
   {#if action}{@render action()}{:else if actionHref && actionLabel}<LinkButton href={actionHref} variant="primary">{actionLabel}</LinkButton>{/if}
 </header>
 

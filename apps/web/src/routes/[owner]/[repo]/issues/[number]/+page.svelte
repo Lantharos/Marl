@@ -6,6 +6,7 @@
   import Pencil from 'lucide-svelte/icons/pencil';
   import X from 'lucide-svelte/icons/x';
   import Button from '$lib/components/Button.svelte';
+  import DiscussionEntry from '$lib/components/DiscussionEntry.svelte';
   import MarkdownBody from '$lib/components/MarkdownBody.svelte';
   import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
   import Modal from '$lib/components/Modal.svelte';
@@ -103,7 +104,7 @@
 
     <section class="activity">
       <header><h2>Activity</h2></header>
-      {#if data.shellUser}<section class="composer"><MarkdownComposer bind:value={comment} {context} compact placeholder={issue.locked && !issue.canManage ? 'This conversation is locked' : 'Leave an update or record a decision'} minHeight={86} /><footer>{#if issue.canEdit}<Button disabled={busy} onclick={changeState}>{issue.state === 'open' ? 'Close issue' : 'Reopen issue'}</Button>{/if}<Button variant="primary" loading={busy} disabled={!comment.trim() || (issue.locked && !issue.canManage)} onclick={addComment}>Add update</Button></footer></section>{/if}
+      {#if data.shellUser}<section class="composer"><MarkdownComposer bind:value={comment} {context} compact placeholder={issue.locked && !issue.canManage ? 'This conversation is locked' : 'Leave a comment'} minHeight={86} /><footer>{#if issue.canEdit}<Button disabled={busy} onclick={changeState}>{issue.state === 'open' ? 'Close issue' : 'Reopen issue'}</Button>{/if}<Button variant="primary" loading={busy} disabled={!comment.trim() || (issue.locked && !issue.canManage)} onclick={addComment}>Comment</Button></footer></section>{/if}
       <div class="timeline">
         {#each timelineItems as item (item.sequence)}
           {#if timeline.hidden > 0 && item.sequence === timeline.firstBoundarySequence}<Button class="older" block variant="ghost" loading={busy} onclick={loadOlder}>{timeline.hidden} earlier {timeline.hidden === 1 ? 'event' : 'events'} · Load more</Button>{/if}
@@ -112,10 +113,14 @@
           {:else if item.kind === 'reference'}
             <ReferenceTimelineEvent reference={item.value} />
           {:else}
-            <article class="comment">
-              <header><UserProfileLink handle={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} size={25} /><span>commented</span><Time class="end" value={item.value.createdAt} />{#if item.value.canEdit && !item.value.deleted}<div class="comment-actions">{#if confirmingDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deleteComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingComment = item.value.id; editCommentBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingDelete = item.value.id)}>Delete</Button>{/if}</div>{/if}</header>
-              <div>{#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingComment === item.value.id}<MarkdownComposer bind:value={editCommentBody} {context} compact minHeight={80} /><footer><Button size="small" onclick={() => (editingComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editCommentBody.trim()} onclick={() => saveComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} {context} />{/if}</div>
-            </article>
+            <DiscussionEntry author={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} createdAt={item.value.createdAt}>
+              {#snippet actions()}
+                {#if item.value.canEdit && !item.value.deleted}{#if confirmingDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deleteComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingComment = item.value.id; editCommentBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingDelete = item.value.id)}>Delete</Button>{/if}{/if}
+              {/snippet}
+              {#snippet children()}
+                {#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingComment === item.value.id}<MarkdownComposer bind:value={editCommentBody} {context} compact minHeight={80} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editCommentBody.trim()} onclick={() => saveComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} {context} />{/if}
+              {/snippet}
+            </DiscussionEntry>
           {/if}
         {/each}
         {#if timelineItems.length === 0}<p class="quiet-activity">No activity yet. The work brief is the current source of truth.</p>{/if}
@@ -128,5 +133,46 @@
 <Modal open={editing} title="Edit issue" description="Keep the work brief current as decisions change." onClose={() => (editing = false)}>{#snippet children()}<div class="editor"><label><span>Title</span><input bind:value={editedTitle} maxlength="240" /></label><label><span>Work brief</span><MarkdownComposer bind:value={editedBody} {context} minHeight={160} /></label></div>{/snippet}{#snippet actions()}<Button size="small" onclick={() => (editing = false)}>Cancel</Button><Button size="small" variant="primary" loading={busy} disabled={editedTitle.trim().length < 3} onclick={saveDetails}>Save changes</Button>{/snippet}</Modal>
 
 <style>
-  .issue-header{padding:2px 0 22px}.title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:16px}.title-row h1{margin:0;color:var(--text-strong);font-size:25px;font-weight:670;letter-spacing:-.03em;line-height:1.18;text-wrap:balance}.title-row h1 span{color:var(--text-faint);font-size:16px;font-weight:540;letter-spacing:-.01em;white-space:nowrap}.issue-meta{margin:10px 0 0;color:var(--text-muted);font-size:10px}.work-motion{display:flex;min-height:38px;align-items:center;justify-content:space-between;gap:18px;margin:1px 0 29px;padding:0 3px}.work-motion>strong{display:flex;align-items:center;gap:8px;color:var(--text-strong);font-size:12px;font-weight:670}.work-motion>strong span{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}.work-motion.working>strong span{background:var(--brand)}.work-motion.attention>strong span{background:var(--danger)}.work-motion.complete>strong span{background:var(--success)}.motion-action{padding:6px 7px;border-radius:5px;color:var(--brand);font-size:10px;font-weight:650;text-decoration:none}.motion-action:hover{background:var(--surface-hover);color:var(--brand-hover)}.work-layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;align-items:start;gap:46px}.brief{padding:15px 17px 18px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface)}.brief>header,.activity>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:670}.brief-body{padding-top:15px;font-size:12px;line-height:1.65;text-wrap:pretty}.activity{padding-top:38px}.timeline{display:grid;gap:14px;padding-top:18px}.comment{padding:11px 13px 13px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface);content-visibility:auto;contain-intrinsic-size:auto 120px;transition:box-shadow 140ms ease}.comment:hover{box-shadow:var(--shadow-surface-hover)}.comment>header{display:flex;align-items:center;gap:6px;min-height:28px;color:var(--text-muted);font-size:10px}.comment>header :global(.user-profile-link){font-size:10px}.comment>div{padding:9px 0 0 33px;text-wrap:pretty}.comment footer,.composer>footer{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}:global(.end){margin-left:auto}.comment-actions{display:flex;gap:3px;margin-left:6px}.deleted,.quiet-activity{margin:0;color:var(--text-faint);font-size:10px;font-style:italic}.quiet-activity{padding:18px 2px;font-style:normal}.event{display:grid;grid-template-columns:10px 1fr;align-items:start;gap:9px;padding:3px 5px}.event-mark{width:5px;height:5px;margin-top:7px;border-radius:50%;background:var(--text-faint)}.event p{margin:0;color:var(--text-muted);font-size:10px;line-height:1.55}.event p :global(.user-profile-link){font-size:10px}.work-reference{color:var(--text-strong);font-weight:650;text-decoration:none}.work-reference:hover{text-decoration:underline}.composer{padding-top:14px}.composer>footer{margin-top:8px}.action-error{display:grid;grid-template-columns:18px minmax(0,1fr) 30px;align-items:center;gap:6px;margin:-10px 0 14px;padding:8px 8px 8px 11px;border-left:2px solid var(--danger);border-radius:0 6px 6px 0;background:var(--danger-soft);color:var(--danger);font-size:10px}.timeline :global(.older.button){height:auto;min-height:36px;background:var(--surface-muted);font-size:9px}.editor{display:grid;gap:14px}.editor label>span{display:block;margin-bottom:6px;color:var(--text-muted);font-size:9px;font-weight:620}.editor input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:7px;outline:0;background:var(--surface);color:var(--text-strong);font-size:11px}.editor input:focus{border-color:var(--brand)}aside{position:sticky;top:68px}@media(max-width:860px){.work-layout{grid-template-columns:1fr;gap:42px}aside{position:static}}@media(max-width:600px){.title-row{grid-template-columns:1fr}.title-row>:global(.button){justify-self:start}.title-row h1{font-size:21px}.title-row h1 span{font-size:14px}.brief{padding:13px 14px 16px}.brief>header,.activity>header{display:grid}.comment{padding:10px 11px 12px}.comment>div{padding-left:0}}
+  .issue-header{padding:2px 0 14px}
+  .title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:16px}
+  .title-row h1{margin:0;color:var(--text-strong);font-size:25px;font-weight:670;letter-spacing:-.03em;line-height:1.18;text-wrap:balance}
+  .title-row h1 span{color:var(--text-faint);font-size:16px;font-weight:540;letter-spacing:-.01em;white-space:nowrap}
+  .issue-meta{margin:12px 0 0;color:var(--text-muted);font-size:12px}
+  .work-motion{display:flex;min-height:40px;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px}
+  .work-motion>strong{display:flex;align-items:center;gap:8px;color:var(--text-strong);font-size:13px;font-weight:670}
+  .work-motion>strong span{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}
+  .work-motion.working>strong span{background:var(--brand)}
+  .work-motion.attention>strong span{background:var(--danger)}
+  .work-motion.complete>strong span{background:var(--success)}
+  .motion-action{display:flex;min-height:40px;align-items:center;padding:0 8px;border-radius:5px;color:var(--brand);font-size:12px;font-weight:650;text-decoration:none}
+  .motion-action:hover{background:var(--surface-hover);color:var(--brand-hover)}
+  .work-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;align-items:start;gap:32px}
+  main,.activity{min-width:0}
+  .brief{padding:18px 20px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface);--markdown-font-size:13px}
+  .brief>header,.activity>header{display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:670}
+  .brief-body{padding-top:14px}
+  .activity{padding-top:28px}
+  .timeline{display:grid;gap:12px;padding-top:14px}
+  .comment-edit-actions,.composer>footer{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:10px}
+  .deleted,.quiet-activity{margin:0;color:var(--text-muted);font-size:12px}
+  .deleted{font-style:italic}
+  .quiet-activity{padding:16px 2px}
+  .event{display:grid;grid-template-columns:10px minmax(0,1fr);align-items:start;gap:9px;padding:5px 12px}
+  .event-mark{width:5px;height:5px;margin-top:7px;border-radius:50%;background:var(--text-faint)}
+  .event p{margin:0;color:var(--text-muted);font-size:11px;line-height:1.6}
+  .event p :global(.user-profile-link){font-size:11px}
+  .work-reference{color:var(--text-strong);font-weight:650;text-decoration:none}
+  .work-reference:hover{text-decoration:underline}
+  .composer{padding-top:14px}
+  .composer>footer{margin-top:8px}
+  .action-error{display:grid;grid-template-columns:18px minmax(0,1fr) 30px;align-items:center;gap:6px;margin:-10px 0 14px;padding:8px 8px 8px 11px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:12px}
+  .timeline :global(.older.button){height:auto;min-height:40px;background:var(--surface-muted);font-size:11px}
+  .editor{display:grid;gap:14px}
+  .editor label>span{display:block;margin-bottom:6px;color:var(--text-muted);font-size:12px;font-weight:620}
+  .editor input{width:100%;height:40px;padding:0 10px;border:1px solid var(--border);border-radius:7px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}
+  .editor input:focus{border-color:var(--brand)}
+  aside{position:sticky;top:68px}
+  @media(max-width:900px){.work-layout{grid-template-columns:1fr;gap:28px}aside{position:static}}
+  @media(max-width:600px){.title-row{grid-template-columns:1fr}.title-row>:global(.button){justify-self:start}.title-row h1{font-size:23px}.title-row h1 span{font-size:15px}.brief{padding:16px}.activity{padding-top:24px}}
 </style>
