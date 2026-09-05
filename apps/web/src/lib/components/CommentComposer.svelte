@@ -38,5 +38,5 @@
 </div>
 
 <style>
-  .comment-composer{min-width:0}.comment-composer.with-avatar{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:start;gap:10px}.avatar{display:grid;width:30px;height:30px;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-size:9px;font-weight:740}.editor{min-width:0}.editor>footer{display:flex;justify-content:flex-end;gap:7px;margin-top:8px}
+  .comment-composer{min-width:0}.comment-composer.with-avatar{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:start;gap:10px}.avatar{display:grid;width:30px;height:30px;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-size:11px;font-weight:740}.editor{min-width:0}.editor>footer{display:flex;justify-content:flex-end;gap:7px;margin-top:8px}
 </style>

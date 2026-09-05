@@ -36,7 +36,7 @@
 </script>
 
 <svelte:head><title>Connect runner · Marl</title></svelte:head>
-<FormShell title="Connect a runner" description="Give one machine permission to pick up jobs for an organization.">
+<FormShell backHref="/runners" backLabel="Runners" title="Connect a runner" description="Give one machine permission to pick up jobs for an organization.">
   {#if token}
     <div class="ready"><strong>Run this on the machine</strong><p>The enrollment token works once and expires at {expiresAt}. Registration verifies Docker before the runner is connected.</p><div><code>{command}</code><Button icon aria-label="Copy runner command" onclick={copy}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</Button></div><LinkButton class="done" href="/runners">I'll finish on the machine</LinkButton></div>
   {:else}
@@ -45,5 +45,5 @@
 </FormShell>
 
 <style>
-  .explain>p,.ready>p{margin:0 0 18px;color:var(--text-muted);font-size:12px;line-height:1.6}.explain>label{display:grid;gap:7px;margin-bottom:12px}.explain>label>span{color:var(--text-strong);font-size:11px;font-weight:630}dl{margin:0}dl>div{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border-subtle);font-size:11px}dt{color:var(--text-faint)}dd{margin:0;color:var(--text-strong)}.explain :global(.connect.button){display:flex;margin:20px 0 0 auto}.error{color:var(--danger)!important}.ready>strong{display:block;margin-bottom:5px;color:var(--text-strong);font-size:13px}.ready>div{display:grid;grid-template-columns:minmax(0,1fr) 36px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}.ready code{overflow:auto;padding:12px;color:var(--text);font-size:10px;white-space:nowrap}.ready>div :global(.button){height:100%;border-width:0 0 0 1px;border-radius:0 6px 6px 0}.ready :global(.done.link-button){margin-top:17px}
+  .explain>p,.ready>p{margin:0 0 18px;color:var(--text-muted);font-size:12px;line-height:1.6}.explain>label{display:grid;gap:7px;margin-bottom:12px}.explain>label>span{color:var(--text-strong);font-size:11px;font-weight:630}dl{margin:0}dl>div{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;padding:11px 0;font-size:11px}dt{color:var(--text-faint)}dd{margin:0;color:var(--text-strong)}.explain :global(.connect.button){display:flex;margin:20px 0 0 auto}.error{color:var(--danger)!important}.ready>strong{display:block;margin-bottom:5px;color:var(--text-strong);font-size:13px}.ready>div{display:grid;grid-template-columns:minmax(0,1fr) 36px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}.ready code{overflow:auto;padding:12px;color:var(--text);font-size:11px;white-space:nowrap}.ready>div :global(.button){height:100%;border-width:0 0 0 1px;border-radius:0 6px 6px 0}.ready :global(.done.link-button){margin-top:17px}
 </style>

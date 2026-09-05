@@ -23,7 +23,7 @@
   }
 </script>
 <svelte:head><title>New repository · Marl</title></svelte:head>
-<FormShell title="Create a repository" description="A new home for code, reviews, and self-hosted automation.">
+<FormShell title="Create a repository" backHref="/repositories" backLabel="Repositories">
   <form class="form-grid" onsubmit={(event) => { event.preventDefault(); void createRepository(); }}>
     <div class="field-row"><label class="field"><span>Owner</span><Select bind:value={owner} ariaLabel="Repository owner" options={ownerOptions} /></label><label class="field"><span>Repository name</span><input bind:value={name} oninput={() => (name = repositoryName(name))} onblur={() => (name = submittedName)} maxlength="100" placeholder="new-project" autocomplete="off" data-1p-ignore /></label></div>
     <label class="field"><span>Description <small>Optional</small></span><textarea bind:value={description} placeholder="What is this repository for?" data-1p-ignore></textarea></label>
@@ -32,4 +32,4 @@
     <div class="form-actions"><LinkButton href="/repositories">Cancel</LinkButton><Button type="submit" variant="primary" loading={submitting} disabled={!owner || !nameValid}>Create repository</Button></div>
   </form>
 </FormShell>
-<style>.form-error{margin:0;padding:9px 11px;border-left:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);font-size:10px}</style>
+<style>.form-error{margin:0;padding:9px 11px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:11px}</style>

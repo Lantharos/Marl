@@ -26,5 +26,5 @@
 <SettingsLayout {sidebar} content={children} />
 
 <style>
-  h1{margin:0 0 12px;padding:0 10px;color:var(--text-muted);font-size:13px}nav{display:grid;gap:2px}nav a{display:flex;min-height:38px;align-items:center;gap:9px;padding:0 10px;border-radius:6px;color:var(--text-muted);font-size:12px;text-decoration:none}nav a:hover,nav a.active{background:var(--brand-soft);color:var(--text-strong)}@media(max-width:720px){nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  h1{margin:0 0 12px;padding:0 10px;color:var(--text-muted);font-size:13px}nav{display:grid;gap:2px}nav a{display:flex;min-height:40px;align-items:center;gap:9px;padding:0 10px;border-radius:6px;color:var(--text-muted);font-size:12px;text-decoration:none}nav a:hover{background:var(--surface-hover);color:var(--text-strong)}nav a.active{background:var(--surface-muted);color:var(--text-strong)}@media(max-width:800px){nav{display:flex;flex-wrap:wrap;gap:4px}nav a{padding:0 12px;min-height:38px;font-size:12px}}
 </style>

@@ -57,4 +57,4 @@
   </form>
 </AuthShell>
 
-<style>.recovery{justify-self:end;margin-top:-7px;font-size:9px}</style>
+<style>.recovery{justify-self:end;margin-top:-7px;font-size:11px}</style>

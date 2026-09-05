@@ -46,6 +46,8 @@ The public vocabulary is deliberately familiar:
 Implementation-specific concepts must not leak into product language unless they provide
 a concrete capability that cannot be explained with these terms.
 
+See [Interface principles](interface.md) for visual hierarchy, grouping, and interaction guidance.
+
 ## Primary navigation
 
 The global application contains:
@@ -60,6 +62,7 @@ The global application contains:
 
 A repository contains:
 
+- Overview
 - Code
 - Releases
 - Issues

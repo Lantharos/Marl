@@ -23,4 +23,4 @@
   <div class="invitation">{#if organization}<CheckCircle2 size={28} /><LinkButton block variant="primary" href={`/organizations/${organization.slug}/settings/access`}>Open {organization.name}</LinkButton>{:else}{#if error}<p>{error}</p>{/if}{#if needsSignIn}<LinkButton block variant="primary" href={`/sign-in?returnTo=${encodeURIComponent($page.url.pathname)}`}>Sign in to continue</LinkButton>{:else}<Button block variant="primary" loading={busy} onclick={accept}>Accept invitation</Button>{/if}{/if}</div>
 </AuthShell>
 
-<style>.invitation{display:grid;justify-items:center;gap:14px;color:var(--success)}.invitation p{width:100%;padding:9px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:10px}</style>
+<style>.invitation{display:grid;justify-items:center;gap:14px;color:var(--success)}.invitation p{width:100%;padding:9px;border-radius:6px;background:var(--danger-soft);color:var(--danger);font-size:11px}</style>

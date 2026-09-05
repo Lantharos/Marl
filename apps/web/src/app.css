@@ -90,7 +90,9 @@
   --text-strong: #f1f0ed;
   --text: #d0cfcb;
   --text-muted: #aaa9a4;
-  --text-faint: #85847f;
+  --text-faint: #95948e;
+  --on-brand: #27160f;
+  --on-danger: #281214;
   --brand: #df7557;
   --brand-hover: #ec8667;
   --brand-strong: #f09a7e;
@@ -123,7 +125,9 @@
   --text-strong: #1b1a18;
   --text: #3e3c38;
   --text-muted: #6e6b65;
-  --text-faint: #96928a;
+  --text-faint: #75716a;
+  --on-brand: #ffffff;
+  --on-danger: #ffffff;
   --brand: #b64f35;
   --brand-hover: #9f422c;
   --brand-strong: #923b28;
@@ -143,14 +147,19 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--canvas); }
-body { color: var(--text); font-size: 14px; line-height: 1.45; }
+body { color: var(--text); font-size: 14px; line-height: 1.5; }
 @media (min-width: 1200px) and (max-resolution: 1.05dppx) {
   :root { --interface-scale: 1.1; zoom: var(--interface-scale); }
 }
+::-webkit-scrollbar { width: 8px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 8px; background: var(--border-strong); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+::-webkit-scrollbar-button { display: none; }
 ::selection { background: var(--brand-soft-strong); color: var(--text-strong); }
 button, input, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 1px solid var(--brand); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 input:read-write:focus, textarea:read-write:focus { border-color: var(--brand); box-shadow: none; outline: 0; }
 :is(label, header, div):has(> :is(input:read-write, textarea:read-write):focus) { border-color: var(--brand); box-shadow: none; }
 button { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease; }

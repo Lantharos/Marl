@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import '../app.css';
+  import '$lib/styles/controls.css';
   import { registerElevationHandler } from '$lib/auth/elevation';
   import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';

@@ -32,11 +32,11 @@
 
 <div class="filter-bar">
   <div class="filters" aria-label="Filters">
-    <div class="tabs">{#each tabs as tab}<Chip active={tab === active} onclick={() => { active = tab; onActiveChange?.(tab); }}>{tab}</Chip>{/each}</div>
+    <div class="tabs">{#each tabs as tab (tab)}<Chip active={tab === active} onclick={() => { active = tab; onActiveChange?.(tab); }}>{tab}</Chip>{/each}</div>
     {#if labelOptions.length || selectedLabels.length}
       <span class="divider" aria-hidden="true"></span>
       <div class="selected-labels">
-        {#each selectedLabels as name}
+        {#each selectedLabels as name (name)}
           {@const label = labelOptions.find((option) => option.name === name)}
           <Chip removable color={label?.color ?? 'var(--text-faint)'} aria-label={`Remove ${name} filter`} onclick={() => toggleLabel(name)}>{name}</Chip>
         {/each}
@@ -47,7 +47,7 @@
           <div class="label-menu">
             <label class="label-search"><Search size={13} /><input bind:value={labelQuery} aria-label="Find a label" placeholder="Find a label" /></label>
             <div class="label-options">
-              {#each filteredLabels as label}
+              {#each filteredLabels as label (label.name)}
                 <Button class="label-option" variant="ghost" onclick={() => toggleLabel(label.name)}>
                   <span class="label-copy"><b style:background={label.color}></b><span><strong>{label.name}</strong>{#if label.description}<small>{label.description}</small>{/if}</span></span>
                   {#if selectedLabels.includes(label.name)}<Check size={13} />{/if}
@@ -63,5 +63,5 @@
 </div>
 
 <style>
-  .filter-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:15px}.filters,.tabs,.selected-labels{display:flex;min-width:0;align-items:center;gap:4px}.filters{flex-wrap:wrap}.divider{width:1px;height:18px;margin:0 5px;background:var(--border)}.label-picker{position:relative}.label-picker :global(.add-label.button){border:1px dashed var(--border);border-radius:50%}.label-picker :global(.add-label.button:hover){border-color:var(--border-strong)}.label-menu{position:absolute;z-index:80;top:35px;left:0;width:270px;padding:6px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.label-search,.query{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-faint)}.label-search{height:32px;padding:0 8px}.query{width:min(280px,42%);height:32px;padding:0 9px}.label-search:focus-within,.query:focus-within{border-color:var(--brand)}input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--text-strong);font-size:10px}input::placeholder{color:var(--text-faint)}.label-options{display:grid;max-height:260px;overflow-y:auto;margin-top:5px;padding-top:3px;border-top:1px solid var(--border-subtle)}.label-options :global(.label-option.button){height:auto;min-height:38px;justify-content:space-between;padding:6px 7px;text-align:left}.label-copy{display:flex;min-width:0;align-items:center;gap:8px}.label-copy>b{width:9px;height:9px;flex:0 0 auto;border-radius:50%}.label-copy strong,.label-copy small{display:block;overflow:hidden;max-width:190px;text-overflow:ellipsis;white-space:nowrap}.label-copy strong{color:var(--text-strong);font-size:10px}.label-copy small{margin-top:2px;color:var(--text-faint);font-size:8px}.label-options>p{margin:0;padding:18px 8px;color:var(--text-faint);font-size:9px;text-align:center}@media(max-width:680px){.filter-bar{align-items:stretch;flex-direction:column}.query{width:100%}.selected-labels{flex-wrap:wrap}}
+  .filter-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:22px}.filters,.tabs,.selected-labels{display:flex;min-width:0;align-items:center;gap:4px}.filters{flex-wrap:wrap}.divider{width:1px;height:18px;margin:0 5px;background:var(--border)}.label-picker{position:relative}.label-picker :global(.add-label.button){border:0;border-radius:999px;background:var(--surface-raised)}.label-picker :global(.add-label.button:hover){border-color:var(--border-strong)}.label-menu{position:absolute;z-index:80;top:35px;left:0;width:min(270px,calc(100vw - 48px));padding:6px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.label-search,.query{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-faint)}.label-search{height:36px;padding:0 10px}.query{width:min(280px,42%);height:36px;padding:0 11px}.label-search:focus-within,.query:focus-within{border-color:var(--brand)}input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--text-strong);font-size:12px}input::placeholder{color:var(--text-faint)}.label-options{display:grid;max-height:260px;overflow-y:auto;margin-top:5px;padding-top:3px;border-top:1px solid var(--border-subtle)}.label-options :global(.label-option.button){height:auto;min-height:38px;justify-content:space-between;padding:6px 7px;text-align:left}.label-copy{display:flex;min-width:0;align-items:center;gap:8px}.label-copy>b{width:9px;height:9px;flex:0 0 auto;border-radius:50%}.label-copy strong,.label-copy small{display:block;overflow:hidden;max-width:190px;text-overflow:ellipsis;white-space:nowrap}.label-copy strong{color:var(--text-strong);font-size:12px}.label-copy small{margin-top:2px;color:var(--text-faint);font-size:11px}.label-options>p{margin:0;padding:18px 8px;color:var(--text-faint);font-size:11px;text-align:center}@media(max-width:680px){.filter-bar{align-items:stretch;flex-direction:column}.query{width:100%}.selected-labels{flex-wrap:wrap}}
 </style>

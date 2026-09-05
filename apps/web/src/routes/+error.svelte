@@ -33,5 +33,5 @@
 </section>
 
 <style>
-  .error-page{display:flex;min-height:calc(100vh / var(--interface-scale) - 52px);flex-direction:column;align-items:center;justify-content:center;padding:46px 24px 96px;text-align:center}.illustration{width:min(430px,88vw);height:auto;margin-bottom:-8px}h1{margin:0;color:var(--text-strong);font-size:26px;font-weight:660;letter-spacing:-.035em}.actions{display:flex;gap:7px;margin-top:24px}
+  .error-page{display:flex;min-height:calc(100dvh / var(--interface-scale) - 60px);flex-direction:column;align-items:center;justify-content:center;padding:46px 24px 96px;text-align:center}.illustration{width:min(430px,88vw);height:auto;margin-bottom:-8px}h1{margin:0;color:var(--text-strong);font-size:26px;font-weight:660;letter-spacing:-.035em}.actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:24px}
 </style>
