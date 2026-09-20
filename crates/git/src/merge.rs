@@ -26,6 +26,7 @@ pub(crate) struct MergeRequest {
     pub(crate) target_commit_id: String,
     pub(crate) title: String,
     pub(crate) author: String,
+    pub(crate) author_email: String,
     pub(crate) actor_id: String,
     pub(crate) operation_id: String,
     #[serde(default)]
@@ -48,6 +49,11 @@ struct MergeResponse {
     target_head_id: String,
 }
 
+struct MergePlan {
+    result: MergeResponse,
+    update: Option<(String, String)>,
+}
+
 pub(crate) async fn merge_request(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -66,6 +72,10 @@ pub(crate) async fn merge_request(
     }
     match perform_merge(&state, request).await {
         Ok(value) => (StatusCode::OK, Json(value)).into_response(),
+        Err(error) if error.to_string().starts_with("Signing firewall") => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": format!("{error} Create and sign the merge locally, then push it.")})),
+        ).into_response(),
         Err(error) if error.to_string().starts_with("merge conflict") => {
             (
                 StatusCode::CONFLICT,
@@ -106,7 +116,24 @@ async fn perform_merge(state: &AppState, request: MergeRequest) -> Result<MergeR
         anyhow::bail!("invalid merge request")
     }
     let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
-    let value = perform_repository_merge(&repository, &request).await?;
+    let plan = prepare_repository_merge(&repository, &request).await?;
+    if plan.update.is_some() {
+        let history = git_output(
+            &repository,
+            &[
+                "--no-replace-objects",
+                "rev-list",
+                &plan.result.commit_id,
+                "--not",
+                "--all",
+            ],
+        )
+        .await?;
+        let commits = history.lines().map(str::to_owned).collect::<Vec<_>>();
+        crate::signatures::enforce_commits(state, &request.repository_id, &repository, &commits)
+            .await?;
+    }
+    let value = publish_merge(&repository, plan).await?;
     if state.local_storage
         && let Err(error) = index_local_repository(
             state,
@@ -122,10 +149,7 @@ async fn perform_merge(state: &AppState, request: MergeRequest) -> Result<MergeR
     Ok(value)
 }
 
-async fn perform_repository_merge(
-    repository: &Path,
-    request: &MergeRequest,
-) -> Result<MergeResponse> {
+async fn prepare_repository_merge(repository: &Path, request: &MergeRequest) -> Result<MergePlan> {
     let source_ref = format!("refs/heads/{}", request.source_branch);
     let target_ref = format!("refs/heads/{}", request.target_branch);
     let source = git_output(repository, &["rev-parse", &source_ref])
@@ -137,9 +161,12 @@ async fn perform_repository_merge(
         .trim()
         .to_owned();
     if let Some(commit_id) = completed_operation(repository, request, &target).await? {
-        return Ok(MergeResponse {
-            commit_id,
-            target_head_id: target,
+        return Ok(MergePlan {
+            result: MergeResponse {
+                commit_id,
+                target_head_id: target,
+            },
+            update: None,
         });
     }
     if source != request.source_commit_id || target != request.target_commit_id {
@@ -174,19 +201,29 @@ async fn perform_repository_merge(
         }
         MergeMethod::Rebase => rebase_commits(repository, request, &target, &source).await?,
     };
+    Ok(MergePlan {
+        result: MergeResponse {
+            target_head_id: commit_id.clone(),
+            commit_id,
+        },
+        update: Some((target_ref, target)),
+    })
+}
+
+async fn publish_merge(repository: &Path, plan: MergePlan) -> Result<MergeResponse> {
+    let Some((target_ref, target)) = plan.update else {
+        return Ok(plan.result);
+    };
     let update = Command::new("git")
         .args(["-C"])
         .arg(repository)
-        .args(["update-ref", &target_ref, &commit_id, &target])
+        .args(["update-ref", &target_ref, &plan.result.commit_id, &target])
         .output()
         .await?;
     if !update.status.success() {
         anyhow::bail!("stale branch head")
     }
-    Ok(MergeResponse {
-        target_head_id: commit_id.clone(),
-        commit_id,
-    })
+    Ok(plan.result)
 }
 
 async fn completed_operation(
@@ -235,6 +272,17 @@ async fn completed_operation(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn perform_repository_merge(
+        repository: &Path,
+        request: &MergeRequest,
+    ) -> Result<MergeResponse> {
+        publish_merge(
+            repository,
+            prepare_repository_merge(repository, request).await?,
+        )
+        .await
+    }
     use std::{
         fs,
         process::Command as StdCommand,
@@ -425,6 +473,7 @@ mod tests {
             target_commit_id: target.into(),
             title: "Merge test".into(),
             author: "tester".into(),
+            author_email: "tester@example.com".into(),
             actor_id: "tester".into(),
             operation_id: operation_id.into(),
             method: MergeMethod::Merge,

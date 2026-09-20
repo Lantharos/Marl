@@ -3,6 +3,9 @@
   import { page } from '$app/stores';
   import { untrack } from 'svelte';
   import Archive from 'lucide-svelte/icons/archive';
+  import Check from 'lucide-svelte/icons/check';
+  import Save from 'lucide-svelte/icons/save';
+  import GitBranch from 'lucide-svelte/icons/git-branch';
   import ArrowRightLeft from 'lucide-svelte/icons/arrow-right-left';
   import Globe2 from 'lucide-svelte/icons/globe-2';
   import GitFork from 'lucide-svelte/icons/git-fork';
@@ -15,7 +18,6 @@
   import Modal from '$lib/components/Modal.svelte';
   import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
   import Select from '$lib/components/Select.svelte';
-  import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
   import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
   import type { PageData } from './$types';
 
@@ -26,18 +28,20 @@
   const owner = $derived($page.params.owner ?? '');
   const repo = $derived($page.params.repo ?? '');
   let description = $state(untrack(() => data.repository.description));
+  let savedDescription = $state(untrack(() => data.repository.description));
   let iconUrl = $state<string | null>(untrack(() => data.repository.iconUrl));
   let iconState = $state<'idle' | 'saving' | 'saved'>('idle');
   let iconInput: HTMLInputElement;
   let visibility = $state(untrack(() => data.repository.visibility));
   let nextVisibility = $state(untrack(() => data.repository.visibility));
   let defaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
+  let nextDefaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
   let newName = $state($page.params.repo ?? '');
   let destination = $state(untrack(() => data.organizations.find((organization: Organization) => organization.slug !== ($page.params.owner ?? ''))?.slug ?? ($page.params.owner ?? '')));
   let deleteConfirmation = $state('');
   let archived = $state(untrack(() => Boolean(data.repository.archivedAt)));
   let upstream = $state(untrack(() => data.repository.upstream));
-  let dialog = $state<'visibility' | 'rename' | 'transfer' | 'detach' | 'archive' | 'delete' | null>(null);
+  let dialog = $state<'branch' | 'visibility' | 'rename' | 'transfer' | 'detach' | 'archive' | 'delete' | null>(null);
   let busy = $state('');
   let generalState = $state<'idle' | 'saving' | 'saved'>('idle');
   let visibilityState = $state<'idle' | 'saved'>('idle');
@@ -57,9 +61,12 @@
   }
 
   async function saveGeneral() {
+    if (busy || description === savedDescription) return;
+    const submitted = description;
     generalState = 'saving';
     await run('general', async () => {
-    await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ description, defaultBranch }) });
+      await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ description: submitted }) });
+      savedDescription = submitted;
     });
     if (error) { generalState = 'idle'; return; }
     generalState = 'saved';
@@ -84,6 +91,16 @@
     } finally {
       input.value = '';
     }
+  }
+
+  async function saveDefaultBranch() {
+    if (busy) return;
+    const submitted = nextDefaultBranch;
+    await run('branch', async () => {
+      await api(`/repositories/${owner}/${repo}/settings`, { method: 'PATCH', body: JSON.stringify({ defaultBranch: submitted }) });
+      defaultBranch = submitted;
+      dialog = null;
+    });
   }
 
   function changeVisibility() { return run('visibility', async () => {
@@ -127,14 +144,13 @@
 
 <svelte:head><title>Settings · {owner}/{repo} · Marl</title></svelte:head>
 
-<header class="page-head"><h2>General</h2><p>Repository identity, access, and lifecycle.</p></header>
+<header class="page-head"><h2>General</h2></header>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 
 <section class="details">
-  <header><div><h3>Repository details</h3><p>Shown anywhere this repository appears in Marl.</p></div><SettingsAction state={generalState} onclick={saveGeneral} /></header>
   <div class="icon-field"><ImageUploadButton state={iconState} label="Change repository icon" size={52} onclick={() => iconInput.click()}>{#snippet children()}<RepositoryIcon name={repo} src={iconUrl} size={52} />{/snippet}</ImageUploadButton><div><strong>Repository icon</strong><small>Click the icon to change it. PNG, JPEG, or WebP up to 2 MB.</small></div><input bind:this={iconInput} type="file" accept="image/png,image/jpeg,image/webp" onchange={uploadIcon} /></div>
-  <label><span>Description</span><input bind:value={description} maxlength="280" placeholder="Describe this repository" /></label>
-  <div class="fields single"><label><span>Default branch</span><Select bind:value={defaultBranch} ariaLabel="Default branch" options={branchOptions} /></label></div>
+  <form class="description-field" onsubmit={(event) => { event.preventDefault(); void saveGeneral(); }}><label for="repository-description">Description</label><div><input id="repository-description" bind:value={description} maxlength="280" placeholder="Describe this repository" /><Button type="submit" icon variant="ghost" aria-label="Save description" title="Save description" loading={generalState === 'saving'} disabled={Boolean(busy) || description === savedDescription}>{#if generalState === 'saved' && description === savedDescription}<Check size={17} />{:else}<Save size={17} />{/if}</Button></div></form>
+  <div class="default-branch"><strong>Default branch</strong><Button size="small" aria-label="Change default branch, currently {defaultBranch}" aria-haspopup="dialog" disabled={!branchOptions.length} onclick={() => { nextDefaultBranch = defaultBranch; error = ''; dialog = 'branch'; }}><GitBranch size={14} />{defaultBranch}</Button></div>
 </section>
 
 <section class="operations">
@@ -154,6 +170,12 @@
   <div class="operation"><span class="operation-icon"><Archive size={15} /></span><div><strong>{archived ? 'Unarchive repository' : 'Archive repository'}</strong><small>{archived ? 'Restore pushes and normal repository activity.' : 'Make the repository read-only while preserving every object.'}</small></div><Button size="small" onclick={() => (dialog = 'archive')}>{archived ? 'Unarchive' : 'Archive'}</Button></div>
   <div class="operation delete"><span class="operation-icon"><Trash2 size={15} /></span><div><strong>Delete repository</strong><small>Hide it immediately and permanently purge it after 30 days.</small></div><Button size="small" variant="danger-soft" onclick={() => { deleteConfirmation = ''; dialog = 'delete'; }}>Delete</Button></div>
 </section>
+
+<Modal open={dialog === 'branch'} title="Change default branch" onClose={() => { if (busy !== 'branch') dialog = null; }}>
+  <label class="modal-field"><span>Default branch</span><Select bind:value={nextDefaultBranch} ariaLabel="Default branch" options={branchOptions} /></label>
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#snippet actions()}<Button size="small" disabled={busy === 'branch'} onclick={() => (dialog = null)}>Cancel</Button><Button size="small" variant="primary" loading={busy === 'branch'} disabled={nextDefaultBranch === defaultBranch || Boolean(busy)} onclick={saveDefaultBranch}>Change branch</Button>{/snippet}
+</Modal>
 
 <Modal open={dialog === 'rename'} title="Rename repository" description="Links and clone URLs will change immediately." onClose={() => (dialog = null)}>
   {#snippet children()}<label class="modal-field"><span>New repository name</span><input bind:value={newName} oninput={() => (newName = repositoryName(newName))} onblur={() => (newName = submittedNewName)} maxlength="100" autocomplete="off" /></label>{/snippet}
@@ -187,7 +209,8 @@
 
 
 <style>
-  .page-head{padding-bottom:24px;margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p,section header p{margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;}.details>label,.fields label{display:block}.details label>span,.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}.operations,.danger-zone{border-radius:12px;background:var(--surface);box-shadow:var(--shadow-surface)}.operations>header,.danger-zone>header{margin:0;padding:20px 20px 8px}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:16px 20px;}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:11px}
-  .fields.single{grid-template-columns:1fr}.icon-field{display:grid;grid-template-columns:52px minmax(0,1fr);align-items:center;gap:12px;margin-bottom:18px}.icon-field>input{display:none}.icon-field strong,.icon-field small{display:block}.icon-field strong{color:var(--text-strong);font-size:12px}.icon-field small{margin-top:4px;color:var(--text-faint);font-size:11px}
-  @media(max-width:580px){.fields{grid-template-columns:1fr}.details>header{align-items:flex-start}.operation{grid-template-columns:32px minmax(0,1fr)}.operation>:global(.button){grid-column:2;justify-self:start}}
+  .description-field{display:grid;gap:8px}.description-field>label{color:var(--text-strong);font-size:13px;font-weight:600}.description-field>div{display:flex;align-items:center;gap:8px}.description-field input{flex:1;min-width:0}.description-field :global(.button){flex:none}.default-branch{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:24px}.default-branch strong{display:block;color:var(--text-strong);font-size:13px}
+  .page-head{padding-bottom:24px;margin-bottom:24px}.page-head h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.error{display:flex;align-items:center;gap:6px;margin:0 0 14px;color:var(--danger);font-size:12px}section{margin-bottom:26px}section h3{margin:0;color:var(--text-strong);font-size:13px}section>header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.details{padding-bottom:26px;}.modal-field>span{display:block;margin-bottom:7px;color:var(--text-muted);font-size:12px;font-weight:620}.details input,.modal-field input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}.details input:focus,.modal-field input:focus{border-color:var(--brand)}.operations,.danger-zone{border-radius:12px;background:var(--surface);box-shadow:var(--shadow-surface)}.operations>header,.danger-zone>header{margin:0;padding:20px 20px 8px}.operation{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:72px;padding:16px 20px;}.operation-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px;background:var(--canvas);color:var(--text-muted)}.operation strong,.operation small{display:block}.operation strong{color:var(--text-strong);font-size:13px}.operation small{margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.4}.operation code{color:var(--text-muted)}.delete .operation-icon{background:var(--danger-soft);color:var(--danger)}.modal-field{display:block}.modal-summary{display:flex;align-items:center;gap:11px;padding:11px;border-radius:7px;background:var(--surface)}.modal-summary>:global(svg){color:var(--brand)}.modal-summary strong,.modal-summary small{display:block}.modal-summary strong{color:var(--text-strong);font-size:11px}.modal-summary small{margin-top:4px;color:var(--text-muted);font-size:11px}
+  .icon-field{display:grid;grid-template-columns:52px minmax(0,1fr);align-items:center;gap:12px;margin-bottom:18px}.icon-field>input{display:none}.icon-field strong,.icon-field small{display:block}.icon-field strong{color:var(--text-strong);font-size:12px}.icon-field small{margin-top:4px;color:var(--text-faint);font-size:11px}
+  @media(max-width:580px){.operation{grid-template-columns:32px minmax(0,1fr)}.operation>:global(.button){grid-column:2;justify-self:start}}
 </style>

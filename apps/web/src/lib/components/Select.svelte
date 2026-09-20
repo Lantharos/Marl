@@ -4,6 +4,7 @@
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import { dismissable } from '$lib/actions/dismissable';
   import { interfaceScale } from '$lib/ui/floating';
+  import { popoverMotion } from '$lib/ui/popover';
 
   type Option = { value: string; label: string; description?: string };
   let { value = $bindable(), options, ariaLabel, onchange }: { value: string; options: Option[]; ariaLabel: string; onchange?: (value: string) => void | Promise<void> } = $props();
@@ -38,6 +39,7 @@
     if (direction === 'first') activeIndex = 0;
     if (direction === 'last') activeIndex = options.length - 1;
     await tick();
+    menu?.showPopover();
     positionMenu();
     await focusActiveOption();
   }
@@ -96,9 +98,9 @@
 
 <div class="select" use:dismissable={() => closeMenu()}>
   <button bind:this={trigger} type="button" aria-label={ariaLabel} aria-haspopup="listbox" aria-controls={listboxId} aria-expanded={open} onkeydown={keydown} onclick={toggle}><span><strong>{selected?.label ?? 'Choose…'}</strong>{#if selected?.description}<small>{selected.description}</small>{/if}</span><ChevronDown size={14} /></button>
-  {#if open}<div bind:this={menu} id={listboxId} class="options" style={menuStyle} role="listbox" tabindex="-1" aria-label={ariaLabel} onkeydown={keydown}>{#each options as option,index (option.value)}<button id={optionId(index)} type="button" role="option" tabindex={index === activeIndex ? 0 : -1} aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
+  {#if open}<div bind:this={menu} id={listboxId} class="options" popover="manual" transition:popoverMotion style={menuStyle} role="listbox" tabindex="-1" aria-label={ariaLabel} onkeydown={keydown}>{#each options as option,index (option.value)}<button id={optionId(index)} type="button" role="option" tabindex={index === activeIndex ? 0 : -1} aria-selected={option.value === value} class:active={index === activeIndex} onmouseenter={() => (activeIndex = index)} onclick={() => choose(option)}><span><strong>{option.label}</strong>{#if option.description}<small>{option.description}</small>{/if}</span>{#if option.value === value}<Check size={14} />{/if}</button>{/each}</div>{/if}
 </div>
 
 <style>
-  .select{position:relative}.select>button{display:flex;width:100%;height:100%;min-height:42px;align-items:center;justify-content:space-between;gap:10px;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;text-align:left}.select>button:hover{border-color:var(--text-faint)}.select>button:focus-visible{border-color:var(--brand);outline:2px solid var(--brand);outline-offset:2px}.select>button span,.options button span{min-width:0}.select strong,.select small{display:block}.select strong{overflow:hidden;color:var(--text-strong);font-size:13px;font-weight:560;text-overflow:ellipsis;white-space:nowrap}.select small{margin-top:2px;color:var(--text-faint);font-size:11px}.options{position:fixed;z-index:200;max-height:280px;overflow:auto;padding:4px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.options button{display:grid;width:100%;grid-template-columns:minmax(0,1fr) 18px;align-items:center;gap:8px;min-height:38px;padding:9px;border:0;border-radius:6px;background:transparent;color:var(--text);cursor:pointer;text-align:left}.options button:hover,.options button.active{background:var(--surface-muted)}.options button>:global(svg){color:var(--brand)}
+  .select{position:relative}.select>button{display:flex;width:100%;height:100%;min-height:42px;align-items:center;justify-content:space-between;gap:10px;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;text-align:left}.select>button:hover{border-color:var(--text-faint)}.select>button:focus-visible{border-color:var(--brand);outline:2px solid var(--brand);outline-offset:2px}.select>button span,.options button span{min-width:0}.select strong,.select small{display:block}.select strong{overflow:hidden;color:var(--text-strong);font-size:13px;font-weight:560;text-overflow:ellipsis;white-space:nowrap}.select small{margin-top:2px;color:var(--text-faint);font-size:11px}.options{position:fixed;inset:auto;margin:0;max-width:none;color:var(--text);max-height:280px;overflow:auto;padding:6px;border:0;border-radius:14px;background:var(--surface-raised);box-shadow:var(--shadow-popover);transform-origin:top center}.options button{display:grid;width:100%;grid-template-columns:minmax(0,1fr) 18px;align-items:center;gap:8px;min-height:38px;padding:9px;border:0;border-radius:8px;background:transparent;color:var(--text);cursor:pointer;text-align:left}.options button:hover,.options button.active{background:var(--surface-muted)}.options button>:global(svg){color:var(--brand)}
 </style>

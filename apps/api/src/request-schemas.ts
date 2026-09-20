@@ -1,17 +1,24 @@
-import { array, boolean, integer, maxLength, maxValue, minLength, minValue, number, optional, picklist, pipe, record, strictObject, string, unknown } from 'valibot';
+import { array, boolean, integer, maxLength, maxValue, minLength, minValue, nullable, number, optional, picklist, pipe, record, strictObject, string, unknown } from 'valibot';
 
 const shortString = pipe(string(), maxLength(1_000));
 const bodyString = pipe(string(), maxLength(100_000));
 const identifier = pipe(string(), minLength(1), maxLength(200));
 const branch = pipe(string(), minLength(1), maxLength(1_024));
 const mergeMethod = picklist(['merge', 'squash', 'rebase']);
+const signingMode = picklist(['optional', 'vigilant', 'firewall']);
+export const signingModeBody = strictObject({ signingMode });
+export const signingPolicyBody = strictObject({
+  repositoryId: optional(identifier),
+  emails: pipe(array(pipe(string(), maxLength(320))), maxLength(80))
+});
 
 export const branchRuleBody = strictObject({
   pattern: branch,
   requiredApprovals: pipe(number(), integer(), minValue(0), maxValue(10)),
   requiredChecks: pipe(array(pipe(string(), minLength(1), maxLength(240))), maxLength(32)),
   requireConversations: boolean(),
-  dismissStaleReviews: boolean(),
+  carryApprovalsForward: boolean(),
+  allowAuthorMerge: boolean(),
   allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3))
 });
 
@@ -33,6 +40,8 @@ export const createRepositoryBody = strictObject({
   visibility: optional(picklist(['public', 'private']))
 });
 export const repositorySettingsBody = strictObject({
+  signingMode: optional(signingMode),
+  requireCheckApproval: optional(boolean()),
   description: optional(pipe(string(), maxLength(280))),
   visibility: optional(picklist(['public', 'private'])),
   defaultBranch: optional(branch),
@@ -74,6 +83,18 @@ export const createPullLabelBody = strictObject({
 export const commentBody = strictObject({
   body: pipe(string(), minLength(1), maxLength(50_000))
 });
+export const issueCommentBody = strictObject({
+  body: pipe(string(), minLength(1), maxLength(50_000)),
+  replyToId: optional(identifier)
+});
+export const issueConclusionBody = strictObject({
+  body: pipe(string(), maxLength(10_000)),
+  commentId: optional(nullable(identifier))
+});
+export const issueParticipationBody = strictObject({
+  following: optional(boolean()),
+  lastReadSequence: optional(pipe(number(), integer(), minValue(0), maxValue(Number.MAX_SAFE_INTEGER)))
+});
 export const reviewThreadBody = strictObject({
   path: pipe(string(), minLength(1), maxLength(4_096)),
   side: picklist(['old', 'new']),
@@ -86,10 +107,11 @@ export const resolveThreadBody = strictObject({
   resolved: optional(boolean())
 });
 export const reviewBody = strictObject({
+  commitId: pipe(string(), minLength(40), maxLength(64)),
   state: picklist(['commented', 'approved', 'changes_requested']),
   body: optional(pipe(string(), maxLength(20_000)))
 });
-export const mergeBody = strictObject({ method: optional(mergeMethod) });
+export const mergeBody = strictObject({ method: optional(mergeMethod), commitId: pipe(string(), minLength(40), maxLength(64)) });
 
 export const createIssueBody = strictObject({
   title: pipe(string(), minLength(1), maxLength(240)),
@@ -165,9 +187,6 @@ export const secretValueBody = strictObject({
 export const sshKeyBody = strictObject({
   name: pipe(string(), minLength(1), maxLength(80)),
   publicKey: pipe(string(), minLength(32), maxLength(16_000))
-});
-export const signingKeysBody = strictObject({
-  emails: pipe(array(pipe(string(), minLength(3), maxLength(320))), maxLength(250))
 });
 export const pullRealtimeUpdateBody = strictObject({
   id: identifier,

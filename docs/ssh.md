@@ -31,6 +31,28 @@ Marl shows **Verified** only after the signature is cryptographically valid, the
 still linked to a Marl account, and the commit author email matches that account's verified email.
 Removing the key removes its verification from indexed commits.
 
+Choose a mode in **Settings -> Sign-in and security**, or under a repository's
+**Settings -> Access and security**:
+
+- **Optional** accepts unsigned commits without an indicator. Valid signatures show Verified.
+- **Vigilant** accepts commits but shows Unverified when their signature cannot be verified.
+- **Firewall** rejects new commits without a valid SSH signature from the author's registered key.
+
+The stricter personal or repository mode applies. Personal settings protect author identities
+using the account's verified email addresses, not display names or the account doing the push.
+Repository Firewall applies to every incoming author, including maintainers. An unknown author,
+an unregistered key, or a signature that cannot be verified does not pass Firewall.
+
+The policy applies to new history, including parents of the pushed tip, over Smart HTTP, SSH,
+and native uploads. Previously accepted history remains available when a mode changes. Deleting
+a branch does not require a commit signature. When signing policy cannot be loaded, a push that
+introduces commits is rejected; retry once Marl is available.
+
+Marl does not hold your private signing key. With Firewall enabled, create and sign merge,
+squash, or rebased commits locally and push them. The web merge action cannot create a verified
+signature on your behalf. Only SSH commit signatures are currently verified; a signed tag alone
+does not verify the commits it points to.
+
 The public-key path works when the matching private key is loaded in your SSH agent. Otherwise,
 set `user.signingkey` to the private-key path instead.
 

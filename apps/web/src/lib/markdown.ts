@@ -1,124 +1,52 @@
 import { Marked, Renderer } from 'marked';
-import sanitizeHtml from 'sanitize-html';
+import { footnotes } from './markdown/footnotes';
+import GithubSlugger from 'github-slugger';
+import { markdownExtensions, plainHeading } from './markdown/extensions';
+import { sanitizeMarkdown } from './markdown/sanitize';
+import { escapeHtml, type MarkdownContext } from './markdown/urls';
 
-export type MarkdownContext = {
-  owner: string;
-  repository: string;
-  revision?: string;
-  path?: string;
-};
-
+export type { MarkdownContext } from './markdown/urls';
 export type MarkdownFormat = 'markdown' | 'plain';
 
-export function renderMarkdown(source: string, context?: MarkdownContext, format: MarkdownFormat = 'markdown') {
+export function renderMarkdown(source: string, context?: MarkdownContext, format: MarkdownFormat = 'markdown', scope = '') {
+  const prefix = `user-content-${scope ? `${scope.replace(/[^\w-]/g, '')}-` : ''}`;
   const normalized = source.replaceAll('\0', '\uFFFD');
-  if (format === 'plain') return sanitize(`<pre class="plain-text">${linkifyPlainText(normalized)}</pre>`);
-  const markdown = new Marked({ gfm: true, breaks: false, renderer: markdownRenderer(context) });
-  if (context) markdown.use({ extensions: [referenceExtension(context)] });
-  return sanitize(markdown.parse(normalized, { async: false }) as string);
-}
-
-function sanitize(rendered: string) {
-  return sanitizeHtml(rendered, {
-    allowedTags: [
-      'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em',
-      'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'input', 'ins', 'kbd', 'li',
-      'mark', 'ol', 'p', 'pre', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody',
-      'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul', 'var'
-    ],
-    allowedAttributes: {
-      a: ['href', 'title', 'target', 'rel'], blockquote: ['class'], col: ['align'], colgroup: ['align'], details: ['open'], div: ['class'],
-      h1: ['id'], h2: ['id'], h3: ['id'], h4: ['id'], h5: ['id'], h6: ['id'], img: ['src', 'alt', 'title', 'width', 'height', 'align'],
-      input: ['type', 'checked', 'disabled'], li: ['class'], ol: ['start'], pre: ['class'], span: ['class'], table: ['align'], td: ['align'], th: ['align'], tr: ['align'], ul: ['class']
-    },
-    allowedSchemes: ['http', 'https', 'mailto'],
-    allowProtocolRelative: false,
-    transformTags: {
-      a: (_tag, attributes) => ({ tagName: 'a', attribs: externalLinkAttributes(attributes) }),
-      input: (_tag, attributes) => ({ tagName: 'input', attribs: { type: 'checkbox', ...(attributes.checked !== undefined ? { checked: '' } : {}), disabled: '' } }),
-      '*': (tagName, attributes) => ({ tagName, attribs: attributes.id ? { ...attributes, id: `user-content-${attributes.id.replace(/^user-content-/, '')}` } : attributes })
-    }
-  });
-}
-
-function markdownRenderer(context?: MarkdownContext) {
+  if (format === 'plain') return sanitizeMarkdown(`<pre class="plain-text">${linkifyPlainText(normalized)}</pre>`, undefined, prefix);
   const renderer = new Renderer();
-  const headings = new Map<string, number>();
+  const slugger = new GithubSlugger();
+  renderer.tablecell = function ({ tokens, header, align }) {
+    const tag = header ? 'th' : 'td';
+    return `<${tag}${align ? ` align="${align}"` : ''}>${this.parser.parseInline(tokens)}</${tag}>\n`;
+  };
   renderer.heading = function ({ tokens, depth }) {
     const content = this.parser.parseInline(tokens);
-    const text = tokens.map((token) => 'text' in token && typeof token.text === 'string' ? token.text : '').join(' ');
-    const base = text.toLowerCase().trim().replace(/<[^>]*>/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-') || 'section';
-    const occurrence = headings.get(base) ?? 0;
-    headings.set(base, occurrence + 1);
-    return `<h${depth} id="${occurrence ? `${base}-${occurrence}` : base}">${content}</h${depth}>`;
+    return `<h${depth} id="${escapeHtml(slugger.slug(plainHeading(content)))}">${content}</h${depth}>`;
   };
-  renderer.link = function ({ href, title, tokens }) {
-    const resolved = resolveMarkdownUrl(href, context, false);
-    const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : '';
-    const external = /^https?:/i.test(resolved) ? ' target="_blank" rel="nofollow noopener noreferrer"' : '';
-    return `<a href="${escapeAttribute(resolved)}"${titleAttribute}${external}>${this.parser.parseInline(tokens)}</a>`;
-  };
-  renderer.image = ({ href, title, text }) => {
-    const resolved = resolveMarkdownUrl(href, context, true);
-    const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : '';
-    return `<img src="${escapeAttribute(resolved)}" alt="${escapeAttribute(text)}"${titleAttribute}>`;
-  };
-  return renderer;
-}
-
-function referenceExtension(context: MarkdownContext) {
-  return {
-    name: 'marlReference',
-    level: 'inline' as const,
-    start(source: string) { return source.search(/(?:[a-z0-9_.-]+\/[a-z0-9_.-]+)?[#!]\d+\b/i); },
-    tokenizer(source: string) {
-      const match = /^(?:([a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?)\/([a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?))?([#!])(\d+)\b/i.exec(source);
-      if (!match) return;
-      return { type: 'marlReference', raw: match[0], owner: match[1], repository: match[2], marker: match[3], number: match[4] };
-    },
-    renderer(token: { raw: string; owner?: string; repository?: string; marker: string; number: string }) {
-      const collection = token.marker === '#' ? 'issues' : 'pulls';
-      const owner = token.owner ?? context.owner;
-      const repository = token.repository ?? context.repository;
-      return `<a class="reference" href="/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/${collection}/${token.number}">${token.raw}</a>`;
+  renderer.blockquote = function ({ tokens, text }) {
+    const alert = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\r?\n|$)/.exec(text);
+    if (!alert) return `<blockquote>\n${this.parser.parse(tokens)}</blockquote>\n`;
+    const name = alert[1].toLowerCase();
+    const content = structuredClone(tokens);
+    const first = content[0];
+    if (first?.type === 'paragraph' && first.tokens?.[0]?.type === 'text') {
+      first.tokens[0].text = first.tokens[0].text.replace(/^\[![A-Z]+\](?:\r?\n)?/, '');
+      if (!first.tokens[0].text) first.tokens.shift();
+      if (first.tokens.at(0)?.type === 'br') first.tokens.shift();
     }
+    return `<blockquote class="markdown-alert markdown-alert-${name}"><span class="markdown-alert-title">${name[0].toUpperCase()}${name.slice(1)}</span>${this.parser.parse(content)}</blockquote>\n`;
   };
-}
-
-function resolveMarkdownUrl(value: string, context: MarkdownContext | undefined, image: boolean) {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('#') || trimmed.startsWith('/')) return trimmed;
-  try {
-    const absolute = new URL(trimmed);
-    return ['http:', 'https:', 'mailto:'].includes(absolute.protocol) && (!image || absolute.protocol !== 'mailto:') ? trimmed : '#';
-  } catch {}
-  if (!context?.revision || !context.path) return '#';
-  const [relativePath, fragment = ''] = trimmed.split('#', 2);
-  const resolved: string[] = [];
-  for (const segment of [...context.path.split('/').slice(0, -1), ...relativePath.split('/')]) {
-    if (!segment || segment === '.') continue;
-    if (segment === '..') resolved.pop();
-    else resolved.push(segment);
-  }
-  if (!resolved.length) return fragment ? `#${fragment}` : '#';
-  const path = resolved.map(encodeURIComponent).join('/');
-  const base = `${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repository)}`;
-  const target = image
-    ? `/api/v1/repositories/${base}/blob/${encodeURIComponent(context.revision)}/${path}`
-    : `/${base}/blob/${encodeURIComponent(context.revision)}/${path}`;
-  return fragment ? `${target}#${encodeURIComponent(fragment)}` : target;
-}
-
-function externalLinkAttributes(attributes: Record<string, string>) {
-  return /^https?:/i.test(attributes.href ?? '') ? { ...attributes, target: '_blank', rel: 'nofollow noopener noreferrer' } : attributes;
-}
-
-function escapeAttribute(value: string) {
-  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
-function escapeHtml(value: string) {
-  return escapeAttribute(value).replaceAll("'", '&#39;');
+  renderer.code = ({ text, lang }) => {
+    const language = lang?.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^\w+-]/g, '') ?? '';
+    if (language === 'math') return `<div class="markdown-math" data-math="block">${escapeHtml(text)}</div>\n`;
+    return `<pre><code${language ? ` class="language-${language}"` : ''}>${escapeHtml(text)}\n</code></pre>\n`;
+  };
+  renderer.codespan = ({ text }) => {
+    const color = /^(?:#[\da-f]{3,8}|(?:rgb|hsl)a?\([\d.,% /+-]+\))$/i.test(text) ? text : '';
+    return `<code>${escapeHtml(text)}</code>${color ? `<span class="color-swatch" data-color="${escapeHtml(color)}" aria-label="Color ${escapeHtml(color)}"></span>` : ''}`;
+  };
+  const markdown = new Marked({ gfm: true, breaks: !context?.path, renderer });
+  markdown.use(footnotes(), { extensions: markdownExtensions(context) });
+  return sanitizeMarkdown(markdown.parse(normalized, { async: false }) as string, context, prefix);
 }
 
 function linkifyPlainText(value: string) {
@@ -127,8 +55,7 @@ function linkifyPlainText(value: string) {
   for (const match of value.matchAll(/https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)]/g)) {
     const index = match.index ?? 0;
     const url = match[0];
-    rendered += escapeHtml(value.slice(offset, index));
-    rendered += `<a href="${escapeAttribute(url)}" target="_blank" rel="nofollow noopener noreferrer">${escapeHtml(url)}</a>`;
+    rendered += `${escapeHtml(value.slice(offset, index))}<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
     offset = index + url.length;
   }
   return rendered + escapeHtml(value.slice(offset));

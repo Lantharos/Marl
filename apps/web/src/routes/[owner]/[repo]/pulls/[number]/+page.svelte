@@ -1,16 +1,15 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { tick, untrack } from 'svelte';
-  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullRevisionSummary, PullRevisionWindow, PullTimelineItem, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@marl/contracts';
-  import ArrowRight from 'lucide-svelte/icons/arrow-right';
-  import BadgeCheck from 'lucide-svelte/icons/badge-check';
+  import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullRevisionSummary, PullRevisionWindow, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@marl/contracts';
+  import CommitSignature from '$lib/components/CommitSignature.svelte';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import FileDiff from 'lucide-svelte/icons/file-diff';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import MessageSquare from 'lucide-svelte/icons/message-square';
-  import Pencil from 'lucide-svelte/icons/pencil';
+  import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import X from 'lucide-svelte/icons/x';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/Button.svelte';
@@ -20,7 +19,6 @@
   import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import PullActionComposer, { type PullComposerAction } from '$lib/components/PullActionComposer.svelte';
-  import PullMetadata from '$lib/components/PullMetadata.svelte';
   import ReferenceTimelineEvent from '$lib/components/ReferenceTimelineEvent.svelte';
   import ReviewChangesPopover from '$lib/components/ReviewChangesPopover.svelte';
   import PullTimelineEvent from '$lib/components/PullTimelineEvent.svelte';
@@ -28,9 +26,12 @@
   import Seo from '$lib/components/Seo.svelte';
   import Time from '$lib/components/Time.svelte';
   import UserProfileLink from '$lib/components/UserProfileLink.svelte';
-  import WorkItemLinks from '$lib/components/WorkItemLinks.svelte';
-  import PullDecisionStrip from '$lib/pulls/PullDecisionStrip.svelte';
+  import { PullMergeability } from '$lib/pulls/PullMergeability.svelte';
+  import PullSummary from '$lib/pulls/PullSummary.svelte';
+  import PullLifecycleActions, { type PullLifecycleAction } from '$lib/pulls/PullLifecycleActions.svelte';
   import PullRevisionGroup from '$lib/pulls/PullRevisionGroup.svelte';
+  import PullRevisionActivity from '$lib/pulls/PullRevisionActivity.svelte';
+  import type { DiscussionItem } from '$lib/pulls/group-review-activity';
   import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
   import { connectPullLive } from '$lib/pulls/pull-live';
   import { reviewThreadContext, type ThreadCodeLine } from '$lib/diff';
@@ -46,11 +47,16 @@
   const markdownContext = $derived({ owner, repository: repo });
   let pull = $derived<PullRequestDetail>(data.pull);
   const timeline = $derived(new PullTimelineState(data.pull.timeline));
+  const mergeability = new PullMergeability();
+  $effect(() => {
+    if (!['draft','merged','closed'].includes(pull.state)) return mergeability.check(`/repositories/${owner}/${repo}/pulls/${number}`, pull.targetCommitId, pull.sourceCommitId);
+  });
   let diff = $state<PullRequestDiff | null>(null);
   let DiffViewer = $state<typeof import('$lib/components/DiffViewer.svelte').default | null>(null);
   let diffLoading = $state(false);
   let tab = $state<Tab>('overview');
   let error = $state('');
+  let revisionNotice = $state(false);
   let reviewState = $state<'commented' | 'approved' | 'changes_requested'>('commented');
   let reviewBody = $state('');
   let reviewOpen = $state(false);
@@ -59,8 +65,11 @@
   let editingPullBody = $state('');
   let confirmingPullDelete = $state<string | null>(null);
   let busy = $state(false);
+  let approvingChecks = $state(false);
   let mergeMethod = $state<MergeMethod>('merge');
   let editingDetails = $state(false);
+  let detailsUploading = $state(false);
+  let commentUploading = $state(false);
   let editedTitle = $state('');
   let editedBody = $state('');
   let changesView = $state<HTMLElement>();
@@ -72,6 +81,16 @@
   const patchRequests: Record<string, Promise<string>> = {};
 
   let stateRefreshQueued = false;
+  let stateRequest = 0;
+
+  async function refreshState(generation = pullGeneration, route = { owner, repo, number }) {
+    const request = ++stateRequest;
+    const result = await api<{ state: Partial<PullRequestDetail> }>(`/repositories/${route.owner}/${route.repo}/pulls/${route.number}/state`);
+    if (generation !== pullGeneration || request !== stateRequest) return;
+    const version = Number(result.state.realtimeVersion ?? 0);
+    if (version >= pull.realtimeVersion) pull = { ...pull, ...result.state, realtimeVersion: pull.realtimeVersion };
+  }
+
   function scheduleStateRefresh() {
     if (stateRefreshQueued) return;
     stateRefreshQueued = true;
@@ -79,10 +98,7 @@
     const route = { owner, repo, number };
     queueMicrotask(async () => {
       try {
-        const result = await api<{ state: Partial<PullRequestDetail> }>(`/repositories/${route.owner}/${route.repo}/pulls/${route.number}/state`);
-        if (generation !== pullGeneration) return;
-        const version = Number(result.state.realtimeVersion ?? 0);
-        if (version >= pull.realtimeVersion) pull = { ...pull, ...result.state, realtimeVersion: pull.realtimeVersion };
+        await refreshState(generation, route);
       } catch {}
       if (generation === pullGeneration) stateRefreshQueued = false;
     });
@@ -117,6 +133,7 @@
         locked: metadata.locked ?? pull.locked
       };
     }
+    if (payload.review) timeline.patch('review', String((payload.review as { id: string }).id), payload.review as Record<string, unknown>);
     if (payload.comment) timeline.patch('comment', String((payload.comment as { id: string }).id), payload.comment as Record<string, unknown>);
     if (payload.thread) {
       const thread = payload.thread as { id: string } & Record<string, unknown>;
@@ -138,6 +155,10 @@
     }
     if (Array.isArray(payload.timeline)) timeline.append(payload.timeline);
     pull = { ...pull, realtimeVersion: update.version };
+    if (pull.sourceCommitId !== previousSource) {
+      reviewOpen = false;
+      revisionNotice = true;
+    }
     if (pull.sourceCommitId !== previousSource || pull.targetCommitId !== previousTarget) {
       diff = null;
       diffLoading = false;
@@ -182,6 +203,7 @@
       clearPatchRequests();
       tab = 'overview';
       error = '';
+      revisionNotice = false;
       reviewState = 'commented';
       reviewBody = '';
       reviewOpen = false;
@@ -190,6 +212,7 @@
       editingPullBody = '';
       confirmingPullDelete = null;
       busy = false;
+      approvingChecks = false;
       mergeMethod = 'merge';
       editingDetails = false;
       editedTitle = '';
@@ -280,7 +303,7 @@
 
   async function submitReview() {
     if (!pull || busy) return; busy = true; error = '';
-    try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: reviewState, body: reviewBody }) }); applyUpdate(result.update); reviewBody = ''; reviewOpen = false; tab = 'overview'; }
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: reviewState, body: reviewBody, commitId: pull.sourceCommitId }) }); applyUpdate(result.update); reviewBody = ''; reviewOpen = false; tab = 'overview'; }
     catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Review could not be submitted.'; }
     finally { busy = false; }
   }
@@ -314,9 +337,17 @@
   }
 
   async function savePullComment(commentId: string) {
-    if (!editingPullBody.trim() || busy) return; busy = true;
+    if (!editingPullBody.trim() || busy || commentUploading) return; busy = true;
     try { const result = await api<{ update: PullRealtimeUpdate }>(`/pull-comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body: editingPullBody }) }); applyUpdate(result.update); editingPullComment = null; editingPullBody = ''; }
     catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Comment could not be updated.'; }
+    finally { busy = false; }
+  }
+
+  async function deleteReviewBody(id: string) {
+    if (busy) return;
+    busy = true; error = '';
+    try { const result = await api<{ update: PullRealtimeUpdate }>(`/pull-reviews/${id}/body`, { method: 'DELETE' }); applyUpdate(result.update); }
+    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Review comment could not be deleted.'; }
     finally { busy = false; }
   }
 
@@ -383,22 +414,36 @@
     finally { busy = false; }
   }
 
-  async function composerAction(action: PullComposerAction) {
+  async function composerAction(action: PullComposerAction | PullLifecycleAction) {
     if (busy) return;
     busy = true; error = '';
     try {
       if (action === 'approve' || action === 'request_changes') {
-        const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: action === 'approve' ? 'approved' : 'changes_requested', body: commentBody }) }); applyUpdate(result.update);
+        const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/reviews`, { method: 'POST', body: JSON.stringify({ state: action === 'approve' ? 'approved' : 'changes_requested', body: commentBody, commitId: pull.sourceCommitId }) }); applyUpdate(result.update);
       } else {
-        if (commentBody.trim() && !pull.locked) { const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/comments`, { method: 'POST', body: JSON.stringify({ body: commentBody }) }); applyUpdate(result.update); }
         const result = action === 'merge'
-          ? await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/merge`, { method: 'POST', body: JSON.stringify({ method: mergeMethod }) })
+          ? await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/merge`, { method: 'POST', body: JSON.stringify({ method: mergeMethod, commitId: pull.sourceCommitId }) })
           : await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}/${action}`, { method: 'POST', body: '{}' });
         applyUpdate(result.update);
       }
-      commentBody = '';
+      if (action === 'approve' || action === 'request_changes') commentBody = '';
     } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Pull action could not be completed.'; }
     finally { busy = false; }
+  }
+
+  async function approveChecks() {
+    if (busy || !pull.checksApproval.waiting || !pull.checksApproval.canApprove) return;
+    const generation = pullGeneration;
+    const route = { owner, repo, number };
+    busy = true; approvingChecks = true; error = '';
+    try {
+      await api(`/repositories/${route.owner}/${route.repo}/pulls/${route.number}/approve-checks`, { method: 'POST', body: JSON.stringify({ commitId: pull.sourceCommitId }) });
+      if (generation === pullGeneration) await refreshState(generation, route);
+    } catch (cause) {
+      if (generation === pullGeneration) error = cause instanceof MarlApiError ? cause.message : 'Checks could not be approved.';
+    } finally {
+      if (generation === pullGeneration) { busy = false; approvingChecks = false; }
+    }
   }
 
   function openDetailsEditor() {
@@ -408,7 +453,7 @@
   }
 
   async function saveDetails() {
-    if (busy || !editedTitle.trim()) return;
+    if (busy || detailsUploading || !editedTitle.trim()) return;
     busy = true; error = '';
     try {
       const result = await api<{ update: PullRealtimeUpdate }>(`/repositories/${owner}/${repo}/pulls/${number}`, { method: 'PATCH', body: JSON.stringify({ title: editedTitle, body: editedBody }) });
@@ -420,24 +465,20 @@
 
 </script>
 
-{#snippet timelineEntry(item: PullTimelineItem)}
+{#snippet timelineEntry(item: DiscussionItem, grouped: boolean)}
   {#if item.kind === 'event'}
-    <PullTimelineEvent event={item.value} />
+    <PullTimelineEvent event={item.value} repository={pull.sourceRepository ?? { owner, name: repo }} />
   {:else if item.kind === 'reference'}
     <ReferenceTimelineEvent reference={item.value} />
-  {:else if item.kind === 'review'}
-    <DiscussionEntry author={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} createdAt={item.value.createdAt} tone={item.value.state} outcome={item.value.state === 'approved' ? 'approved this revision' : item.value.state === 'changes_requested' ? 'requested changes' : 'reviewed'}>
-      {#if item.value.body}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}
-    </DiscussionEntry>
   {:else if item.kind === 'thread'}
-    <ReviewThread thread={item.value} {busy} interactive={pull.canManage && !pull.locked} context={markdownContext} onLoadContext={loadThreadContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
+    <ReviewThread thread={item.value} state={timeline.threadState(item.value.id)} {busy} {grouped} interactive={pull.canManage && !pull.locked} canResolve={pull.canModerate} canModerate={pull.canModerate} viewerId={data.shellUser?.id} context={markdownContext} onLoadContext={loadThreadContext} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />
   {:else}
     <DiscussionEntry author={item.value.author} displayName={item.value.authorDisplayName} avatarUrl={item.value.authorAvatarUrl} createdAt={item.value.createdAt}>
       {#snippet actions()}
-        {#if item.value.canEdit && !item.value.deleted}{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}{/if}
+        {#if !item.value.deleted && (item.value.authorId === data.shellUser?.id || pull.canModerate)}{#if confirmingPullDelete === item.value.id}<Button size="small" variant="danger-soft" disabled={busy} onclick={() => deletePullComment(item.value.id)}>Delete</Button><Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = null)}>Cancel</Button>{:else}{#if item.value.authorId === data.shellUser?.id}<Button size="small" variant="ghost" onclick={() => { editingPullComment = item.value.id; editingPullBody = item.value.body; }}>Edit</Button>{/if}<Button size="small" variant="ghost" onclick={() => (confirmingPullDelete = item.value.id)}>Delete</Button>{/if}{/if}
       {/snippet}
       {#snippet children()}
-        {#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:value={editingPullBody} context={markdownContext} compact minHeight={82} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}
+        {#if item.value.deleted}<p class="deleted">Comment deleted</p>{:else if editingPullComment === item.value.id}<MarkdownComposer bind:uploading={commentUploading} bind:value={editingPullBody} context={markdownContext} compact minHeight={82} /><footer class="comment-edit-actions"><Button size="small" onclick={() => (editingPullComment = null)}>Cancel</Button><Button size="small" variant="primary" disabled={busy || commentUploading || !editingPullBody.trim()} onclick={() => savePullComment(item.value.id)}>Save</Button></footer>{:else}<MarkdownBody source={item.value.body} context={markdownContext} />{/if}
       {/snippet}
     </DiscussionEntry>
   {/if}
@@ -448,104 +489,84 @@
 {#if !pull}
   <div class="fatal"><CircleAlert size={24} /><strong>Pull unavailable</strong><p>{error}</p><a href="/{owner}/{repo}/pulls">Back to pulls</a></div>
 {:else}
-  <header class="pr-header">
-    <div class="title-row">
-      <h1>{pull.title} <span>!{pull.number}</span></h1>
-      {#if pull.canManage}<Button size="small" disabled={busy} onclick={openDetailsEditor}><Pencil size={13} />Edit</Button>{/if}
-    </div>
-    <div class="revision-line">
-      <UserProfileLink handle={pull.author} displayName={pull.authorDisplayName} avatar={false} />
-      <span>proposes</span><code>{pull.sourceBranch}</code><ArrowRight size={12} /><code>{pull.targetBranch}</code>
-    </div>
-  </header>
-
-  <PullDecisionStrip {pull} />
-
+  <div class="pull-layout" class:wide-diff={tab === 'changes'}>
+    <PullSummary conflicted={mergeability.conflicted} {pull} {busy} context={markdownContext} onEdit={openDetailsEditor} onUpdate={updateMetadata} onCreateLabel={createLabel}>
+      {#snippet actions()}{#key pull.sourceCommitId}<PullLifecycleActions conflicted={mergeability.conflicted} {pull} {busy} {approvingChecks} bind:mergeMethod onAction={composerAction} onApproveChecks={approveChecks} />{/key}{/snippet}
+    </PullSummary>
+    <div class="pull-content">
   <nav class="tabs" aria-label="Pull sections">
-    <Chip active={tab === 'overview'} onclick={() => selectTab('overview')}><MessageSquare size={14} />Overview <span class="count">{timeline.total}</span></Chip>
+    <Chip active={tab === 'overview'} onclick={() => selectTab('overview')}><MessageSquare size={14} />Overview</Chip>
     <Chip active={tab === 'changes'} onclick={() => selectTab('changes')}><FileDiff size={14} />Changes {#if diff}<span class="count">{diff.files.length}</span>{/if}</Chip>
     <Chip active={tab === 'commits'} onclick={() => selectTab('commits')}><GitCommitHorizontal size={14} />Commits <span class="count">{pull.commits.length}</span></Chip>
     <Chip active={tab === 'checks'} onclick={() => selectTab('checks')}><CircleCheck size={14} />Checks <span class="count">{pull.checks.length}</span></Chip>
   </nav>
   {#if error}<div class="action-error" role="alert"><CircleAlert size={15} /><span>{error}</span><Button icon size="small" variant="ghost" aria-label="Dismiss error" onclick={() => (error = '')}><X size={13} /></Button></div>{/if}
+  {#if revisionNotice}<div class="revision-notice" role="status"><GitCommitHorizontal size={16} /><span>A new revision arrived. Review it before submitting.</span><Button icon size="small" variant="ghost" aria-label="Dismiss revision update" onclick={() => (revisionNotice = false)}><X size={13} /></Button></div>{/if}
 
   {#if tab === 'overview'}
-    <div class="overview-layout">
-      <main class="workspace">
-        <article class="brief">
-          <header><h2>Change brief</h2>{#if pull.canManage}<Button size="small" variant="ghost" disabled={busy} onclick={openDetailsEditor}><Pencil size={13} />Edit brief</Button>{/if}</header>
-          <div class="brief-body"><MarkdownBody source={pull.body || 'No change brief was provided.'} context={markdownContext} /></div>
-        </article>
-        <section class="activity">
-          <header><h2>Review activity</h2></header>
+        <section class="activity" aria-label="Review activity">
           <div class="timeline">
             {#if currentRevision}
               <PullRevisionGroup revision={currentRevision}>
-                  {#if data.shellUser}<PullActionComposer bind:value={commentBody} bind:mergeMethod context={markdownContext} pullState={pull.state} ready={pull.mergeRequirements.ready} locked={pull.locked} {busy} canManage={pull.canManage} canMerge={pull.canMerge} allowedMergeMethods={pull.allowedMergeMethods} onComment={addPullComment} onAction={composerAction} />{/if}
-                  {#each timeline.order as key (key)}
-                    {@const item = timeline.items.get(key)}
-                    {#if item}{@render timelineEntry(item)}{/if}
-                  {:else}
-                    <p class="quiet-activity">No review activity on this revision yet.</p>
-                  {/each}
+                  {#if data.shellUser}<PullActionComposer bind:value={commentBody} context={markdownContext} pullState={pull.state} locked={pull.locked} {busy} canManage={pull.canManage} onComment={addPullComment} onAction={composerAction} />{/if}
+                  <PullRevisionActivity viewerId={data.shellUser?.id} canModerate={pull.canModerate} {busy} onDeleteReview={deleteReviewBody} items={timeline.currentItems} context={markdownContext} entry={timelineEntry} emptyMessage="No review activity on this revision yet." />
               </PullRevisionGroup>
             {/if}
             {#each previousRevisions as revision (revision.sequence)}
               {@const expanded = expandedRevisions.includes(revision.sequence)}
               <PullRevisionGroup {revision} {expanded} loading={loadingRevisions.includes(revision.sequence)} onToggle={() => toggleRevision(revision)}>
-                      {#each timeline.revisionItems(revision.sequence) as item (`${item.kind}:${item.value.id}`)}
-                        {@render timelineEntry(item)}
-                      {:else}
-                        <p class="quiet-activity">No discussion on this revision.</p>
-                      {/each}
+                  <PullRevisionActivity viewerId={data.shellUser?.id} canModerate={pull.canModerate} {busy} onDeleteReview={deleteReviewBody} items={timeline.revisionItems(revision.sequence)} context={markdownContext} entry={timelineEntry} />
               </PullRevisionGroup>
             {/each}
-            {#if !currentRevision}<p class="quiet-activity">No review activity yet. The brief is ready for a first pass.</p>{/if}
+            {#if !currentRevision}{#if data.shellUser}<PullActionComposer bind:value={commentBody} context={markdownContext} pullState={pull.state} locked={pull.locked} {busy} canManage={pull.canManage} onComment={addPullComment} onAction={composerAction} />{/if}<PullRevisionActivity viewerId={data.shellUser?.id} canModerate={pull.canModerate} {busy} onDeleteReview={deleteReviewBody} items={timeline.currentItems} context={markdownContext} entry={timelineEntry} />{/if}
           </div>
         </section>
-      </main>
-      <aside class="sidebar"><WorkItemLinks items={pull.linkedItems} /><PullMetadata {pull} {busy} onUpdate={updateMetadata} onCreateLabel={createLabel} /></aside>
-    </div>
   {:else if tab === 'commits'}
-    <section class="commit-list">{#each pull.commits as commit (commit.id)}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{pull.sourceRepository?.owner ?? owner}/{pull.sourceRepository?.name ?? repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} />{#if commit.signatureStatus === 'verified'}<i><BadgeCheck size={12} />Verified</i>{/if}</small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull head.</p></div>{/each}</section>
+    <section class="commit-list">{#each pull.commits as commit (commit.id)}<article><span class="commit-mark"><GitCommitHorizontal size={14} /></span><span><a class="commit-title" href="/{pull.sourceRepository?.owner ?? owner}/{pull.sourceRepository?.name ?? repo}/commit/{commit.id}">{commit.title}</a><small><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatar={false} /> · <Time value={commit.authoredAt} /><CommitSignature status={commit.signatureStatus} /></small></span><code>{commit.shortId}</code></article>{:else}<div><strong>No commits to merge</strong><p>The target branch already contains this pull head.</p></div>{/each}</section>
   {:else if tab === 'changes'}
     <section class="changes-view" bind:this={changesView}>
       <header class="changes-head"><div><strong>Latest revision</strong><span>Reviewing <code>{pull.sourceCommitId.slice(0,7)}</code> from {pull.sourceBranch} against {pull.targetBranch}</span></div>{#if pull.canManage && !pull.locked && pull.state !== 'merged' && pull.state !== 'closed'}<ReviewChangesPopover bind:open={reviewOpen} bind:reviewState bind:body={reviewBody} context={markdownContext} {busy} onSubmit={submitReview} />{/if}</header>
-      {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer files={diff.files} threads={changeThreads} context={markdownContext} {busy} reviewable={pull.canManage && !pull.locked && pull.state !== 'merged' && pull.state !== 'closed'} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
+      {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer canResolve={pull.canModerate} canModerate={pull.canModerate} viewerId={data.shellUser?.id} files={diff.files} threads={changeThreads} context={markdownContext} {busy} reviewable={pull.canManage && !pull.locked && pull.state !== 'merged' && pull.state !== 'closed'} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
     </section>
   {:else}
-    <section class="checks-page"><header><h2>Checks for <code>{pull.sourceCommitId.slice(0,7)}</code></h2><p>Required checks must pass on the latest commit.</p></header>{#each pull.checks as check (check.id)}<article><span class="check-icon {check.state}">{#if check.state === 'success'}<CircleCheck size={17} />{:else if check.state === 'failure'}<CircleAlert size={17} />{:else}<CircleDot size={17} />{/if}</span><div><strong>{check.name}</strong><p>{check.summary}</p></div><span>{check.state}</span></article>{:else}<div class="empty-checks"><CircleDot size={22} /><strong>No checks reported</strong><p>Push a workflow or attach a self-hosted runner to report checks.</p></div>{/each}</section>
+    <section class="checks-page">
+      <header><h2>Checks for <code>{pull.sourceCommitId.slice(0,7)}</code></h2><p>Required checks must pass on the latest commit.</p></header>
+      {#if pull.checksApproval.waiting > 0}<div class="checks-waiting"><ShieldCheck size={16} /><span>{pull.checksApproval.waiting} {pull.checksApproval.waiting === 1 ? 'run awaits' : 'runs await'} maintainer approval.</span></div>{/if}
+      {#each pull.checks as check (check.id)}
+        <article><span class="check-icon {check.state}">{#if check.state === 'success'}<CircleCheck size={17} />{:else if check.state === 'failure'}<CircleAlert size={17} />{:else}<CircleDot size={17} />{/if}</span><div><strong>{check.name}</strong><p>{check.summary}</p></div><span>{check.state}</span></article>
+      {:else}
+        {#if !pull.checksApproval.waiting}<div class="empty-checks"><CircleDot size={22} /><strong>No checks reported</strong><p>Push a workflow or attach a self-hosted runner to report checks.</p></div>{/if}
+      {/each}
+    </section>
   {/if}
 
-  <Modal open={editingDetails} title="Edit pull" description="Changes are recorded in review activity." onClose={() => (editingDetails = false)}>
-    {#snippet children()}<div class="details-editor"><label><span>Title</span><input bind:value={editedTitle} maxlength="240" /></label><label><span>Description</span><MarkdownComposer bind:value={editedBody} context={markdownContext} minHeight={160} /></label></div>{/snippet}
-    {#snippet actions()}<Button size="small" onclick={() => (editingDetails = false)}>Cancel</Button><Button size="small" variant="primary" loading={busy} disabled={editedTitle.trim().length < 3} onclick={saveDetails}>Save changes</Button>{/snippet}
+    </div>
+  </div>
+
+  <Modal open={editingDetails} title="Edit pull" --modal-width="720px" onClose={() => { if (!detailsUploading && !busy) editingDetails = false; }}>
+    {#snippet children()}<div class="details-editor"><label><span>Title</span><input bind:value={editedTitle} maxlength="240" /></label><label><span>Description</span><MarkdownComposer bind:uploading={detailsUploading} bind:value={editedBody} context={markdownContext} minHeight={160} /></label></div>{/snippet}
+    {#snippet actions()}<Button size="small" disabled={detailsUploading || busy} onclick={() => (editingDetails = false)}>Cancel</Button><Button size="small" variant="primary" loading={busy} disabled={detailsUploading || editedTitle.trim().length < 3} onclick={saveDetails}>Save changes</Button>{/snippet}
   </Modal>
 {/if}
 
 <style>
+  .revision-notice{display:flex;align-items:center;gap:9px;margin-bottom:14px;padding:9px 10px 9px 14px;border-radius:12px;background:var(--surface);color:var(--text-muted);font-size:12px}.revision-notice>:global(svg){flex:none}.revision-notice>span{flex:1}
+  .checks-waiting{display:flex;align-items:center;gap:9px;margin:0 0 12px;padding:12px 14px;border-radius:12px;background:var(--surface);color:var(--text-muted);font-size:12px}.checks-waiting>:global(svg){flex:none;color:var(--brand)}
   .changes-loading{height:260px;border-radius:8px;background:var(--surface-muted);animation:changes-loading 1.2s ease-in-out infinite alternate}@keyframes changes-loading{to{opacity:.48}}
-  .fatal{padding:70px 20px;text-align:center;color:var(--text-faint)}.fatal strong{display:block;margin-top:10px;color:var(--text-strong)}.fatal p{font-size:11px}.fatal a{color:var(--brand);font-size:11px}.pr-header{padding:2px 0 14px}.title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:16px}.title-row h1{margin:0;color:var(--text-strong);font-size:25px;font-weight:680;letter-spacing:-.03em;line-height:1.18;text-wrap:balance}.title-row h1 span{color:var(--text-faint);font-size:16px;font-weight:540;letter-spacing:-.01em;white-space:nowrap}.revision-line{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:12px 0 0;color:var(--text-muted);font-size:12px}.revision-line code{padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text-strong)}.revision-line :global(.user-profile-link){font-size:12px}.revision-line code{max-width:100%;overflow-wrap:anywhere;font-size:11px}
+  .fatal{padding:70px 20px;text-align:center;color:var(--text-faint)}.fatal strong{display:block;margin-top:10px;color:var(--text-strong)}.fatal p{font-size:11px}.fatal a{color:var(--brand);font-size:11px}
   .tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px}.tabs .count{display:inline-grid;min-width:18px;height:18px;place-items:center;padding:0 5px;border-radius:999px;background:var(--surface-muted);color:var(--text-faint);font-size:11px}.tabs :global(.chip.active .count){background:color-mix(in srgb,var(--brand) 13%,var(--surface-muted));color:var(--brand-strong)}.action-error{display:grid;grid-template-columns:18px minmax(0,1fr) 30px;align-items:center;gap:6px;margin:-8px 0 14px;padding:8px 8px 8px 11px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:10px}
-  .overview-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;align-items:start;gap:32px}
-  .workspace{display:grid;min-width:0;gap:28px}
-  .brief{padding:18px 20px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface);--markdown-font-size:13px}
-  .brief>header,.activity>header{display:flex;align-items:center;justify-content:space-between;gap:16px}
-  .brief h2,.activity h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:660;letter-spacing:-.01em}
-  .brief-body{padding-top:14px}
-  .activity{min-width:0}
-  .activity>header{margin:0 0 14px}
+  .pull-layout{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.75fr);align-items:start;gap:32px}
+  .pull-content,.activity{min-width:0}
   .timeline{display:grid;gap:12px}
   .comment-edit-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
-  .deleted,.quiet-activity{margin:0;color:var(--text-muted);font-size:12px}
+  .deleted{margin:0;color:var(--text-muted);font-size:12px}
   .deleted{font-style:italic}
-  .quiet-activity{padding:16px 10px}
-  .sidebar{position:sticky;top:68px}
 
-  .commit-list{display:grid;gap:4px}.commit-list>article{position:relative;display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;min-height:62px;padding:8px 10px;border-radius:8px;color:inherit}.commit-list>article:hover{background:var(--surface-hover)}.commit-mark{display:grid;width:28px;height:28px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}.commit-list .commit-title,.commit-list small{display:block}.commit-list .commit-title{color:var(--text-strong);font-size:11px;font-weight:650;text-decoration:none}.commit-list .commit-title::after{position:absolute;inset:0;content:''}.commit-list small{display:flex;align-items:center;gap:3px;margin-top:3px;color:var(--text-faint);font-size:9px}.commit-list small :global(.user-profile-link){position:relative;z-index:1;color:var(--text-muted);font-size:9px}.commit-list small i{display:inline-flex;align-items:center;gap:3px;margin-left:7px;color:var(--success);font-style:normal;font-weight:650}.commit-list code{color:var(--text-muted);font-size:9px}.commit-list>div{padding:45px;text-align:center}.commit-list>div strong{font-size:12px}.commit-list>div p{color:var(--text-faint);font-size:10px}
+  .commit-list{display:grid;gap:4px}.commit-list>article{position:relative;display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;min-height:62px;padding:8px 10px;border-radius:8px;color:inherit}.commit-list>article:hover{background:var(--surface-hover)}.commit-mark{display:grid;width:28px;height:28px;place-items:center;border-radius:50%;background:var(--surface-muted);color:var(--text-muted)}.commit-list .commit-title,.commit-list small{display:block}.commit-list .commit-title{color:var(--text-strong);font-size:11px;font-weight:650;text-decoration:none}.commit-list .commit-title::after{position:absolute;inset:0;content:''}.commit-list small{display:flex;align-items:center;gap:3px;margin-top:3px;color:var(--text-faint);font-size:9px}.commit-list small :global(.user-profile-link){position:relative;z-index:1;color:var(--text-muted);font-size:9px}.commit-list code{color:var(--text-muted);font-size:9px}.commit-list>div{padding:45px;text-align:center}.commit-list>div strong{font-size:12px}.commit-list>div p{color:var(--text-faint);font-size:10px}
   .changes-view{min-height:calc(100dvh / var(--interface-scale) - 64px);scroll-margin-top:64px}.changes-head{display:flex;min-height:58px;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;padding:0 5px}.changes-head>div:first-child strong,.changes-head>div:first-child span{display:block}.changes-head>div:first-child strong{color:var(--text-strong);font-size:11px}.changes-head>div:first-child span{margin-top:3px;color:var(--text-faint);font-size:9px}
   .checks-page>header{padding:14px 5px}.checks-page h2{margin:0;color:var(--text-strong);font-size:12px}.checks-page header p{margin:4px 0 0;color:var(--text-faint);font-size:9px}.checks-page article{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;min-height:65px;padding:10px 5px}.check-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:7px}.check-icon.success{background:var(--success-soft);color:var(--success)}.check-icon.failure{background:var(--danger-soft);color:var(--danger)}.check-icon.running,.check-icon.queued{background:var(--brand-soft);color:var(--brand)}.checks-page article strong{color:var(--text-strong);font-size:11px}.checks-page article p{margin:3px 0 0;color:var(--text-faint);font-size:9px}.checks-page article>span:last-child{color:var(--text-muted);font-size:9px;text-transform:capitalize}.empty-checks{padding:50px 20px;color:var(--text-faint);text-align:center}.empty-checks strong{display:block;margin-top:9px;color:var(--text-strong);font-size:12px}.empty-checks p{font-size:10px}
   .details-editor{display:grid;gap:14px}.details-editor label>span{display:block;margin-bottom:6px;color:var(--text-muted);font-size:9px;font-weight:620}.details-editor input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:7px;outline:0;background:var(--surface);color:var(--text-strong);font-size:11px}.details-editor input:focus{border-color:var(--brand)}
-  @media(max-width:900px){.overview-layout{grid-template-columns:1fr;gap:28px}.sidebar{position:static}}
-  @media(max-width:600px){.title-row{grid-template-columns:1fr}.title-row>:global(.button){justify-self:start}.title-row h1{font-size:23px}.title-row h1 span{font-size:15px}.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.brief{padding:16px}.workspace{gap:24px}}
+  @media(min-width:1300px){.wide-diff{grid-template-columns:300px minmax(0,1fr);gap:24px}}
+  @media(max-width:1000px){.pull-layout{grid-template-columns:1fr;gap:28px}}
+  @media(max-width:600px){.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}}
 </style>

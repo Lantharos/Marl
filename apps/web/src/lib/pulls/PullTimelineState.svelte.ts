@@ -1,5 +1,6 @@
 import type { PullRevisionSummary, PullRevisionWindow, PullTimelineItem, PullTimelineWindow, ReviewThread } from '@marl/contracts';
 import { SvelteMap } from 'svelte/reactivity';
+import { ReviewThreadState } from './ReviewThreadState.svelte';
 
 type TimelineKind = PullTimelineItem['kind'];
 
@@ -10,6 +11,7 @@ function timelineKey(kind: TimelineKind, id: string) {
 export class PullTimelineState {
   readonly items = new SvelteMap<string, PullTimelineItem>();
   readonly revisionOrders = new SvelteMap<number, string[]>();
+  private readonly threadStates = new Map<string, ReviewThreadState>();
   order = $state<string[]>([]);
   revisions = $state.raw<PullRevisionSummary[]>([]);
   total = $state(0);
@@ -35,6 +37,15 @@ export class PullTimelineState {
     return this.get('thread', id)?.value as ReviewThread | undefined;
   }
 
+  threadState(id: string) {
+    let state = this.threadStates.get(id);
+    if (!state) {
+      state = new ReviewThreadState();
+      this.threadStates.set(id, state);
+    }
+    return state;
+  }
+
   patch(kind: TimelineKind, id: string, patch: Record<string, unknown>) {
     const key = timelineKey(kind, id);
     const item = this.items.get(key);
@@ -52,7 +63,7 @@ export class PullTimelineState {
     const added: string[] = [];
     for (const entry of entries) {
       const candidate = entry as { kind?: TimelineKind; value?: { id?: string; kind?: string }; createdAt?: string };
-      if (!candidate.kind || !candidate.value?.id || !candidate.createdAt || candidate.value.kind === 'commits_added') continue;
+      if (!candidate.kind || !candidate.value?.id || !candidate.createdAt || ['commits_added', 'thread_resolved', 'thread_reopened'].includes(candidate.value.kind ?? '')) continue;
       const key = timelineKey(candidate.kind, candidate.value.id);
       if (this.items.has(key)) continue;
       this.items.set(key, { sequence: sequence++, kind: candidate.kind, value: candidate.value, createdAt: candidate.createdAt } as PullTimelineItem);
@@ -72,8 +83,16 @@ export class PullTimelineState {
     return this.revisionOrders.has(sequence);
   }
 
+  get currentItems() {
+    return this.orderedItems(this.order);
+  }
+
   revisionItems(sequence: number) {
-    return (this.revisionOrders.get(sequence) ?? []).flatMap((key) => {
+    return this.orderedItems(this.revisionOrders.get(sequence) ?? []);
+  }
+
+  private orderedItems(keys: string[]) {
+    return keys.flatMap((key) => {
       const item = this.items.get(key);
       return item ? [item] : [];
     });

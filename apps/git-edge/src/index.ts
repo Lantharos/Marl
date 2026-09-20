@@ -20,7 +20,7 @@ type RepositoryRoute = {
   body?: Record<string, unknown>;
 };
 
-const INTERNAL_REPOSITORY_ROUTES = new Set(['/_marl/archive', '/_marl/blob', '/_marl/commit', '/_marl/compare', '/_marl/merge', '/_marl/patch', '/_marl/pulls/pin', '/_marl/tags/create', '/_marl/tags/list', '/_marl/tree']);
+const INTERNAL_REPOSITORY_ROUTES = new Set(['/_marl/mergeability', '/_marl/branches/delete', '/_marl/archive', '/_marl/blob', '/_marl/commit', '/_marl/compare', '/_marl/merge', '/_marl/patch', '/_marl/pulls/pin', '/_marl/tags/create', '/_marl/tags/list', '/_marl/tree']);
 
 export class GitContainer extends Container<GitEdgeEnv> {
   defaultPort = 8788;
@@ -109,7 +109,7 @@ async function repositoryRoute(request: Request): Promise<RepositoryRoute | null
     return {
       owner: body.owner,
       repository: body.repository,
-      writes: url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin' || url.pathname === '/_marl/tags/create',
+      writes: url.pathname === '/_marl/branches/delete' || url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin' || url.pathname === '/_marl/tags/create',
       body
     };
   }

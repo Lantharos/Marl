@@ -1,0 +1,67 @@
+  .markdown:not(.document){--media-max-width:560px;--media-max-height:320px}
+  .markdown:not(.document) img{width:min(100%,var(--media-max-width));height:auto;max-height:none}
+  .markdown:not(.document) .media-image{width:min(100%,var(--media-max-width))}
+  .markdown:not(.document) .media-image img{width:100%;max-height:none}
+  .markdown{color:var(--text);font-size:var(--markdown-font-size,12px);line-height:1.65;overflow-wrap:anywhere}.markdown.muted{color:var(--text-muted)}
+  .markdown :first-child{margin-top:0}.markdown :last-child{margin-bottom:0}.markdown p,.markdown ul,.markdown ol,.markdown blockquote,.markdown pre,.markdown table,.markdown details{margin:0 0 12px}.markdown ul,.markdown ol{padding-left:22px}.markdown li+li{margin-top:3px}.markdown a{color:var(--brand);text-decoration:none}.markdown a:hover{text-decoration:underline}.markdown img{display:block;max-width:100%;height:auto;margin:14px 0}.markdown code{padding:2px 4px;border-radius:4px;background:var(--surface-muted);color:var(--text-strong);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.9em}.markdown pre{overflow:auto;padding:11px 13px;border-radius:6px;background:var(--surface-muted)}.markdown pre code{padding:0;background:transparent}.markdown blockquote{padding-left:12px;border-left:2px solid var(--border-strong);color:var(--text-muted)}.markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{margin:18px 0 9px;color:var(--text-strong);line-height:1.25}.markdown h1{font-size:18px}.markdown h2{font-size:15px}.markdown h3{font-size:13px}.markdown h4,.markdown h5,.markdown h6{font-size:12px}.markdown hr{height:1px;margin:16px 0;border:0;background:var(--border)}.markdown table{display:block;width:max-content;max-width:100%;overflow:auto;border-spacing:0;border-collapse:collapse}.markdown th,.markdown td{padding:7px 10px;border:1px solid var(--border);text-align:left}.markdown th{background:var(--surface-muted);color:var(--text-strong);font-weight:650}.markdown tr:nth-child(2n) td{background:color-mix(in srgb,var(--surface-muted) 48%,transparent)}.markdown .task-list-item{list-style:none}.markdown .contains-task-list{padding-left:4px}.markdown input[type='checkbox']{display:inline-grid;width:14px;height:14px;margin:0 6px 0 0;border:1px solid var(--border-strong);border-radius:3px;appearance:none;background:var(--surface);vertical-align:-2px;place-items:center}.markdown input[type='checkbox']:checked{border-color:var(--brand);background:var(--brand)}.markdown input[type='checkbox']:checked::after{width:7px;height:4px;border:solid white;border-width:0 0 2px 2px;content:'';transform:translateY(-1px) rotate(-45deg)}.markdown details{padding:8px 10px;border-radius:6px;background:var(--surface-muted)}.markdown summary{color:var(--text-strong);cursor:pointer;font-weight:630}
+  .markdown.document{font-size:13px;line-height:1.7}.markdown.document h1{font-size:27px;letter-spacing:-.035em}.markdown.document h2{padding-bottom:7px;border-bottom:1px solid var(--border);font-size:19px;letter-spacing:-.02em}.markdown.document h3{font-size:16px}.markdown.document h4{font-size:14px}.markdown.document p,.markdown.document ul,.markdown.document ol,.markdown.document blockquote,.markdown.document pre,.markdown.document table,.markdown.document details{margin-bottom:16px}
+  .markdown pre.plain-text{overflow:visible;padding:0;border-radius:0;background:transparent;color:inherit;font:inherit;line-height:inherit;white-space:pre-wrap}
+  .markdown .media-image{display:block;max-width:min(100%,var(--media-max-width,100%));margin:14px 0;padding:0;overflow:hidden;border:0;border-radius:8px;background:transparent;cursor:zoom-in}
+  .markdown .media-image:focus-visible{outline:2px solid var(--brand);outline-offset:4px}
+  .markdown .media-image img{max-height:var(--media-max-height,520px);margin:0;object-fit:contain;object-position:left center}
+  .markdown .media-video{margin:14px 0}
+  .markdown .media-video video{margin:0}
+.markdown [id]{scroll-margin-top:140px}
+.markdown [align='center']{text-align:center}
+.markdown [align='right']{text-align:right}
+.markdown [align='left']{text-align:left}
+.markdown [align='justify']{text-align:justify}
+.markdown.document img{display:inline-block;vertical-align:middle;max-width:100%;height:auto}
+.markdown.document p img{margin-block:0}
+.markdown.document img[role='button']{cursor:zoom-in}
+.markdown.document img[role='button']:focus-visible{outline:2px solid var(--brand);outline-offset:4px}
+.markdown li:has(>input[type='checkbox']),.markdown li:has(>p>input[type='checkbox']){list-style:none}
+.markdown.document picture{display:inline}
+.markdown.document img[align='right']{float:right;margin-left:16px}
+.markdown.document img[align='left']{float:left;margin-right:16px}
+.markdown.document::after{display:block;clear:both;content:''}
+:root:not([data-theme='light']) .markdown [data-color-mode='light'],:root[data-theme='light'] .markdown [data-color-mode='dark']{display:none}
+.markdown .markdown-alert{padding:14px 18px;border:0;border-radius:10px;background:var(--surface-muted)}
+.markdown .markdown-alert-title{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:650;color:var(--brand)}
+.markdown .markdown-alert-title::before{content:'ⓘ';font-size:17px}
+.markdown .markdown-alert-tip .markdown-alert-title{color:var(--success)}
+.markdown .markdown-alert-warning .markdown-alert-title{color:var(--warning)}
+.markdown .markdown-alert-caution .markdown-alert-title{color:var(--danger)}
+.markdown .markdown-alert-warning .markdown-alert-title::before,.markdown .markdown-alert-caution .markdown-alert-title::before{content:'⚠'}
+.markdown .markdown-alert>:last-child{margin-bottom:0}
+.markdown .footnotes{margin-top:28px;color:var(--text-muted);font-size:.92em}
+.markdown .footnotes h2{font-size:14px}
+.markdown .sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.markdown .heading-anchor{margin-left:8px;opacity:0;color:var(--text-faint);font-weight:400;text-decoration:none}
+.markdown :is(h1,h2,h3,h4,h5,h6):hover .heading-anchor,.markdown .heading-anchor:focus-visible{opacity:1}
+.markdown .markdown-math[data-math='block']{overflow-x:auto;margin:18px 0;text-align:center}
+.markdown .markdown-math[data-math='inline']{white-space:normal}
+.markdown .color-swatch{display:inline-block;width:12px;height:12px;margin-left:5px;border-radius:3px;box-shadow:0 0 0 1px var(--border-strong);vertical-align:-1px}
+.markdown .katex{font-size:1.1em}
+.markdown .katex .katex-html{user-select:none}
+.markdown pre{position:relative}
+.markdown pre>code{display:block;padding-right:46px}
+.markdown .code-copy{position:absolute;top:6px;right:6px;min-height:32px;padding:6px 9px;border:0;border-radius:7px;background:var(--surface);color:var(--text-muted);font:inherit;font-size:11px;cursor:pointer;opacity:0}
+.markdown pre:hover .code-copy,.markdown pre:focus-within .code-copy{opacity:1}
+.markdown code.highlighted span{color:var(--shiki-light)}
+:root:not([data-theme='light']) .markdown code.highlighted span{color:var(--shiki-dark)!important}
+.markdown .markdown-diagram{margin:16px 0;overflow:hidden;border-radius:12px;background:var(--surface-muted);box-shadow:var(--shadow-surface)}
+.markdown .diagram-toolbar{display:flex;justify-content:flex-end;gap:4px;padding:6px}
+.markdown .diagram-toolbar button{min-width:40px;height:36px;border:0;border-radius:7px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.markdown .diagram-toolbar button:hover,.markdown .code-copy:hover{background:var(--surface-hover);color:var(--text-strong)}
+.markdown .diagram-viewport{max-height:560px;overflow:auto}
+.markdown .diagram-canvas{min-width:100%;padding:12px;box-sizing:border-box}
+.markdown .diagram-canvas>img,.markdown .diagram-canvas>svg{display:block;width:100%;max-width:none;height:auto;margin:0}
+.markdown .diagram-canvas>img{background:#fff;border-radius:6px}
+.markdown .diagram-canvas>canvas{display:block;max-width:100%;border-radius:8px}
+.markdown .markdown-diagram>details{margin:0;padding:12px;background:transparent}
+.markdown .markdown-diagram>details>pre{margin-top:12px}
+.markdown .preview-error{padding:12px 18px;color:var(--danger);font-size:13px}
+.markdown .map-grid{fill:none;stroke:var(--border-strong);stroke-width:.6}
+.markdown .map-features{fill:var(--brand-soft);stroke:var(--brand);stroke-width:1.5}
+@media(hover:none){.markdown .code-copy{opacity:1}.markdown .heading-anchor{opacity:.6}}

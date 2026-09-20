@@ -1,4 +1,5 @@
 import { parse } from 'yaml';
+import { workflowTriggeredBy } from './workflow-triggers';
 import { principalHasScope, type Principal } from './auth';
 import { auditStatement } from './audit';
 import { identifier } from './domain';
@@ -19,6 +20,7 @@ type IndexedWorkflow = {
   name: string;
   source: 'marl' | 'github';
   triggers: WorkflowTrigger[];
+  triggerConfig?: unknown;
   jobs: RunJob[] | null;
   error: string | null;
   pushEnabled: boolean;
@@ -26,7 +28,7 @@ type IndexedWorkflow = {
 };
 
 const knownTriggers = new Set<WorkflowTrigger>(['push', 'workflow_dispatch', 'pull_request', 'schedule']);
-const executableTriggers = new Set<WorkflowTrigger>(['push', 'workflow_dispatch']);
+const executableTriggers = new Set<WorkflowTrigger>(['push', 'workflow_dispatch', 'pull_request']);
 
 function declaredTriggers(value: unknown): WorkflowTrigger[] {
   const names = typeof value === 'string'
@@ -52,25 +54,6 @@ export function supersedePushes(value: ObjectValue | null): boolean {
     if (typeof cancelInProgress === 'boolean') return cancelInProgress;
   }
   return true;
-}
-
-function branchMatches(patterns: unknown, branch: string): boolean {
-  if (patterns === undefined) return true;
-  const values = typeof patterns === 'string' ? [patterns] : patterns;
-  if (!Array.isArray(values) || values.some((value) => typeof value !== 'string')) return false;
-  return values.some((pattern: string) => {
-    const expression = pattern.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
-    return new RegExp(`^${expression}$`).test(branch);
-  });
-}
-
-function runsOnPush(value: unknown, branch: string): boolean {
-  if (value === 'push') return true;
-  if (Array.isArray(value)) return value.includes('push');
-  if (!value || typeof value !== 'object') return false;
-  const push = (value as ObjectValue).push;
-  if (push === null || push === true) return true;
-  return Boolean(push && typeof push === 'object' && branchMatches((push as ObjectValue).branches, branch));
 }
 
 function workflowJobs(value: unknown): unknown {
@@ -233,12 +216,12 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
         const parsed = value ? parseWorkflow(value, entry.path) : { error: 'Workflow YAML must contain an object.' };
         const unsupported = triggers.filter((trigger) => !executableTriggers.has(trigger));
         const error = !triggers.length
-          ? 'Workflow must declare push or workflow_dispatch.'
+          ? 'Workflow must declare push, pull_request, or workflow_dispatch.'
           : unsupported.length
             ? `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported yet.`
             : parsed.error ?? null;
         if (error) warnings.push({ path: entry.path, error });
-        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'marl', triggers, jobs: parsed.jobs ?? null, error, pushEnabled: runsOnPush(value?.on, branch), supersedePushes: supersedePushes(value) });
+        indexed.push({ id: existingIds.get(entry.path) ?? identifier('workflow'), path: entry.path, name: workflowName(value, entry.path), source: entry.path.startsWith('.github/') ? 'github' : 'marl', triggers, triggerConfig: value?.on, jobs: parsed.jobs ?? null, error, pushEnabled: workflowTriggeredBy(value?.on, 'push', branch), supersedePushes: supersedePushes(value) });
       } catch (error) {
         const message = error instanceof Error ? error.message.slice(0, 240) : 'Workflow YAML is invalid.';
         warnings.push({ path: entry.path, error: message });
@@ -248,7 +231,7 @@ export async function queuePushWorkflows(env: Env, repositoryId: string, branch:
   }
   const statements = [env.DB.prepare('UPDATE workflows SET active=0,updated_at=CURRENT_TIMESTAMP WHERE repository_id=? AND branch=?').bind(repositoryId, branch)];
   for (const workflow of indexed) {
-    statements.push(env.DB.prepare(`INSERT INTO workflows (id,repository_id,branch,path,name,source,triggers_json,jobs_json,status,error,commit_id,supersede_pushes,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1) ON CONFLICT(repository_id,branch,path) DO UPDATE SET name=excluded.name,source=excluded.source,triggers_json=excluded.triggers_json,jobs_json=excluded.jobs_json,status=excluded.status,error=excluded.error,commit_id=excluded.commit_id,supersede_pushes=excluded.supersede_pushes,active=1,updated_at=CURRENT_TIMESTAMP`).bind(workflow.id, repositoryId, branch, workflow.path, workflow.name, workflow.source, JSON.stringify(workflow.triggers), workflow.jobs ? JSON.stringify(workflow.jobs) : null, workflow.error ? 'invalid' : 'valid', workflow.error, commitId, workflow.supersedePushes ? 1 : 0));
+    statements.push(env.DB.prepare(`INSERT INTO workflows (id,repository_id,branch,path,name,source,triggers_json,trigger_config_json,jobs_json,status,error,commit_id,supersede_pushes,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1) ON CONFLICT(repository_id,branch,path) DO UPDATE SET name=excluded.name,source=excluded.source,triggers_json=excluded.triggers_json,trigger_config_json=excluded.trigger_config_json,jobs_json=excluded.jobs_json,status=excluded.status,error=excluded.error,commit_id=excluded.commit_id,supersede_pushes=excluded.supersede_pushes,active=1,updated_at=CURRENT_TIMESTAMP`).bind(workflow.id, repositoryId, branch, workflow.path, workflow.name, workflow.source, JSON.stringify(workflow.triggers), JSON.stringify(workflow.triggerConfig ?? workflow.triggers), workflow.jobs ? JSON.stringify(workflow.jobs) : null, workflow.error ? 'invalid' : 'valid', workflow.error, commitId, workflow.supersedePushes ? 1 : 0));
   }
   await env.DB.batch(statements);
   for (const workflow of indexed) {

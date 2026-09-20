@@ -8,6 +8,7 @@ export type RevisionTimelineRow = {
 };
 
 export type RevisionBoundary = {
+  kind?: 'commits_added' | 'head_updated';
   sequence: number;
   actor: string;
   actorDisplayName: string;
@@ -20,7 +21,14 @@ export type RevisionReview = Pick<PullRequestReview, 'id' | 'state'> & { authorI
 type TimelineCommit = { id: string; title: string };
 
 export function summarizePullRevisions(rows: RevisionTimelineRow[], boundaries: RevisionBoundary[], reviews: RevisionReview[], currentHead: string): PullRevisionSummary[] {
-  const orderedBoundaries = [...boundaries].sort((left, right) => left.sequence - right.sequence);
+  const orderedBoundaries: RevisionBoundary[] = [];
+  for (const boundary of [...boundaries].sort((left, right) => left.sequence - right.sequence)) {
+    const previous = orderedBoundaries.at(-1);
+    if (boundary.kind === 'head_updated' && previous) {
+      const commits = boundary.details.forcePushed === 'true' ? parseCommits(boundary.details.commits) : [...new Map([...parseCommits(previous.details.commits), ...parseCommits(boundary.details.commits)].map((commit) => [commit.id, commit])).values()];
+      previous.details = { ...previous.details, ...boundary.details, commits: JSON.stringify(commits) };
+    } else orderedBoundaries.push({ ...boundary, details: { ...boundary.details } });
+  }
   const reviewById = new Map(reviews.map((review) => [review.id, review]));
 
   return orderedBoundaries.map((boundary, index) => {

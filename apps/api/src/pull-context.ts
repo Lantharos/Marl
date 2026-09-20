@@ -1,5 +1,5 @@
 import type { Principal } from './auth';
-import { branchRulesFor, type BranchRule, type MergeMethod } from './branch-rules';
+import { branchRulesFor, defaultRule, type MergeMethod } from './branch-rules';
 import { identifier } from './domain';
 import { pinPullRefs } from './git-writes';
 import { problem } from './http';
@@ -7,6 +7,7 @@ import type { Env } from './platform';
 import { mergeRequirements, type CheckCounts, type RequirementReview } from './pull-requirements';
 import { authorizeRepository, lookupRepository } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
+import { commitSignatureStatusSql } from './commit-signing';
 
 export type PullRepository = { id: string; owner: string; name: string; visibility: 'public' | 'private'; organizationId: string; defaultBranch: string };
 export type PullRow = { id: string; repositoryId: string; sourceRepositoryId: string | null; number: number; title: string; body: string; authorId: string; author: string; authorDisplayName: string; authorAvatarUrl: string | null; sourceBranch: string; targetBranch: string; sourceCommitId: string; targetCommitId: string; sourceOwner: string; sourceRepository: string; state: 'draft' | 'open' | 'merged' | 'closed'; mergedCommitId?: string; mergeMethod?: MergeMethod; lockedAt?: string; realtimeVersion: number; createdAt: string; updatedAt: string; owner: string; repository: string };
@@ -32,13 +33,9 @@ export async function canManageRepository(env: Env, principal: Principal, reposi
   return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'repository.triage'));
 }
 
-export async function canMergeRepository(env: Env, principal: Principal, repository: PullRepository): Promise<boolean> {
-  return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'repository.push'));
-}
-
-export function reviewStatusFor(pull: PullRow, rule: BranchRule, reviews: RequirementReview[]): ReviewStatus {
+export function reviewStatusFor(pull: PullRow, reviews: RequirementReview[]): ReviewStatus {
   const latest = new Map<string, string>();
-  for (const review of reviews) if (!rule.dismissStaleReviews || review.commitId === pull.sourceCommitId) latest.set(review.authorId, review.state);
+  for (const review of reviews) if (review.commitId === pull.sourceCommitId && review.authorId !== pull.authorId) latest.set(review.authorId, review.state);
   const states = [...latest.values()];
   return states.includes('changes_requested') ? 'changes_requested' : states.includes('approved') ? 'approved' : pull.state === 'open' ? 'requested' : 'none';
 }
@@ -90,9 +87,9 @@ export async function summarizePullRows(env: Env, rows: PullRow[]) {
     labels.set(label.pullId, items);
   }
   return rows.map((row) => {
-    const rule = rules.get(`${row.repositoryId}:${row.targetBranch}`) ?? { pattern: row.targetBranch, requiredApprovals: 0, requiredChecks: [], requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge', 'squash', 'rebase'] as MergeMethod[] };
+    const rule = rules.get(`${row.repositoryId}:${row.targetBranch}`) ?? defaultRule(row.targetBranch);
     const rowReviews = reviews.get(row.id) ?? [];
-    const reviewStatus = reviewStatusFor(row, rule, rowReviews);
+    const reviewStatus = reviewStatusFor(row, rowReviews);
     const counts = checks.get(row.id) ?? { total: 0, passed: 0, failed: 0, running: 0 };
     const unresolved = threads.get(row.id) ?? 0;
     const value = pullSummary(row, counts, reviewStatus, unresolved, labels.get(row.id) ?? []);
@@ -109,5 +106,5 @@ export async function preservePullRefs(env: Env, repository: PullRepository, pul
 }
 
 export function pullCommits(env: Env, repositoryId: string, sourceRepositoryId: string, sourceCommitId: string, targetCommitId: string) {
-  return env.DB.prepare(`WITH RECURSIVE source_history(id) AS (SELECT ? UNION SELECT json_each.value FROM source_history JOIN commits ON commits.repository_id=? AND commits.id=source_history.id JOIN json_each(commits.parent_ids)),target_history(id) AS (SELECT ? UNION SELECT json_each.value FROM target_history JOIN commits ON commits.repository_id=? AND commits.id=target_history.id JOIN json_each(commits.parent_ids)),commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits) SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,commit_rows.signature_status AS signatureStatus FROM commit_rows JOIN source_history ON source_history.id=commit_rows.id LEFT JOIN target_history ON target_history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=? AND target_history.id IS NULL ORDER BY commit_rows.authored_at,commit_rows.id`).bind(sourceCommitId, sourceRepositoryId, targetCommitId, repositoryId, sourceRepositoryId).all<{ id: string; shortId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string }>();
+  return env.DB.prepare(`WITH RECURSIVE source_history(id) AS (SELECT ? UNION SELECT json_each.value FROM source_history JOIN commits ON commits.repository_id=? AND commits.id=source_history.id JOIN json_each(commits.parent_ids)),target_history(id) AS (SELECT ? UNION SELECT json_each.value FROM target_history JOIN commits ON commits.repository_id=? AND commits.id=target_history.id JOIN json_each(commits.parent_ids)),commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits) SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,${commitSignatureStatusSql('commit_rows')} AS signatureStatus FROM commit_rows JOIN source_history ON source_history.id=commit_rows.id LEFT JOIN target_history ON target_history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=? AND target_history.id IS NULL ORDER BY commit_rows.authored_at,commit_rows.id`).bind(sourceCommitId, sourceRepositoryId, targetCommitId, repositoryId, sourceRepositoryId).all<{ id: string; shortId: string; title: string; author: string; authorHandle: string | null; authorDisplayName: string | null; authorAvatarUrl: string | null; authoredAt: string; signatureStatus: string }>();
 }

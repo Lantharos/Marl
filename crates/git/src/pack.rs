@@ -299,6 +299,7 @@ async fn validate_object_graph(
 ) -> Result<()> {
     let repository = directory.join("repository.git");
     fs::create_dir_all(repository.join("objects/pack")).await?;
+    fs::create_dir_all(repository.join("refs")).await?;
     fs::write(repository.join("HEAD"), b"ref: refs/heads/main\n").await?;
     fs::copy(
         directory.join(format!("pack-{pack_id}.pack")),
@@ -354,7 +355,7 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<()> {
     Ok(())
 }
 
-fn validate_session_part(value: &str) -> Result<()> {
+pub(crate) fn validate_session_part(value: &str) -> Result<()> {
     if value.is_empty()
         || value.len() > 96
         || !value
@@ -366,7 +367,7 @@ fn validate_session_part(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn session_path(state: &AppState, push: &str) -> Result<PathBuf> {
+pub(crate) fn session_path(state: &AppState, push: &str) -> Result<PathBuf> {
     validate_session_part(push)?;
     Ok(state.repositories.join(".marl-packs").join(push))
 }

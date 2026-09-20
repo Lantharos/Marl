@@ -4,6 +4,7 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
   import Button from '../Button.svelte';
+  import Modal from '../Modal.svelte';
   import Time from '../Time.svelte';
 
   type Secret = { id: string; name: string; createdAt: string; updatedAt: string };
@@ -12,7 +13,9 @@
   let name = $state('');
   let value = $state('');
   let busy = $state(false);
-  let saved = $state(false);
+  let open = $state(false);
+  let editing = $state(false);
+  let removing = $state<Secret | null>(null);
   let error = $state('');
 
   async function save() {
@@ -20,6 +23,11 @@
     busy = true;
     error = '';
     const normalized = name.trim().toUpperCase();
+    if (!editing && secrets.some(secret => secret.name === normalized)) {
+      error = 'This secret already exists. Use Change to replace its value.';
+      busy = false;
+      return;
+    }
     try {
       await api(`${endpoint}/${encodeURIComponent(normalized)}`, { method: 'PUT', body: JSON.stringify({ value }) });
       const now = new Date().toISOString();
@@ -27,8 +35,7 @@
       secrets = existing ? secrets.map((secret) => secret.name === normalized ? { ...secret, updatedAt: now } : secret) : [...secrets, { id: normalized, name: normalized, createdAt: now, updatedAt: now }].sort((a, b) => a.name.localeCompare(b.name));
       name = '';
       value = '';
-      saved = true;
-      setTimeout(() => (saved = false), 1800);
+      open = false;
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'The secret could not be saved.';
     } finally { busy = false; }
@@ -41,25 +48,36 @@
     try {
       await api(`${endpoint}/${encodeURIComponent(secret.name)}`, { method: 'DELETE' });
       secrets = secrets.filter((item) => item.name !== secret.name);
+      removing = null;
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'The secret could not be removed.';
     } finally { busy = false; }
   }
 </script>
 
-<header class="page-head"><h1>CI secrets</h1><p>{scope === 'organization' ? 'Shared with jobs in every organization repository. Repository secrets with the same name take precedence.' : 'Encrypted values are injected into jobs as environment variables and automatically masked from runner logs.'}</p></header>
-<form onsubmit={(event) => { event.preventDefault(); void save(); }}>
-  <label><span>Name</span><input bind:value={name} oninput={() => (name = name.toUpperCase().replace(/[^A-Z0-9_]/g, ''))} placeholder="DEPLOY_TOKEN" autocomplete="off" /></label>
-  <label><span>Value</span><input bind:value={value} type="password" placeholder="Secret value" autocomplete="new-password" /></label>
-  <Button type="submit" variant="primary" size="large" loading={busy} disabled={busy || saved || !name || !value}>{saved ? 'Added!' : busy ? 'Saving' : 'Add secret'}</Button>
-</form>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
-<section>
+<header class="page-head"><h1>CI secrets</h1><Button size="small" onclick={() => { name = ''; value = ''; editing = false; error = ''; open = true; }}>Add secret</Button></header>
+<p class="scope-note">{scope === 'organization' ? 'Shared with organization repositories. A repository secret with the same name takes precedence.' : 'Repository secrets override organization secrets with the same name.'}</p>
+<section class="secret-list" aria-label="CI secrets">
   {#each secrets as secret (secret.id)}
-    <article><span class="icon"><KeyRound size={16} /></span><span><strong>{secret.name}</strong><small>Updated <Time value={secret.updatedAt} /></small></span><Button variant="danger-soft" icon aria-label="Delete {secret.name}" onclick={() => remove(secret)}><Trash2 size={15} /></Button></article>
-  {:else}<div class="empty"><KeyRound size={22} /><strong>No {scope} secrets</strong><p>{scope === 'organization' ? 'Add a shared value for organization workflows.' : 'Organization secrets still apply unless a repository secret uses the same name.'}</p></div>{/each}
+    <article><span class="icon"><KeyRound size={17} /></span><span class="secret-name"><strong>{secret.name}</strong><small>Updated <Time value={secret.updatedAt} /></small></span><Button size="small" aria-label="Change {secret.name}" aria-haspopup="dialog" onclick={() => { name = secret.name; value = ''; editing = true; error = ''; open = true; }}>Change</Button><Button variant="ghost" size="small" icon aria-label="Delete {secret.name}" onclick={() => { error = ''; removing = secret; }}><Trash2 size={15} /></Button></article>
+  {:else}<div class="empty"><KeyRound size={19} /><span>No {scope} secrets</span></div>{/each}
 </section>
 
+<Modal {open} title={editing ? 'Change secret' : 'Add secret'} onClose={() => { if (!busy) { open = false; value = ''; } }} --modal-width="540px">
+  <form id="secret-form" onsubmit={(event) => { event.preventDefault(); void save(); }}>
+    <label><span>Name</span><input bind:value={name} disabled={editing || busy} oninput={() => (name = name.toUpperCase().replace(/[^A-Z0-9_]/g, ''))} placeholder="DEPLOY_TOKEN" autocomplete="off" required /></label>
+    <label><span>{editing ? 'New value' : 'Value'}</span><input bind:value={value} disabled={busy} type="password" placeholder="Secret value" autocomplete="new-password" required /></label>
+  </form>
+  <p class="note">Encrypted and masked from runner logs. Saved values cannot be read back.</p>
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#snippet actions()}<Button size="small" disabled={busy} onclick={() => { open = false; value = ''; }}>Cancel</Button><Button type="submit" form="secret-form" variant="primary" size="small" loading={busy} disabled={!name || !value}>Save</Button>{/snippet}
+</Modal>
+<Modal open={removing !== null} title="Delete secret?" onClose={() => { if (!busy) removing = null; }} --modal-width="540px">
+  <p class="delete-note"><strong>{removing?.name}</strong> will no longer be available to new jobs.</p>
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#snippet actions()}<Button size="small" disabled={busy} onclick={() => (removing = null)}>Cancel</Button><Button size="small" variant="danger" loading={busy} onclick={() => { if (removing) void remove(removing); }}>Delete secret</Button>{/snippet}
+</Modal>
+
 <style>
-  .page-head{padding-bottom:24px;}h1{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}.page-head p{max-width:650px;margin:7px 0 0;color:var(--text-muted);font-size:13px;line-height:1.5}form{display:grid;grid-template-columns:210px minmax(0,1fr) auto;align-items:end;gap:12px;padding:24px 0;}label{display:grid;gap:7px}label span{color:var(--text-strong);font-size:12px;font-weight:630}input{height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong);font-size:13px}input:focus{border-color:var(--brand)}.error{padding:10px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:12px}article{display:grid;grid-template-columns:36px minmax(0,1fr) 38px;align-items:center;gap:10px;min-height:68px;}.icon{display:grid;width:32px;height:32px;color:var(--text-muted);place-items:center}article strong,article small{display:block}article strong{color:var(--text-strong);font-size:13px}article small{margin-top:4px;color:var(--text-muted);font-size:11px}.empty{padding:54px 0;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:8px;color:var(--text-strong);font-size:14px}.empty p{font-size:12px}@media(max-width:700px){form{grid-template-columns:1fr}form :global(.button){justify-self:start}}
+  .page-head{display:flex;align-items:center;justify-content:space-between;gap:16px}h1{margin:0;color:var(--text-strong);font-size:22px;letter-spacing:-.03em}.scope-note{margin:0 0 24px;color:var(--text-muted);font-size:13px;line-height:1.6}.secret-list{padding:0 20px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-surface)}article{display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;align-items:center;gap:12px;min-height:82px}.icon{display:grid;place-items:center;color:var(--text-muted)}.secret-name{min-width:0;overflow-wrap:anywhere}article strong,article small{display:block}article strong{color:var(--text-strong);font-size:14px}article small{margin-top:5px;color:var(--text-muted);font-size:12px}.empty{display:flex;align-items:center;gap:12px;min-height:82px;color:var(--text-muted);font-size:13px}form{display:grid;gap:20px}label{display:grid;gap:8px}label span{color:var(--text-strong);font-size:13px;font-weight:600}input{min-width:0;width:100%;height:42px;padding:0 12px;border:1px solid var(--border);border-radius:9px;outline:0;background:var(--surface);color:var(--text-strong);font:inherit;font-size:13px}input:focus{border-color:var(--brand)}input:disabled{color:var(--text-muted)}.note,.delete-note{margin:16px 0 0;color:var(--text-muted);font-size:13px;line-height:1.6}.delete-note{margin:0}.delete-note strong{color:var(--text-strong);overflow-wrap:anywhere}.error{margin:16px 0 0;color:var(--danger);font-size:13px}@media(max-width:520px){.secret-list{padding:0 14px}article{grid-template-columns:minmax(0,1fr) auto auto;gap:8px}.icon{display:none}}
 </style>

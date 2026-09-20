@@ -1,94 +1,59 @@
 <script lang="ts">
-  import type { MergeMethod, PullRequestState } from '@marl/contracts';
+  import type { PullRequestState } from '@marl/contracts';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import GitMerge from 'lucide-svelte/icons/git-merge';
-  import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import MessageSquare from 'lucide-svelte/icons/message-square';
-  import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
   import ShieldAlert from 'lucide-svelte/icons/shield-alert';
-  import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
+  import { popoverMotion } from '$lib/ui/popover';
   import Button from './Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
   import type { MarkdownContext } from '$lib/markdown';
+  import '$lib/styles/review-actions.css';
 
-  export type PullComposerAction = 'approve' | 'request_changes' | 'close' | 'reopen' | 'ready' | 'merge';
+  export type PullComposerAction = 'approve' | 'request_changes';
   type Selection = {
     key: string;
     action: 'comment' | PullComposerAction;
     label: string;
-    description: string;
-    tone: 'brand' | 'success' | 'danger';
-    mergeMethod?: MergeMethod;
+    tone: 'commented' | 'approved' | 'changes_requested';
   };
 
   let {
-    value = $bindable(''), pullState, ready, locked, busy, canManage, canMerge, allowedMergeMethods,
-    mergeMethod = $bindable<MergeMethod>('merge'), onComment, onAction, context
+    value = $bindable(''), pullState, locked, busy, canManage, onComment, onAction, context
   } = $props<{
     value?: string;
     pullState: PullRequestState;
-    ready: boolean;
     locked: boolean;
     busy: boolean;
     canManage: boolean;
-    canMerge: boolean;
-    allowedMergeMethods: MergeMethod[];
-    mergeMethod?: MergeMethod;
     onComment: () => Promise<void>;
     onAction: (action: PullComposerAction) => Promise<void>;
     context?: MarkdownContext;
   }>();
 
   let open = $state(false);
+  let uploading = $state(false);
   let selectedKey = $state('comment');
   const active = $derived(['open', 'mergeable', 'blocked'].includes(pullState));
   const selections = $derived.by<Selection[]>(() => {
-    const items: Selection[] = [{ key: 'comment', action: 'comment', label: 'Comment', description: 'Add to the conversation without changing its state.', tone: 'brand' }];
+    const items: Selection[] = [{ key: 'comment', action: 'comment', label: 'Comment', tone: 'commented' }];
     if (active) {
       if (canManage && !locked) {
         items.push(
-          { key: 'approve', action: 'approve', label: 'Approve changes', description: 'Approve the current head revision.', tone: 'success' },
-          { key: 'request_changes', action: 'request_changes', label: 'Request changes', description: 'Block merging until concerns are addressed.', tone: 'danger' }
+          { key: 'approve', action: 'approve', label: 'Approve', tone: 'approved' },
+          { key: 'request_changes', action: 'request_changes', label: 'Request changes', tone: 'changes_requested' }
         );
       }
-      if (ready && canMerge) {
-        for (const method of allowedMergeMethods) {
-          const label = method === 'merge' ? 'Merge pull' : method === 'squash' ? 'Squash and merge' : 'Rebase and merge';
-          const description = method === 'merge' ? 'Create a merge commit on the target branch.' : method === 'squash' ? 'Combine the pull into one commit.' : 'Replay these commits on the target branch.';
-          items.push({ key: `merge:${method}`, action: 'merge', mergeMethod: method, label, description, tone: 'success' });
-        }
-      }
-      if (canManage) items.push({ key: 'close', action: 'close', label: 'Close pull', description: 'Keep its commits and conversation.', tone: 'danger' });
-    } else if (pullState === 'draft' && canManage) {
-      items.push(
-        { key: 'ready', action: 'ready', label: 'Mark ready for review', description: 'Move this pull into review.', tone: 'brand' },
-        { key: 'close', action: 'close', label: 'Close pull', description: 'Keep its commits and conversation.', tone: 'danger' }
-      );
-    } else if (pullState === 'closed' && canManage) {
-      items.push({ key: 'reopen', action: 'reopen', label: 'Reopen pull', description: 'Return it to active review.', tone: 'brand' });
     }
     return items;
   });
   const selected = $derived(selections.find((item) => item.key === selectedKey) ?? selections[0]);
-  const includesComment = $derived(Boolean(value.trim()) && !locked);
-  const primaryLabel = $derived.by(() => {
-    if (!selected || selected.action === 'comment') return 'Comment';
-    if (!includesComment) return selected.action === 'approve' ? 'Approve' : selected.label;
-    if (selected.action === 'approve') return 'Comment and approve';
-    if (selected.action === 'request_changes') return 'Comment and request changes';
-    if (selected.action === 'merge') return selected.mergeMethod === 'squash' ? 'Comment and squash' : selected.mergeMethod === 'rebase' ? 'Comment and rebase' : 'Comment and merge';
-    if (selected.action === 'close') return 'Comment and close';
-    if (selected.action === 'reopen') return 'Comment and reopen';
-    return 'Comment and mark ready';
-  });
-  const submitDisabled = $derived(busy || !selected || (selected.action === 'comment' && (locked || !value.trim())));
+  const submitDisabled = $derived(busy || uploading || locked || !selected || (selected.action === 'comment' && !value.trim()));
 
   function choose(selection: Selection) {
     selectedKey = selection.key;
-    if (selection.mergeMethod) mergeMethod = selection.mergeMethod;
     open = false;
   }
 
@@ -102,20 +67,20 @@
 </script>
 
   <div class="composer">
-    <MarkdownComposer bind:value {context} compact placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={84} />
+    <MarkdownComposer bind:value bind:uploading {context} disabled={locked || busy} compact placeholder={locked ? 'This conversation is locked' : 'Leave a comment'} minHeight={84} />
     <footer>
       {#if locked}<span>Unlock the conversation to comment.</span>{/if}
       <div class="actions" use:dismissable={() => (open = false)}>
-        <Button class={`primary-action ${selected?.tone ?? 'brand'}${selections.length === 1 ? ' solo' : ''}`} size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} loading={busy} disabled={submitDisabled} onclick={submit}>
-          {#if selected?.action === 'approve'}<BadgeCheck size={13} />{:else if selected?.action === 'request_changes'}<ShieldAlert size={13} />{:else if selected?.action === 'merge'}<GitMerge size={13} />{:else if selected?.action === 'close'}<X size={13} />{:else if selected?.action === 'reopen'}<RotateCcw size={13} />{:else if selected?.action === 'ready'}<GitPullRequest size={13} />{:else}<MessageSquare size={13} />{/if}
-          {primaryLabel}
+        <Button class={`review-submit primary-action ${selected?.tone ?? 'commented'}${selections.length === 1 ? ' solo' : ''}`} variant="primary" loading={busy} disabled={submitDisabled} onclick={submit}>
+          {#if selected?.action === 'approve'}<BadgeCheck size={15} />{:else if selected?.action === 'request_changes'}<ShieldAlert size={15} />{:else}<MessageSquare size={15} />{/if}
+          {selected?.label ?? 'Comment'}
         </Button>
-        {#if selections.length > 1}<Button class={`more-action ${selected?.tone ?? 'brand'}`} icon size="small" variant={selected?.tone === 'danger' ? 'danger' : 'primary'} aria-label="Choose pull action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={14} /></Button>{/if}
-        {#if open && selections.length > 1}<div class="menu" role="menu">
+        {#if selections.length > 1}<Button class={`review-submit more-action ${selected?.tone ?? 'commented'}`} icon variant="primary" aria-label="Choose pull action" aria-haspopup="menu" aria-expanded={open} disabled={busy} onclick={() => (open = !open)}><ChevronDown size={15} /></Button>{/if}
+        {#if open && selections.length > 1}<div class="menu" role="menu" transition:popoverMotion={{ upward: true }}>
           {#each selections as selection (selection.key)}
-            <Button class={`menu-option${selection.tone === 'danger' ? ' danger' : ''}`} variant="ghost" block role="menuitemradio" aria-checked={selection.key === selected?.key} onclick={() => choose(selection)}>
-              <span class="option-icon">{#if selection.action === 'approve'}<BadgeCheck size={14} />{:else if selection.action === 'request_changes'}<ShieldAlert size={14} />{:else if selection.action === 'merge'}<GitMerge size={14} />{:else if selection.action === 'close'}<X size={14} />{:else if selection.action === 'reopen'}<RotateCcw size={14} />{:else if selection.action === 'ready'}<GitPullRequest size={14} />{:else}<MessageSquare size={14} />{/if}</span>
-              <span><strong>{selection.label}</strong><small>{selection.description}</small></span>
+            <Button class="menu-option" variant="ghost" block role="menuitemradio" aria-checked={selection.key === selected?.key} onclick={() => choose(selection)}>
+              <span class="option-icon {selection.tone}">{#if selection.action === 'approve'}<BadgeCheck size={16} />{:else if selection.action === 'request_changes'}<ShieldAlert size={16} />{:else}<MessageSquare size={16} />{/if}</span>
+              <span>{selection.label}</span>
               <span class="selected">{#if selection.key === selected?.key}<Check size={14} />{/if}</span>
             </Button>
           {/each}
@@ -125,5 +90,17 @@
   </div>
 
 <style>
-  .composer{min-width:0;padding-bottom:4px}.composer>footer{display:flex;align-items:center;gap:12px;margin-top:8px}.composer>footer>span{color:var(--text-faint);font-size:9px}.actions{position:relative;display:flex;margin-left:auto}.actions :global(.primary-action.button){border-radius:6px 0 0 6px}.actions :global(.primary-action.solo.button){border-radius:6px}.actions :global(.more-action.button){border-left-color:rgb(255 255 255/.22);border-radius:0 6px 6px 0}.actions :global(.button.success){border-color:var(--success);background:var(--success);color:#0d1812}.actions :global(.button.success:hover:not(:disabled)){border-color:color-mix(in srgb,var(--success) 84%,white);background:color-mix(in srgb,var(--success) 84%,white)}.menu{position:absolute;right:0;bottom:38px;z-index:45;width:min(310px,calc(100vw - 60px));padding:5px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-raised);box-shadow:var(--shadow-card)}.menu :global(.menu-option.button){height:auto;min-height:48px;display:grid;grid-template-columns:22px minmax(0,1fr) 18px;gap:6px;padding:8px;text-align:left;white-space:normal}.menu :global(.menu-option.button.danger){color:var(--danger)}.menu strong,.menu small{display:block}.menu strong{color:inherit;font-size:12px}.menu small{margin-top:2px;color:var(--text-faint);font-size:11px;line-height:1.45}.option-icon,.selected{display:grid;place-items:center}.selected{color:var(--brand)}
+  .composer{min-width:0;padding-bottom:4px}
+  .composer>footer{display:flex;align-items:center;gap:12px;margin-top:10px}
+  .composer>footer>span{color:var(--text-faint);font-size:12px}
+  .actions{position:relative;display:flex;margin-left:auto;border-radius:9px;background:var(--brand)}
+  .actions:has(:global(.approved.primary-action)){background:var(--success-soft)}
+  .actions:has(:global(.changes_requested.primary-action)){background:var(--warning-soft)}
+  .actions :global(.primary-action.button){border-radius:9px 0 0 9px;padding-inline:14px}
+  .actions :global(.primary-action.solo.button){border-radius:9px}
+  .actions :global(.more-action.button){border-radius:0 9px 9px 0;border-left-color:color-mix(in srgb,currentColor 18%,transparent)}
+  .menu{position:absolute;right:0;bottom:calc(100% + 8px);z-index:45;width:min(230px,calc(100vw - 60px));padding:7px;border-radius:15px;background:var(--surface-raised);box-shadow:var(--shadow-popover);transform-origin:bottom right}
+  .menu :global(.menu-option.button){min-height:38px;display:grid;grid-template-columns:20px minmax(0,1fr) 16px;gap:10px;padding:8px 10px;border-radius:9px;text-align:left;font-size:12px;color:var(--text-strong)}
+  .option-icon,.selected{display:grid;place-items:center;color:var(--text-muted)}
+  .option-icon.approved{color:var(--success)}.option-icon.changes_requested{color:var(--warning)}
 </style>

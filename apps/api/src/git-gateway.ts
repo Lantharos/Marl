@@ -36,6 +36,7 @@ export interface GitGatewayRequestMap {
     head: string;
     path: string;
   };
+  '/_marl/mergeability': { owner: string; repository: string; base: string; head: string };
   '/_marl/merge': {
     operationId: string;
     method: string;
@@ -48,6 +49,7 @@ export interface GitGatewayRequestMap {
     targetCommitId: string;
     title: string;
     author: string;
+    authorEmail: string;
     actorId: string;
   };
   '/_marl/pulls/pin': {
@@ -60,6 +62,7 @@ export interface GitGatewayRequestMap {
     sourceRepository?: string;
     sourceRepositoryId?: string;
   };
+  '/_marl/branches/delete': { owner: string; repository: string; repositoryId: string; branch: string; expectedCommitId: string; actorId: string };
   '/_marl/tags/list': { owner: string; repository: string };
   '/_marl/tags/create': {
     owner: string;

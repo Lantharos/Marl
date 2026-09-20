@@ -4,9 +4,10 @@ import { pageResult, pageSize, readCursor } from './cursor';
 import { json, problem } from './http';
 import { issueSelect, summarizeIssueRows, type IssueRow } from './issue-context';
 import { initialIssueTimeline, olderIssueTimeline } from './issue-timeline';
+import { issueConclusion, issueParticipation } from './issue-discussion';
 import { readListQuery } from './list-query';
 import type { Env } from './platform';
-import { authorizeRepository, repositoryListFilter } from './repository-access';
+import { authorizeRepository, repositoryListFilter, repositoryReadFilter } from './repository-access';
 import { linkedWorkItems } from './work-item-references';
 
 export async function listIssues(env: Env, principal: Principal | null, owner: string, name: string, url: URL): Promise<Response> {
@@ -22,6 +23,8 @@ export async function listIssues(env: Env, principal: Principal | null, owner: s
   const cursor = readCursor(url);
   const filters = ['issues.repository_id=?'];
   const values: unknown[] = [repository.id];
+  const viewError = discussionFilter(url, principal, filters, values);
+  if (viewError) return viewError;
   if (state !== 'all') { filters.push('issues.state=?'); values.push(state); }
   if (search.query) { filters.push(`(issues.title LIKE ? ESCAPE '\\' OR issues.body LIKE ? ESCAPE '\\' OR users.handle LIKE ? ESCAPE '\\')`); values.push(search.like, search.like, search.like); }
   for (const label of labels) { filters.push('EXISTS (SELECT 1 FROM issue_labels JOIN repository_labels ON repository_labels.id=issue_labels.label_id WHERE issue_labels.issue_id=issues.id AND repository_labels.name=? COLLATE NOCASE)'); values.push(label); }
@@ -32,7 +35,7 @@ export async function listIssues(env: Env, principal: Principal | null, owner: s
     env.DB.prepare(`SELECT state,COUNT(*) AS count FROM issues WHERE repository_id=? GROUP BY state`).bind(repository.id).all<{ state: 'open' | 'closed'; count: number }>()
   ]);
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
-  return json({ issues: await summarizeIssueRows(env, page.items), nextCursor: page.nextCursor, availableLabels: availableLabels.results, counts: Object.fromEntries(counts.results.map((row) => [row.state, Number(row.count)])) });
+  return json({ issues: await summarizeIssueRows(env, page.items, principal), nextCursor: page.nextCursor, availableLabels: availableLabels.results, counts: Object.fromEntries(counts.results.map((row) => [row.state, Number(row.count)])) });
 }
 
 export async function listAllIssues(env: Env, principal: Principal, url: URL): Promise<Response> {
@@ -40,17 +43,19 @@ export async function listAllIssues(env: Env, principal: Principal, url: URL): P
   if (!['open', 'closed', 'all'].includes(state)) return problem(422, 'invalid_issue_state', 'Choose open, closed, or all issues.');
   const search = readListQuery(url);
   if ('error' in search) return search.error;
-  const access = repositoryListFilter(principal);
+  const access = url.searchParams.get('view') === 'following' ? repositoryReadFilter(principal) : repositoryListFilter(principal);
   const limit = pageSize(url, 40, 100);
   const cursor = readCursor(url);
   const filters = [access.sql];
   const values: unknown[] = [...access.values];
+  const viewError = discussionFilter(url, principal, filters, values);
+  if (viewError) return viewError;
   if (state !== 'all') { filters.push('issues.state=?'); values.push(state); }
   if (search.query) { filters.push(`(issues.title LIKE ? ESCAPE '\\' OR organizations.slug LIKE ? ESCAPE '\\' OR repositories.name LIKE ? ESCAPE '\\')`); values.push(search.like, search.like, search.like); }
   if (cursor) { filters.push('(issues.updated_at<? OR (issues.updated_at=? AND issues.id<?))'); values.push(cursor.value, cursor.value, cursor.id); }
   const rows = await env.DB.prepare(`${issueSelect} WHERE ${filters.join(' AND ')} ORDER BY issues.updated_at DESC,issues.id DESC LIMIT ?`).bind(...values, limit + 1).all<IssueRow>();
   const page = pageResult(rows.results, limit, (row) => ({ value: row.updatedAt, id: row.id }));
-  return json({ issues: await summarizeIssueRows(env, page.items), nextCursor: page.nextCursor });
+  return json({ issues: await summarizeIssueRows(env, page.items, principal), nextCursor: page.nextCursor });
 }
 
 export async function getIssue(env: Env, principal: Principal | null, owner: string, name: string, number: number): Promise<Response> {
@@ -59,16 +64,19 @@ export async function getIssue(env: Env, principal: Principal | null, owner: str
   const row = await env.DB.prepare(`${issueSelect} WHERE issues.repository_id=? AND issues.number=?`).bind(repository.id, number).first<IssueRow>();
   if (!row) return problem(404, 'issue_not_found', 'Issue not found.');
   const canManage = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.triage'));
-  const [summary, availableLabels, availableAssignees, timeline, linkedItems] = await Promise.all([
-    summarizeIssueRows(env, [row]),
+  const [summary, availableLabels, availableAssignees, timeline, linkedItems, conclusion, participation, canConclude] = await Promise.all([
+    summarizeIssueRows(env, [row], principal),
     env.DB.prepare('SELECT id,name,color,description FROM repository_labels WHERE repository_id=? ORDER BY name').bind(repository.id).all<IssueLabel>(),
     repository.role
       ? env.DB.prepare('SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users JOIN organization_members ON organization_members.user_id=users.id WHERE organization_members.organization_id=? ORDER BY users.handle').bind(repository.organizationId).all<IssuePerson>()
       : Promise.resolve({ results: [] as IssuePerson[] }),
     initialIssueTimeline(env, principal, row.id, canManage),
-    linkedWorkItems(env, principal, 'issue', row.id)
+    linkedWorkItems(env, principal, 'issue', row.id),
+    issueConclusion(env, row.id),
+    issueParticipation(env, row.id, principal?.id),
+    authorizeRepository(env, principal, owner, name, 'repository.maintain').then(Boolean)
   ]);
-  const issue: IssueDetail = { ...summary[0], body: row.body, authorId: row.authorId, locked: Boolean(row.lockedAt), canEdit: canManage || row.authorId === principal?.id, canManage, availableLabels: availableLabels.results, availableAssignees: availableAssignees.results, linkedItems, timeline };
+  const issue: IssueDetail = { ...summary[0], body: row.body, authorId: row.authorId, locked: Boolean(row.lockedAt), canEdit: canManage || row.authorId === principal?.id, canManage, canConclude, conclusion, participation, availableLabels: availableLabels.results, availableAssignees: availableAssignees.results, linkedItems, timeline };
   return json({ issue });
 }
 
@@ -82,4 +90,21 @@ export async function getIssueTimeline(env: Env, principal: Principal | null, ow
   if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after) || before <= after) return problem(422, 'invalid_timeline_cursor', 'Timeline cursor is invalid.');
   const canManage = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.triage'));
   return json({ timeline: await olderIssueTimeline(env, principal, issue.id, before, after, canManage) });
+}
+
+function discussionFilter(url: URL, principal: Principal | null, filters: string[], values: unknown[]) {
+  const view = url.searchParams.get('view') ?? 'all';
+  if (!['all', 'unanswered', 'following', 'unread'].includes(view)) return problem(422, 'invalid_issue_view', 'Choose all, unanswered, following, or unread issues.');
+  if (view === 'unanswered') filters.push('NOT EXISTS (SELECT 1 FROM issue_comments c WHERE c.issue_id=issues.id AND c.deleted_at IS NULL AND c.author_id!=issues.author_id)');
+  if (view === 'following' || view === 'unread') {
+    if (!principal) return problem(401, 'authentication_required', 'Sign in to see your discussions.');
+    if (view === 'following') {
+      filters.push('EXISTS (SELECT 1 FROM issue_participants p WHERE p.issue_id=issues.id AND p.user_id=? AND p.following=1)');
+      values.push(principal.id);
+    } else {
+      filters.push("EXISTS (SELECT 1 FROM issue_timeline t JOIN issue_comments c ON c.id=t.entity_id AND t.kind='comment' WHERE t.issue_id=issues.id AND c.deleted_at IS NULL AND c.author_id!=? AND t.sequence>COALESCE((SELECT last_read_sequence FROM issue_participants p WHERE p.issue_id=issues.id AND p.user_id=?),0))");
+      values.push(principal.id, principal.id);
+    }
+  }
+  return null;
 }

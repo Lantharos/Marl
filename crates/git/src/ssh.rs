@@ -233,6 +233,15 @@ impl server::Handler for SshSession {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         receive::configure(&mut child_command, receives_pack);
+        let _signing_hook = if receives_pack {
+            Some(crate::signing_hook::configure(
+                &mut child_command,
+                &self.state,
+                &authorization.repository_id,
+            )?)
+        } else {
+            None
+        };
         let mut child = child_command.spawn().context("start SSH Git process")?;
         let input = child.stdin.take().context("open SSH Git stdin")?;
         let stdout = child.stdout.take().context("open SSH Git stdout")?;
@@ -250,6 +259,7 @@ impl server::Handler for SshSession {
         let state = self.state.clone();
         tokio::spawn(async move {
             let status = child.wait().await;
+            drop(_signing_hook);
             let mut succeeded = status.as_ref().is_ok_and(|status| status.success());
             if receives_pack && succeeded {
                 if let Err(error) = repair_head(&repository).await {

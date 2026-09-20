@@ -1,3 +1,5 @@
+import { deleteBranch } from './branches';
+import { deleteReviewBody } from './pull-review-comments';
 import { authenticate } from './auth';
 import { handleAccessRoute } from './access-routes';
 import { handleAuth } from './auth/handler';
@@ -13,14 +15,20 @@ import { cancelRun, listRuns, retryRun } from './runs';
 import { dispatchWorkflow } from './workflows';
 import { search } from './search';
 import { organizationSecrets, repositorySecrets } from './secrets';
-import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys, signingKeys } from './ssh-keys';
+import { authorizeSsh, createSshKey, deleteSshKey, listSshKeys } from './ssh-keys';
+import { getSigningPolicy, getSigningSettings, updateSigningSettings } from './commit-signing';
 import { getPublicIdentityProfile } from './public-profiles';
+import { listProfileRepositories } from './profile-repositories';
 import { getPublicIndex } from './public-index';
 import { readAvatar } from './profile';
 import { readOrganizationAvatar } from './organizations';
 import { getShell } from './shell';
 import { addIssueComment, createIssue, createIssueLabel, deleteIssueComment, setIssueState, updateIssue, updateIssueComment, updateIssueMetadata } from './issues';
 import { listAllIssues } from './issue-queries';
+import { approvePullChecks, approveRunChecks } from './pull-checks';
+import { linkIssuePull } from './issue-pull-links';
+import { updateIssueConclusion, updateIssueParticipation } from './issue-discussion';
+import { readRepositoryMedia, uploadRepositoryMedia } from './repository-media';
 import { listInbox, markInboxRead, updateInboxState } from './inbox';
 import { createRelease, deleteRelease, updateRelease } from './releases';
 import { abortReleaseAssetUpload, beginReleaseAssetUpload, completeReleaseAssetUpload, deleteReleaseAsset, uploadReleaseAssetPart } from './release-assets';
@@ -44,15 +52,16 @@ const worker = {
     const gatewayTrusted = Boolean(_env.GIT_GATEWAY_TOKEN && request.headers.get('x-marl-gateway-token') === _env.GIT_GATEWAY_TOKEN);
     if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') return listPendingGitIndexes(_env);
     if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
-    if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') return signingKeys(request, _env);
+    if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/git/signing-policy') return getSigningPolicy(request, _env);
     if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/git/index') return indexGit(request, _env, null, true);
 
     const avatar = url.pathname.match(/^\/api\/v1\/avatars\/([^/]+)\/([^/]+)$/);
     const organizationAvatar = url.pathname.match(/^\/api\/v1\/organization-avatars\/([^/]+)\/([^/]+)$/);
     const repositoryIcon = url.pathname.match(/^\/api\/v1\/repository-icons\/([^/]+)\/([^/]+)$/);
     const publicIdentity = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)$/);
+    const profileRepositories = url.pathname.match(/^\/api\/v1\/profiles\/([^/]+)\/repositories$/);
     const publicIndex = url.pathname === '/api/v1/public-index';
-    const publicGet = request.method === 'GET' && (avatar || organizationAvatar || repositoryIcon || publicIdentity || publicIndex);
+    const publicGet = request.method === 'GET' && (avatar || organizationAvatar || repositoryIcon || publicIdentity || profileRepositories || publicIndex);
     if (publicGet) {
       const rate = await _env.RATE_LIMITER.limit({
         key: request.headers.get('cf-connecting-ip') ?? 'anonymous'
@@ -62,6 +71,7 @@ const worker = {
       if (organizationAvatar) return readOrganizationAvatar(_env, organizationAvatar[1], organizationAvatar[2]);
       if (repositoryIcon) return readRepositoryIcon(_env, repositoryIcon[1], repositoryIcon[2]);
       if (publicIdentity) return getPublicIdentityProfile(_env, decodeURIComponent(publicIdentity[1]));
+      if (profileRepositories) return listProfileRepositories(request, _env, decodeURIComponent(profileRepositories[1]));
       if (publicIndex) return getPublicIndex(_env);
     }
 
@@ -106,15 +116,23 @@ const worker = {
       return indexGit(request, _env, principal, gatewayTrusted);
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
-    if (request.method === 'POST' && url.pathname === '/api/v1/git/signing-keys') {
+    if (request.method === 'POST' && url.pathname === '/api/v1/git/signing-policy') {
       return problem(404, 'not_found', 'The requested Marl API route does not exist.');
     }
+    const media = url.pathname.match(/^\/api\/v1\/media\/(media_[a-z0-9]+)$/);
+    if (media && ['GET', 'HEAD'].includes(request.method)) return readRepositoryMedia(request, _env, principal, media[1]);
     const repositoryRead = await readRepositoryRequest(request, _env, principal, ctx);
     if (repositoryRead) return repositoryRead;
     if (!principal) return problem(401, 'authentication_required', 'Sign in to use the Marl API.');
+    const mediaUpload = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/media$/);
+    if (mediaUpload && request.method === 'POST') return uploadRepositoryMedia(request, _env, principal, decodeURIComponent(mediaUpload[1]), decodeURIComponent(mediaUpload[2]));
 
     if (request.method === 'GET' && url.pathname === '/api/v1/session') return json({ user: principal });
     if (request.method === 'GET' && url.pathname === '/api/v1/shell') return getShell(_env, principal);
+    if (url.pathname === '/api/v1/signing') {
+      if (request.method === 'GET') return getSigningSettings(_env, principal);
+      if (request.method === 'PATCH') return updateSigningSettings(request, _env, principal);
+    }
     if (url.pathname === '/api/v1/ssh-keys') {
       if (request.method === 'GET') return listSshKeys(_env, principal);
       if (request.method === 'POST') return createSshKey(request, _env, principal);
@@ -153,10 +171,11 @@ const worker = {
     const compareRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/compare$/);
     if (compareRoute && request.method === 'GET') return compareBranches(_env, principal, decodeURIComponent(compareRoute[1]), decodeURIComponent(compareRoute[2]), url);
 
-    const runRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/runs(?:\/(\d+)(?:\/(cancel|retry|state))?)?$/);
+    const runRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/runs(?:\/(\d+)(?:\/(cancel|retry|state|approve))?)?$/);
     if (runRoute) {
       const owner = decodeURIComponent(runRoute[1]);
       const repository = decodeURIComponent(runRoute[2]);
+      if (runRoute[3] && runRoute[4] === 'approve' && request.method === 'POST') return approveRunChecks(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'cancel' && request.method === 'POST') return cancelRun(_env, principal, owner, repository, Number(runRoute[3]));
       if (runRoute[3] && runRoute[4] === 'retry' && request.method === 'POST') return retryRun(_env, principal, owner, repository, Number(runRoute[3]));
     }
@@ -217,12 +236,15 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
-    const issueRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/issues(?:\/(\d+)(?:\/(comments|metadata|labels|state|timeline))?)?$/);
+    const issueRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/issues(?:\/(\d+)(?:\/(comments|metadata|labels|state|timeline|conclusion|participation|links))?)?$/);
     if (issueRoute) {
       const owner = decodeURIComponent(issueRoute[1]);
       const repository = decodeURIComponent(issueRoute[2]);
       const number = issueRoute[3] ? Number(issueRoute[3]) : null;
       const action = issueRoute[4];
+      if (number !== null && action === 'links' && request.method === 'POST') return linkIssuePull(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'conclusion' && request.method === 'PATCH') return updateIssueConclusion(request, _env, principal, owner, repository, number);
+      if (number !== null && action === 'participation' && request.method === 'PATCH') return updateIssueParticipation(request, _env, principal, owner, repository, number);
       if (number === null && request.method === 'POST') return createIssue(request, _env, principal, owner, repository);
       if (number !== null && !action && request.method === 'PATCH') return updateIssue(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'comments' && request.method === 'POST') return addIssueComment(request, _env, principal, owner, repository, number);
@@ -256,12 +278,18 @@ const worker = {
     const repositoryIconRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/icon$/);
     if (repositoryIconRoute && request.method === 'PUT') return uploadRepositoryIcon(request, _env, principal, decodeURIComponent(repositoryIconRoute[1]), decodeURIComponent(repositoryIconRoute[2]));
 
-    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|patch|threads|comments|metadata|labels|ready|close|reopen|timeline|updates|live|state))?)?$/);
+    const branchRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/branches\/(.+)$/);
+    if (branchRoute && request.method === 'DELETE') return deleteBranch(request, _env, principal, decodeURIComponent(branchRoute[1]), decodeURIComponent(branchRoute[2]), decodeURIComponent(branchRoute[3]));
+    const reviewBodyRoute = url.pathname.match(/^\/api\/v1\/pull-reviews\/(review_[a-z0-9]+)\/body$/);
+    if (reviewBodyRoute && request.method === 'DELETE') return deleteReviewBody(_env, principal, reviewBodyRoute[1]);
+
+    const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(reviews|merge|diff|patch|threads|comments|metadata|labels|ready|close|reopen|timeline|updates|live|state|approve-checks))?)?$/);
     if (pullRoute) {
       const owner = decodeURIComponent(pullRoute[1]);
       const repository = decodeURIComponent(pullRoute[2]);
       const number = pullRoute[3] ? Number(pullRoute[3]) : null;
       const action = pullRoute[4];
+      if (number !== null && action === 'approve-checks' && request.method === 'POST') return approvePullChecks(request, _env, principal, owner, repository, number);
       if (number === null && request.method === 'POST') return createPull(request, _env, principal, owner, repository);
       if (number !== null && !action && request.method === 'PATCH') return updatePullDetails(request, _env, principal, owner, repository, number);
       if (number !== null && action === 'reviews' && request.method === 'POST') return reviewPull(request, _env, principal, owner, repository, number);

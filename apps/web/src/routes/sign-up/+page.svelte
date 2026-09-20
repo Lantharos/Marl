@@ -3,6 +3,7 @@
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
+  import { clearShellCache } from '$lib/shell-cache';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -19,6 +20,7 @@
     try {
       const result = await authClient.signUp.email({ name, username, email, password, callbackURL: '/' });
       if (result.error) { error = result.error.message || 'Your account could not be created.'; return; }
+      clearShellCache(true);
       if (data.emailVerificationRequired) { awaitingVerification = true; return; }
       await invalidateAll();
       await goto('/');

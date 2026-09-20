@@ -126,6 +126,15 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     receive::configure(&mut command, git_path.service == "git-receive-pack");
+    let _signing_hook = if receives_pack {
+        Some(crate::signing_hook::configure(
+            &mut command,
+            &state,
+            &authorization.repository_id,
+        )?)
+    } else {
+        None
+    };
     let mut child = command.spawn().context("start git http-backend")?;
     let stdin = child.stdin.take().context("open Git stdin")?;
     let input_task = tokio::spawn(copy_request_body(

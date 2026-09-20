@@ -1,3 +1,4 @@
+import { getPullMergeability } from './pull-mergeability';
 import type { Principal } from './auth';
 import { getIssue, getIssueTimeline, listIssues } from './issue-queries';
 import type { Env } from './platform';
@@ -92,12 +93,13 @@ export async function readRepositoryRequest(
       : getIssue(env, principal, owner, repository, Number(issueRoute[3]));
   }
 
-  const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(diff|patch|timeline|updates|live|state))?)?$/);
+  const pullRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/pulls(?:\/(\d+)(?:\/(diff|patch|timeline|updates|live|state|mergeability))?)?$/);
   if (pullRoute) {
     const owner = decodeURIComponent(pullRoute[1]);
     const repository = decodeURIComponent(pullRoute[2]);
     const number = pullRoute[3] ? Number(pullRoute[3]) : null;
     const action = pullRoute[4];
+    if (number !== null && action === 'mergeability') return getPullMergeability(env, principal, owner, repository, number, url);
     if (number === null) return listPulls(env, principal, owner, repository, url);
     if (!action) return getPull(env, principal, owner, repository, number);
     if (action === 'diff') return getPullDiff(env, principal, owner, repository, number);

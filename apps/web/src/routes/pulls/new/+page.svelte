@@ -9,6 +9,7 @@
   import Checkbox from '$lib/components/Checkbox.svelte';
   import Button from '$lib/components/Button.svelte';
   import FormShell from '$lib/components/FormShell.svelte';
+  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
   import Select from '$lib/components/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
@@ -24,11 +25,13 @@
   let base = $state(untrack(() => data.base));
   let compare = $state(untrack(() => data.compare));
   let title = $state(untrack(() => data.linkedIssue?.title ?? ''));
-  let body = $state(untrack(() => data.linkedIssue ? `Fixes #${data.linkedIssue.number}\n\n` : ''));
+  let body = $state(untrack(() => data.linkedIssue ? `Fixes ${data.linkedIssue.repository.owner}/${data.linkedIssue.repository.name}#${data.linkedIssue.number}\n\n${data.linkedIssue.conclusion?.body ?? ''}` : ''));
   let draft = $state(false);
   let comparison = $state<PullRequestDiff | null>(untrack(() => data.comparison));
   let comparing = $state(false);
   let creating = $state(false);
+  let uploading = $state(false);
+  const markdownContext = $derived(repository ? { owner: repository.split('/')[0], repository: repository.split('/')[1] } : undefined);
   let error = $state('');
   let branchRequest = 0;
   let comparisonRequest = 0;
@@ -97,7 +100,7 @@
   }
 
   async function createPull() {
-    if (!title.trim() || !comparison || creating) return;
+    if (!title.trim() || !comparison || creating || uploading) return;
     creating = true; error = '';
     const { owner, name } = repoParts();
     try {
@@ -133,14 +136,14 @@
         {#if comparison}<small><b>+{comparison.files.reduce((sum, file) => sum + file.additions, 0)}</b><i>−{comparison.files.reduce((sum, file) => sum + file.deletions, 0)}</i></small>{/if}
       </div>
       <label class="field"><span>Title</span><input bind:value={title} maxlength="240" required placeholder="What changes, and why?" /></label>
-      <label class="field"><span>Description</span><textarea bind:value={body} maxlength="100000" placeholder="Give reviewers the context they need."></textarea></label>
+      <div class="field"><span>Description</span><MarkdownComposer bind:value={body} bind:uploading context={markdownContext} minHeight={180} placeholder="Give reviewers the context they need." /></div>
       <Checkbox bind:checked={draft} label="Open as draft" description="Keep this pull out of the landing queue until it is ready." />
-      <div class="form-actions"><a href="/pulls">Cancel</a><Button type="submit" variant="primary" loading={creating} disabled={!comparison || !title.trim()}>{draft ? 'Open draft' : 'Open pull'}</Button></div>
+      <div class="form-actions"><a href="/pulls">Cancel</a><Button type="submit" variant="primary" loading={creating} disabled={uploading || !comparison || !title.trim()}>{draft ? 'Open draft' : 'Open pull'}</Button></div>
     </form>
   {/if}
 </FormShell>
 
 <style>
-  .issue-context{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:8px;padding:6px 2px 10px;color:var(--success);text-decoration:none}.issue-context:hover strong{color:var(--brand)}.issue-context small,.issue-context strong{display:block}.issue-context small{color:var(--text-faint);font-size:11px}.issue-context strong{margin-top:2px;overflow:hidden;color:var(--text-strong);font-size:11px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}.compare{display:grid;grid-template-columns:1fr 18px 1fr;align-items:center;gap:10px}.compare>:global(svg){margin-top:18px;color:var(--text-faint)}.comparison{display:flex;min-height:42px;align-items:center;gap:8px;padding:0 2px;color:var(--text-muted);font-size:11px}.comparison.busy{opacity:.65}.comparison small{display:flex;gap:6px;margin-left:auto}.comparison b{color:var(--success)}.comparison i{color:var(--danger);font-style:normal}.field textarea{min-height:130px;resize:vertical}.error{display:flex;align-items:center;gap:7px;padding:10px 11px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:11px}.empty{padding:48px 20px;text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{color:var(--text-faint);font-size:11px}.empty a{color:var(--brand);font-size:11px}
+  .issue-context{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:8px;padding:6px 2px 10px;color:var(--success);text-decoration:none}.issue-context:hover strong{color:var(--brand)}.issue-context small,.issue-context strong{display:block}.issue-context small{color:var(--text-faint);font-size:11px}.issue-context strong{margin-top:2px;overflow:hidden;color:var(--text-strong);font-size:11px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}.compare{display:grid;grid-template-columns:1fr 18px 1fr;align-items:center;gap:10px}.compare>:global(svg){margin-top:18px;color:var(--text-faint)}.comparison{display:flex;min-height:42px;align-items:center;gap:8px;padding:0 2px;color:var(--text-muted);font-size:11px}.comparison.busy{opacity:.65}.comparison small{display:flex;gap:6px;margin-left:auto}.comparison b{color:var(--success)}.comparison i{color:var(--danger);font-style:normal}.error{display:flex;align-items:center;gap:7px;padding:10px 11px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:11px}.empty{padding:48px 20px;text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{color:var(--text-faint);font-size:11px}.empty a{color:var(--brand);font-size:11px}
   @media(max-width:600px){.compare{grid-template-columns:1fr}.compare>:global(svg){display:none}.comparison{flex-wrap:wrap;padding-block:10px}}
 </style>

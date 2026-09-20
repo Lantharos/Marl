@@ -1,5 +1,6 @@
 import type { ApiError } from '@marl/contracts';
 import { requestElevation } from '$lib/auth/elevation';
+import { changesShell, clearShellCache } from '$lib/shell-cache';
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -23,6 +24,7 @@ async function apiRequest<T>(fetcher: Fetcher, path: string, init: RequestInit, 
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
   const response = await fetcher(`/api/v1${path}`, { ...init, headers });
   if (!response.ok) {
+    if (response.status === 401) clearShellCache();
     const value = await response.json().catch(() => null) as ApiError | null;
     if (allowElevation && response.status === 403 && value?.error.code === 'identity_confirmation_required') {
       const confirmed = await requestElevation(value.error.message);
@@ -30,6 +32,10 @@ async function apiRequest<T>(fetcher: Fetcher, path: string, init: RequestInit, 
       return apiRequest(fetcher, path, init, false);
     }
     throw new MarlApiError(response.status, value?.error.code ?? 'request_failed', value?.error.message ?? `Marl API request failed (${response.status}).`);
+  }
+  if (typeof window !== 'undefined' && !['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase()) && changesShell(path)) {
+    clearShellCache(true);
+    void import('$app/navigation').then(({ invalidate }) => invalidate('marl:shell'));
   }
   if (response.status === 204 || response.status === 205) return undefined as T;
   const body = await response.text();

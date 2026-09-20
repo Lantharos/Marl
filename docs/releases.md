@@ -1,5 +1,14 @@
 # Releases
 
+Release lists show a short preview of the notes and a direct link to downloads. More versions
+load as you scroll. A release keeps its notes beside the download panel; on small screens,
+downloads appear first. Uploaded files are separate from generated source archives, and a
+filename search appears when a release has more than six files.
+
+This separation addresses recurring reports about [finding release downloads](https://github.com/orgs/community/discussions/6163)
+and [downloads buried below changelogs](https://www.reddit.com/r/github/comments/dlihnt/).
+These reports informed the layout; they are not a measured usability result for Marl.
+
 Repository collaborators with push access can draft and publish releases. Every release selects
 an existing branch or full commit identifier and owns one repository-unique Git tag. Drafts can
 change that tag and target until publication. Published tags are immutable; release notes,

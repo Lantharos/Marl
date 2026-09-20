@@ -33,16 +33,31 @@ export function createIssueEvent(env: Env, issueId: string, actor: Pick<Principa
   };
 }
 
-export async function summarizeIssueRows(env: Env, rows: IssueRow[]): Promise<IssueSummary[]> {
+export async function savedIssueEvents(env: Env, events: ReturnType<typeof createIssueEvent>[]) {
+  if (!events.length) return [];
+  const ids = events.map((event) => event.value.id);
+  const rows = await env.DB.prepare(`SELECT sequence,entity_id AS id FROM issue_timeline WHERE kind='event' AND entity_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<{ id: string; sequence: number }>();
+  const sequences = new Map(rows.results.map((row) => [row.id, row.sequence]));
+  return events.map(({ value }) => {
+    const sequence = sequences.get(value.id);
+    if (sequence === undefined) throw new Error('Issue event was not recorded');
+    return { sequence, kind: 'event' as const, value, createdAt: value.createdAt };
+  });
+}
+
+export async function summarizeIssueRows(env: Env, rows: IssueRow[], principal?: Principal | null): Promise<IssueSummary[]> {
   if (!rows.length) return [];
+  if (rows.length > 80) return (await Promise.all([summarizeIssueRows(env, rows.slice(0, 80), principal), summarizeIssueRows(env, rows.slice(80), principal)])).flat();
   const placeholders = rows.map(() => '?').join(',');
   const ids = rows.map((row) => row.id);
-  const [labelRows, assigneeRows] = await Promise.all([
+  const [labelRows, assigneeRows, participationRows] = await Promise.all([
     env.DB.prepare(`SELECT issue_labels.issue_id AS issueId,repository_labels.id,repository_labels.name,repository_labels.color,repository_labels.description FROM issue_labels JOIN repository_labels ON repository_labels.id=issue_labels.label_id WHERE issue_labels.issue_id IN (${placeholders}) ORDER BY repository_labels.name`).bind(...ids).all<IssueLabel & { issueId: string }>(),
-    env.DB.prepare(`SELECT issue_assignees.issue_id AS issueId,users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM issue_assignees JOIN users ON users.id=issue_assignees.user_id WHERE issue_assignees.issue_id IN (${placeholders}) ORDER BY users.handle`).bind(...ids).all<IssuePerson & { issueId: string }>()
+    env.DB.prepare(`SELECT issue_assignees.issue_id AS issueId,users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM issue_assignees JOIN users ON users.id=issue_assignees.user_id WHERE issue_assignees.issue_id IN (${placeholders}) ORDER BY users.handle`).bind(...ids).all<IssuePerson & { issueId: string }>(),
+    principal ? env.DB.prepare(`SELECT issues.id,COALESCE(p.following,0) AS following,EXISTS(SELECT 1 FROM issue_timeline t JOIN issue_comments c ON c.id=t.entity_id AND t.kind='comment' WHERE t.issue_id=issues.id AND t.sequence>COALESCE(p.last_read_sequence,0) AND c.deleted_at IS NULL AND c.author_id!=?) AS unread FROM issues LEFT JOIN issue_participants p ON p.issue_id=issues.id AND p.user_id=? WHERE issues.id IN (${placeholders})`).bind(principal.id, principal.id, ...ids).all<{ id: string; following: number; unread: number }>() : Promise.resolve({ results: [] })
   ]);
   const labels = groupByIssue(labelRows.results);
   const assignees = groupByIssue(assigneeRows.results);
+  const participation = new Map(participationRows.results.map((row) => [row.id, row]));
   return rows.map((row) => ({
     id: row.id,
     number: Number(row.number),
@@ -55,6 +70,8 @@ export async function summarizeIssueRows(env: Env, rows: IssueRow[]): Promise<Is
     labels: labels.get(row.id) ?? [],
     assignees: assignees.get(row.id) ?? [],
     commentCount: Number(row.commentCount),
+    following: Boolean(participation.get(row.id)?.following),
+    unread: Boolean(participation.get(row.id)?.unread),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }));

@@ -48,10 +48,22 @@ after the complete result exists. D1 is updated after Git and never moves its de
 row behind the target head reported by Git.
 
 Merge rules are evaluated on the server against the current source commit immediately before
-publication. Required approvals exclude the pull-request author, stale approvals can be
-dismissed when the head changes, required checks must be complete and successful, and current
-review conversations must be resolved. The UI presents the same authoritative reasons but
-cannot bypass them.
+publication. Required approvals exclude the pull-request author and count only reviews attached
+to the current head. When carry-forward is enabled, the head update and copied approvals are one
+database transaction; each copy retains its source review and appears in the new revision's timeline.
+Review submissions reject a head that changed while the review was being submitted.
+Required checks must be complete and successful, and current
+review conversations must be resolved. Only maintainers and owners can resolve or reopen
+conversations. The UI exposes authoritative requirements on demand and cannot bypass them.
+A separate Git merge-tree check reports conflicts for the exact source/target pair; it does not
+replace the final merge transaction.
+Author self-merge is opt-in per branch rule and additionally requires every reported check to pass.
+It does not grant the author repository push permissions.
+
+Branch deletion uses the same durable publication path as a push. It removes a heads ref with
+compare-and-swap against the commit the user confirmed, then updates the derived index. Default
+and protected branches, and branches used by open pulls, are rejected before publication. Pinned
+pull refs keep review history available after a source branch is deleted.
 
 A required check is tied to the target repository's default-branch workflow path and job identity;
 its display name is not an authentication boundary. Runs of that workflow on repository

@@ -4,6 +4,7 @@
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
+  import { clearShellCache } from '$lib/shell-cache';
 
   let code = $state('');
   let error = $state('');
@@ -15,6 +16,7 @@
     try {
       const result = await authClient.twoFactor.verifyTotp({ code, trustDevice: true });
       if (result.error) { error = result.error.message || 'That code is not valid.'; return; }
+      clearShellCache(true);
       await invalidateAll(); await goto(returnTo);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'That code is not valid.';

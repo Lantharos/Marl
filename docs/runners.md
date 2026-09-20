@@ -72,9 +72,32 @@ jobs:
 
 Native workflows support job dependencies, per-job Docker images, service containers,
 job and step timeouts, step working directories, continue-on-error, environment values,
-artifacts, runner labels, and push branch filters.
+artifacts, runner labels, and branch filters for `push` and `pull_request`.
 
-Push runs are superseded by a newer push of the same workflow on the same branch. Marl cancels
+Pull workflows use `on: pull_request`, or a `pull_request` entry alongside other triggers.
+Their branch filters match the target branch. Marl reads the workflow definition from that
+branch and checks out the pull's exact source commit, including contributions from a fork.
+Draft pulls wait until marked ready. Each workflow runs once per pull head; an authorized retry
+can run it again.
+
+Repository settings can require permission before checks run on outside contributions.
+Contributors with push access to the target repository are trusted; direct pushes and trusted
+contributors' pulls run normally. If the author or the person pushing the current pull head lacks
+that access, automatic pull checks wait for someone with target-repository push access to approve
+them from the pull or run page. Permission applies to that exact head and is separate from code
+review approval. Carried-forward reviews do not authorize compute for a new outside head.
+Waiting jobs cannot be claimed by runners.
+
+This permission gate applies to pull checks in the target repository, not ordinary pushes to
+a fork. A fork's push workflows use runners belonging to the fork's organization. Opening a pull
+does not move those push runs to the upstream runner pool; it creates separate pull checks there.
+
+Outside-contribution jobs do not receive repository or organization secrets and cannot publish
+releases, even after execution is approved. A runner can read a fork outside its organization
+only while it holds an active job lease for that checkout.
+
+Automatic push and pull runs are superseded by a newer head of the same workflow and branch
+(scoped to the same pull for pull workflows). Marl cancels
 both queued jobs and an in-progress stale run so an offline runner processes only the newest
 revision when it returns. Manual dispatches and retries are never superseded. Set
 `supersede: false` at the top level of a native workflow when every push must run. GitHub

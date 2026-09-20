@@ -113,6 +113,11 @@ export async function linkedWorkItems(env: Env, principal: Principal | null, kin
   const rows = await env.DB.prepare(`SELECT id,source_issue_id AS sourceIssueId,source_pull_id AS sourcePullId,target_issue_id AS targetIssueId,target_pull_id AS targetPullId,closes_target AS closesTarget,created_at AS createdAt FROM work_item_references WHERE ${kind === 'issue' ? 'source_issue_id=? OR target_issue_id=?' : 'source_pull_id=? OR target_pull_id=?'}`).bind(id, id).all<ReferenceRow>();
   const issueIds = new Set<string>();
   const pullIds = new Set<string>();
+  const explicit = await env.DB.prepare(`SELECT issue_id AS issueId,pull_request_id AS pullId FROM issue_pull_links WHERE ${kind === 'issue' ? 'issue_id' : 'pull_request_id'}=?`).bind(id).all<{ issueId: string; pullId: string }>();
+  for (const link of explicit.results) {
+    if (kind === 'issue') pullIds.add(link.pullId);
+    else issueIds.add(link.issueId);
+  }
   for (const row of rows.results) {
     if (row.sourceIssueId && row.sourceIssueId !== id) issueIds.add(row.sourceIssueId);
     if (row.targetIssueId && row.targetIssueId !== id) issueIds.add(row.targetIssueId);
@@ -122,6 +127,12 @@ export async function linkedWorkItems(env: Env, principal: Principal | null, kin
   const items = await loadItems(env, issueIds, pullIds);
   const readable = await readableItems(env, principal, items);
   const linked = new Map<string, LinkedWorkItem>();
+  for (const link of explicit.results) {
+    const otherKind = kind === 'issue' ? 'pull' : 'issue';
+    const otherId = kind === 'issue' ? link.pullId : link.issueId;
+    const item = readable.get(`${otherKind}:${otherId}`);
+    if (item) linked.set(`${otherKind}:${otherId}`, { id: item.id, kind: otherKind, repository: { owner: item.owner, name: item.repository }, number: item.number, title: item.title, state: item.state, closes: false, direction: 'references' });
+  }
   for (const row of rows.results) {
     const sourceMatches = kind === 'issue' ? row.sourceIssueId === id : row.sourcePullId === id;
     const otherKind: WorkItemKind = sourceMatches

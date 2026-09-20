@@ -1,6 +1,7 @@
 import { getContainer } from '@cloudflare/containers';
 import { readBoundedJson, readBoundedText } from './bounded-body';
 import { promoteCanonicalObject } from './canonical';
+import { enforcePackSigning } from './commit-signing';
 import type { GitEdgeEnv } from './env';
 import { acknowledgeCommittedPush, committedPush, publishWithReconciliation, recoverCommittedState } from './reconciliation';
 import { organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state-client';
@@ -128,6 +129,9 @@ async function validatePacks(env: GitEdgeEnv, session: UploadSnapshotResponse['s
     }
     await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/refs`, env, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ refs: session.refs }) })));
     const packs: PackDescriptor[] = [];
+    for (let number = 0; number < reports.length; number += 1) {
+      await enforcePackSigning(env, session.repository, session.pushId, number, knownPacks.map(pack => pack.id));
+    }
     for (const [number, report] of reports.entries()) {
       const metadataResponse = await expectContainer(container.fetch(internalRequest(`http://container/_marl/packs/${session.pushId}/${number}/objects`, env)));
       const objects = await readBoundedJson<PackObject[]>(metadataResponse, 64 * 1024 * 1024);

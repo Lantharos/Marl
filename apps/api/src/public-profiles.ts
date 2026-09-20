@@ -8,7 +8,6 @@ type UserRow = { id: string; handle: string; displayName: string; avatarUrl: str
 
 const publicRepositories = `repositories.visibility='public' AND repositories.deletion_scheduled_at IS NULL`;
 const activePublicRepositories = `${publicRepositories} AND repositories.archived_at IS NULL`;
-const archivedPublicRepositories = `${publicRepositories} AND repositories.archived_at IS NOT NULL`;
 
 export async function getPublicIdentityProfile(env: Env, handle: string) {
   if (!validIdentitySlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
@@ -22,9 +21,8 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
   if (!user) return notFound('user');
 
   const identity = `${commitAuthorIdSql()}=?`;
-  const [repositories, archivedRepositories, repositoryCount, organizations, contributions, activity, pullRequests] = await Promise.all([
-    env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organizations.kind='personal' AND ${activePublicRepositories} ORDER BY repositories.updated_at DESC LIMIT 12`).bind(user.id).all(),
-    env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt,repositories.archived_at AS archivedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organizations.kind='personal' AND ${archivedPublicRepositories} ORDER BY repositories.updated_at DESC LIMIT 12`).bind(user.id).all(),
+  const [repositories, repositoryCount, organizations, contributions, activity, pullRequests] = await Promise.all([
+    env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organizations.kind='personal' AND ${activePublicRepositories} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 7`).bind(user.id).all(),
     env.DB.prepare(`SELECT COUNT(*) AS count FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organizations.kind='personal' AND ${activePublicRepositories}`).bind(user.id).first<{ count: number }>(),
     env.DB.prepare(`SELECT organizations.slug,organizations.name,organizations.avatar_url AS avatarUrl,organizations.description FROM organizations JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organizations.kind='team' ORDER BY organizations.name LIMIT 12`).bind(user.id).all(),
     env.DB.prepare(`SELECT date(commits.authored_at) AS date,COUNT(*) AS count FROM commits JOIN repositories ON repositories.id=commits.repository_id WHERE ${activePublicRepositories} AND ${identity} AND date(commits.authored_at)>=date('now','-371 days') GROUP BY date(commits.authored_at) ORDER BY date(commits.authored_at)`).bind(user.id).all<ContributionRow>(),
@@ -38,7 +36,6 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
     stats: { repositories: Number(repositoryCount?.count ?? 0), contributions: contributionDays.reduce((sum, day) => sum + day.count, 0), pullRequests: Number(pullRequests?.count ?? 0) },
     contributions: contributionDays,
     repositories: repositories.results,
-    archivedRepositories: archivedRepositories.results,
     organizations: organizations.results,
     activity: activity.results
   });
@@ -50,9 +47,8 @@ async function getPublicOrganizationProfile(env: Env, slug: string) {
   if (!organization) return notFound('organization');
 
   const authorId = commitAuthorIdSql();
-  const [repositories, archivedRepositories, repositoryCount, members, activity, contributionCount, totalMembers] = await Promise.all([
-    env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.organization_id=? AND ${activePublicRepositories} ORDER BY repositories.updated_at DESC LIMIT 18`).bind(organization.id).all(),
-    env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt,repositories.archived_at AS archivedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.organization_id=? AND ${archivedPublicRepositories} ORDER BY repositories.updated_at DESC LIMIT 18`).bind(organization.id).all(),
+  const [repositories, repositoryCount, members, activity, contributionCount, totalMembers] = await Promise.all([
+    env.DB.prepare(`SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.organization_id=? AND ${activePublicRepositories} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 7`).bind(organization.id).all(),
     env.DB.prepare(`SELECT COUNT(*) AS count FROM repositories WHERE repositories.organization_id=? AND ${activePublicRepositories}`).bind(organization.id).first<{ count: number }>(),
     env.DB.prepare(`SELECT users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,organization_members.role FROM organization_members JOIN users ON users.id=organization_members.user_id WHERE organization_members.organization_id=? ORDER BY CASE organization_members.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,users.handle LIMIT 24`).bind(organization.id).all(),
     env.DB.prepare(`SELECT commits.id,commits.title,commits.authored_at AS authoredAt,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,repositories.name AS repository FROM commits JOIN repositories ON repositories.id=commits.repository_id LEFT JOIN users ON users.id=${authorId} WHERE repositories.organization_id=? AND ${activePublicRepositories} ORDER BY commits.authored_at DESC LIMIT 10`).bind(organization.id).all(),
@@ -64,7 +60,6 @@ async function getPublicOrganizationProfile(env: Env, slug: string) {
     organization: { slug: organization.slug, name: organization.name, avatarUrl: organization.avatarUrl, description: organization.description, website: organization.website, kind: organization.kind, createdAt: organization.createdAt },
     stats: { repositories: Number(repositoryCount?.count ?? 0), members: Number(totalMembers?.count ?? 0), contributions: Number(contributionCount?.count ?? 0) },
     repositories: repositories.results,
-    archivedRepositories: archivedRepositories.results,
     members: members.results,
     activity: activity.results
   });

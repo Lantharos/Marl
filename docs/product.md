@@ -108,17 +108,32 @@ can exist without ambiguity. Issues support open and closed states, editable des
 comments, durable deletion tombstones, assignees, repository labels, conversation locking, and a
 complete actor-attributed timeline. Global Issues provides one searchable queue across every
 repository the current user can read; repository Issues preserves label filtering and repository
-context. Open queues group work by its actual next move: in motion, needing a decision, or needing
-an owner. The issue page treats its editable work brief as the current source of truth and keeps
-decisions, comments, and references in a separate activity stream. When no pull is linked, an issue
-can open a prefilled pull that preserves the closing reference. Only repository triage roles manage
+context. Lists offer unanswered, following, and unread discussion filters. Unanswered means nobody
+other than the author has replied; assignments and comment counts do not imply workflow states.
+The opening report and chronological discussion occupy the main column, with one level of grouped
+replies. Long reports expand in place. Labels, assignees, linked pulls, and an optional conclusion
+sit alongside the conversation. Maintainers and owners can write a conclusion or promote a comment,
+preserving a link to its source without replacing the original report. Link a pull searches existing pulls
+in the same repository; the issue author and repository triage roles can add a link without
+editing the report. These explicit links remain when the report changes and do not close
+the issue automatically. Only repository triage roles manage
 assignment, labels, and locks, while issue authors
 can edit and close their own work. References in descriptions, comments, reviews, and review
 conversations create durable links and backlink timeline entries. References may use the current
 repository shorthand or a qualified form such as `lantharos/marl#12` and `lantharos/marl!7`.
 Authored discussion uses restrained surfaces so comment boundaries and reply groups remain easy to
-scan; mechanical changes remain available as compact events without breaking the pace of the
-conversation.
+scan; mechanical changes remain in expandable history. Read position and following are stored per
+user. Resume returns to unread discussion, while Latest jumps to the end. Following also includes
+the issue in the inbox. Draft replies stay with their conversation in the current browser tab.
+
+Descriptions, comments, and review conversations accept pasted, dropped, or attached images and
+videos. Images open at full size; videos have explicit playback controls and do not autoplay.
+PNG, JPEG, GIF, and WebP uploads allow 10 MiB per image; MP4 and WebM allow 50 MiB per video, with
+a rolling 250 MiB daily allowance per user. Codec playback depends on the browser; MP4 with H.264
+and WebM are the supported upload containers. Uploads stream to object storage with size and file
+signature checks. Every attachment read rechecks repository access, including byte-range video
+requests; private media is never served from a public cache. Uploaded files belong to the repository,
+and removing their Markdown reference does not delete the stored file.
 
 ## Pulls
 
@@ -128,12 +143,17 @@ developer must be able to understand the proposal, review every file, follow con
 inspect checks, and identify every merge blocker without hunting across unrelated screens.
 
 A pull moves from draft to ready and can be closed or reopened without losing its review record.
-Its overview states the current review outcome beside concise merge requirements, keeps the editable
-change brief distinct from review activity, and names the exact head revision being discussed. The
+Its desktop view keeps the title, brief, current status, assignees, labels, and lifecycle actions
+in a left-hand summary, with revision history and discussion on the right. Small screens stack
+the summary above the discussion and disclose metadata on demand. One status describes the current
+outcome; merge requirements are available when needed. Conflicts are checked against the exact
+source and target commits without delaying the initial page. The
 latest revision and composer appear first. Earlier revisions stay collapsed until opened, with
 their review outcome and discussion count visible in the header. Each revision's top-level
 activity runs newest-first; replies inside a conversation read in order. Code excerpts scroll
 horizontally when needed so a narrow screen does not hide part of a reviewed line.
+Pushes before anyone comments or reviews stay in the same revision, with a compact commit update.
+Once discussion begins, the next push starts a revision and preserves that discussion with its head.
 
 Activity includes replies, editable comments, durable deletion
 tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
@@ -141,10 +161,13 @@ start line or range conversations directly from the changes view; those conversa
 appear in the timeline with their exact file, line range, and a capped excerpt of the relevant code,
 then collapse when resolved. Each review, comment, and line conversation is visually contained while
 commit and metadata events remain compact. Title,
-description, lifecycle, lock, assignment, label, merge, and thread-resolution changes are durable
-timeline events. The conversation composer keeps comment, review, every allowed merge method,
-close, and reopen actions together without navigating away. Choosing an action makes it the
-composer's primary submit behavior and includes the written comment when present. Assignees and
+description, lifecycle, lock, assignment, label, and merge changes are durable timeline events.
+Only repository maintainers and owners can resolve or reopen line conversations; these changes
+update the thread and merge requirements live without adding activity rows. Authors can delete
+their own comments, and maintainers can delete comments across the pull. Deleting a review summary
+removes its text, not its decision or line conversations.
+The composer combines comments with approval or requested changes. Merge, close, reopen, and
+ready-for-review actions live beside the summary and never submit an unfinished comment. Assignees and
 repository labels make ownership and triage visible without replacing review state. The commits,
 changes, checks, and overview views all describe the same pinned head revision.
 
@@ -153,8 +176,20 @@ occurs atomically with a successful merge into the repository's default branch; 
 other branch preserves the link without changing issue state.
 
 Repository owners configure merge rules from the branches surface: required approvals,
-successful checks, resolved conversations, stale-approval dismissal, and the allowed merge,
-squash, or rebase methods. These rules are enforcement policy, not UI suggestions.
+successful checks, resolved conversations, and the allowed merge, squash, or rebase methods.
+Approvals apply to the reviewed revision by default. An optional carry-forward setting copies each
+reviewer's latest approval onto the next head and records whose approval was carried forward in
+that revision's timeline. Requested changes never carry forward as approval.
+
+An optional author-merge setting lets a pull's author merge when the approval threshold is met,
+every reported check passes, and the remaining merge rules are satisfied. The approval threshold
+can be zero. Author merge does not grant push access or permission to approve check execution.
+These rules are enforced by the server.
+
+Branches can be deleted from the branch list by contributors with push access. Deletion needs
+confirmation and checks the expected head commit. Default branches, branches covered by protection
+rules, and branches still used by open pulls cannot be deleted. Git publishes the ref removal before
+its derived branch index changes; pull history retains its pinned commits.
 
 ## Releases
 

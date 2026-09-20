@@ -9,6 +9,6 @@ export const load: PageLoad = async ({ fetch, params }) => {
       releases: ReleaseSummary[];
       nextCursor: string | null;
       canCreate: boolean;
-    }>(fetch, `/repositories/${params.owner}/${params.repo}/releases`)
+    }>(fetch, `/repositories/${params.owner}/${params.repo}/releases?limit=30`)
   );
 };

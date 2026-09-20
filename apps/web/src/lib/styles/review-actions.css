@@ -1,0 +1,4 @@
+.review-submit.control.approved { --review-fill: var(--success-soft); --review-ink: var(--success); }
+.review-submit.control.changes_requested { --review-fill: var(--warning-soft); --review-ink: var(--warning); }
+.review-submit.control:is(.approved, .changes_requested) { background: var(--review-fill); color: var(--review-ink); }
+.review-submit.control:is(.approved, .changes_requested):hover:not(:disabled) { background: color-mix(in srgb, var(--review-fill) 86%, var(--review-ink)); }

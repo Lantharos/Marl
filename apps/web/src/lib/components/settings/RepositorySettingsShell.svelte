@@ -16,7 +16,7 @@
   <nav aria-label="Repository settings">
     <a class:active={path === settings} href={settings}><Settings size={15} />General</a>
     <a class:active={path.startsWith(`${settings}/branches`)} href="{settings}/branches"><GitBranch size={15} />Branches</a>
-    <a class:active={path.startsWith(`${settings}/access`)} href="{settings}/access"><Users size={15} />Access</a>
+    <a class:active={path.startsWith(`${settings}/access`)} href="{settings}/access"><Users size={15} />Access and security</a>
     <a class:active={path.startsWith(`${settings}/secrets`)} href="{settings}/secrets"><KeyRound size={15} />CI secrets</a>
   </nav>
 {/snippet}

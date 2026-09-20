@@ -8,6 +8,7 @@
   import PageHeader from '$lib/components/PageHeader.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import IssueList from '$lib/issues/IssueList.svelte';
+  import IssueViews from '$lib/issues/IssueViews.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
@@ -24,9 +25,9 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   let listGeneration = 0;
   $effect(() => { issues = data.issues; nextCursor = data.nextCursor; query = data.query; active = data.state[0].toUpperCase() + data.state.slice(1); selectedLabels = [...data.labels]; loading = false; loadError = ''; listGeneration += 1; clearTimeout(timer); });
-  function navigate(state = active, value = query, labels = selectedLabels) { const params = new URLSearchParams(); if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase()); if (value.trim()) params.set('q', value.trim()); for (const label of labels) params.append('label', label); void goto(`/${owner}/${repo}/issues${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true }); }
+  function navigate(state = active, value = query, labels = selectedLabels, view = data.view) { const params = new URLSearchParams({ view }); if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase()); if (value.trim()) params.set('q', value.trim()); for (const label of labels) params.append('label', label); void goto(`/${owner}/${repo}/issues${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true }); }
   function changeQuery(value: string) { clearTimeout(timer); timer = setTimeout(() => navigate(active, value), 220); }
-  async function loadMore() { if (!nextCursor || loading) return; const generation = listGeneration; const cursor = nextCursor; const route = { owner, repo }; loading = true; loadError = ''; try { const params = new URLSearchParams({ limit: '30', state: active.toLowerCase(), cursor }); if (query.trim()) params.set('q', query.trim()); for (const label of selectedLabels) params.append('label', label); const result = await api<{ issues: IssueSummary[]; nextCursor: string | null }>(`/repositories/${route.owner}/${route.repo}/issues?${params}`); if (generation !== listGeneration || owner !== route.owner || repo !== route.repo) return; const ids = new Set(issues.map((issue) => issue.id)); issues = [...issues, ...result.issues.filter((issue) => !ids.has(issue.id))]; nextCursor = result.nextCursor; } catch (cause) { if (generation === listGeneration) loadError = cause instanceof MarlApiError ? cause.message : 'More issues could not be loaded.'; } finally { if (generation === listGeneration) loading = false; } }
+  async function loadMore() { if (!nextCursor || loading) return; const generation = listGeneration; const cursor = nextCursor; const route = { owner, repo }; loading = true; loadError = ''; try { const params = new URLSearchParams({ limit: '30', state: active.toLowerCase(), cursor, view: data.view }); if (query.trim()) params.set('q', query.trim()); for (const label of selectedLabels) params.append('label', label); const result = await api<{ issues: IssueSummary[]; nextCursor: string | null }>(`/repositories/${route.owner}/${route.repo}/issues?${params}`); if (generation !== listGeneration || owner !== route.owner || repo !== route.repo) return; const ids = new Set(issues.map((issue) => issue.id)); issues = [...issues, ...result.issues.filter((issue) => !ids.has(issue.id))]; nextCursor = result.nextCursor; } catch (cause) { if (generation === listGeneration) loadError = cause instanceof MarlApiError ? cause.message : 'More issues could not be loaded.'; } finally { if (generation === listGeneration) loading = false; } }
   onDestroy(() => clearTimeout(timer));
 </script>
 
@@ -34,7 +35,8 @@
 <div class="page">
   <PageHeader title="Issues" actionHref={data.shellUser ? `/issues/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? 'New issue' : undefined} />
   <FilterBar placeholder="Search issues" tabs={['Open', 'Closed', 'All']} labelOptions={data.availableLabels} bind:active bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(active, query, labels)} />
-  <IssueList {issues} grouped={active === 'Open'} emptyTitle={query || selectedLabels.length ? 'No matching issues' : `No ${active.toLowerCase()} issues`} emptyDescription={query || selectedLabels.length ? 'Try another search or remove a label filter.' : 'New issues will appear here.'} />
+  <IssueViews value={data.view} personal={Boolean(data.shellUser)} onChange={(view) => navigate(active, query, selectedLabels, view)} />
+  <IssueList {issues} emptyTitle={data.view !== 'all' ? `No ${data.view} discussions` : query || selectedLabels.length ? 'No matching issues' : `No ${active.toLowerCase()} issues`} emptyDescription={query || selectedLabels.length ? 'Try another search or remove a label filter.' : 'New issues will appear here.'} />
   {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}
   {#if nextCursor}<Button class="load" loading={loading} onclick={loadMore}>Load more</Button>{/if}
 </div>

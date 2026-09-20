@@ -88,6 +88,10 @@ export async function requireOrganizationRole(env: Env, principal: Principal, or
   return role === 'owner' || role === 'admin' ? role : null;
 }
 
+export function repositoryCan(repository: RepositoryAccess, principal: Principal | null, capability: RepositoryCapability) {
+  return Boolean(allowRepository(repository, principal, capability));
+}
+
 function allowRepository(repository: RepositoryAccess | null, principal: Principal | null, capability: RepositoryCapability) {
   if (!repository || repository.deletionScheduledAt) return null;
   if (capability === 'repository.read' && repository.visibility === 'public') return tokenAllows(principal, repository, capability) ? repository : null;

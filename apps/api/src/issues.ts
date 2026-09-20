@@ -2,9 +2,9 @@ import type { Principal } from './auth';
 import { auditStatement } from './audit';
 import { identifier } from './domain';
 import { json, problem, readJson } from './http';
-import { createIssueEvent, issueSelect, summarizeIssueRows, type IssueRow } from './issue-context';
+import { createIssueEvent, issueSelect, savedIssueEvents, summarizeIssueRows, type IssueRow } from './issue-context';
 import type { Env } from './platform';
-import { commentBody, createIssueBody, createPullLabelBody, issueMetadataBody, issueStateBody, updateIssueBody } from './request-schemas';
+import { commentBody, issueCommentBody, createIssueBody, createPullLabelBody, issueMetadataBody, issueStateBody, updateIssueBody } from './request-schemas';
 import { authorizeRepository } from './repository-access';
 import type { RepositoryAccess } from './repository-access';
 import { deleteReferenceStatements, linkedWorkItems, referenceStatements } from './work-item-references';
@@ -56,7 +56,7 @@ export async function updateIssue(request: Request, env: Env, principal: Princip
     ...events.map((event) => event.statement),
     auditStatement(env, { organizationId: context.repository.organizationId, repositoryId: context.repository.id, actor: principal, action: 'issue.updated', subjectType: 'issue', subjectId: context.issue.id })
   ]);
-  return json({ issue: { title, body: description }, linkedItems: await linkedWorkItems(env, principal, 'issue', context.issue.id), timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })) });
+  return json({ issue: { title, body: description }, linkedItems: await linkedWorkItems(env, principal, 'issue', context.issue.id), timeline: await savedIssueEvents(env, events) });
 }
 
 export async function setIssueState(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
@@ -71,7 +71,7 @@ export async function setIssueState(request: Request, env: Env, principal: Princ
     event.statement,
     auditStatement(env, { organizationId: context.repository.organizationId, repositoryId: context.repository.id, actor: principal, action: `issue.${body.state}`, subjectType: 'issue', subjectId: context.issue.id })
   ]);
-  return json({ state: body.state, timeline: { kind: 'event', value: event.value, createdAt: event.value.createdAt } });
+  return json({ state: body.state, timeline: (await savedIssueEvents(env, [event]))[0] });
 }
 
 export async function addIssueComment(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
@@ -80,20 +80,25 @@ export async function addIssueComment(request: Request, env: Env, principal: Pri
   const issue = await env.DB.prepare('SELECT id,locked_at AS lockedAt FROM issues WHERE repository_id=? AND number=?').bind(repository.id, number).first<{ id: string; lockedAt: string | null }>();
   if (!issue) return problem(404, 'issue_not_found', 'Issue not found.');
   if (issue.lockedAt && !(await authorizeRepository(env, principal, owner, name, 'repository.triage'))) return problem(423, 'issue_locked', 'This issue is locked.');
-  const body = await readJson(request, commentBody);
+  const body = await readJson(request, issueCommentBody);
   if (!body?.body.trim()) return problem(422, 'invalid_comment', 'Comment body is required.');
+  const target = body.replyToId ? await env.DB.prepare('SELECT id,parent_id AS parentId FROM issue_comments WHERE id=? AND issue_id=? AND deleted_at IS NULL').bind(body.replyToId, issue.id).first<{ id: string; parentId: string | null }>() : null;
+  if (body.replyToId && !target) return problem(422, 'invalid_reply', 'That comment is no longer available in this issue.');
+  const parentId = target ? target.parentId ?? target.id : null;
+  const replyToId = target?.id ?? null;
   const id = identifier('comment');
   const createdAt = new Date().toISOString();
   const comment = body.body.trim();
   const references = await referenceStatements(env, principal, { kind: 'issue', id: issue.id, owner, repository: name }, 'comment', id, comment);
   const mentions = await mentionStatements(env, principal, { kind: 'issue', id: issue.id }, 'issue_comment', id, comment, createdAt);
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id, issue.id, principal.id, comment, createdAt, createdAt),
+    env.DB.prepare('INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at,parent_id,reply_to_id) VALUES (?,?,?,?,?,?,?,?)').bind(id, issue.id, principal.id, comment, createdAt, createdAt, parentId, replyToId),
     ...references,
     ...mentions,
     env.DB.prepare('UPDATE issues SET updated_at=? WHERE id=?').bind(createdAt, issue.id)
   ]);
-  return json({ comment: { id, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: comment, createdAt, updatedAt: createdAt, deleted: false, canEdit: true }, linkedItems: await linkedWorkItems(env, principal, 'issue', issue.id) }, { status: 201 });
+  const entry = await env.DB.prepare("SELECT sequence FROM issue_timeline WHERE issue_id=? AND kind='comment' AND entity_id=?").bind(issue.id, id).first<{ sequence: number }>();
+  return json({ comment: { id, parentId, replyToId, authorId: principal.id, author: principal.handle, authorDisplayName: principal.displayName, authorAvatarUrl: principal.avatarUrl, body: comment, createdAt, updatedAt: createdAt, deleted: false, canEdit: true }, sequence: entry?.sequence, linkedItems: await linkedWorkItems(env, principal, 'issue', issue.id) }, { status: 201 });
 }
 
 export async function updateIssueComment(request: Request, env: Env, principal: Principal, commentId: string): Promise<Response> {
@@ -171,7 +176,7 @@ export async function updateIssueMetadata(request: Request, env: Env, principal:
   statements.push(env.DB.prepare('UPDATE issues SET updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(issue.id));
   statements.push(auditStatement(env, { organizationId: repository.organizationId, repositoryId: repository.id, actor: principal, action: 'issue.metadata_updated', subjectType: 'issue', subjectId: issue.id }));
   await env.DB.batch(statements);
-  return json({ updated: true, timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })) });
+  return json({ updated: true, timeline: await savedIssueEvents(env, events) });
 }
 
 export async function createIssueLabel(request: Request, env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {

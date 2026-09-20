@@ -1,4 +1,5 @@
 import type { RepositorySummary } from '@marl/contracts';
+import { commitSignatureStatusSql } from './commit-signing';
 import { auditStatement } from './audit';
 import { requireFreshSession, type Principal } from './auth';
 import { identifier, safeRepositoryPath, validBranchName, validIdentitySlug, validSlug, validVisibility } from './domain';
@@ -10,7 +11,8 @@ import type { D1Result, Env } from './platform';
 import { createRepositoryBody, deleteRepositoryBody, forkRepositoryBody, gitIndexBody, renameRepositoryBody, repositoryOverviewBody, repositorySettingsBody, transferRepositoryBody } from './request-schemas';
 import { synchronizePullsForBranchUpdates } from './pull-synchronization';
 import { queuePushWorkflows } from './workflows';
-import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryListFilter, repositoryPermissions, repositoryReadFilter } from './repository-access';
+import { queuePullsForIndexedRepository } from './pull-checks';
+import { authorizeRepository, authorizeRepositoryId, lookupRepository, repositoryCan, repositoryListFilter, repositoryPermissions, repositoryReadFilter } from './repository-access';
 import { commitAuthorIdSql } from './commit-authors';
 import { readImageAsset, readImageUpload, storedImageKey } from './image-assets';
 import { rawBlobHeaders } from './raw-content';
@@ -156,6 +158,7 @@ export async function indexGit(request: Request, env: Env, principal: Principal 
     workflowsQueued += result.queued;
     workflowWarnings.push(...result.warnings);
   }
+  await queuePullsForIndexedRepository(env, body.repositoryId, indexedBranches.map((branch) => branch.name));
   return json({
     indexed: {
       commits: body.commits.length,
@@ -521,6 +524,7 @@ export async function updateRepositorySettings(request: Request, env: Env, princ
   if (!access) return problem(404, 'repository_not_found', 'Repository not found.');
   const body = await readJson(request, repositorySettingsBody);
   if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
+  if (body.signingMode !== undefined && !(await requireFreshSession(request, env, principal))) return problem(403, 'identity_confirmation_required', 'Confirm your identity before changing commit signing.');
   const description = body.description ?? access.description;
   const visibility = body.visibility ?? access.visibility;
   const defaultBranch = body.defaultBranch ?? access.defaultBranch;
@@ -531,7 +535,7 @@ export async function updateRepositorySettings(request: Request, env: Env, princ
   }
   const archivedAt = typeof body.archived === 'boolean' ? (body.archived ? new Date().toISOString() : null) : access.archivedAt;
   await env.DB.batch([
-    env.DB.prepare('UPDATE repositories SET description=?,visibility=?,default_branch=?,archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(description, visibility, defaultBranch, archivedAt, access.id),
+    env.DB.prepare('UPDATE repositories SET description=?,visibility=?,default_branch=?,archived_at=?,require_check_approval=COALESCE(?,require_check_approval),signing_mode=COALESCE(?,signing_mode),updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(description, visibility, defaultBranch, archivedAt, body.requireCheckApproval === undefined ? null : Number(body.requireCheckApproval), body.signingMode ?? null, access.id),
     auditStatement(env, {
       organizationId: access.organizationId,
       repositoryId: access.id,
@@ -543,7 +547,9 @@ export async function updateRepositorySettings(request: Request, env: Env, princ
         descriptionChanged: description !== access.description,
         visibility: { from: access.visibility, to: visibility },
         defaultBranch: { from: access.defaultBranch, to: defaultBranch },
-        archived: Boolean(archivedAt)
+        archived: Boolean(archivedAt),
+        ...(body.signingMode === undefined ? {} : { signingMode: body.signingMode }),
+        ...(body.requireCheckApproval === undefined ? {} : { requireCheckApproval: body.requireCheckApproval })
       }
     })
   ]);
@@ -647,8 +653,8 @@ function relocateStorage(env: Env, oldOwner: string, oldRepository: string, newO
 export async function listBranches(env: Env, principal: Principal | null, owner: string, name: string): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const result = await env.DB.prepare(`SELECT branches.name, branches.commit_id AS commitId, commits.title, branches.updated_at AS updatedAt FROM branches JOIN commits ON commits.repository_id = branches.repository_id AND commits.id = branches.commit_id WHERE branches.repository_id = ? ORDER BY branches.name`).bind(repo.id).all();
-  return json({ defaultBranch: repo.defaultBranch, branches: result.results });
+  const result = await env.DB.prepare(`SELECT branches.name, branches.commit_id AS commitId, commits.title, branches.updated_at AS updatedAt, NOT EXISTS (SELECT 1 FROM branch_rules WHERE branch_rules.repository_id=branches.repository_id AND branch_rules.pattern IN (branches.name, '*')) AS unprotected FROM branches JOIN commits ON commits.repository_id = branches.repository_id AND commits.id = branches.commit_id WHERE branches.repository_id = ? ORDER BY branches.name`).bind(repo.id).all();
+  return json({ defaultBranch: repo.defaultBranch, branches: result.results.map((branch) => ({ ...branch, canDelete: repositoryCan(repo, principal, 'repository.push') && Boolean(branch.unprotected) && branch.name !== repo.defaultBranch })) });
 }
 
 export async function listPullSources(env: Env, principal: Principal, owner: string, name: string): Promise<Response> {
@@ -690,7 +696,7 @@ export async function listCommits(env: Env, principal: Principal | null, owner: 
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
   const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
   const values = cursor ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [resolved.id, repo.id, repo.id, limit + 1];
-  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,commit_rows.signature_status AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`)
+  const result = await env.DB.prepare(`WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,${commitSignatureStatusSql('commit_rows')} AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`)
     .bind(...values)
     .all<{
       id: string;
@@ -719,8 +725,14 @@ export async function listCommits(env: Env, principal: Principal | null, owner: 
 export async function getCommit(env: Env, principal: Principal | null, owner: string, name: string, commitId: string): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  if (!/^[0-9a-f]{40,64}$/.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
-  const indexed = await env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=?) SELECT commit_row.id,commit_row.signature_status AS signatureStatus,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repo.id, commitId).first<{
+  if (!/^[0-9a-f]{7,64}$/i.test(commitId)) return problem(422, 'invalid_commit', 'Commit identifier is invalid.');
+  commitId = commitId.toLowerCase();
+  if (commitId.length !== 40 && commitId.length !== 64) {
+    const matches = await env.DB.prepare('SELECT id FROM commits WHERE repository_id=? AND id>=? AND id<? ORDER BY id LIMIT 2').bind(repo.id, commitId, `${commitId}g`).all<{ id: string }>();
+    if (matches.results.length !== 1) return problem(matches.results.length ? 422 : 404, matches.results.length ? 'ambiguous_commit' : 'commit_not_found', matches.results.length ? 'Use a longer commit identifier.' : 'Commit not found.');
+    commitId = matches.results[0].id;
+  }
+  const indexed = await env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=?) SELECT commit_row.id,${commitSignatureStatusSql('commit_row')} AS signatureStatus,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repo.id, commitId).first<{
     id: string;
     signatureStatus: string;
     authorHandle: string | null;
@@ -831,7 +843,7 @@ export async function readBlob(env: Env, principal: Principal | null, owner: str
   }
   if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
   const immutableRevision = revision.toLowerCase() === resolved.id.toLowerCase();
-  const cacheKey = new Request(`https://blob-cache.marl.internal/v2/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
+  const cacheKey = new Request(`https://blob-cache.marl.internal/v3/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`);
   const publicCache = (caches as unknown as { default: Cache }).default;
   if (repo.visibility === 'public') {
     const cached = await publicCache.match(cacheKey);
@@ -885,7 +897,7 @@ async function resolveRevision(
   authoredAt: string;
   signatureStatus: string;
 } | null> {
-  return env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)) SELECT commit_row.id,commit_row.tree_id AS treeId,commit_row.title,commit_row.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_row.authored_at AS authoredAt,commit_row.signature_status AS signatureStatus FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repositoryId, repositoryId, revision, revision).first<{
+  return env.DB.prepare(`WITH commit_row AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits WHERE commits.repository_id=? AND commits.id=COALESCE((SELECT commit_id FROM branches WHERE repository_id=? AND name=?),?)) SELECT commit_row.id,commit_row.tree_id AS treeId,commit_row.title,commit_row.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_row.authored_at AS authoredAt,${commitSignatureStatusSql('commit_row')} AS signatureStatus FROM commit_row LEFT JOIN users AS commit_authors ON commit_authors.id=commit_row.matched_author_id`).bind(repositoryId, repositoryId, revision, revision).first<{
     id: string;
     treeId: string;
     title: string;

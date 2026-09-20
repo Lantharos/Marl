@@ -129,7 +129,6 @@ export interface PublicUserProfile {
   stats: { repositories: number; contributions: number; pullRequests: number };
   contributions: Array<{ date: string; count: number }>;
   repositories: PublicProfileRepository[];
-  archivedRepositories: PublicProfileRepository[];
   organizations: Array<{
     slug: string;
     name: string;
@@ -157,7 +156,6 @@ export interface PublicOrganizationProfile {
   };
   stats: { repositories: number; members: number; contributions: number };
   repositories: PublicProfileRepository[];
-  archivedRepositories: PublicProfileRepository[];
   members: Array<{
     handle: string;
     displayName: string;
@@ -260,12 +258,16 @@ export interface IssueSummary {
   labels: IssueLabel[];
   assignees: IssuePerson[];
   commentCount: number;
+  following: boolean;
+  unread: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface IssueComment {
   id: Identifier;
+  parentId: Identifier | null;
+  replyToId: Identifier | null;
   authorId: Identifier;
   author: string;
   authorDisplayName: string;
@@ -320,6 +322,7 @@ export type IssueTimelineItem =
 
 export interface IssueTimelineWindow {
   items: IssueTimelineItem[];
+  context: IssueComment[];
   total: number;
   hidden: number;
   loadBeforeSequence?: number;
@@ -332,10 +335,21 @@ export interface IssueDetail extends IssueSummary {
   locked: boolean;
   canEdit: boolean;
   canManage: boolean;
+  canConclude: boolean;
+  conclusion: IssueConclusion | null;
+  participation: { following: boolean; lastReadSequence: number };
   availableAssignees: IssuePerson[];
   availableLabels: IssueLabel[];
   linkedItems: LinkedWorkItem[];
   timeline: IssueTimelineWindow;
+}
+
+export interface IssueConclusion {
+  body: string;
+  commentId: Identifier | null;
+  author: string;
+  authorDisplayName: string;
+  updatedAt: string;
 }
 
 export interface PullRequestDetail extends PullRequestSummary {
@@ -374,6 +388,8 @@ export interface PullRequestDetail extends PullRequestSummary {
   locked: boolean;
   canManage: boolean;
   canMerge: boolean;
+  checksApproval: { waiting: number; canApprove: boolean };
+  canModerate: boolean;
   realtimeVersion: number;
   linkedItems: LinkedWorkItem[];
   timeline: PullTimelineWindow;
@@ -442,7 +458,7 @@ export interface PullRealtimeUpdate {
   createdAt: string;
 }
 
-export type PullRequestEventKind = 'title_changed' | 'description_changed' | 'locked' | 'unlocked' | 'assigned' | 'unassigned' | 'label_added' | 'label_removed' | 'ready' | 'closed' | 'reopened' | 'merged' | 'commits_added' | 'force_pushed' | 'thread_resolved' | 'thread_reopened';
+export type PullRequestEventKind = 'title_changed' | 'description_changed' | 'locked' | 'unlocked' | 'assigned' | 'unassigned' | 'label_added' | 'label_removed' | 'ready' | 'closed' | 'reopened' | 'merged' | 'commits_added' | 'head_updated' | 'force_pushed' | 'thread_resolved' | 'thread_reopened';
 
 export interface PullRequestEvent {
   id: Identifier;
@@ -482,12 +498,14 @@ export interface PullRequestComment {
 
 export interface PullRequestReview {
   id: Identifier;
+  authorId: Identifier;
   author: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
   state: 'commented' | 'approved' | 'changes_requested';
   body: string;
   commitId: string;
+  carriedFromReviewId?: Identifier | null;
   createdAt: string;
 }
 
@@ -555,6 +573,7 @@ export interface RunSummary {
   branch: string;
   commit: string;
   state: RunState;
+  approvalRequired: boolean;
   cancellationReason?: RunCancellationReason;
   jobs: number;
   duration?: string;
@@ -606,6 +625,7 @@ export interface RunJob {
 }
 
 export interface RunDetail extends RunSummary {
+  canApproveChecks?: boolean;
   jobsDetail: RunJob[];
   startedAt?: string;
   completedAt?: string;
@@ -657,3 +677,4 @@ export interface RunnerJobLease {
   };
   leaseExpiresAt: string;
 }
+export type SigningMode = 'optional' | 'vigilant' | 'firewall';

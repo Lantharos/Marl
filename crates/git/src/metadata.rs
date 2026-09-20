@@ -12,15 +12,10 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    io::Write,
     path::Path,
-    process::Stdio,
     sync::Arc,
 };
-use tokio::{
-    io::AsyncWriteExt,
-    time::{Duration, sleep},
-};
+use tokio::time::{Duration, sleep};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,23 +64,6 @@ struct IndexedCommit {
     signature_key_fingerprint: Option<String>,
     #[serde(skip)]
     position: usize,
-    #[serde(skip)]
-    signed: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SigningKey {
-    user_id: String,
-    email: String,
-    public_key: String,
-    fingerprint: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SigningKeysResponse {
-    signing_keys: Vec<SigningKey>,
 }
 
 #[derive(Serialize)]
@@ -328,10 +306,8 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
             signature_status: "unverified".into(),
             signature_signer_id: None,
             signature_key_fingerprint: None,
-            signed: false,
         })
         .collect::<Vec<_>>();
-    mark_signed_commits(&repository, &mut commits).await?;
     verify_commit_signatures(state, &repository, &mut commits).await?;
     let changes = index_changes(&repository, &commits, &request.exclude_commits).await?;
     let mut indexed = HashSet::new();
@@ -463,158 +439,33 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
         .collect())
 }
 
-async fn mark_signed_commits(repository: &Path, commits: &mut [IndexedCommit]) -> Result<()> {
-    if commits.is_empty() {
-        return Ok(());
-    }
-    let mut child = Command::new("git")
-        .args(["-C"])
-        .arg(repository)
-        .args(["cat-file", "--batch"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("start commit signature scan")?;
-    let input = commits
-        .iter()
-        .map(|commit| commit.id.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    child
-        .stdin
-        .take()
-        .context("open commit signature scan input")?
-        .write_all(format!("{input}\n").as_bytes())
-        .await
-        .context("write commit signature scan input")?;
-    let output = child
-        .wait_with_output()
-        .await
-        .context("read commit signature scan")?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "commit signature scan failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-    }
-    let mut cursor = 0;
-    for commit in commits {
-        let header_end = output.stdout[cursor..]
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .map(|offset| cursor + offset)
-            .context("invalid commit signature scan header")?;
-        let header = std::str::from_utf8(&output.stdout[cursor..header_end])?;
-        let size = header
-            .split_whitespace()
-            .next_back()
-            .context("missing commit object size")?
-            .parse::<usize>()
-            .context("invalid commit object size")?;
-        let object_start = header_end + 1;
-        let object_end = object_start + size;
-        let object = output
-            .stdout
-            .get(object_start..object_end)
-            .context("truncated commit signature scan")?;
-        commit.signed = object
-            .split(|byte| *byte == b'\n')
-            .any(|line| line.starts_with(b"gpgsig ") || line.starts_with(b"gpgsig-sha256 "));
-        cursor = object_end + 1;
-    }
-    Ok(())
-}
-
 async fn verify_commit_signatures(
     state: &AppState,
     repository: &Path,
     commits: &mut [IndexedCommit],
 ) -> Result<()> {
-    let emails = commits
-        .iter()
-        .filter(|commit| commit.signed)
-        .map(|commit| commit.author_email.trim().to_lowercase())
-        .filter(|email| !email.is_empty())
-        .collect::<HashSet<_>>();
-    if emails.is_empty() {
-        return Ok(());
-    }
-    let response = state
-        .client
-        .post(format!("{}/api/v1/git/signing-keys", state.control_plane))
-        .header("x-marl-gateway-token", &state.gateway_token)
-        .json(&serde_json::json!({ "emails": emails }))
-        .send()
-        .await
-        .context("request linked SSH signing keys")?
-        .error_for_status()
-        .context("control plane rejected signing key lookup")?
-        .json::<SigningKeysResponse>()
-        .await
-        .context("decode linked SSH signing keys")?;
-    let mut by_email = HashMap::<String, Vec<SigningKey>>::new();
-    for key in response.signing_keys {
-        by_email
-            .entry(key.email.to_lowercase())
-            .or_default()
-            .push(key);
-    }
-    for commit in commits.iter_mut().filter(|commit| commit.signed) {
-        let Some(keys) = by_email.get(&commit.author_email.to_lowercase()) else {
-            continue;
-        };
-        let mut allowed = tempfile::NamedTempFile::new().context("create allowed signers file")?;
-        for key in keys {
-            writeln!(allowed, "{} {}", key.user_id, key.public_key)
-                .context("write allowed SSH signer")?;
-        }
-        allowed.flush().context("flush allowed signers file")?;
-        let output = Command::new("git")
-            .args(["-C"])
-            .arg(repository)
-            .arg("-c")
-            .arg("gpg.format=ssh")
-            .arg("-c")
-            .arg(format!(
-                "gpg.ssh.allowedSignersFile={}",
-                allowed.path().display()
-            ))
-            .args(["verify-commit", "--raw", &commit.id])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .context("verify SSH commit signature")?;
-        if !output.status.success() {
-            commit.signature_status = "invalid".into();
+    use crate::signatures::{POLICY_BATCH, SignatureVerifier, load_policy, read_commit_identities};
+    for batch in commits.chunks_mut(POLICY_BATCH) {
+        let ids = batch
+            .iter()
+            .map(|commit| commit.id.clone())
+            .collect::<Vec<_>>();
+        let identities = read_commit_identities(repository, &ids).await?;
+        let emails = identities
+            .iter()
+            .filter(|commit| commit.ssh_signed)
+            .map(|commit| commit.author_email.clone())
+            .collect::<Vec<_>>();
+        if emails.is_empty() {
             continue;
         }
-        let verification = format!(
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let fingerprint = verification
-            .split_whitespace()
-            .find(|part| part.starts_with("SHA256:"))
-            .map(|part| {
-                part.trim_matches(|character: char| {
-                    !character.is_ascii_alphanumeric()
-                        && !matches!(character, ':' | '+' | '/' | '=')
-                })
-                .to_owned()
-            });
-        let Some(key) = fingerprint
-            .as_ref()
-            .and_then(|fingerprint| keys.iter().find(|key| &key.fingerprint == fingerprint))
-        else {
-            commit.signature_status = "invalid".into();
-            continue;
-        };
-        commit.signature_status = "verified".into();
-        commit.signature_signer_id = Some(key.user_id.clone());
-        commit.signature_key_fingerprint = Some(key.fingerprint.clone());
+        let mut verifier = SignatureVerifier::new(load_policy(state, None, &emails).await?);
+        for (commit, identity) in batch.iter_mut().zip(&identities) {
+            let verification = verifier.verify(repository, identity).await?;
+            commit.signature_status = verification.status.into();
+            commit.signature_signer_id = verification.signer_id;
+            commit.signature_key_fingerprint = verification.fingerprint;
+        }
     }
     Ok(())
 }
@@ -832,7 +683,6 @@ mod tests {
             signature_signer_id: None,
             signature_key_fingerprint: None,
             position,
-            signed: false,
         }
     }
 

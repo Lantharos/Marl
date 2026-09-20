@@ -14,21 +14,23 @@ export type BranchRule = {
   requiredApprovals: number;
   requiredChecks: RequiredCheck[];
   requireConversations: boolean;
-  dismissStaleReviews: boolean;
+  carryApprovalsForward: boolean;
+  allowAuthorMerge: boolean;
   allowedMergeMethods: MergeMethod[];
 };
 
-type RuleRow = Omit<BranchRule, 'requiredChecks' | 'requireConversations' | 'dismissStaleReviews' | 'allowedMergeMethods'> & {
+type RuleRow = Omit<BranchRule, 'requiredChecks' | 'requireConversations' | 'carryApprovalsForward' | 'allowAuthorMerge' | 'allowedMergeMethods'> & {
   requiredChecksJson: string;
   requireConversations: number;
-  dismissStaleReviews: number;
+  carryApprovalsForward: number;
+  allowAuthorMerge: number;
   allowedMergeMethodsJson: string;
 };
 
-const selectRule = 'pattern,required_approvals AS requiredApprovals,required_checks_json AS requiredChecksJson,require_conversations AS requireConversations,dismiss_stale_reviews AS dismissStaleReviews,allowed_merge_methods_json AS allowedMergeMethodsJson';
+const selectRule = 'pattern,required_approvals AS requiredApprovals,required_checks_json AS requiredChecksJson,require_conversations AS requireConversations,carry_approvals_forward AS carryApprovalsForward,allow_author_merge AS allowAuthorMerge,allowed_merge_methods_json AS allowedMergeMethodsJson';
 
-function defaultRule(pattern: string): BranchRule {
-  return { pattern, requiredApprovals: 0, requiredChecks: [], requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge', 'squash', 'rebase'] };
+export function defaultRule(pattern: string): BranchRule {
+  return { pattern, requiredApprovals: 0, requiredChecks: [], requireConversations: true, carryApprovalsForward: false, allowAuthorMerge: false, allowedMergeMethods: ['merge', 'squash', 'rebase'] };
 }
 
 export async function branchRuleFor(env: Env, repositoryId: string, branch: string): Promise<BranchRule> {
@@ -65,10 +67,10 @@ export async function putBranchRule(request: Request, env: Env, principal: Princ
   const requiredChecks = await resolveRequiredChecks(env, access.id, requiredCheckNames);
   if (!requiredChecks) return problem(422, 'invalid_required_checks', 'Every required check must uniquely identify a workflow job on the default branch.');
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO branch_rules (repository_id,pattern,required_approvals,required_checks_json,require_conversations,dismiss_stale_reviews,allowed_merge_methods_json,updated_by) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(repository_id,pattern) DO UPDATE SET required_approvals=excluded.required_approvals,required_checks_json=excluded.required_checks_json,require_conversations=excluded.require_conversations,dismiss_stale_reviews=excluded.dismiss_stale_reviews,allowed_merge_methods_json=excluded.allowed_merge_methods_json,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP`).bind(access.id, body.pattern, body.requiredApprovals, JSON.stringify(requiredChecks), Number(body.requireConversations), Number(body.dismissStaleReviews), JSON.stringify(methods), principal.id),
-    auditStatement(env, { organizationId: access.organizationId, repositoryId: access.id, actor: principal, action: 'repository.branch_rule.updated', subjectType: 'branch_rule', subjectId: body.pattern, details: { requiredApprovals: body.requiredApprovals, requiredChecks: requiredCheckNames, requireConversations: body.requireConversations, dismissStaleReviews: body.dismissStaleReviews, allowedMergeMethods: methods } })
+    env.DB.prepare(`INSERT INTO branch_rules (repository_id,pattern,required_approvals,required_checks_json,require_conversations,carry_approvals_forward,allow_author_merge,allowed_merge_methods_json,updated_by) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(repository_id,pattern) DO UPDATE SET required_approvals=excluded.required_approvals,required_checks_json=excluded.required_checks_json,require_conversations=excluded.require_conversations,carry_approvals_forward=excluded.carry_approvals_forward,allow_author_merge=excluded.allow_author_merge,allowed_merge_methods_json=excluded.allowed_merge_methods_json,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP`).bind(access.id, body.pattern, body.requiredApprovals, JSON.stringify(requiredChecks), Number(body.requireConversations), Number(body.carryApprovalsForward), Number(body.allowAuthorMerge), JSON.stringify(methods), principal.id),
+    auditStatement(env, { organizationId: access.organizationId, repositoryId: access.id, actor: principal, action: 'repository.branch_rule.updated', subjectType: 'branch_rule', subjectId: body.pattern, details: { requiredApprovals: body.requiredApprovals, requiredChecks: requiredCheckNames, requireConversations: body.requireConversations, carryApprovalsForward: body.carryApprovalsForward, allowAuthorMerge: body.allowAuthorMerge, allowedMergeMethods: methods } })
   ]);
-  return json({ branchRule: publicRule({ pattern: body.pattern, requiredApprovals: body.requiredApprovals, requiredChecks, requireConversations: body.requireConversations, dismissStaleReviews: body.dismissStaleReviews, allowedMergeMethods: methods }) });
+  return json({ branchRule: publicRule({ ...body, requiredChecks, allowedMergeMethods: methods }) });
 }
 
 function mapRule(row: RuleRow): BranchRule {
@@ -81,7 +83,7 @@ function mapRule(row: RuleRow): BranchRule {
       : [];
   }) : [];
   const methods = JSON.parse(row.allowedMergeMethodsJson) as MergeMethod[];
-  return { pattern: row.pattern, requiredApprovals: Number(row.requiredApprovals), requiredChecks, requireConversations: Boolean(row.requireConversations), dismissStaleReviews: Boolean(row.dismissStaleReviews), allowedMergeMethods: methods.filter((method) => ['merge', 'squash', 'rebase'].includes(method)) };
+  return { pattern: row.pattern, requiredApprovals: Number(row.requiredApprovals), requiredChecks, requireConversations: Boolean(row.requireConversations), carryApprovalsForward: Boolean(row.carryApprovalsForward), allowAuthorMerge: Boolean(row.allowAuthorMerge), allowedMergeMethods: methods.filter((method) => ['merge', 'squash', 'rebase'].includes(method)) };
 }
 
 function publicRule(rule: BranchRule) {

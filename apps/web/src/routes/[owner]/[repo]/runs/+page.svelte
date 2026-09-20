@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunState, WorkflowSummary, WorkflowTrigger } from '@marl/contracts';
+  import type { WorkflowSummary, WorkflowTrigger } from '@marl/contracts';
   import { page } from '$app/stores';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
@@ -7,11 +7,13 @@
   import FileCode2 from 'lucide-svelte/icons/file-code-2';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import MousePointerClick from 'lucide-svelte/icons/mouse-pointer-click';
+  import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Timer from 'lucide-svelte/icons/timer';
   import Zap from 'lucide-svelte/icons/zap';
   import Time from '$lib/components/Time.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -50,8 +52,8 @@
       </span>
       <span class="latest">
         {#if workflow.lastRun}
-          <span class="run-state {workflow.lastRun.state}">{#if ['queued', 'running'].includes(workflow.lastRun.state)}<CircleDot size={14} />{:else if workflow.lastRun.state === 'success'}<CircleCheck size={14} />{:else}<CircleAlert size={14} />{/if}</span>
-          <span><strong>{workflow.lastRun.cancellationReason === 'superseded' ? 'Superseded' : workflow.lastRun.state}</strong><small>#{workflow.lastRun.number} · <Time value={workflow.lastRun.queuedAt} /></small></span>
+          <span class="run-state {workflow.lastRun.state}">{#if awaitingCheckApproval(workflow.lastRun)}<ShieldCheck size={14} />{:else if ['queued', 'running'].includes(workflow.lastRun.state)}<CircleDot size={14} />{:else if workflow.lastRun.state === 'success'}<CircleCheck size={14} />{:else}<CircleAlert size={14} />{/if}</span>
+          <span><strong>{runStateLabel(workflow.lastRun)}</strong><small>#{workflow.lastRun.number} · <Time value={workflow.lastRun.queuedAt} /></small></span>
         {:else if workflow.status === 'invalid'}
           <span class="run-state failure"><CircleAlert size={14} /></span><span><strong>Needs attention</strong><small>{workflow.error}</small></span>
         {:else}

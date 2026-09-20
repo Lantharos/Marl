@@ -1,13 +1,16 @@
 mod archive;
 mod blob;
+mod branches;
 mod compare;
 mod cross_repository;
 mod fork;
 mod merge;
 mod merge_operations;
+mod mergeability;
 mod metadata;
 mod pack;
 mod pack_graph;
+mod pack_signatures;
 mod process;
 mod receive;
 mod refs;
@@ -15,6 +18,8 @@ mod relocate;
 mod remote_storage;
 mod repository_files;
 mod repository_storage;
+mod signatures;
+mod signing_hook;
 mod smart_http;
 mod ssh;
 mod state;
@@ -51,6 +56,9 @@ async fn main() -> Result<()> {
         repository_locks: Mutex::new(HashMap::new()),
     });
     let repository_root = state.repositories.display().to_string();
+    if std::env::args().nth(1).as_deref() == Some("--signing-hook") {
+        return signing_hook::run(&state).await;
+    }
     if state.local_storage {
         tokio::spawn(metadata::backfill_pending_repositories(state.clone()));
     }
@@ -93,6 +101,14 @@ async fn main() -> Result<()> {
             axum::routing::post(pack::validate_graph),
         )
         .route(
+            "/_marl/packs/{push}/{pack}/signatures/scan",
+            axum::routing::post(pack_signatures::scan),
+        )
+        .route(
+            "/_marl/packs/{push}/{pack}/signatures/check",
+            axum::routing::post(pack_signatures::check),
+        )
+        .route(
             "/_marl/packs/{push}/refs",
             axum::routing::post(pack::validate_proposed_refs),
         )
@@ -105,9 +121,17 @@ async fn main() -> Result<()> {
             axum::routing::delete(pack::remove_session),
         )
         .route("/_marl/merge", axum::routing::post(merge::merge_request))
+        .route(
+            "/_marl/mergeability",
+            axum::routing::post(mergeability::mergeability),
+        )
         .route("/_marl/pulls/pin", axum::routing::post(refs::pin_pull))
         .route("/_marl/tags/list", axum::routing::post(refs::list_tags))
         .route("/_marl/tags/create", axum::routing::post(refs::create_tag))
+        .route(
+            "/_marl/branches/delete",
+            axum::routing::post(branches::delete_branch),
+        )
         .route(
             "/_marl/repositories/relocate",
             axum::routing::post(relocate::relocate_repository),

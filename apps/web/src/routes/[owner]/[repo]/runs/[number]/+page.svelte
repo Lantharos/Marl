@@ -10,11 +10,13 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
+  import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Square from 'lucide-svelte/icons/square';
   import Terminal from 'lucide-svelte/icons/terminal';
   import { api, apiTextCursorAll, MarlApiError } from '$lib/api';
   import Time from '$lib/components/Time.svelte';
   import Button from '$lib/components/Button.svelte';
+  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
@@ -27,13 +29,14 @@
   let logCursor = $derived(data.logCursor);
   let logMore = $derived(data.logMore);
   let logUnavailable = $derived(data.logUnavailable);
-  let actionBusy = $state(false);
+  let actionBusy = $state<'cancel' | 'retry' | 'approve' | null>(null);
   let error = $state('');
   let logFetch: Promise<void> | null = null;
   let logFetchJob = '';
   const pendingLogs = new SvelteMap<number, string>();
   const job = $derived(run.jobsDetail.find((item) => item.id === selected) ?? run.jobsDetail[0] ?? null);
   const activeRun = $derived(run.state === 'queued' || run.state === 'running');
+  const awaitingApproval = $derived(awaitingCheckApproval(run));
 
   function flushPendingLogs(jobId: string) {
     if (job?.id !== jobId) return;
@@ -64,7 +67,7 @@
 
   async function appendLogs() {
     const current = job;
-    if (!current) return;
+    if (!current || awaitingApproval) return;
     if (logFetch && logFetchJob === current.id) return logFetch;
     const request = loadLogs(current.id, logCursor);
     logFetch = request;
@@ -114,7 +117,7 @@
 
   async function action(kind: 'cancel' | 'retry') {
     if (actionBusy) return;
-    actionBusy = true;
+    actionBusy = kind;
     error = '';
     try {
       const result = await api<{ state?: RunDetail['state']; run?: { number: number } }>(
@@ -135,7 +138,23 @@
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : `Run could not be ${kind}ed.`;
     } finally {
-      actionBusy = false;
+      actionBusy = null;
+    }
+  }
+
+  async function approveChecks() {
+    if (actionBusy || !awaitingApproval || !run.canApproveChecks) return;
+    const runId = run.id;
+    actionBusy = 'approve';
+    error = '';
+    try {
+      await api(`/repositories/${owner}/${repo}/runs/${number}/approve`, { method: 'POST', body: '{}' });
+      if (run.id !== runId) return;
+      await refreshState();
+    } catch (cause) {
+      if (run.id === runId) error = cause instanceof MarlApiError ? cause.message : 'Checks could not be approved.';
+    } finally {
+      if (run.id === runId) actionBusy = null;
     }
   }
 
@@ -145,19 +164,19 @@
     pendingLogs.clear();
     logFetch = null;
     logFetchJob = '';
-    actionBusy = false;
+    actionBusy = null;
     error = '';
   });
 
   $effect(() => {
     const id = job?.id;
-    if (!id || !logMore) return;
+    if (!id || !logMore || awaitingApproval) return;
     untrack(() => void appendLogs());
   });
 
   $effect(() => {
     const id = job?.id;
-    if (!id || !['queued', 'running'].includes(job.state) || typeof window === 'undefined') return;
+    if (!id || !['queued', 'running'].includes(job.state) || awaitingApproval) return;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${location.host}/api/v1/jobs/${id}/live`);
     socket.binaryType = 'arraybuffer';
@@ -184,7 +203,7 @@
       await refreshState();
       polling = false;
       if (!stopped && run.id === runId && ['queued', 'running'].includes(run.state)) {
-        timer = setTimeout(poll, document.hidden ? 10_000 : 2_000);
+        timer = setTimeout(poll, document.hidden || awaitingApproval ? 10_000 : 2_000);
       }
     };
     const visible = () => {
@@ -193,7 +212,7 @@
         void poll();
       }
     };
-    timer = setTimeout(poll, 2_000);
+    timer = setTimeout(poll, awaitingApproval ? 10_000 : 2_000);
     document.addEventListener('visibilitychange', visible);
     return () => {
       stopped = true;
@@ -208,7 +227,8 @@
 <header class="run-head">
   <div class="title">
     <span class="run-icon {run.state}">
-      {#if run.state === 'success'}<CircleCheck size={18} />
+      {#if awaitingApproval}<ShieldCheck size={18} />
+      {:else if run.state === 'success'}<CircleCheck size={18} />
       {:else if run.state === 'failure'}<CircleAlert size={18} />
       {:else}<CircleDot size={18} />{/if}
     </span>
@@ -216,9 +236,9 @@
   </div>
   {#if data.repository.permissions.push}
     {#if run.state === 'queued' || run.state === 'running'}
-      <Button loading={actionBusy} onclick={() => action('cancel')}><Square size={14} />Cancel</Button>
+      <Button loading={actionBusy === 'cancel'} disabled={Boolean(actionBusy)} onclick={() => action('cancel')}><Square size={14} />Cancel</Button>
     {:else}
-      <Button loading={actionBusy} onclick={() => action('retry')}><RotateCcw size={14} />Run again</Button>
+      <Button loading={actionBusy === 'retry'} disabled={Boolean(actionBusy)} onclick={() => action('retry')}><RotateCcw size={14} />Run again</Button>
     {/if}
   {/if}
 </header>
@@ -228,7 +248,7 @@
   <code>{run.commit.slice(0, 7)}</code>
   <span>{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</span>
   <Time value={run.queuedAt} />
-  <span class="state-text {run.state}">{run.cancellationReason === 'superseded' ? 'superseded' : run.state}</span>
+  <span class="state-text {run.state}">{runStateLabel(run)}</span>
 </div>
 
 {#if error}<p class="notice" role="alert">{error}</p>{/if}
@@ -239,19 +259,27 @@
     {#each run.jobsDetail as item (item.id)}
       <button class:active={item.id === job?.id} onclick={() => choose(item.id)}>
         <span class="job-icon {item.state}">
-          {#if item.state === 'success'}<CircleCheck size={16} />
+          {#if awaitingApproval}<ShieldCheck size={16} />
+          {:else if item.state === 'success'}<CircleCheck size={16} />
           {:else if item.state === 'failure'}<CircleAlert size={16} />
           {:else}<CircleDot size={16} />{/if}
         </span>
         <span>
           <strong>{item.name}</strong>
-          <small>{item.runner?.name ?? (item.state === 'queued' ? `Waiting for ${item.requiredLabels.join(', ')}` : 'No runner')}</small>
+          <small>{awaitingApproval ? 'Awaiting approval' : item.runner?.name ?? (item.state === 'queued' ? `Waiting for ${item.requiredLabels.join(', ')}` : 'No runner')}</small>
         </span>
       </button>
     {/each}
   </aside>
   <main>
-    {#if job}
+    {#if awaitingApproval}
+      <section class="approval-wait">
+        <ShieldCheck size={24} strokeWidth={1.6} />
+        <h2>Checks need approval</h2>
+        <p>A maintainer needs to approve this contribution before its checks can use a runner.</p>
+        {#if run.canApproveChecks}<Button variant="primary" loading={actionBusy === 'approve'} disabled={Boolean(actionBusy)} onclick={approveChecks}>Approve checks</Button>{/if}
+      </section>
+    {:else if job}
       <header class="job-head">
         <div><h2>{job.name}</h2><p>{job.runner ? `Ran on ${job.runner.name}` : `Requires ${job.requiredLabels.join(', ')}`}</p></div>
         <span>{job.state}</span>
@@ -277,5 +305,6 @@
 </div>
 
 <style>
+  .approval-wait{display:grid;justify-items:start;align-content:center;gap:16px;min-height:240px;padding:28px;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-surface)}.approval-wait>:global(svg){color:var(--brand)}.approval-wait h2{margin:0;color:var(--text-strong);font-size:18px;letter-spacing:-.025em}.approval-wait p{max-width:440px;margin:-8px 0 0;color:var(--text-muted);font-size:13px;line-height:1.6}
   .run-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:20px}.title{display:flex;align-items:center;gap:12px}.run-icon{display:grid;width:40px;height:40px;place-items:center;border-radius:9px;background:var(--surface-muted);color:var(--text-muted)}.run-icon.success{background:var(--success-soft);color:var(--success)}.run-icon.failure{background:var(--danger-soft);color:var(--danger)}.run-icon.running,.run-icon.queued{background:var(--brand-soft);color:var(--brand)}h1{margin:0;color:var(--text-strong);font-size:23px;letter-spacing:-.03em}.title p{margin:5px 0 0;color:var(--text-muted);font-size:12px}.action{display:inline-flex;height:36px;align-items:center;gap:7px;padding:0 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px}.run-meta{display:flex;align-items:center;gap:13px;flex-wrap:wrap;min-height:48px;padding:12px 16px;border-radius:10px;background:var(--surface);color:var(--text-muted);font-size:12px}.run-meta span{display:inline-flex;align-items:center;gap:5px}.run-meta code{color:var(--text)}.run-meta :global(time){font-size:12px}.state-text{margin-left:auto;text-transform:capitalize}.state-text.success{color:var(--success)}.state-text.failure{color:var(--danger)}.state-text.running,.state-text.queued{color:var(--brand)}.notice{color:var(--danger);font-size:12px}.run-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:28px;padding-top:28px}.run-layout>aside{align-self:start;padding:8px;border-radius:12px;background:var(--surface)}.run-layout aside h2{margin:0 0 9px 7px;color:var(--text-muted);font-size:12px;font-weight:650}.run-layout aside button{display:grid;width:100%;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:8px;padding:10px 8px;border:0;border-radius:6px;background:transparent;color:var(--text);cursor:pointer;text-align:left}.run-layout aside button:hover,.run-layout aside button.active{background:var(--surface-muted)}.job-icon{display:grid;place-items:center;color:var(--text-muted)}.job-icon.success{color:var(--success)}.job-icon.failure{color:var(--danger)}.job-icon.running,.job-icon.queued{color:var(--brand)}.run-layout aside strong,.run-layout aside small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.run-layout aside strong{color:var(--text-strong);font-size:13px}.run-layout aside small{margin-top:3px;color:var(--text-muted);font-size:11px}.run-layout>main{min-width:0}.job-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:15px}.job-head h2{margin:0;color:var(--text-strong);font-size:17px}.job-head p{margin:5px 0 0;color:var(--text-muted);font-size:12px}.job-head>span{color:var(--text);font-size:12px;text-transform:capitalize}.terminal{overflow:hidden;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-surface)}.terminal>header{display:flex;align-items:center;gap:7px;min-height:39px;padding:0 12px;background:var(--surface-muted);color:var(--text-muted);font-size:12px}.terminal header small{margin-left:auto;color:var(--text-faint)}.terminal pre{min-height:300px;max-height:560px;overflow:auto;margin:0;padding:15px;color:var(--text);font-family:var(--font-mono);font-size:12px;line-height:1.65;white-space:pre-wrap}.log-error{display:flex;min-height:220px;align-items:center;justify-content:center;gap:8px;margin:0;padding:20px;color:var(--danger);font-size:12px}.artifacts{margin-top:26px}.artifacts h3{margin:0 0 9px;color:var(--text-strong);font-size:14px}.artifacts a{display:grid;grid-template-columns:24px 1fr;align-items:center;gap:8px;padding:11px 4px;border-top:1px solid var(--border-subtle);color:var(--text-muted);text-decoration:none}.artifacts strong,.artifacts small{display:block}.artifacts strong{color:var(--text-strong);font-size:12px}.artifacts small{margin-top:3px;color:var(--text-muted);font-size:11px}@media(max-width:700px){.run-layout{grid-template-columns:1fr}.run-layout>aside{display:flex;overflow-x:auto;padding:8px}.run-layout aside h2{display:none}.run-layout aside button{min-width:200px}.run-head{align-items:flex-start;flex-wrap:wrap}.title h1{font-size:20px}.terminal pre{min-height:240px}}
 </style>

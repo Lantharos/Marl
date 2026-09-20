@@ -4,9 +4,10 @@
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import LinkButton from '$lib/components/LinkButton.svelte';
+  import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import InboxList from '$lib/inbox/InboxList.svelte';
   import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
+  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
 
   type DashboardData = {
     inbox: { items: InboxItem[]; counts: { inbox: number; unread: number; done: number } };
@@ -35,7 +36,6 @@
       <h1>Hey, {firstName}.</h1>
       {#if inbox.counts.unread > 0}<p>{inbox.counts.unread} new {inbox.counts.unread === 1 ? 'update' : 'updates'} in your inbox.</p>{/if}
     </div>
-    <LinkButton href="/repositories/new">New repository</LinkButton>
   </header>
 
   {#if data.unavailable}
@@ -57,8 +57,10 @@
       <div class="runs">
         {#each runs.slice(0, 5) as run (run.id)}
           <a href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}">
-            <span class="run-state {run.state}">
-              {#if run.state === 'success'}
+            <span class="run-state {run.state}" title={runStateLabel(run)}>
+              {#if awaitingCheckApproval(run)}
+                <ShieldCheck size={15} />
+              {:else if run.state === 'success'}
                 <CircleCheck size={15} />
               {:else if run.state === 'failure'}
                 <CircleAlert size={15} />
@@ -68,7 +70,7 @@
             </span>
             <span>
               <strong>{run.name}</strong>
-              <small>{run.repository.name} · {run.branch}</small>
+              <small>{run.repository.name} · {run.branch}{awaitingCheckApproval(run) ? ' · Awaiting approval' : ''}</small>
             </span>
             <code>{run.commit.slice(0, 7)}</code>
           </a>

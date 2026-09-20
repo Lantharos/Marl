@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { rawBlobHeaders } from './raw-content';
 
 describe('raw repository content', () => {
-  test('isolates SVG as an attachment instead of active image content', () => {
+  test('serves SVG images with sandboxing and attachment navigation', () => {
     const headers = rawBlobHeaders("assets/owner's-mark.SVG", 'public', '412', true);
-    expect(headers.get('content-type')).toBe('application/octet-stream');
+    expect(headers.get('content-type')).toBe('image/svg+xml');
     expect(headers.get('content-disposition')).toBe("attachment; filename*=UTF-8''owner%27s-mark.SVG");
-    expect(headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
+    expect(headers.get('content-security-policy')).toBe("default-src 'none'; style-src 'unsafe-inline'; sandbox");
     expect(headers.get('x-content-type-options')).toBe('nosniff');
   });
 

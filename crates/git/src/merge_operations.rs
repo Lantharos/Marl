@@ -60,17 +60,13 @@ pub(crate) async fn create_commit(
             .env("GIT_AUTHOR_EMAIL", email)
             .env("GIT_AUTHOR_DATE", date);
     } else {
-        command.env("GIT_AUTHOR_NAME", &request.author).env(
-            "GIT_AUTHOR_EMAIL",
-            format!("{}@users.marl.sh", request.author),
-        );
+        command
+            .env("GIT_AUTHOR_NAME", &request.author)
+            .env("GIT_AUTHOR_EMAIL", &request.author_email);
     }
     let output = command
         .env("GIT_COMMITTER_NAME", &request.author)
-        .env(
-            "GIT_COMMITTER_EMAIL",
-            format!("{}@users.marl.sh", request.author),
-        )
+        .env("GIT_COMMITTER_EMAIL", &request.author_email)
         .output()
         .await?;
     if !output.status.success() {

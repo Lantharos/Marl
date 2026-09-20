@@ -24,15 +24,21 @@
     onCancel?: () => void;
     context?: MarkdownContext;
   }>();
+  let uploading = $state(false);
+
+  async function submit() {
+    if (busy || uploading || !value.trim()) return;
+    await onSubmit();
+  }
 </script>
 
 <div class="comment-composer" class:with-avatar={Boolean(avatar)}>
   {#if avatar}<span class="avatar">{avatar}</span>{/if}
   <div class="editor">
-    <MarkdownComposer bind:value {context} {placeholder} {minHeight} />
+    <MarkdownComposer bind:value bind:uploading {context} {placeholder} {minHeight} disabled={busy} />
     <footer>
-      {#if onCancel}<Button size="small" onclick={onCancel}>Cancel</Button>{/if}
-      <Button size="small" variant="primary" disabled={busy || !value.trim()} onclick={onSubmit}>{submitLabel}</Button>
+      {#if onCancel}<Button size="small" disabled={busy || uploading} onclick={onCancel}>Cancel</Button>{/if}
+      <Button size="small" variant="primary" disabled={busy || uploading || !value.trim()} onclick={submit}>{submitLabel}</Button>
     </footer>
   </div>
 </div>

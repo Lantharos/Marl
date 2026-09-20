@@ -5,7 +5,7 @@ import { mergeRequirements } from './pull-requirements';
 const pull = { authorId: 'author', sourceCommitId: 'head-2', state: 'open' as const };
 const producer = { workflowId: 'workflow_target', jobKey: 'check' };
 const checks = { total: 1, passed: 1, failed: 0, running: 0, items: [{ name: 'Project checks / Check repository', state: 'success', ...producer }] };
-const rule: BranchRule = { pattern: 'main', requiredApprovals: 1, requiredChecks: [{ name: 'Project checks / Check repository', ...producer }], requireConversations: true, dismissStaleReviews: true, allowedMergeMethods: ['merge'] };
+const rule: BranchRule = { pattern: 'main', requiredApprovals: 1, requiredChecks: [{ name: 'Project checks / Check repository', ...producer }], requireConversations: true, carryApprovalsForward: false, allowAuthorMerge: false, allowedMergeMethods: ['merge'] };
 
 describe('pull merge requirements', () => {
   test('requires a non-author approval, successful checks, and resolved conversations', () => {

@@ -6,7 +6,7 @@ export function rawBlobHeaders(path: string, visibility: 'public' | 'private', c
     'cache-control': visibility === 'public'
       ? immutableRevision ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate'
       : 'private, no-store',
-    'content-security-policy': "default-src 'none'; sandbox",
+    'content-security-policy': extension(path) === 'svg' ? "default-src 'none'; style-src 'unsafe-inline'; sandbox" : "default-src 'none'; sandbox",
     'x-content-type-options': 'nosniff'
   });
   if (contentLength && /^\d+$/.test(contentLength)) headers.set('content-length', contentLength);
@@ -20,6 +20,10 @@ function rawContentType(path: string) {
   if (suffix === 'png') return 'image/png';
   if (suffix === 'jpg' || suffix === 'jpeg') return 'image/jpeg';
   if (suffix === 'gif') return 'image/gif';
+  if (suffix === 'svg') return 'image/svg+xml';
+  if (suffix === 'webp') return 'image/webp';
+  if (suffix === 'avif') return 'image/avif';
+  if (suffix === 'ico') return 'image/x-icon';
   return 'application/octet-stream';
 }
 

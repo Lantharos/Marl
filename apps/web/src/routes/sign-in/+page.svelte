@@ -5,6 +5,7 @@
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/Button.svelte';
   import { authClient } from '$lib/auth-client';
+  import { clearShellCache } from '$lib/shell-cache';
 
   let identity = $state('');
   let password = $state('');
@@ -14,6 +15,7 @@
   const returnTo = $derived(requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//') ? requestedReturnTo : '/');
 
   async function finish() {
+    clearShellCache(true);
     await invalidateAll();
     await goto(returnTo);
   }

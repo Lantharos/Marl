@@ -5,7 +5,8 @@ export interface PageCursor {
 }
 
 export function pageSize(url: URL, fallback = 100, maximum = 100) {
-  const requested = Number(url.searchParams.get('limit'));
+  const raw = url.searchParams.get('limit');
+  const requested = raw === null ? NaN : Number(raw);
   return Number.isInteger(requested) ? Math.min(Math.max(requested, 1), maximum) : fallback;
 }
 

@@ -13,6 +13,8 @@
   let uploading = $state<Array<{ name: string; progress: number }>>([]);
   let deleting = $state<string | null>(null);
   let error = $state('');
+  let query = $state('');
+  const shown = $derived(assets.filter(asset => asset.name.toLowerCase().includes(query.trim().toLowerCase())));
 
   async function chooseFiles(event: Event) {
     const files = [...((event.currentTarget as HTMLInputElement).files ?? [])];
@@ -55,16 +57,18 @@
   }
 </script>
 
-<section class="assets">
-  <header><div><h2>Assets</h2><p>Installers, binaries, checksums, and other files for this release.</p></div>{#if editable}<Button size="small" disabled={uploading.length > 0} onclick={() => input?.click()}><Upload size={13} />Add files</Button><input bind:this={input} type="file" multiple onchange={chooseFiles} />{/if}</header>
+<section class="assets" id="downloads">
+  <header><div><h2>Downloads</h2></div>{#if editable}<Button size="small" disabled={uploading.length > 0} onclick={() => input?.click()}><Upload size={13} />Add files</Button><input bind:this={input} type="file" multiple onchange={chooseFiles} />{/if}</header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if assets.length > 6}<input class="search" aria-label="Find a download" placeholder="Find a file" bind:value={query} />{/if}
   <div class="rows">
-    {#each assets as asset (asset.id)}<div class="asset"><FileArchive size={16} /><a href={asset.downloadUrl}><strong>{asset.name}</strong><small>{size(asset.byteSize)} · {asset.downloadCount} {asset.downloadCount === 1 ? 'download' : 'downloads'}</small></a><a class="download" href={asset.downloadUrl} aria-label="Download {asset.name}"><Download size={15} /></a>{#if editable}<Button icon size="small" variant="ghost" loading={deleting === asset.id} aria-label="Delete {asset.name}" onclick={() => remove(asset)}><Trash2 size={14} /></Button>{/if}</div>{/each}
+    {#each shown as asset (asset.id)}<div class="asset"><FileArchive size={16} /><a href={asset.downloadUrl}><strong>{asset.name}</strong><small>{size(asset.byteSize)} · {asset.downloadCount} {asset.downloadCount === 1 ? 'download' : 'downloads'}</small></a><a class="download" href={asset.downloadUrl} aria-label="Download {asset.name}"><Download size={15} /></a>{#if editable}<Button icon size="small" variant="ghost" loading={deleting === asset.id} aria-label="Delete {asset.name}" onclick={() => remove(asset)}><Trash2 size={14} /></Button>{/if}</div>{/each}
     {#each uploading as item (item.name)}<div class="uploading"><Upload size={15} /><span><strong>{item.name}</strong><small>{Math.round(item.progress * 100)}%</small><i style={`--progress:${item.progress * 100}%`}></i></span></div>{/each}
-    {#if !assets.length && !uploading.length}<p class="empty">No files attached.</p>{/if}
+    {#if !assets.length && !uploading.length}<p class="empty">No downloads attached.</p>{/if}
+    {#if assets.length && !shown.length}<p class="empty">No matching files.</p>{/if}
   </div>
 </section>
 
 <style>
-  .assets{padding-top:24px;border-top:1px solid var(--border-subtle)}header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}h2{margin:0;color:var(--text-strong);font-size:16px}header p{margin:5px 0 0;color:var(--text-faint);font-size:11px}input[type=file]{display:none}.error{margin:14px 0 0;color:var(--danger);font-size:11px}.rows{margin-top:16px;border-top:1px solid var(--border-subtle)}.asset,.uploading{display:flex;min-height:54px;align-items:center;gap:10px;border-bottom:1px solid var(--border-subtle);color:var(--text-faint)}.asset>a:not(.download),.uploading span{min-width:0;flex:1;text-decoration:none}.asset strong,.asset small,.uploading strong,.uploading small{display:block}.asset strong,.uploading strong{overflow:hidden;color:var(--text-strong);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.asset small,.uploading small{margin-top:3px;color:var(--text-faint);font-size:11px}.download{display:grid;width:30px;height:30px;color:var(--text-muted);place-items:center}.download:hover{color:var(--brand)}.uploading span{position:relative;padding:8px 0}.uploading i{position:absolute;right:0;bottom:0;left:0;height:2px;background:linear-gradient(to right,var(--brand) var(--progress),var(--border-subtle) var(--progress))}.empty{margin:0;padding:22px 0;color:var(--text-faint);font-size:11px}
+ .assets{padding:20px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-surface);scroll-margin-top:80px}header{display:flex;align-items:center;justify-content:space-between;gap:12px}h2{margin:0;color:var(--text-strong);font-size:15px}input[type=file]{display:none}.search{width:100%;box-sizing:border-box;margin-top:16px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--canvas);color:var(--text);font:inherit;font-size:13px}.error{color:var(--danger);font-size:13px}.rows{display:grid;gap:6px;margin-top:14px}.asset,.uploading{display:flex;align-items:center;gap:10px;padding:12px 8px;border-radius:9px;color:var(--text-muted)}.asset:hover{background:var(--surface-hover)}.asset>a:not(.download),.uploading span{min-width:0;flex:1;text-decoration:none}.asset> :global(svg){flex:none}.asset strong,.asset small,.uploading strong,.uploading small{display:block}.asset strong,.uploading strong{color:var(--text-strong);font-size:13px;overflow-wrap:anywhere;line-height:1.5}.asset small,.uploading small{margin-top:5px;color:var(--text-muted);font-size:11px;line-height:1.5}.download{display:grid;width:32px;height:32px;flex:none;place-items:center;border-radius:8px;background:var(--surface-muted);color:var(--text)}.download:hover{color:var(--brand)}.uploading span{position:relative;padding-bottom:8px}.uploading i{position:absolute;left:0;bottom:0;height:2px;width:var(--progress);background:var(--brand)}.empty{margin:0;padding:12px 8px;color:var(--text-muted);font-size:13px}
 </style>

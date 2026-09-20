@@ -1,7 +1,7 @@
 import type { Principal } from './auth';
 import { pinPullRefs } from './git-writes';
 import type { Env } from './platform';
-import { createPullEvent } from './pull-context';
+import { revisionUpdateStatements } from './pull-revision-updates';
 import { commitPullUpdate } from './pull-realtime';
 
 type BranchHead = { name: string; commitId: string };
@@ -45,13 +45,13 @@ export async function synchronizePullsForBranchUpdates(env: Env, repositoryId: s
     });
     if (!pinned.ok) throw new Error(`Pull request !${pull.number} could not preserve its updated commits.`);
 
-    const events = [];
+    const statements = [];
     if (sourceCommitId !== pull.sourceCommitId) {
       const forcePushed = !await isAncestor(env, pull.sourceRepositoryId, pull.sourceCommitId, sourceCommitId);
       const commits = forcePushed
         ? await currentPullCommits(env, pull.sourceRepositoryId, sourceCommitId, pull.repositoryId, targetCommitId)
         : await commitsIntroducedByHead(env, pull.sourceRepositoryId, sourceCommitId, pull.sourceCommitId);
-      events.push(createPullEvent(env, pull.id, actor, 'commits_added', {
+      statements.push(...revisionUpdateStatements(env, pull.id, pull.sourceCommitId, sourceCommitId, actor, {
         commits: JSON.stringify(commits),
         owner: pull.sourceOwner,
         repository: pull.sourceRepository,
@@ -64,11 +64,11 @@ export async function synchronizePullsForBranchUpdates(env: Env, repositoryId: s
     const pullPatch = { sourceCommitId, targetCommitId };
     await commitPullUpdate(env, pull.id, 'pull.synchronized', {
       pull: pullPatch,
-      timeline: events.map((event) => ({ kind: 'event', value: event.value, createdAt: event.value.createdAt })),
+      refreshTimeline: sourceCommitId !== pull.sourceCommitId,
       refreshState: true
     }, [
       env.DB.prepare(`UPDATE pull_requests SET source_commit_id=?,target_commit_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND state IN ('draft','open')`).bind(sourceCommitId, targetCommitId, pull.id),
-      ...events.map((event) => event.statement)
+      ...statements
     ]);
   }
   return changed;
