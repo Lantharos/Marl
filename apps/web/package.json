@@ -35,7 +35,7 @@
   "dependencies": {
     "@better-auth/passkey": "1.7.2",
     "@marl/contracts": "workspace:*",
-    "better-auth": "1.7.2",
+    "better-auth": "1.7.5",
     "d3-geo": "^3.1.1",
     "gemoji": "^8.1.0",
     "github-slugger": "^2.0.0",

@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "1.7.2",
-    "better-auth": "1.7.2",
+    "better-auth": "1.7.5",
     "drizzle-orm": "0.45.2",
     "valibot": "^1.4.2",
     "yaml": "^2.9.0"
