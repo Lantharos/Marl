@@ -6,6 +6,7 @@ import type { GitEdgeEnv } from './env';
 import { hydrateRepository } from './hydration';
 import { handleNativePush, nativePushRoute } from './native-push';
 import { readPackedObject } from './pack-reader';
+import { purgeRepository } from './repository-deletion';
 import { forkRepositoryStorage } from './fork-storage';
 export { OrganizationQuotaObject } from './organization-quota-object';
 export { RepositoryStateObject } from './repository-state-object';
@@ -54,6 +55,7 @@ export default {
           status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404
         });
       }
+      if (path === '/_marl/repositories/purge' && request.method === 'POST') return purgeRepository(request, env);
       if (path === '/_marl/repositories/fork' && request.method === 'POST') return forkRepositoryStorage(request, env);
       if (path === '/_marl/object' && request.method === 'POST') {
         if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });

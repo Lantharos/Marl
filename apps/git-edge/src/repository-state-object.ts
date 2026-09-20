@@ -7,6 +7,7 @@ import { beginPushBody, forkStateBody, proposePushBody, publishBody, pushIdBody 
 
 export class RepositoryStateObject extends DurableObject<StateEnv> {
   private store: RepositoryStateStore;
+  private deleting = false;
 
   constructor(ctx: DurableObjectState, env: StateEnv) {
     super(ctx, env);
@@ -17,6 +18,23 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
     if (!trusted(request, this.env)) return stateResponse({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
+      let deletion = await this.ctx.storage.get<{ storedBytes: number; startedAt: number; complete?: boolean }>('deletion');
+      if (deletion) this.deleting = true;
+      if (path === '/delete' && request.method === 'POST') {
+        this.deleting = true;
+        if (!deletion) {
+          deletion = { storedBytes: this.store.read().storedBytes, startedAt: Date.now() };
+          await this.ctx.storage.put('deletion', deletion);
+          await this.ctx.storage.deleteAlarm();
+        }
+        return stateResponse(deletion);
+      }
+      if (deletion && path === '/delete/complete' && request.method === 'POST') {
+        this.store.clear();
+        await this.ctx.storage.put('deletion', { ...deletion, complete: true });
+        return new Response(null, { status: 204 });
+      }
+      if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
       const object = path.match(/^\/objects\/([0-9a-f]{40,64})$/);
       if (request.method === 'GET' && object) {
         const locator = this.store.object(object[1]);
@@ -37,6 +55,7 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
           return typeof object.id === 'string' && /^[0-9a-f]{40,64}$/.test(object.id) && typeof object.kind === 'string' && ['commit', 'tree', 'blob', 'tag'].includes(object.kind) && [object.size, object.packedBytes, object.offset].every((number) => typeof number === 'number' && Number.isSafeInteger(number) && number >= 0);
         });
         if (objects.length !== body.objects.length) return stateResponse({ error: 'invalid_catalog' }, 422);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         this.store.catalog(body.packId, objects);
         return new Response(null, { status: 204 });
       }
@@ -50,44 +69,52 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
       }
       if (request.method === 'POST' && path === '/begin') {
         const body = await parseStateBody(request, beginPushBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         const next = beginPush(state, { id: body.pushId, reservationId: body.reservationId, expiresAt: body.expiresAt, proposedRefs: body.proposedRefs }, body.expectedRefs, Date.now());
         this.store.write(state, next);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/publish') {
         const body = await parseStateBody(request, publishBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         const now = Date.now();
         const next = publish(state, body, now);
         const removed = state.packs.filter((pack) => !next.packs.some((active) => active.id === pack.id));
         await this.ctx.storage.setAlarm(now);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         this.store.publish(state, next, body.pushId, removed, now);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/fork') {
         const body = await parseStateBody(request, forkStateBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         const state: RepositoryState = { generation: 1, refsVersion: Object.keys(body.refs).length ? 1 : 0, refs: body.refs, manifestKey: body.manifestKey, manifestHash: body.manifestHash, packs: body.packs, storedBytes: body.packs.reduce((total, pack) => total + pack.compressedBytes, 0), activePush: null };
         this.store.initializeFork(state, Date.now());
         return stateResponse({ state }, 201);
       }
       if (request.method === 'POST' && path === '/propose') {
         const body = await parseStateBody(request, proposePushBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         const next = proposePushRefs(state, body.pushId, body.refs, Date.now());
         this.store.write(state, next);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/abort') {
         const body = await parseStateBody(request, pushIdBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         const next = abortPush(state, body.pushId);
         this.store.write(state, next);
         return stateResponse({ state: next });
       }
       if (request.method === 'POST' && path === '/committed') {
         const body = await parseStateBody(request, pushIdBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         const committed = this.store.committed(body.pushId);
         return committed ? stateResponse({ committed }) : stateResponse({ error: 'push_not_committed' }, 404);
       }
       if (request.method === 'POST' && path === '/acknowledge') {
         const body = await parseStateBody(request, pushIdBody);
+        if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         this.store.acknowledge(body.pushId);
         return new Response(null, { status: 204 });
       }
@@ -98,6 +125,7 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
   }
 
   async alarm(): Promise<void> {
+    if (await this.ctx.storage.get('deletion')) return;
     let nextAlarm = await this.verifyIntegrity();
     const state = this.store.read();
     const activeKeys = new Set(state.packs.flatMap((pack) => [pack.packKey, pack.indexKey, pack.objectIndexKey]));

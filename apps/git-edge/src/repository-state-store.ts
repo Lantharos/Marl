@@ -25,6 +25,13 @@ export class RepositoryStateStore {
     this.initialize();
   }
 
+  clear() {
+    this.storage.transactionSync(() => {
+      for (const table of ['repository_refs', 'proposed_refs', 'repository_packs', 'repository_objects', 'committed_pushes', 'repository_generations', 'integrity_schedule', 'integrity_verification', 'retirement_keys', 'retirements']) this.sql.exec(`DELETE FROM ${table}`);
+      this.sql.exec('UPDATE repository_meta SET generation=0,refs_version=0,manifest_key=NULL,manifest_hash=NULL,stored_bytes=0,push_id=NULL,reservation_id=NULL,expected_generation=NULL,expires_at=NULL');
+    });
+  }
+
   read(): RepositoryState {
     const meta = this.sql.exec<MetaRow>('SELECT generation,refs_version AS refsVersion,manifest_key AS manifestKey,manifest_hash AS manifestHash,stored_bytes AS storedBytes,push_id AS pushId,reservation_id AS reservationId,expected_generation AS expectedGeneration,expires_at AS expiresAt FROM repository_meta WHERE id=1').one();
     const refs = Object.fromEntries(this.sql.exec<RefRow>('SELECT name,object_id AS objectId FROM repository_refs').toArray().map((row) => [row.name, row.objectId]));

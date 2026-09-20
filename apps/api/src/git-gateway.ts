@@ -6,6 +6,7 @@ interface GatewayRequestOptions {
 }
 
 export interface GitGatewayRequestMap {
+  '/_marl/repositories/purge': { repositoryId: string; organizationId: string; owner: string; repository: string };
   '/_marl/archive': {
     owner: string;
     repository: string;

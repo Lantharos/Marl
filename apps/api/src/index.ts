@@ -1,3 +1,4 @@
+import { listDeletedRepositories, restoreRepository, purgeDeletedRepositories } from './repository-lifecycle';
 import { deleteBranch } from './branches';
 import { deleteReviewBody } from './pull-review-comments';
 import { authenticate } from './auth';
@@ -5,6 +6,7 @@ import { handleAccessRoute } from './access-routes';
 import { handleAuth } from './auth/handler';
 import { listBranchRules, putBranchRule } from './branch-rules';
 import { json, problem } from './http';
+import { readiness } from './health';
 import { getDashboard } from './dashboard';
 import type { Env } from './platform';
 import { authorizeGit, createRepository, detachRepositoryFork, forkRepository, getRepositorySettings, indexGit, listPendingGitIndexes, listPullSources, listRepositories, readRepositoryIcon, renameRepository, scheduleRepositoryDeletion, setRepositoryStar, transferRepository, updateRepositoryOverview, updateRepositorySettings, uploadRepositoryIcon } from './repositories';
@@ -35,6 +37,7 @@ import { abortReleaseAssetUpload, beginReleaseAssetUpload, completeReleaseAssetU
 import { readRepositoryRequest } from './repository-reads';
 
 const worker = {
+  async scheduled(_controller: ScheduledController, env: Env) { await purgeDeletedRepositories(env); },
   async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
@@ -50,6 +53,8 @@ const worker = {
         emailVerificationRequired: _env.ENVIRONMENT !== 'development'
       });
     const gatewayTrusted = Boolean(_env.GIT_GATEWAY_TOKEN && request.headers.get('x-marl-gateway-token') === _env.GIT_GATEWAY_TOKEN);
+    if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/maintenance/readiness') return readiness(_env);
+    if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/maintenance/purge') { await purgeDeletedRepositories(_env); return new Response(null, { status: 204 }); }
     if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/pending-indexes') return listPendingGitIndexes(_env);
     if (gatewayTrusted && request.method === 'GET' && url.pathname === '/api/v1/git/ssh/authorize') return authorizeSsh(request, _env);
     if (gatewayTrusted && request.method === 'POST' && url.pathname === '/api/v1/git/signing-policy') return getSigningPolicy(request, _env);
@@ -190,6 +195,7 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/v1/repositories/deleted') return listDeletedRepositories(_env, principal);
     if (url.pathname === '/api/v1/repositories') {
       if (request.method === 'GET') return listRepositories(_env, principal, url);
       if (request.method === 'POST') return createRepository(request, _env, principal);
@@ -262,7 +268,7 @@ const worker = {
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }
 
-    const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|detach-fork|delete))?$/);
+    const settingsRoute = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/settings(?:\/(rename|transfer|detach-fork|delete|restore))?$/);
     if (settingsRoute) {
       const owner = decodeURIComponent(settingsRoute[1]);
       const repository = decodeURIComponent(settingsRoute[2]);
@@ -272,6 +278,7 @@ const worker = {
       if (action === 'rename' && request.method === 'POST') return renameRepository(request, _env, principal, owner, repository);
       if (action === 'transfer' && request.method === 'POST') return transferRepository(request, _env, principal, owner, repository);
       if (action === 'detach-fork' && request.method === 'POST') return detachRepositoryFork(request, _env, principal, owner, repository);
+      if (action === 'restore' && request.method === 'POST') return restoreRepository(request, _env, principal, owner, repository);
       if (action === 'delete' && request.method === 'POST') return scheduleRepositoryDeletion(request, _env, principal, owner, repository);
       return problem(405, 'method_not_allowed', 'This method is not allowed.');
     }

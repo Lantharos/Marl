@@ -3,6 +3,7 @@ mod blob;
 mod branches;
 mod compare;
 mod cross_repository;
+mod delete;
 mod fork;
 mod merge;
 mod merge_operations;
@@ -131,6 +132,10 @@ async fn main() -> Result<()> {
         .route(
             "/_marl/branches/delete",
             axum::routing::post(branches::delete_branch),
+        )
+        .route(
+            "/_marl/repositories/purge",
+            axum::routing::post(delete::delete_repository),
         )
         .route(
             "/_marl/repositories/relocate",

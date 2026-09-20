@@ -1,3 +1,4 @@
+import { sourcePreview } from './source-preview';
 import { getPullMergeability } from './pull-mergeability';
 import type { Principal } from './auth';
 import { getIssue, getIssueTimeline, listIssues } from './issue-queries';
@@ -30,7 +31,7 @@ export async function readRepositoryRequest(
 
   const repositoryOverview = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/overview$/);
   if (repositoryOverview) return getRepositoryOverview(env, principal, decodeURIComponent(repositoryOverview[1]), decodeURIComponent(repositoryOverview[2]));
-  const repositorySource = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob)(?:\/(.*))?)?$/);
+  const repositorySource = url.pathname.match(/^\/api\/v1\/repositories\/([^/]+)\/([^/]+)(?:\/(branches|commits|tree|blob|source)(?:\/(.*))?)?$/);
   if (repositorySource) {
     const [, encodedOwner, encodedName, resource, rest] = repositorySource;
     const owner = decodeURIComponent(encodedOwner);
@@ -43,9 +44,9 @@ export async function readRepositoryRequest(
       return getCommit(env, principal, owner, name, decodeURIComponent(rest));
     }
     if (resource === 'tree') return listTree(env, principal, owner, name, url);
-    if (resource === 'blob' && rest) {
+    if ((resource === 'blob' || resource === 'source') && rest) {
       const separator = rest.indexOf('/');
-      if (separator > 0) return readBlob(env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)), ctx);
+      if (separator > 0) return (resource === 'source' ? sourcePreview : readBlob)(env, principal, owner, name, decodeURIComponent(rest.slice(0, separator)), decodeURIComponent(rest.slice(separator + 1)), ctx);
     }
     return null;
   }

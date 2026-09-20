@@ -230,6 +230,7 @@ try {
     method: 'POST',
     body: JSON.stringify({
       state: 'commented',
+      commitId: timelineSecond,
       body: 'Current head reviewed.'
     })
   });
@@ -259,13 +260,13 @@ try {
     (value) => value.pullRequest.sourceCommitId === timelineRewritten && value.pullRequest.timeline.revisions.at(-1)?.forcePushed === true,
     'Pull request did not preserve a force-push revision boundary'
   );
-  assertRevisionHistory(rewrittenDetail, [timelineSecond, timelineFastForward, timelineRewritten]);
+  assertRevisionHistory(rewrittenDetail, [timelineSecond, timelineRewritten]);
   assert(rewrittenDetail.pullRequest.commits.length === 1 && rewrittenDetail.pullRequest.commits[0]?.id === timelineRewritten, 'Current pull request commits did not follow the rewritten head.');
   const rewrittenDiff = await client.request<{ files: unknown[] }>(`${timelinePath}/diff`);
   assert(rewrittenDiff.files.length > 0, 'Pull request diff was empty after a force push.');
   await client.request(`${timelinePath}/merge`, {
     method: 'POST',
-    body: JSON.stringify({ method: 'merge' })
+    body: JSON.stringify({ method: 'merge', commitId: (await client.request<PullQualificationDetail>(timelinePath)).pullRequest.sourceCommitId })
   });
 
   stage('Exercise pull request publication');
@@ -293,13 +294,14 @@ try {
         body: `Ready to exercise **${method}** publication.`
       })
     });
+    const reviewedHead = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
     const merged = await client.request<{ commitId: string }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/merge`, {
       method: 'POST',
-      body: JSON.stringify({ method })
+      body: JSON.stringify({ method, commitId: reviewedHead })
     });
     const retried = await client.request<{ commitId: string }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/merge`, {
       method: 'POST',
-      body: JSON.stringify({ method })
+      body: JSON.stringify({ method, commitId: reviewedHead })
     });
     assert(merged.commitId === retried.commitId, `${method} merge retry produced a different commit.`);
     const detail = await client.request<{

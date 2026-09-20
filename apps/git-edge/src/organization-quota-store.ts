@@ -73,7 +73,7 @@ export class OrganizationQuotaStore {
     this.storage.transactionSync(() => {
       this.sql.exec('UPDATE quota_meta SET used_bytes=? WHERE id=1', usedBytes);
       this.sql.exec('INSERT INTO quota_adjustments (id,delta_bytes,created_at) VALUES (?,?,?)', id, deltaBytes, now);
-      this.sql.exec('DELETE FROM quota_adjustments WHERE created_at<?', now - 30 * 24 * 60 * 60 * 1000);
+      this.sql.exec("DELETE FROM quota_adjustments WHERE created_at<? AND id NOT LIKE 'repository-delete-%'", now - 30 * 24 * 60 * 60 * 1000);
     });
   }
 

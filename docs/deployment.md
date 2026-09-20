@@ -98,3 +98,9 @@ push through both `git.marl.sh` and `ssh.marl.sh`, cross-protocol fetch visibili
 publication, release asset download, repository browsing, and a self-hosted runner job. The local
 qualification command does not exercise live Cloudflare R2, Durable Objects, Containers, DNS,
 email, or retention settings.
+
+## Schema and repository maintenance
+
+Follow [Database changes](database.md) for Drizzle generation and local initialization. Apply both the generated baseline and invariant triggers before starting the application. Do not reuse local databases created with the previous migration history.
+
+Keep the API hourly cron enabled for [repository deletion and recovery](repository-lifecycle.md). Test the authenticated readiness endpoint and a complete deletion in staging, including storage accounting and retained audit history. Configure object-storage multipart expiry and monitor failed or overdue purges.

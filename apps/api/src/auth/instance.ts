@@ -81,8 +81,8 @@ export function createAuth(env: Env, request: Request) {
         '/sign-in/email': { window: 60, max: 5 },
         '/sign-in/username': { window: 60, max: 5 },
         '/sign-up/email': { window: 60, max: 5 },
-        '/forget-password': { window: 300, max: 3 },
-        '/sign-in/passkey': { window: 60, max: 10 },
+        '/request-password-reset': { window: 300, max: 3 },
+        '/passkey/verify-authentication': { window: 60, max: 10 },
         '/step-up/verify': { window: 60, max: 5 }
       }
     },

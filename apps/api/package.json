@@ -8,20 +8,25 @@
     "types:check": "bun run types --check",
     "check": "bun run types:check && tsc --noEmit",
     "test": "bun test",
-    "build": "wrangler deploy --dry-run --outdir dist"
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:migrate": "wrangler d1 migrations apply marl --local",
+    "db:reset": "bun ../../scripts/reset-database.ts"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260901.1",
+    "@cloudflare/workers-types": "^5.20260920.1",
     "@marl/contracts": "workspace:*",
-    "@types/bun": "^1.4.0",
+    "@types/bun": "^1.4.2",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^7.0.2",
-    "wrangler": "^4.128.0"
+    "wrangler": "^4.135.0"
   },
   "dependencies": {
-    "@better-auth/passkey": "1.7.2",
-    "better-auth": "1.7.2",
-    "drizzle-orm": "0.45.2",
-    "valibot": "^1.4.2",
-    "yaml": "^2.9.0"
+    "@better-auth/passkey": "^1.7.5",
+    "better-auth": "^1.7.5",
+    "drizzle-orm": "^0.45.2",
+    "valibot": "^1.5.0",
+    "yaml": "^2.9.1"
   }
 }

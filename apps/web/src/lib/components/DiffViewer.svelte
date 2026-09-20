@@ -10,6 +10,8 @@
   import { popoverMotion } from '$lib/ui/popover';
   import { parsePatchLines, type PatchLine } from '$lib/diff';
   import Button from './Button.svelte';
+  import Tokens from '$lib/code/Tokens.svelte';
+  import { comparisonTokens, type CodeComparison, type ComparisonTokens } from '$lib/code/comparison';
   import CommentComposer from './CommentComposer.svelte';
   import ReviewThread from './ReviewThread.svelte';
   import type { MarkdownContext } from '$lib/markdown';
@@ -21,14 +23,28 @@
   const LARGE_DIFF_LINES = 1_000;
   const LARGE_DIFF_BYTES = 200_000;
 
-  let { files, threads = [], busy = false, reviewable = true, canResolve = false, canModerate = false, viewerId, context, onLoadPatch = async (file: DiffFile) => file.patch, onCreate = async () => {}, onReply = async () => {}, onResolve = async () => {}, onEdit = async () => {}, onDelete = async () => {} } = $props<{
+  let { files, comparison, threads = [], busy = false, reviewable = true, canResolve = false, canModerate = false, viewerId, context, onLoadPatch = async (file: DiffFile) => file.patch, onCreate = async () => {}, onReply = async () => {}, onResolve = async () => {}, onEdit = async () => {}, onDelete = async () => {} } = $props<{
     files: PullRequestDiff['files']; threads?: ReviewThreadType[]; busy?: boolean; reviewable?: boolean; canResolve?: boolean; canModerate?: boolean; viewerId?: string;
-    context?: MarkdownContext;
+    context?: MarkdownContext; comparison?: CodeComparison;
     onLoadPatch?: (file: DiffFile) => Promise<string>;
     onCreate?: (draft: Draft, body: string) => Promise<void>; onReply?: (threadId: string, body: string) => Promise<void>;
     onResolve?: (threadId: string, resolved: boolean) => Promise<void>; onEdit?: (commentId: string, body: string) => Promise<void>; onDelete?: (commentId: string) => Promise<void>;
   }>();
 
+  let highlighted = $state.raw<Record<string, ComparisonTokens>>({});
+  const highlighting = new Map<string, AbortController>();
+  $effect(() => {
+    files; comparison;
+    highlighted = {}; expandedFiles = {}; loadedPatches = {};
+    return () => { for (const abort of highlighting.values()) abort.abort(); highlighting.clear(); };
+  });
+  async function colorFile(file: DiffFile) {
+    if (!comparison || highlighted[file.path] || highlighting.has(file.path)) return;
+    const abort = new AbortController(); highlighting.set(file.path, abort);
+    const result = await comparisonTokens(comparison, file.path, file.oldPath ?? file.path, abort.signal);
+    if (!abort.signal.aborted) highlighted = { ...highlighted, [file.path]: result };
+    if (highlighting.get(file.path) === abort) highlighting.delete(file.path);
+  }
   let drag = $state<{ path: string; side: 'old' | 'new'; anchor: number; current: number } | null>(null);
   let draft = $state<Draft | null>(null);
   let body = $state('');
@@ -95,6 +111,21 @@
     observer.observe(node);
     return { destroy: () => observer.disconnect() };
   }
+  function highlightVisible(node: HTMLElement, file: (typeof parsedFiles)[number]) {
+    let current = file;
+    let near = false;
+    const observer = new IntersectionObserver(entries => {
+      near = entries.some(entry => entry.isIntersecting);
+      if (near && current.expanded) void colorFile(current);
+      else if (!near) {
+        highlighting.get(current.path)?.abort();
+        highlighting.delete(current.path);
+        const next = { ...highlighted }; delete next[current.path]; highlighted = next;
+      }
+    }, { rootMargin: '300px 0px' });
+    observer.observe(node);
+    return { update(file: (typeof parsedFiles)[number]) { current = file; if (near && file.expanded) void colorFile(file); }, destroy() { observer.disconnect(); highlighting.get(current.path)?.abort(); } };
+  }
   function goToFile(file: (typeof parsedFiles)[number]) {
     const index = parsedFiles.indexOf(file);
     document.getElementById(fileAnchor(index))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); navigatorOpen = false; fileQuery = '';
@@ -113,6 +144,7 @@
       }
     }
     expandedFiles[file.path] = true;
+    void colorFile(file);
   }
   async function submit() {
     if (!draft || !body.trim()) return;
@@ -129,7 +161,7 @@
   </div>
   <main class="diffs">
     {#each parsedFiles as file, index (file.path)}
-      <section class="diff" id={fileAnchor(index)} use:visible={() => file.reason === 'lazy' && void expandFile(file)}>
+      <section class="diff" id={fileAnchor(index)} use:highlightVisible={file} use:visible={() => { if (file.reason === 'lazy') void expandFile(file);  }}>
         <header><strong>{file.path}</strong><span>{file.status}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small>{#if file.reason && file.expanded}<Button class="collapse-file" icon size="small" variant="ghost" aria-label="Collapse {file.path}" title="Collapse file" onclick={() => (expandedFiles[file.path] = false)}><ChevronUp size={14} /></Button>{/if}</header>
         <div class="patch">
           {#if !file.expanded}
@@ -137,7 +169,7 @@
           {:else}
             {#if file.lines.length === 0}<div class="empty-patch">No textual diff is available for this file.</div>{/if}
             {#each file.lines as line (`${file.path}:${line.key}`)}
-              <div class="line {line.kind}" class:selected={selected(file.path, line)} role="group" onpointerenter={() => extendRange(file.path, line)}><div class="gutter">{#if line.line !== null}<span>{line.line}</span>{#if reviewable}<Button class="line-comment" icon size="small" variant="primary" aria-label="Comment on line {line.line}; drag to select a range" onpointerdown={(event) => beginRange(event, file.path, line)} onclick={() => openSingle(file.path, line)}><MessageSquarePlus size={14} /></Button>{/if}{/if}</div><pre>{line.text || ' '}</pre></div>
+              <div class="line {line.kind}" class:selected={selected(file.path, line)} role="group" onpointerenter={() => extendRange(file.path, line)}><div class="gutter">{#if line.line !== null}<span>{line.line}</span>{#if reviewable}<Button class="line-comment" icon size="small" variant="primary" aria-label="Comment on line {line.line}; drag to select a range" onpointerdown={(event) => beginRange(event, file.path, line)} onclick={(event) => { if (event.detail === 0) openSingle(file.path, line); }}><MessageSquarePlus size={14} /></Button>{/if}{/if}</div><pre>{#if line.side && line.line !== null}{line.text.slice(0, 1)}<Tokens tokens={highlighted[file.path]?.[line.side as 'old' | 'new']?.[line.line - 1]} text={line.text.slice(1) || ' '} />{:else}{line.text || ' '}{/if}</pre></div>
               {#each threadsAt(file.path, line) as thread (thread.id)}<ReviewThread {thread} {busy} {context} {canResolve} {canModerate} {viewerId} inline interactive={reviewable} onReply={onReply} onResolve={onResolve} onEdit={onEdit} onDelete={onDelete} />{/each}
               {@const activeDraft = draftAt(file.path, line)}
               {#if activeDraft}<div class="draft"><div class="range-label">Commenting on {activeDraft.startLine === activeDraft.line ? `line ${activeDraft.line}` : `lines ${activeDraft.startLine}–${activeDraft.line}`}</div><CommentComposer bind:value={body} {context} placeholder="Leave a review comment" submitLabel="Add review comment" minHeight={92} {busy} onSubmit={submit} onCancel={() => { draft = null; body = ''; }} /></div>{/if}

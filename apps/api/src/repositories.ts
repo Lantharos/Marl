@@ -632,7 +632,9 @@ export async function scheduleRepositoryDeletion(request: Request, env: Env, pri
   if (!body || body.confirmation !== `${owner}/${name}`) return problem(422, 'confirmation_mismatch', 'Type the full repository name to confirm deletion.');
   const deletionScheduledAt = new Date(Date.now() + 30 * 86400000).toISOString();
   await env.DB.batch([
-    env.DB.prepare('UPDATE repositories SET deletion_scheduled_at=?,archived_at=COALESCE(archived_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(deletionScheduledAt, access.id),
+    env.DB.prepare('UPDATE repositories SET deletion_scheduled_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(deletionScheduledAt, access.id),
+    env.DB.prepare("UPDATE jobs SET state='canceled',cancel_requested=1,lease_token_hash=NULL,lease_expires_at=NULL,completed_at=CURRENT_TIMESTAMP WHERE run_id IN (SELECT id FROM runs WHERE repository_id=? OR checkout_repository_id=?) AND state IN ('queued','running')").bind(access.id, access.id),
+    env.DB.prepare("UPDATE runs SET state='canceled',cancellation_reason='developer',completed_at=CURRENT_TIMESTAMP WHERE (repository_id=? OR checkout_repository_id=?) AND state IN ('queued','running')").bind(access.id, access.id),
     auditStatement(env, {
       organizationId: access.organizationId,
       repositoryId: access.id,

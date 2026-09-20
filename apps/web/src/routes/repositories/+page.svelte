@@ -5,3 +5,6 @@
 </script>
 
 <RepositoryBrowser {data} />
+
+<div class="recovery"><a href="/repositories/deleted">Recently deleted</a></div>
+<style>.recovery{padding:0 24px 24px;text-align:right}.recovery a{color:var(--text-muted);font-size:12px}</style>
