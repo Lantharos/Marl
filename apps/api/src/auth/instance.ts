@@ -4,6 +4,8 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { twoFactor, username } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/d1';
+import { legalVersion } from '@marl/contracts';
+import { recordLegalAcceptance } from '../account/legal';
 import { validIdentitySlug } from '../core/domain';
 import { sendTransactionalEmail } from '../core/email';
 import type { Env } from '../core/platform';
@@ -30,12 +32,16 @@ export function createAuth(env: Env, request: Request) {
         if (context.path === '/update-user' && context.body?.username !== undefined)
           throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
         if (context.path !== '/sign-up/email') return;
+        if (context.body?.termsVersion !== legalVersion)
+          throw new APIError('BAD_REQUEST', { message: 'Accept the Terms of Service and Privacy Policy to continue.' });
         const candidate = typeof context.body?.username === 'string' ? context.body.username.toLowerCase() : '';
         if (!validIdentitySlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
         const unavailable = await usernameUnavailable(env, candidate);
         if (unavailable) throw new APIError('BAD_REQUEST', { message: 'That username is unavailable.' });
       }),
       after: createAuthMiddleware(async (context) => {
+        if (context.path === '/sign-up/email' && !(context.context.returned instanceof Error))
+          await recordSignUpAcceptance(env, String(context.body?.email ?? ''), context.request);
         const newSession = context.context.newSession;
         if (!newSession) return;
         const existingDeviceId = await context.getSignedCookie('marl_device', secret);
@@ -147,6 +153,13 @@ async function usernameUnavailable(env: Env, candidate: string) {
   if (organization) return true;
   if (!user) return false;
   return user.email !== null || user.authUserId !== null;
+}
+
+async function recordSignUpAcceptance(env: Env, email: string, request: Request | undefined) {
+  const user = await env.DB.prepare('SELECT id FROM auth_user WHERE email=? COLLATE NOCASE')
+    .bind(email)
+    .first<{ id: string }>();
+  if (user) await recordLegalAcceptance(env, user.id, request?.headers.get('cf-connecting-ip') ?? null).run();
 }
 
 async function sendAuthEmail(env: Env, recipient: string, subject: string, actionUrl: string) {

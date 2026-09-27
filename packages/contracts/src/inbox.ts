@@ -1,3 +1,4 @@
+import type { RunSummary } from './ci';
 import type { RepositorySummary } from './repositories';
 
 export type InboxItemKind = 'issue' | 'pull' | 'run';
@@ -22,4 +23,17 @@ export interface InboxPage {
   items: InboxItem[];
   nextCursor: string | null;
   counts: { inbox: number; unread: number; done: number };
+}
+
+export type OnboardingStep = 'repository' | 'push' | 'teammate' | 'pull' | 'runner';
+
+export interface OnboardingProgress {
+  id: OnboardingStep;
+  done: boolean;
+}
+
+export interface DashboardData {
+  inbox: Pick<InboxPage, 'items' | 'counts'>;
+  onboarding: OnboardingProgress[] | null;
+  runs: RunSummary[];
 }

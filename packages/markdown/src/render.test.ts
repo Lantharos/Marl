@@ -37,4 +37,11 @@ describe('GitHub Flavored Markdown', () => {
     expect(html).toContain('href="/lantharos/marl/pulls/7"');
     expect(html).toContain('<code>#99</code>');
   });
+
+  test('links mentions but leaves email addresses as email links', () => {
+    const html = renderMarkdown('Ask @kristof or write to privacy@marl.sh.');
+    expect(html).toContain('href="/kristof"');
+    expect(html).toContain('href="mailto:privacy@marl.sh"');
+    expect(html).not.toContain('href="/marl"');
+  });
 });

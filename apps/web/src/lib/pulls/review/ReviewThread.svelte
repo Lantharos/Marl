@@ -90,8 +90,10 @@
 </script>
 
 <article
+  data-review-thread={thread.resolved ? 'resolved' : 'open'}
+  tabindex="-1"
   class={[
-    'min-w-0 [contain-intrinsic-size:auto_210px] [content-visibility:auto]',
+    'min-w-0 scroll-mt-30 outline-offset-2 [contain-intrinsic-size:auto_210px] [content-visibility:auto] focus-visible:outline-2 focus-visible:outline-brand',
     inline
       ? 'mx-2.5 my-2.5 rounded-lg bg-surface-raised p-3 shadow-surface'
       : grouped

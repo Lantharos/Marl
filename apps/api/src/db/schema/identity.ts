@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, index, uniqueIndex, check, primaryKey } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { nocaseText } from './types';
@@ -67,13 +67,15 @@ export const users = sqliteTable(
     website: text('website'),
     signingMode: text('signing_mode')
       .notNull()
-      .default(sql`'optional'`)
+      .default(sql`'optional'`),
+    onboardingDismissedAt: text('onboarding_dismissed_at')
   },
   (table) => [
     uniqueIndex('users_by_auth_user')
       .on(table.authUserId)
       .where(sql`auth_user_id IS NOT NULL`),
     uniqueIndex('users_handle_unique').on(sql`${table.handle} COLLATE NOCASE`),
+    index('users_by_display_name').on(sql`${table.displayName} COLLATE NOCASE`),
     check('users_check_0', sql`signing_mode IN ('optional','vigilant','firewall')`)
   ]
 );
@@ -120,4 +122,17 @@ export const userEmailVerifications = sqliteTable(
     index('user_email_verifications_by_expiry').on(table.expiresAt),
     uniqueIndex('user_email_verifications_token_hash_unique').on(table.tokenHash)
   ]
+);
+
+export const legalAcceptances = sqliteTable(
+  'legal_acceptances',
+  {
+    userId: text('user_id').notNull(),
+    version: text('version').notNull(),
+    ipAddress: text('ip_address'),
+    acceptedAt: text('accepted_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.version] })]
 );

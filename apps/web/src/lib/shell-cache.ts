@@ -14,7 +14,12 @@ export type ShellOrganization = {
   kind: 'personal' | 'team';
   role: string;
 };
-export type ShellData = { user: ShellUser; repositories: RepositorySummary[]; repositoryOwners: ShellOrganization[] };
+export type ShellData = {
+  user: ShellUser;
+  repositories: RepositorySummary[];
+  repositoryOwners: ShellOrganization[];
+  legalAccepted: boolean;
+};
 
 type Snapshot = { data: ShellData | null; expiresAt: number };
 const lifetime = 60_000;

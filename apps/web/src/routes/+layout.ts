@@ -1,7 +1,7 @@
-import type { InboxItem, RepositorySummary, RunSummary } from '@marl/contracts';
+import type { DashboardData, RepositorySummary } from '@marl/contracts';
 import { error, redirect } from '@sveltejs/kit';
 import { apiWith, MarlApiError } from '$lib/api';
-import { isPublicRepositoryPath } from '$lib/repositories/repository-route';
+import { isPublicRepositoryPath, privateRoots } from '$lib/repositories/repository-route';
 import { cachedShell, clearShellCache, rememberShell, type ShellData, type ShellUser } from '$lib/shell-cache';
 import type { LayoutLoad } from './$types';
 
@@ -12,31 +12,11 @@ export const load = (async ({ fetch, url, depends }) => {
     url.pathname.startsWith('/invitations/');
   const isHomeRoute = url.pathname === '/';
   const publicHandle = url.pathname.match(/^\/([^/]+)(?:\/-\/repositories)?\/?$/)?.[1];
-  const privateRoots = new Set([
-    'forgot-password',
-    'inbox',
-    'invitations',
-    'issues',
-    'organizations',
-    'pulls',
-    'repositories',
-    'reset-password',
-    'runners',
-    'runs',
-    'settings',
-    'sign-in',
-    'sign-up',
-    'two-factor'
-  ]);
   const isPublicProfile = Boolean(publicHandle && !privateRoots.has(publicHandle));
   const repositoryRoute = url.pathname.match(/^\/([^/]+)\/[^/]+/);
   const isPublicRepository = Boolean(
     repositoryRoute && !privateRoots.has(repositoryRoute[1]) && isPublicRepositoryPath(url.pathname)
   );
-  type DashboardData = {
-    inbox: { items: InboxItem[]; counts: { inbox: number; unread: number; done: number } };
-    runs: RunSummary[];
-  };
   let shellUser: ShellUser | null = null;
   let shellData: ShellData | null = null;
   let shellDashboard: DashboardData | null = null;
@@ -80,13 +60,15 @@ export const load = (async ({ fetch, url, depends }) => {
       shellRepositories: [] as RepositorySummary[],
       shellOrganizations: [],
       shellRepositoriesUnavailable: false,
-      shellDashboard: null
+      shellDashboard: null,
+      shellLegalAccepted: true
     };
   return {
     shellUser,
     shellRepositories: shellData?.repositories ?? [],
     shellOrganizations: shellData?.repositoryOwners ?? [],
     shellRepositoriesUnavailable: !shellData,
-    shellDashboard
+    shellDashboard,
+    shellLegalAccepted: shellData?.legalAccepted ?? true
   };
 }) satisfies LayoutLoad;

@@ -1,9 +1,10 @@
 <script lang="ts">
-  import type { InboxItem, RepositorySummary, RunSummary } from '@marl/contracts';
+  import type { DashboardData as Dashboard, RepositorySummary } from '@marl/contracts';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import CirclePlay from '@lucide/svelte/icons/circle-play';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import Plus from '@lucide/svelte/icons/plus';
+  import FirstSteps from './FirstSteps.svelte';
   import InboxList from '$lib/inbox/InboxList.svelte';
   import LinkButton from '$lib/components/controls/LinkButton.svelte';
   import EmptyState from '$lib/components/feedback/EmptyState.svelte';
@@ -12,10 +13,8 @@
   import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
 
-  type DashboardData = {
-    inbox: { items: InboxItem[]; counts: { inbox: number; unread: number; done: number } };
+  type DashboardData = Dashboard & {
     repositories: RepositorySummary[];
-    runs: RunSummary[];
     user: { handle: string; displayName: string };
     unavailable: boolean;
   };
@@ -93,34 +92,37 @@
       </section>
     </div>
 
-    <aside class="min-w-0">
-      {@render sectionHeader('Repositories', '/repositories', 'All repositories')}
-      <div class="surface p-1.5">
-        {#each repositories.slice(0, 7) as repository (repository.id)}
-          <a
-            href="/{repository.owner}/{repository.name}"
-            class="group grid grid-cols-[26px_minmax(0,1fr)_14px] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
-          >
-            <RepositoryIcon name={repository.name} src={repository.iconUrl} size={26} />
-            <span class="min-w-0">
-              <strong class="block truncate text-sm font-semibold text-ink-strong">{repository.name}</strong>
-              <span class="block truncate text-xs text-ink-muted">{repository.owner}</span>
-            </span>
-            <ArrowUpRight size={14} class="text-ink-faint group-hover:text-brand" />
-          </a>
-        {:else}
-          <EmptyState
-            compact
-            icon={FolderGit2}
-            title="No repositories yet"
-            description="Create one, then push your code."
-          >
-            <LinkButton size="small" variant="primary" href="/repositories/new"
-              ><Plus size={14} />New repository</LinkButton
+    <aside class="grid min-w-0 gap-9">
+      {#if data.onboarding}<FirstSteps steps={data.onboarding} />{/if}
+      <section>
+        {@render sectionHeader('Repositories', '/repositories', 'All repositories')}
+        <div class="surface p-1.5">
+          {#each repositories.slice(0, 7) as repository (repository.id)}
+            <a
+              href="/{repository.owner}/{repository.name}"
+              class="group grid grid-cols-[26px_minmax(0,1fr)_14px] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
             >
-          </EmptyState>
-        {/each}
-      </div>
+              <RepositoryIcon name={repository.name} src={repository.iconUrl} size={26} />
+              <span class="min-w-0">
+                <strong class="block truncate text-sm font-semibold text-ink-strong">{repository.name}</strong>
+                <span class="block truncate text-xs text-ink-muted">{repository.owner}</span>
+              </span>
+              <ArrowUpRight size={14} class="text-ink-faint group-hover:text-brand" />
+            </a>
+          {:else}
+            <EmptyState
+              compact
+              icon={FolderGit2}
+              title="No repositories yet"
+              description="Create one, then push your code."
+            >
+              <LinkButton size="small" variant="primary" href="/repositories/new"
+                ><Plus size={14} />New repository</LinkButton
+              >
+            </EmptyState>
+          {/each}
+        </div>
+      </section>
     </aside>
   </div>
 </main>

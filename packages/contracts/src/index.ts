@@ -7,3 +7,4 @@ export type * from './issues';
 export type * from './pulls';
 export type * from './ci';
 export type * from './identity';
+export * from './legal';

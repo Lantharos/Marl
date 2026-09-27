@@ -229,6 +229,16 @@
         class="inline-flex min-h-10 items-center text-sm text-ink-muted hover:text-ink-strong"
         href="/lantharos/marl/blob/master/LICENSE">AGPL-3.0-or-later</a
       >
+      <a class="inline-flex min-h-10 items-center text-sm text-ink-muted hover:text-ink-strong" href="/legal/terms"
+        >Terms</a
+      >
+      <a class="inline-flex min-h-10 items-center text-sm text-ink-muted hover:text-ink-strong" href="/legal/privacy"
+        >Privacy</a
+      >
+      <a
+        class="inline-flex min-h-10 items-center text-sm text-ink-muted hover:text-ink-strong"
+        href="https://status.marl.sh">Status</a
+      >
       <a class="inline-flex min-h-10 items-center text-sm text-ink-muted hover:text-ink-strong" href="/sign-in"
         >Sign in</a
       >

@@ -388,6 +388,14 @@ CREATE TABLE `indexed_commit_changes` (
 	FOREIGN KEY (`repository_id`,`commit_id`) REFERENCES `commits`(`repository_id`,`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `legal_acceptances` (
+	`user_id` text NOT NULL,
+	`version` text NOT NULL,
+	`ip_address` text,
+	`accepted_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	PRIMARY KEY(`user_id`, `version`)
+);
+--> statement-breakpoint
 CREATE TABLE `personal_access_tokens` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -453,11 +461,13 @@ CREATE TABLE `users` (
 	`bio` text DEFAULT '' NOT NULL,
 	`website` text,
 	`signing_mode` text DEFAULT 'optional' NOT NULL,
+	`onboarding_dismissed_at` text,
 	CONSTRAINT "users_check_0" CHECK(signing_mode IN ('optional','vigilant','firewall'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `users_by_auth_user` ON `users` (`auth_user_id`) WHERE auth_user_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `users_handle_unique` ON `users` ("handle" COLLATE NOCASE);--> statement-breakpoint
+CREATE INDEX `users_by_display_name` ON `users` ("display_name" COLLATE NOCASE);--> statement-breakpoint
 CREATE TABLE `content_mentions` (
 	`user_id` text NOT NULL,
 	`actor_id` text NOT NULL,

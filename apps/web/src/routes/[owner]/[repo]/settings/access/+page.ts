@@ -18,7 +18,6 @@ type Access = {
   requireCheckApproval: boolean;
   collaborators: AccessPerson[];
   teams: AccessTeam[];
-  availableMembers: AccessPerson[];
   availableTeams: AccessTeam[];
 };
 

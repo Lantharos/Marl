@@ -1,12 +1,14 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { untrack } from 'svelte';
+  import type { WorkItemPerson } from '@marl/contracts';
   import Trash2 from '@lucide/svelte/icons/trash';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/controls/Button.svelte';
   import Field from '$lib/components/controls/Field.svelte';
   import Select from '$lib/components/controls/Select.svelte';
   import Notice from '$lib/components/feedback/Notice.svelte';
+  import PersonSearch from '$lib/components/identity/PersonSearch.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
   import Modal from '$lib/components/overlays/Modal.svelte';
@@ -28,16 +30,12 @@
   let adding = $state<Kind | null>(null);
   let removing = $state<{ kind: Kind; id: string; name: string } | null>(null);
   let selected = $state('');
+  let person = $state<WorkItemPerson | null>(null);
   let role = $state('read');
   let busy = $state(false);
   let error = $state('');
   const base = $derived(`/repositories/${page.params.owner}/${page.params.repo}/access`);
   const settingsEndpoint = $derived(`/repositories/${page.params.owner}/${page.params.repo}/settings`);
-  const peopleOptions = $derived(
-    data.availableMembers
-      .filter((person) => !collaborators.some((item) => item.id === person.id))
-      .map((person) => ({ value: person.id, label: person.displayName, description: `@${person.handle}` }))
-  );
   const teamOptions = $derived(
     data.availableTeams
       .filter((team) => !teams.some((item) => item.id === team.id))
@@ -67,7 +65,8 @@
   }
 
   function openAdd(kind: Kind) {
-    selected = (kind === 'collaborators' ? peopleOptions : teamOptions)[0]?.value ?? '';
+    selected = teamOptions[0]?.value ?? '';
+    person = null;
     role = 'read';
     error = '';
     adding = kind;
@@ -75,12 +74,12 @@
 
   async function add() {
     const kind = adding;
-    if (!kind || !selected) return;
+    const target = kind === 'collaborators' ? person?.id : selected;
+    if (!kind || !target) return;
     const saved = await run(async () => {
-      await grant(kind, selected, role);
-      if (kind === 'collaborators') {
-        const person = data.availableMembers.find((item) => item.id === selected);
-        if (person) collaborators = [...collaborators, { ...person, role }];
+      await grant(kind, target, role);
+      if (kind === 'collaborators' && person) {
+        collaborators = [...collaborators, { ...person, role }];
       } else {
         const team = data.availableTeams.find((item) => item.id === selected);
         if (team) teams = [...teams, { ...team, role, members: team.members ?? 0 }];
@@ -129,9 +128,7 @@
   <section>
     <header class="mb-2.5 flex items-center justify-between gap-3 px-1">
       <h2 class="text-sm font-semibold text-ink-strong">Collaborators</h2>
-      <Button size="small" disabled={!peopleOptions.length} onclick={() => openAdd('collaborators')}
-        >Add collaborator</Button
-      >
+      <Button size="small" onclick={() => openAdd('collaborators')}>Add collaborator</Button>
     </header>
     <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
       {#each collaborators as person (person.id)}
@@ -220,7 +217,7 @@
 >
   <div class="grid gap-5">
     {#if adding === 'collaborators'}
-      <Field label="Person"><Select bind:value={selected} options={peopleOptions} ariaLabel="Person" /></Field>
+      <Field label="Person"><PersonSearch endpoint="{base}/candidates" bind:selected={person} /></Field>
     {:else}
       <Field label="Team"><Select bind:value={selected} options={teamOptions} ariaLabel="Team" /></Field>
     {/if}
@@ -229,7 +226,13 @@
   {#if error}<Notice class="mt-4">{error}</Notice>{/if}
   {#snippet actions()}
     <Button size="small" disabled={busy} onclick={() => (adding = null)}>Cancel</Button>
-    <Button size="small" variant="primary" loading={busy} disabled={!selected} onclick={add}>Grant access</Button>
+    <Button
+      size="small"
+      variant="primary"
+      loading={busy}
+      disabled={adding === 'collaborators' ? !person : !selected}
+      onclick={add}>Grant access</Button
+    >
   {/snippet}
 </Modal>
 

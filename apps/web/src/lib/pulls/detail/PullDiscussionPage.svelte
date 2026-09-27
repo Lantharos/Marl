@@ -11,6 +11,7 @@
   import Chip from '$lib/components/controls/Chip.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
   import { seoExcerpt } from '$lib/seo';
+  import { plainKey, stepThrough } from '$lib/ui/keyboard';
   import { connectPullLive } from '../pull-live';
   import PullLifecycleActions from '../PullLifecycleActions.svelte';
   import { PullMergeability } from '../PullMergeability.svelte';
@@ -60,6 +61,27 @@
     });
   }
 
+  const tabOrder: PullTab[] = ['overview', 'changes', 'commits', 'checks'];
+
+  async function shortcut(event: KeyboardEvent) {
+    const key = plainKey(event);
+    if (!key) return;
+    const tabIndex = Number(key) - 1;
+    if (tabOrder[tabIndex]) void selectTab(tabOrder[tabIndex]);
+    else if ((key === 'j' || key === 'k') && pageState.tab === 'changes')
+      stepThrough('[data-review-file]', key === 'j' ? 1 : -1);
+    else if (key === 'n' || key === 'p') stepThrough('[data-review-thread="open"]', key === 'n' ? 1 : -1);
+    else if (key === 'r' && pageState.reviewable) {
+      if (pageState.tab !== 'changes') await selectTab('changes');
+      pageState.reviewOpen = true;
+    } else if (key === 'c' && viewerId) {
+      if (pageState.tab !== 'overview') await selectTab('overview');
+      await tick();
+      document.querySelector<HTMLTextAreaElement>('[data-pull-composer] textarea')?.focus();
+    } else return;
+    event.preventDefault();
+  }
+
   const tabs = $derived([
     { id: 'overview' as const, label: 'Overview', icon: MessageSquare, count: null },
     { id: 'changes' as const, label: 'Changes', icon: FileDiff, count: pageState.diff?.files.length ?? null },
@@ -68,6 +90,7 @@
   ]);
 </script>
 
+<svelte:window onkeydown={shortcut} />
 <Seo
   title={`${pull.title} · !${route.number} · ${route.owner}/${route.repo} · Marl`}
   description={seoExcerpt(pull.bodyText, `${pull.title} — proposed changes for ${route.owner}/${route.repo}.`)}

@@ -5,6 +5,7 @@ import {
   deleteRepositoryTeamGrant,
   getRepositoryAccess,
   putRepositoryCollaborator,
+  searchCollaboratorCandidates,
   putRepositoryTeamGrant
 } from './access/access-api';
 import { listBranchRules, putBranchRule } from './branch-rules';
@@ -134,6 +135,9 @@ export const repositoryRoutes = [
   ),
   route('GET', `${repository}/access`, 'user', ({ env, principal }, { owner, repo }) =>
     getRepositoryAccess(env, principal, owner, repo)
+  ),
+  route('GET', `${repository}/access/candidates`, 'user', ({ env, principal, url }, { owner, repo }) =>
+    searchCollaboratorCandidates(env, principal, owner, repo, url.searchParams.get('q') ?? '')
   ),
   route('PUT', `${repository}/access/collaborators`, 'user', ({ request, env, principal }, { owner, repo }) =>
     putRepositoryCollaborator(request, env, principal, owner, repo)

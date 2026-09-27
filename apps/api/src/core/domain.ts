@@ -1,12 +1,20 @@
 const slugPattern = /^[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$/;
 const reservedIdentitySlugs = new Set([
+  'about',
+  'abuse',
+  'admin',
   'api',
   'assets',
+  'docs',
   'forgot-password',
+  'ghost',
   'health',
+  'help',
+  'import',
   'inbox',
   'invitations',
   'issues',
+  'legal',
   'marl-social.png',
   'new',
   'offline',
@@ -17,11 +25,13 @@ const reservedIdentitySlugs = new Set([
   'robots.txt',
   'runners',
   'runs',
+  'security',
   'service-worker.js',
   'settings',
   'sign-in',
   'sign-up',
   'sitemap.xml',
+  'status',
   'two-factor'
 ]);
 

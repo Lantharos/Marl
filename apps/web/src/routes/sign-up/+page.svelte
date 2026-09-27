@@ -5,6 +5,8 @@
   import LinkButton from '$lib/components/controls/LinkButton.svelte';
   import Field from '$lib/components/controls/Field.svelte';
   import Notice from '$lib/components/feedback/Notice.svelte';
+  import { legalVersion } from '@marl/contracts';
+  import Checkbox from '$lib/components/controls/Checkbox.svelte';
   import { authClient } from '$lib/auth-client';
   import { clearShellCache } from '$lib/shell-cache';
   import type { PageData } from './$types';
@@ -14,6 +16,7 @@
   let username = $state('');
   let email = $state('');
   let password = $state('');
+  let accepted = $state(false);
   let busy = $state(false);
   let error = $state('');
   let awaitingVerification = $state(false);
@@ -22,7 +25,14 @@
     busy = true;
     error = '';
     try {
-      const result = await authClient.signUp.email({ name, username, email, password, callbackURL: '/' });
+      const result = await authClient.signUp.email({
+        name,
+        username,
+        email,
+        password,
+        termsVersion: legalVersion,
+        callbackURL: '/'
+      } as Parameters<typeof authClient.signUp.email>[0]);
       if (result.error) {
         error = result.error.message || 'Your account could not be created.';
         return;
@@ -88,7 +98,23 @@
           required
         />
       </Field>
-      <Button type="submit" variant="primary" size="large" block loading={busy}>Create account</Button>
+      <div class="-mx-2.5 grid gap-1">
+        <Checkbox bind:checked={accepted} label="I agree to Marl’s terms and policies" />
+        <p class="pl-10 text-xs leading-relaxed text-ink-muted">
+          Read the <a class="font-semibold text-brand-strong hover:underline" href="/legal/terms" target="_blank"
+            >Terms of Service</a
+          >,
+          <a class="font-semibold text-brand-strong hover:underline" href="/legal/privacy" target="_blank"
+            >Privacy Policy</a
+          >, and
+          <a class="font-semibold text-brand-strong hover:underline" href="/legal/acceptable-use" target="_blank"
+            >Acceptable Use Policy</a
+          >.
+        </p>
+      </div>
+      <Button type="submit" variant="primary" size="large" block loading={busy} disabled={!accepted}
+        >Create account</Button
+      >
     </form>
   {/if}
 </AuthShell>

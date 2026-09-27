@@ -16,6 +16,7 @@
   import type { LatestCommit, TreeEntry } from '$lib/repositories/browser/types';
   import EmptyRepository from '$lib/repositories/EmptyRepository.svelte';
   import { encodeRevision } from '$lib/repositories/repository-path';
+  import { plainKey } from '$lib/ui/keyboard';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -45,9 +46,7 @@
   }
 
   function openFinderShortcut(event: KeyboardEvent) {
-    const target = event.target as HTMLElement;
-    if (event.key !== 't' || event.metaKey || event.ctrlKey || event.altKey || finderOpen) return;
-    if (target.closest('input, textarea, select, [contenteditable="true"], dialog')) return;
+    if (plainKey(event) !== 't' || finderOpen) return;
     event.preventDefault();
     finderOpen = true;
   }

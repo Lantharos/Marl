@@ -13,6 +13,8 @@
   import { shellCommands } from './commands';
   import CreateMenu from './CreateMenu.svelte';
   import GlobalNav from './GlobalNav.svelte';
+  import KeyboardShortcuts from './KeyboardShortcuts.svelte';
+  import { plainKey } from '$lib/ui/keyboard';
 
   let {
     repositories,
@@ -29,6 +31,7 @@
   let mobileOpen = $state(false);
   let createOpen = $state(false);
   let accountOpen = $state(false);
+  let shortcutsOpen = $state(false);
   let shortcut = $state('Ctrl K');
   const commands = $derived(shellCommands(user, repositories, organizations));
 
@@ -54,6 +57,10 @@
       else openSearch();
     }
     if (event.key === 'Escape') closeMenus();
+    if (plainKey(event) === '?') {
+      event.preventDefault();
+      shortcutsOpen = true;
+    }
   }
 </script>
 
@@ -95,3 +102,4 @@
 </div>
 
 {#if searchOpen}<CommandPalette {commands} onClose={() => (searchOpen = false)} />{/if}
+<KeyboardShortcuts open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />

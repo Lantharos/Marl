@@ -1,6 +1,6 @@
 {
-  "id": "a81c0eb2-6b39-4c61-bf97-b324a1ef3f2e",
-  "prevId": "0e8ab73e-fc59-4b01-b725-ea58549c3cd2",
+  "id": "5933608f-50bd-4063-9578-85eef8bbaf67",
+  "prevId": "dfa44a4d-1bed-4e93-8d06-a92bce079b86",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -2816,6 +2816,53 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "legal_acceptances": {
+      "name": "legal_acceptances",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "accepted_at": {
+          "name": "accepted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "legal_acceptances_user_id_version_pk": {
+          "columns": [
+            "user_id",
+            "version"
+          ],
+          "name": "legal_acceptances_user_id_version_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "personal_access_tokens": {
       "name": "personal_access_tokens",
       "columns": {
@@ -3265,6 +3312,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'optional'"
+        },
+        "onboarding_dismissed_at": {
+          "name": "onboarding_dismissed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -3282,6 +3336,13 @@
             "\"handle\" COLLATE NOCASE"
           ],
           "isUnique": true
+        },
+        "users_by_display_name": {
+          "name": "users_by_display_name",
+          "columns": [
+            "\"display_name\" COLLATE NOCASE"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -7834,6 +7895,13 @@
       "users_handle_unique": {
         "columns": {
           "\"handle\" COLLATE NOCASE": {
+            "isExpression": true
+          }
+        }
+      },
+      "users_by_display_name": {
+        "columns": {
+          "\"display_name\" COLLATE NOCASE": {
             "isExpression": true
           }
         }

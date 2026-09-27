@@ -1,6 +1,7 @@
 import { getSigningSettings, updateSigningSettings } from '../git/commit-signing';
 import { json } from '../http/http';
 import { route } from '../http/router';
+import { acceptLegalTerms } from './legal';
 import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAccessToken } from './developer-tokens';
 import { getProfile, listSessions, updateProfile, uploadAvatar } from './profile';
 import { createSshKey, deleteSshKey, listSshKeys } from './ssh-keys';
@@ -37,6 +38,7 @@ export const accountRoutes = [
   route('DELETE', '/ssh-keys/:id(sshkey_[a-z0-9]+)', 'user', ({ request, env, principal }, { id }) =>
     deleteSshKey(request, env, principal, id)
   ),
+  route('POST', '/legal/accept', 'user', ({ request, env, principal }) => acceptLegalTerms(request, env, principal)),
   route('GET', '/signing', 'user', ({ env, principal }) => getSigningSettings(env, principal)),
   route('PATCH', '/signing', 'user', ({ request, env, principal }) => updateSigningSettings(request, env, principal))
 ];

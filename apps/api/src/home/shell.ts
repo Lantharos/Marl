@@ -1,15 +1,17 @@
 import type { Principal } from '../auth/principal';
+import { hasAcceptedCurrentTerms } from '../account/legal';
 import { json } from '../http/http';
 import { listRepositoryOwners } from '../identity/organizations';
 import type { Env } from '../core/platform';
 import { listShellRepositories } from '../repositories/repositories';
 
 export async function shellData(env: Env, principal: Principal) {
-  const [repositories, repositoryOwners] = await Promise.all([
+  const [repositories, repositoryOwners, legalAccepted] = await Promise.all([
     listShellRepositories(env, principal),
-    listRepositoryOwners(env, principal)
+    listRepositoryOwners(env, principal),
+    hasAcceptedCurrentTerms(env, principal.id)
   ]);
-  return { repositories, repositoryOwners };
+  return { repositories, repositoryOwners, legalAccepted };
 }
 
 export async function getShell(env: Env, principal: Principal): Promise<Response> {

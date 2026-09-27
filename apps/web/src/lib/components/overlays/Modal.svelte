@@ -16,7 +16,7 @@
     description?: string;
     size?: 'small' | 'medium' | 'large';
     children: Snippet;
-    actions: Snippet;
+    actions?: Snippet;
     onClose: () => void;
   } = $props();
   const id = $props.id();
@@ -53,7 +53,9 @@
         {#if description}<p id={descriptionId} class="mt-1.5 text-sm text-pretty text-ink-muted">{description}</p>{/if}
       </header>
       <div class="px-5 pb-5 sm:px-6 sm:pb-6">{@render children()}</div>
-      <footer class="flex flex-wrap justify-end gap-2 px-5 pb-5 sm:px-6 sm:pb-6">{@render actions()}</footer>
+      {#if actions}<footer class="flex flex-wrap justify-end gap-2 px-5 pb-5 sm:px-6 sm:pb-6">
+          {@render actions()}
+        </footer>{/if}
     </div>
   </dialog>
 {/if}

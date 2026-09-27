@@ -49,7 +49,8 @@ export function markdownExtensions(context?: MarkdownContext): TokenizerAndRende
     {
       name: 'marlReference',
       level: 'inline',
-      start: (source) => source.search(/(?:[a-z0-9_.-]+\/[a-z0-9_.-]+)?[#!]\d+\b|@[a-z0-9][\w-]*|\b[0-9a-f]{7,64}\b/i),
+      start: (source) =>
+        source.search(/(?:[a-z0-9_.-]+\/[a-z0-9_.-]+)?[#!]\d+\b|(?<![\w.+-])@[a-z0-9][\w-]*|\b[0-9a-f]{7,64}\b/i),
       tokenizer(source) {
         if (this.lexer.state.inLink || this.lexer.state.inRawBlock) return;
         const reference =

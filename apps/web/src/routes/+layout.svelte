@@ -7,29 +7,15 @@
   import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import AppShell from '$lib/components/shell/AppShell.svelte';
+  import LegalUpdateNotice from '$lib/legal/LegalUpdateNotice.svelte';
+  import SiteFooter from '$lib/components/shell/SiteFooter.svelte';
   import NavigationProgress from '$lib/components/shell/NavigationProgress.svelte';
-  import { isIndexableRepositoryPath } from '$lib/repositories/repository-route';
+  import { isIndexableRepositoryPath, privateRoots } from '$lib/repositories/repository-route';
   import { watchShellChanges } from '$lib/shell-cache';
   import type { LayoutData } from './$types';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
   const confirmation = new IdentityConfirmation();
-  const privateRoots = new Set([
-    'forgot-password',
-    'inbox',
-    'invitations',
-    'issues',
-    'organizations',
-    'pulls',
-    'repositories',
-    'reset-password',
-    'runners',
-    'runs',
-    'settings',
-    'sign-in',
-    'sign-up',
-    'two-factor'
-  ]);
   const indexable = $derived.by(() => {
     const parts = page.url.pathname.split('/').filter(Boolean);
     const repository = (page.data as { repository?: { visibility?: string } }).repository;
@@ -58,11 +44,13 @@
 <NavigationProgress />
 {#if data.shellUser && !page.error}
   <AppShell repositories={data.shellRepositories} organizations={data.shellOrganizations} user={data.shellUser}>
+    {#if !data.shellLegalAccepted}<LegalUpdateNotice />{/if}
     {@render children()}
   </AppShell>
 {:else}
   {@render children()}
 {/if}
+{#if !page.error && (data.shellUser || page.url.pathname !== '/')}<SiteFooter />{/if}
 <IdentityConfirmationModal
   open={confirmation.open}
   method={confirmation.method}

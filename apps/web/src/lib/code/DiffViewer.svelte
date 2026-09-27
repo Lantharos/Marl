@@ -289,8 +289,10 @@
   <div class="grid min-w-0 gap-4">
     {#each parsedFiles as file, index (file.path)}
       <section
-        class="scroll-mt-30 overflow-hidden rounded-xl bg-surface shadow-surface [contain-intrinsic-size:auto_520px] [content-visibility:auto]"
+        class="scroll-mt-30 overflow-hidden rounded-xl bg-surface shadow-surface outline-offset-2 [contain-intrinsic-size:auto_520px] [content-visibility:auto] focus-visible:outline-2 focus-visible:outline-brand"
         id={fileAnchor(index)}
+        data-review-file
+        tabindex="-1"
         use:highlightVisible={file}
         use:visible={() => {
           if (file.reason === 'lazy') void expandFile(file);

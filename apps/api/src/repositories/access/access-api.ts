@@ -10,7 +10,7 @@ import { authorizeRepository } from './access';
 export async function getRepositoryAccess(env: Env, principal: Principal, owner: string, name: string) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const [collaborators, teams, availableMembers, availableTeams, security] = await Promise.all([
+  const [collaborators, teams, availableTeams, security] = await Promise.all([
     env.DB.prepare(
       `SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,repository_collaborators.role,repository_collaborators.created_at AS addedAt FROM repository_collaborators JOIN users ON users.id=repository_collaborators.user_id WHERE repository_collaborators.repository_id=? ORDER BY users.handle`
     )
@@ -20,11 +20,6 @@ export async function getRepositoryAccess(env: Env, principal: Principal, owner:
       `SELECT teams.id,teams.slug,teams.name,repository_team_grants.role,COUNT(team_members.user_id) AS members FROM repository_team_grants JOIN teams ON teams.id=repository_team_grants.team_id LEFT JOIN team_members ON team_members.team_id=teams.id WHERE repository_team_grants.repository_id=? GROUP BY teams.id ORDER BY teams.name`
     )
       .bind(repository.id)
-      .all(),
-    env.DB.prepare(
-      `SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM users WHERE users.id!=? AND NOT EXISTS (SELECT 1 FROM repository_collaborators WHERE repository_collaborators.repository_id=? AND repository_collaborators.user_id=users.id) ORDER BY users.handle LIMIT 100`
-    )
-      .bind(principal.id, repository.id)
       .all(),
     env.DB.prepare(`SELECT id,slug,name FROM teams WHERE organization_id=? ORDER BY name`)
       .bind(repository.organizationId)
@@ -42,9 +37,36 @@ export async function getRepositoryAccess(env: Env, principal: Principal, owner:
     requireCheckApproval: Boolean(security.requireCheckApproval),
     collaborators: collaborators.results,
     teams: teams.results,
-    availableMembers: availableMembers.results,
     availableTeams: availableTeams.results
   });
+}
+
+export async function searchCollaboratorCandidates(
+  env: Env,
+  principal: Principal,
+  owner: string,
+  name: string,
+  query: string
+) {
+  const repository = await authorizeRepository(env, principal, owner, name, 'repository.admin');
+  if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
+  const prefix = query
+    .trim()
+    .replace(/^@/, '')
+    .replace(/[\\%_]/g, '\\$&');
+  if (!prefix) return json({ people: [] });
+  const people = await env.DB.prepare(
+    `SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl FROM (
+      SELECT * FROM users WHERE handle LIKE ?1 ESCAPE '\\'
+      UNION
+      SELECT * FROM users WHERE display_name LIKE ?1 ESCAPE '\\'
+    ) AS users
+    WHERE id<>?2 AND NOT EXISTS (SELECT 1 FROM repository_collaborators WHERE repository_id=?3 AND user_id=users.id)
+    ORDER BY length(handle),handle LIMIT 8`
+  )
+    .bind(`${prefix}%`, principal.id, repository.id)
+    .all();
+  return json({ people: people.results });
 }
 
 export async function putRepositoryCollaborator(

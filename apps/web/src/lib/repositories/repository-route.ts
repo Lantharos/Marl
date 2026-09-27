@@ -1,3 +1,22 @@
+export const privateRoots = new Set([
+  'admin',
+  'forgot-password',
+  'import',
+  'inbox',
+  'invitations',
+  'issues',
+  'organizations',
+  'pulls',
+  'repositories',
+  'reset-password',
+  'runners',
+  'runs',
+  'settings',
+  'sign-in',
+  'sign-up',
+  'two-factor'
+]);
+
 function repositorySection(pathname: string) {
   const match = pathname.match(/^\/[^/]+\/[^/]+(?:\/(.*))?\/?$/);
   return match ? (match[1] ?? '').replace(/\/+$/, '') : null;

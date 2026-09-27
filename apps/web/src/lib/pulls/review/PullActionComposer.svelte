@@ -75,7 +75,7 @@
   }
 </script>
 
-<div class="min-w-0 pb-1">
+<div class="min-w-0 pb-1" data-pull-composer>
   <MarkdownComposer
     bind:value
     bind:uploading

@@ -274,3 +274,5 @@ export const markdownPreviewBody = strictObject({
   owner: optional(pipe(string(), maxLength(100))),
   repository: optional(pipe(string(), maxLength(100)))
 });
+
+export const legalAcceptanceBody = strictObject({ version: shortString });
