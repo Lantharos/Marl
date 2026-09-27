@@ -49,6 +49,8 @@
         return 'uploaded a revision';
       case 'head_updated':
         return 'updated this revision';
+      case 'retargeted':
+        return `retargeted this pull from ${event.details.from} to ${event.details.to} after its base merged`;
       case 'force_pushed':
         return `force-pushed ${event.details.branch} from ${event.details.from} to ${event.details.to}`;
     }

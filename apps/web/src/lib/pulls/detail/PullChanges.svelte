@@ -11,6 +11,31 @@
 </script>
 
 <section class="grid scroll-mt-20 gap-3" aria-label="Changes">
+  {#if pageState.sinceCommit}
+    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-brand-soft px-3.5 py-2.5 text-sm">
+      <div class="flex gap-0.5 rounded-lg bg-surface/70 p-0.5" role="radiogroup" aria-label="Changes to show">
+        {#each [['all', 'All changes'], ['since', 'Since your review']] as const as [scope, label] (scope)}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={pageState.diffScope === scope}
+            class={[
+              'h-7 rounded-md px-2.5 text-xs font-semibold transition-colors',
+              pageState.diffScope === scope
+                ? 'bg-surface-raised text-ink-strong shadow-subtle'
+                : 'text-ink-muted hover:text-ink-strong'
+            ]}
+            onclick={() => pageState.setDiffScope(scope)}>{label}</button
+          >
+        {/each}
+      </div>
+      <span class="text-ink">
+        {pageState.diffScope === 'since'
+          ? `Showing what changed after you reviewed ${pull.viewerLastReview?.commitId.slice(0, 7)}.`
+          : `New commits arrived after your last review.`}
+      </span>
+    </div>
+  {/if}
   <header class="flex flex-wrap items-center justify-between gap-3">
     <p class="text-sm text-ink-muted">
       Reviewing <code class="font-mono text-xs text-ink">{pull.sourceCommitId.slice(0, 7)}</code> from
@@ -48,7 +73,12 @@
         {context}
         busy={pageState.busy}
         reviewable={pageState.reviewable}
-        onLoadPatch={(file) => pageState.loadPatch(file.path)}
+        onLoadPatch={(file) =>
+          pageState.loadPatch(
+            file.path,
+            pull.sourceCommitId,
+            pageState.diffScope === 'since' ? pageState.sinceCommit : null
+          )}
         onCreate={pageState.createLineComment}
         onReply={pageState.reply}
         onResolve={pageState.setThreadResolved}

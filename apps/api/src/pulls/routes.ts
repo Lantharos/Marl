@@ -46,8 +46,8 @@ export const pullRoutes = [
   route('PATCH', pull, 'user', ({ request, env, principal }, { owner, repo, number }) =>
     updatePullDetails(request, env, principal, owner, repo, Number(number))
   ),
-  route('GET', `${pull}/diff`, 'optional', ({ env, principal }, { owner, repo, number }) =>
-    getPullDiff(env, principal, owner, repo, Number(number))
+  route('GET', `${pull}/diff`, 'optional', ({ env, principal, url }, { owner, repo, number }) =>
+    getPullDiff(env, principal, owner, repo, Number(number), url)
   ),
   route('GET', `${pull}/patch`, 'optional', ({ env, principal, url }, { owner, repo, number }) =>
     getPullPatch(env, principal, owner, repo, Number(number), url)

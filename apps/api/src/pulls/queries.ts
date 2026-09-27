@@ -1,3 +1,4 @@
+import { pullStack } from './stacks';
 import { bodyExcerpt, renderBody } from '../core/markdown';
 import type { Principal } from '../auth/principal';
 import { branchRuleFor } from '../repositories/branch-rules';
@@ -173,7 +174,9 @@ export async function getPull(
     availableAssignees,
     timeline,
     linkedItems,
-    checksApproval
+    checksApproval,
+    stack,
+    viewerLastReview
   ] = await Promise.all([
     latestReviews(env, pull.id),
     env.DB.prepare(
@@ -210,7 +213,15 @@ export async function getPull(
       : Promise.resolve({ results: [] }),
     initialPullTimeline(env, principal, pull.id, pull.sourceCommitId, { owner, repository: name }),
     linkedWorkItems(env, principal, 'pull', pull.id),
-    pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push'))
+    pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push')),
+    pullStack(env, { ...pull, repositoryId: repository.id }),
+    principal
+      ? env.DB.prepare(
+          'SELECT commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? AND author_id=? ORDER BY created_at DESC LIMIT 1'
+        )
+          .bind(pull.id, principal.id)
+          .first<{ commitId: string; createdAt: string }>()
+      : Promise.resolve(null)
   ]);
   const checkSummary = {
     total: checks.results.length,
@@ -259,7 +270,9 @@ export async function getPull(
       canModerate: repositoryCan(repository, principal, 'repository.maintain'),
       realtimeVersion: Number(pull.realtimeVersion),
       linkedItems,
-      timeline
+      timeline,
+      stack,
+      viewerLastReview
     }
   });
 }
@@ -344,7 +357,15 @@ export async function getPullState(
     branchRuleFor(env, repository.id, pull.targetBranch),
     pullCommits(env, repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, pull.targetCommitId),
     linkedWorkItems(env, principal, 'pull', pull.id),
-    pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push'))
+    pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push')),
+    pullStack(env, { ...pull, repositoryId: repository.id }),
+    principal
+      ? env.DB.prepare(
+          'SELECT commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? AND author_id=? ORDER BY created_at DESC LIMIT 1'
+        )
+          .bind(pull.id, principal.id)
+          .first<{ commitId: string; createdAt: string }>()
+      : Promise.resolve(null)
   ]);
   const checkSummary = {
     total: checks.results.length,

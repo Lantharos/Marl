@@ -7,10 +7,13 @@ export function plainKey(event: KeyboardEvent) {
 
 export function stepThrough(selector: string, direction: 1 | -1, offset = 140) {
   const elements = [...document.querySelectorAll<HTMLElement>(selector)];
+  const current = elements.findIndex((element) => element === document.activeElement);
   const target =
-    direction === 1
-      ? elements.find((element) => element.getBoundingClientRect().top > offset + 4)
-      : elements.findLast((element) => element.getBoundingClientRect().top < offset - 4);
+    current >= 0
+      ? elements[current + direction]
+      : direction === 1
+        ? elements.find((element) => element.getBoundingClientRect().top > offset + 4)
+        : elements.findLast((element) => element.getBoundingClientRect().top < offset - 4);
   if (!target) return false;
   target.scrollIntoView({
     block: 'start',

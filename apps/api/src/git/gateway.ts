@@ -30,6 +30,7 @@ export interface GitGatewayRequestMap {
     sourceOwner?: string;
     sourceRepository?: string;
     sourceRepositoryId?: string;
+    direct?: boolean;
   };
   '/_marl/patch': {
     owner: string;

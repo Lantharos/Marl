@@ -21,6 +21,8 @@ pub(crate) struct CompareRequest {
     head: String,
     source_owner: Option<String>,
     source_repository: Option<String>,
+    #[serde(default)]
+    direct: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,10 +192,14 @@ async fn perform_compare(state: &AppState, request: CompareRequest) -> Result<Co
         &request.head,
     )
     .await?;
-    let merge_base = git_output(&repository, &["merge-base", &request.base, &request.head])
-        .await?
-        .trim()
-        .to_owned();
+    let merge_base = if request.direct {
+        request.base.clone()
+    } else {
+        git_output(&repository, &["merge-base", &request.base, &request.head])
+            .await?
+            .trim()
+            .to_owned()
+    };
     let files = diff_files(&repository, &format!("{merge_base}..{}", request.head)).await?;
     Ok(CompareResponse {
         base: request.base,

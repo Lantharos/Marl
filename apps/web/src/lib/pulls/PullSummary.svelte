@@ -7,6 +7,7 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import Button from '$lib/components/controls/Button.svelte';
   import PullBrief from './PullBrief.svelte';
+  import PullStackLinks from './PullStackLinks.svelte';
   import WorkItemMetadata from '$lib/components/discussion/WorkItemMetadata.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
@@ -89,6 +90,7 @@
         title={pull.targetBranch}>{pull.targetBranch}</code
       >
     </div>
+    <PullStackLinks stack={pull.stack} repository="{pull.repository.owner}/{pull.repository.name}" />
     {#if pull.bodyText}<div class="my-5.5 break-words">
         <PullBrief html={pull.bodyHtml} text={pull.bodyText} title={pull.title} />
       </div>{:else}<div class="h-5.5"></div>{/if}

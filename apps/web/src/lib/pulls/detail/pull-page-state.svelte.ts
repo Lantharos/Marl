@@ -27,6 +27,7 @@ export class PullPageState {
   timeline: PullTimelineState;
   diff = $state<PullRequestDiff | null>(null);
   diffLoading = $state(false);
+  diffScope = $state<'all' | 'since'>('all');
   tab = $state<PullTab>('overview');
   error = $state('');
   busy = $state(false);
@@ -60,6 +61,18 @@ export class PullPageState {
   get reviewable() {
     return this.pull.canManage && !this.pull.locked && this.open;
   }
+
+  get sinceCommit() {
+    const reviewed = this.pull.viewerLastReview?.commitId;
+    return reviewed && reviewed !== this.pull.sourceCommitId ? reviewed : null;
+  }
+
+  setDiffScope = (scope: 'all' | 'since') => {
+    if (scope === this.diffScope) return;
+    this.diffScope = scope;
+    this.diff = null;
+    void this.loadDiff();
+  };
 
   get changeThreads() {
     const threads = new Map((this.diff?.threads ?? []).map((thread) => [thread.id, thread]));
@@ -186,10 +199,12 @@ export class PullPageState {
   async loadDiff() {
     if (this.diff || this.diffLoading) return;
     const head = this.pull.sourceCommitId;
+    const since = this.diffScope === 'since' ? this.sinceCommit : null;
     this.diffLoading = true;
     try {
-      const diff = await api<PullRequestDiff>(`${this.endpoint}/diff`);
-      if (head === this.pull.sourceCommitId) this.diff = diff;
+      const diff = await api<PullRequestDiff>(`${this.endpoint}/diff${since ? `?since=${since}` : ''}`);
+      if (head === this.pull.sourceCommitId && since === (this.diffScope === 'since' ? this.sinceCommit : null))
+        this.diff = diff;
     } catch (cause) {
       this.error = cause instanceof MarlApiError ? cause.message : 'Changes could not be loaded.';
     } finally {
@@ -197,13 +212,12 @@ export class PullPageState {
     }
   }
 
-  loadPatch = (path: string, revision = this.pull.sourceCommitId) => {
-    const key = `${revision}:${path}`;
+  loadPatch = (path: string, revision = this.pull.sourceCommitId, since: string | null = null) => {
+    const key = `${since ?? ''}:${revision}:${path}`;
     const cached = this.#patches.get(key);
     if (cached) return cached;
-    const request = api<{ patch: string }>(`${this.endpoint}/patch?${new URLSearchParams({ path, revision })}`).then(
-      (result) => result.patch
-    );
+    const query = new URLSearchParams({ path, revision, ...(since ? { since } : {}) });
+    const request = api<{ patch: string }>(`${this.endpoint}/patch?${query}`).then((result) => result.patch);
     this.#patches.set(key, request);
     request.catch(() => this.#patches.get(key) === request && this.#patches.delete(key));
     return request;
@@ -211,6 +225,14 @@ export class PullPageState {
 
   loadThreadContext = async (thread: ReviewThread): Promise<ThreadCodeLine[]> =>
     reviewThreadContext(await this.loadPatch(thread.path, thread.commitId), thread.side, thread.startLine, thread.line);
+
+  #markReviewed() {
+    this.pull = {
+      ...this.pull,
+      viewerLastReview: { commitId: this.pull.sourceCommitId, createdAt: new Date().toISOString() }
+    };
+    this.diffScope = 'all';
+  }
 
   submitReview = async () => {
     const submitted = await this.#run('Review could not be submitted.', () =>
@@ -221,6 +243,7 @@ export class PullPageState {
       })
     );
     if (!submitted) return;
+    this.#markReviewed();
     this.reviewBody = '';
     this.reviewOpen = false;
     this.tab = 'overview';
@@ -322,7 +345,10 @@ export class PullPageState {
         });
       return this.#send(`${this.endpoint}/${action}`, 'POST', {});
     });
-    if (done && review) this.commentBody = '';
+    if (done && review) {
+      this.commentBody = '';
+      this.#markReviewed();
+    }
   };
 
   approveChecks = async () => {

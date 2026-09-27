@@ -1,3 +1,4 @@
+import { retargetDependents } from '../stacks';
 import type { Principal } from '../../auth/principal';
 import { auditStatement } from '../../core/audit';
 import { branchRuleFor, type MergeMethod } from '../../repositories/branch-rules';
@@ -171,5 +172,6 @@ export async function mergePull(
       })
     ]
   );
+  await retargetDependents(env, principal, { id: repository.id, owner, name }, pull, targetHeadId);
   return json({ merged: true, commitId: result.commitId, update });
 }
