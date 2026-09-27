@@ -5,9 +5,9 @@
   import Link from 'lucide-svelte/icons/link';
   import Search from 'lucide-svelte/icons/search';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import WorkItemLinks from '$lib/components/WorkItemLinks.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
 
   let { items, context, canLink, onLink } = $props<{
     items: LinkedWorkItem[];

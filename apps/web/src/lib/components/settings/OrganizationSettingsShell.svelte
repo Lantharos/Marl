@@ -4,7 +4,7 @@
   import KeyRound from 'lucide-svelte/icons/key-round';
   import Users from 'lucide-svelte/icons/users';
   import ExternalLink from 'lucide-svelte/icons/external-link';
-  import OrganizationAvatar from '../OrganizationAvatar.svelte';
+  import OrganizationAvatar from '../identity/OrganizationAvatar.svelte';
   import SettingsLayout from './SettingsLayout.svelte';
 
   let { name, slug, avatarUrl = null, active, showSecrets = true, children } = $props<{

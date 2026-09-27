@@ -1,6 +1,6 @@
 <script lang="ts">
-  import BrandMark from '../BrandMark.svelte';
-  import LinkButton from '../LinkButton.svelte';
+  import BrandMark from '../identity/BrandMark.svelte';
+  import LinkButton from '../controls/LinkButton.svelte';
   let { visible = false } = $props<{ visible?: boolean }>();
 </script>
 

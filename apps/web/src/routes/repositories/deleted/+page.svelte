@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
   import { api } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
   let busy = $state('');

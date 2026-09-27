@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { resolve } from '$app/paths';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onDestroy, tick, untrack } from 'svelte';
   import Check from 'lucide-svelte/icons/check';
@@ -13,17 +13,17 @@
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import GitFork from 'lucide-svelte/icons/git-fork';
   import Lock from 'lucide-svelte/icons/lock';
-  import PlayCircle from 'lucide-svelte/icons/play-circle';
+  import CirclePlay from 'lucide-svelte/icons/circle-play';
   import Settings from 'lucide-svelte/icons/settings';
   import Star from 'lucide-svelte/icons/star';
   import Tag from 'lucide-svelte/icons/tag';
   import { api, MarlApiError } from '$lib/api';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
+  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
   import { popoverMotion } from '$lib/ui/popover';
-  import Select from '$lib/components/Select.svelte';
-  import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
+  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
   import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
   import { dismissable } from '$lib/actions/dismissable';
   import { interfaceScale } from '$lib/ui/floating';
@@ -31,10 +31,10 @@
   import type { LayoutData } from './$types';
 
   let { children, data } = $props<{ children: import('svelte').Snippet; data: LayoutData }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
   const base = $derived(`/${owner}/${repo}`);
-  const path = $derived($page.url.pathname);
+  const path = $derived(page.url.pathname);
   const repository = $derived(data.repository);
   const canManageSettings = $derived(Boolean(repository?.permissions.maintain));
   let repositoryNav = $state<HTMLElement>();
@@ -54,7 +54,7 @@
   let forkOpen = $state(false);
   let forking = $state(false);
   let forkOwner = $state(untrack(() => data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? ''));
-  let forkName = $state($page.params.repo ?? '');
+  let forkName = $state(page.params.repo ?? '');
   let forkError = $state('');
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   const submittedForkName = $derived(completeRepositoryName(forkName));
@@ -217,7 +217,7 @@
     <a class:active={tabActive('releases')} href="{base}/releases"><Tag size={14} />Releases</a>
     <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
     <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pulls</a>
-    {#if repository?.permissions.member}<a class:active={tabActive('runs')} href="{base}/runs"><PlayCircle size={14} />Runs</a>{/if}
+    {#if repository?.permissions.member}<a class:active={tabActive('runs')} href="{base}/runs"><CirclePlay size={14} />Runs</a>{/if}
     {#if canManageSettings}<a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a>{/if}
   </nav>
 </section>

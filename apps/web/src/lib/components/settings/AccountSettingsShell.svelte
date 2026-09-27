@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import KeyRound from 'lucide-svelte/icons/key-round';
   import Mail from 'lucide-svelte/icons/mail';
   import MonitorSmartphone from 'lucide-svelte/icons/monitor-smartphone';
@@ -9,7 +9,7 @@
   import SettingsLayout from './SettingsLayout.svelte';
 
   let { children } = $props<{ children: import('svelte').Snippet }>();
-  const path = $derived($page.url.pathname);
+  const path = $derived(page.url.pathname);
 </script>
 
 {#snippet sidebar()}

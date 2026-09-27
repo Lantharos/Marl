@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { publishWithReconciliation, type CommittedPush } from './reconciliation';
+import { publishWithReconciliation, type CommittedPush } from './state/reconciliation';
 import {
   adjustStorage,
   beginPush,
@@ -12,7 +12,7 @@ import {
   type OrganizationQuotaState,
   type PackDescriptor,
   type RepositoryState
-} from './storage-model';
+} from './storage/storage-model';
 
 const now = 1_000_000;
 const main = 'a'.repeat(40);

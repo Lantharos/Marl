@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import ArrowDown from 'lucide-svelte/icons/arrow-down';
   import ArrowUp from 'lucide-svelte/icons/arrow-up';
@@ -8,18 +8,18 @@
   import Plus from 'lucide-svelte/icons/plus';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, apiText, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { encodeRepositoryPath } from '$lib/repository-path';
+  import Button from '$lib/components/controls/Button.svelte';
+  import MarkdownPreview from '$lib/components/markdown/MarkdownPreview.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
+  import { encodeRepositoryPath } from '$lib/repositories/repository-path';
   import { isoTimestamp } from '$lib/time';
   import type { RepositoryDocument } from './+page';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
   let documents = $state<RepositoryDocument[]>(untrack(() => [...data.documents]));
   let activeDocument = $state<RepositoryDocument | null>(untrack(() => data.activeDocument));
   let documentContent = $state(untrack(() => data.documentContent));

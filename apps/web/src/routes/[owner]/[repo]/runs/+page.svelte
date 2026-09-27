@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { WorkflowSummary, WorkflowTrigger } from '@marl/contracts';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
@@ -10,15 +10,15 @@
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Timer from 'lucide-svelte/icons/timer';
   import Zap from 'lucide-svelte/icons/zap';
-  import Time from '$lib/components/Time.svelte';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner);
-  const repo = $derived($page.params.repo);
+  const owner = $derived(page.params.owner);
+  const repo = $derived(page.params.repo);
   const workflows = $derived(data.workflows as WorkflowSummary[]);
   let query = $state('');
   let activeFilter = $state('All');

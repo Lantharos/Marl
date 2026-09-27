@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { authClient } from '$lib/auth-client';
   let password = $state(''); let confirm = $state(''); let busy = $state(false); let complete = $state(false); let error = $state('');
   async function reset() {
     if (password !== confirm) { error = 'Passwords do not match.'; return; }
-    const token = $page.url.searchParams.get('token');
+    const token = page.url.searchParams.get('token');
     if (!token) { error = 'This recovery link is invalid or expired.'; return; }
     busy = true; error = '';
     try {

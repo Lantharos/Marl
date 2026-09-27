@@ -1,12 +1,12 @@
 import type { GitAuthorization } from './authorization';
-import { readBoundedBody, readBoundedJson } from './bounded-body';
-import { scheduleCompaction } from './compaction';
+import { readBoundedBody, readBoundedJson } from './push/bounded-body';
+import { scheduleCompaction } from './storage/compaction';
 import type { GitEdgeEnv } from './env';
-import { expectContainer, hydrateRepository, internalRequest, type ContainerStub } from './hydration';
+import { expectContainer, hydrateRepository, internalRequest, type ContainerStub } from './storage/hydration';
 import { scheduleRepositoryIndex } from './indexing';
-import { finalizeUploadedPush } from './publication';
-import { organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state-client';
-import { STORAGE_LIMITS, changesMarlManagedRefs } from './storage-model';
+import { finalizeUploadedPush } from './push/publication';
+import { organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state/state-client';
+import { STORAGE_LIMITS, changesMarlManagedRefs } from './storage/storage-model';
 
 type Capture = { refs: Record<string, string>; packBytes: number; hasPack: boolean };
 const maximumReceiveRequestBytes = STORAGE_LIMITS.pushBytes + 1024 * 1024;

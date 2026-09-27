@@ -3,8 +3,8 @@
   import QRCode from 'qrcode';
   import Check from 'lucide-svelte/icons/check';
   import KeyRound from 'lucide-svelte/icons/key-round';
-  import Modal from '$lib/components/Modal.svelte';
-  import Button from '$lib/components/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import SigningSettings from '$lib/components/settings/SigningSettings.svelte';
   import { authClient } from '$lib/auth-client';
   import type { PageData } from './$types';

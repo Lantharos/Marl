@@ -4,7 +4,7 @@
   import GitMerge from 'lucide-svelte/icons/git-merge';
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import { dismissable } from '$lib/actions/dismissable';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { popoverMotion } from '$lib/ui/popover';
 
   export type PullLifecycleAction = 'merge' | 'close' | 'reopen' | 'ready';

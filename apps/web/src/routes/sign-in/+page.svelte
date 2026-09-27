@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import KeyRound from 'lucide-svelte/icons/key-round';
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { authClient } from '$lib/auth-client';
   import { clearShellCache } from '$lib/shell-cache';
 
@@ -11,7 +11,7 @@
   let password = $state('');
   let busy = $state(false);
   let error = $state('');
-  const requestedReturnTo = $derived($page.url.searchParams.get('returnTo'));
+  const requestedReturnTo = $derived(page.url.searchParams.get('returnTo'));
   const returnTo = $derived(requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//') ? requestedReturnTo : '/');
 
   async function finish() {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import type { ReleaseDetail, RepositoryTag } from '@marl/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
@@ -8,11 +8,11 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Upload from 'lucide-svelte/icons/upload';
   import Tag from 'lucide-svelte/icons/tag';
-  import BackLink from '$lib/components/BackLink.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import Checkbox from '$lib/components/Checkbox.svelte';
-  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import BackLink from '$lib/components/page/BackLink.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Checkbox from '$lib/components/controls/Checkbox.svelte';
+  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
   import ReleaseAssets from './ReleaseAssets.svelte';
   import TagPicker from './TagPicker.svelte';
@@ -35,7 +35,7 @@
   let notesUploading = $state(false);
   let deleting = $state(false);
   let confirmDelete = $state(false);
-  let error = $state(untrack(() => $page.url.searchParams.get('upload') === 'failed' ? 'The release was kept as a draft because one or more files could not be uploaded.' : $page.url.searchParams.get('publish') === 'failed' ? 'The files were uploaded, but the Git tag could not be published. The release remains a draft.' : ''));
+  let error = $state(untrack(() => page.url.searchParams.get('upload') === 'failed' ? 'The release was kept as a draft because one or more files could not be uploaded.' : page.url.searchParams.get('publish') === 'failed' ? 'The files were uploaded, but the Git tag could not be published. The release remains a draft.' : ''));
   const published = $derived(Boolean(release && !release.draft));
   const targetOptions = $derived.by(() => {
     const options = branches.map((branch) => ({ value: branch.name, label: branch.name, description: branch.commitId.slice(0, 8) }));

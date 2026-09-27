@@ -2,9 +2,9 @@
   import { invalidateAll } from '$app/navigation';
   import { untrack } from 'svelte';
   import { api, MarlApiError } from '$lib/api';
-  import ImageUploadButton from '$lib/components/ImageUploadButton.svelte';
+  import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
-  import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import UserAvatar from '$lib/components/identity/UserAvatar.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();

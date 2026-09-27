@@ -9,7 +9,7 @@
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import NavigationProgress from '$lib/components/shell/NavigationProgress.svelte';
-  import { isIndexableRepositoryPath } from '$lib/repository-route';
+  import { isIndexableRepositoryPath } from '$lib/repositories/repository-route';
   import { applyTheme, readTheme } from '$lib/theme';
   import { watchShellChanges } from '$lib/shell-cache';
   import type { LayoutData } from './$types';

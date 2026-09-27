@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { PublicProfileRepository } from '@marl/contracts';
   import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
-  import Time from '../Time.svelte';
-  import RepositoryIcon from '../RepositoryIcon.svelte';
+  import Time from '../page/Time.svelte';
+  import RepositoryIcon from '../identity/RepositoryIcon.svelte';
   let { repositories, empty = 'No public repositories yet.' } = $props<{ repositories: PublicProfileRepository[]; empty?: string }>();
 </script>
 

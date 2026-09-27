@@ -7,7 +7,7 @@
   import GitMerge from 'lucide-svelte/icons/git-merge';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import GitPullRequestClosed from 'lucide-svelte/icons/git-pull-request-closed';
-  import Time from '$lib/components/Time.svelte';
+  import Time from '$lib/components/page/Time.svelte';
   import { pullSignal, type PullQueueGroup } from './pull-signal';
 
   let {

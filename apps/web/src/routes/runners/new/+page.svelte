@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Check from 'lucide-svelte/icons/check';
   import Copy from 'lucide-svelte/icons/copy';
-  import FormShell from '$lib/components/FormShell.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import LinkButton from '$lib/components/LinkButton.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import FormShell from '$lib/components/controls/FormShell.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
+  import { formatAbsoluteTime } from '$lib/time';
   import type { PageData } from './$types';
 
   type Organization = { slug: string; name: string; kind: 'personal' | 'team'; role: 'owner' | 'admin' | 'member' };
@@ -20,7 +21,7 @@
   let busy = $state(false);
   let error = $state('');
   let copied = $state(false);
-  const command = $derived(token ? `marl runner register --url ${$page.url.origin} --token ${token}` : '');
+  const command = $derived(token ? `marl runner register --url ${page.url.origin} --token ${token}` : '');
 
   async function create() {
     if (!organization) return;
@@ -38,7 +39,7 @@
 <svelte:head><title>Connect runner · Marl</title></svelte:head>
 <FormShell backHref="/runners" backLabel="Runners" title="Connect a runner" description="Give one machine permission to pick up jobs for an organization.">
   {#if token}
-    <div class="ready"><strong>Run this on the machine</strong><p>The enrollment token works once and expires at {expiresAt}. Registration verifies Docker before the runner is connected.</p><div><code>{command}</code><Button icon aria-label="Copy runner command" onclick={copy}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</Button></div><LinkButton class="done" href="/runners">I'll finish on the machine</LinkButton></div>
+    <div class="ready"><strong>Run this on the machine</strong><p>The enrollment token works once and expires {formatAbsoluteTime(expiresAt)}. Registration verifies Docker before the runner is connected.</p><div><code>{command}</code><Button icon aria-label="Copy runner command" onclick={copy}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</Button></div><LinkButton class="done" href="/runners">I'll finish on the machine</LinkButton></div>
   {:else}
     <div class="explain"><p>Jobs run in disposable Docker containers. The runner process only manages checkouts, leases, logs, cache storage, and artifacts; repository commands do not execute directly on the host.</p><label><span>Organization</span><Select bind:value={organization} options={organizationOptions} ariaLabel="Runner organization" /></label><dl><div><dt>Enrollment window</dt><dd>15 minutes</dd></div><div><dt>Execution</dt><dd>Docker containers</dd></div><div><dt>Required</dt><dd>Git and Docker Engine</dd></div></dl>{#if error}<p class="error" role="alert">{error}</p>{/if}<Button class="connect" variant="primary" loading={busy} disabled={!organization} onclick={create}>Create enrollment command</Button></div>
   {/if}

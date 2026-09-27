@@ -4,7 +4,7 @@
   import FileArchive from 'lucide-svelte/icons/file-archive';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Upload from 'lucide-svelte/icons/upload';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { api, MarlApiError } from '$lib/api';
   import { uploadReleaseAsset } from './release-upload';
 

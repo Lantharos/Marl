@@ -1,17 +1,17 @@
 import { Container, ContainerProxy, getContainer } from '@cloudflare/containers';
 import { authorizeGit, AuthorizationError } from './authorization';
-import { readBoundedJson } from './bounded-body';
+import { readBoundedJson } from './push/bounded-body';
 import { handleCompatibilityPush } from './compatibility';
 import type { GitEdgeEnv } from './env';
-import { hydrateRepository } from './hydration';
-import { handleNativePush, nativePushRoute } from './native-push';
-import { readPackedObject } from './pack-reader';
-import { purgeRepository } from './repository-deletion';
-import { forkRepositoryStorage } from './fork-storage';
-export { OrganizationQuotaObject } from './organization-quota-object';
-export { RepositoryStateObject } from './repository-state-object';
-export { UploadSessionObject } from './upload-session-object';
-export { CompactionObject } from './compaction';
+import { hydrateRepository } from './storage/hydration';
+import { handleNativePush, nativePushRoute } from './push/native-push';
+import { readPackedObject } from './storage/pack-reader';
+import { purgeRepository } from './storage/repository-deletion';
+import { forkRepositoryStorage } from './storage/fork-storage';
+export { OrganizationQuotaObject } from './quota/organization-quota-object';
+export { RepositoryStateObject } from './state/repository-state-object';
+export { UploadSessionObject } from './push/upload-session-object';
+export { CompactionObject } from './storage/compaction';
 export { RepositoryIndexObject } from './indexing';
 
 type RepositoryRoute = {

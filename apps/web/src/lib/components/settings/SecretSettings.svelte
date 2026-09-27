@@ -3,9 +3,9 @@
   import KeyRound from 'lucide-svelte/icons/key-round';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '../Button.svelte';
-  import Modal from '../Modal.svelte';
-  import Time from '../Time.svelte';
+  import Button from '../controls/Button.svelte';
+  import Modal from '../controls/Modal.svelte';
+  import Time from '../page/Time.svelte';
 
   type Secret = { id: string; name: string; createdAt: string; updatedAt: string };
   let { initialSecrets, endpoint, scope }: { initialSecrets: Secret[]; endpoint: string; scope: 'repository' | 'organization' } = $props();

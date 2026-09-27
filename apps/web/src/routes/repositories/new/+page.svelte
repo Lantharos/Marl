@@ -1,12 +1,12 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
-  import Button from '$lib/components/Button.svelte';
-  import FormShell from '$lib/components/FormShell.svelte';
-  import LinkButton from '$lib/components/LinkButton.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import FormShell from '$lib/components/controls/FormShell.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
+  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
   import type { PageData } from './$types';
   type Organization = { slug: string; name: string; kind: 'personal' | 'team'; role: 'owner' | 'admin' | 'member' };
   let { data } = $props<{ data: PageData }>();

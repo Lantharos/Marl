@@ -1,6 +1,6 @@
 <script lang="ts">
   import Check from 'lucide-svelte/icons/check';
-  import Button from '../Button.svelte';
+  import Button from '../controls/Button.svelte';
 
   let { state = 'idle', label = 'Save changes', savingLabel = 'Saving', savedLabel = 'Saved', disabled = false, onclick } = $props<{
     state?: 'idle' | 'saving' | 'saved';

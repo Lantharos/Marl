@@ -1,13 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { invalidateAll } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
   import BookOpen from 'lucide-svelte/icons/book-open';
   import Building2 from 'lucide-svelte/icons/building-2';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
+  import CirclePlay from 'lucide-svelte/icons/circle-play';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import GitCommit from 'lucide-svelte/icons/git-commit-horizontal';
   import GitBranch from 'lucide-svelte/icons/git-branch';
@@ -27,8 +28,8 @@
   import UserRound from 'lucide-svelte/icons/user-round';
   import X from 'lucide-svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
-  import BrandMark from '../BrandMark.svelte';
-  import UserAvatar from '../UserAvatar.svelte';
+  import BrandMark from '../identity/BrandMark.svelte';
+  import UserAvatar from '../identity/UserAvatar.svelte';
   import { api } from '$lib/api';
   import { applyTheme, readTheme } from '$lib/theme';
   import { clearShellCache } from '$lib/shell-cache';
@@ -61,7 +62,7 @@
   let remoteResults = $state<Command[]>([]);
   let searchLoading = $state(false);
   let selectedIndex = $state(0);
-  const currentPath = $derived($page.url.pathname);
+  const currentPath = $derived(page.url.pathname);
   const commands = $derived<Command[]>(uniqueCommands([
     { label: 'Home', detail: 'Your work across Marl', href: '/', keywords: 'dashboard overview', kind: 'home' },
     { label: 'Inbox', detail: 'Mentions, assignments, and updates', href: '/inbox', keywords: 'notifications attention unread', kind: 'inbox' },
@@ -106,7 +107,7 @@
     { label: 'Runs', detail: 'Automation across your code', href: '/runs', keywords: 'workflows jobs checks', kind: 'run' },
     { label: 'Repositories', detail: 'Browse every project', href: '/repositories', keywords: 'code projects', kind: 'repository' },
     { label: 'Runners', detail: 'Connected self-hosted machines', href: '/runners', keywords: 'machines agents docker', kind: 'runner' },
-    { label: 'New repository', detail: 'Create or import code', href: '/repositories/new', keywords: 'create import', kind: 'create' },
+    { label: 'New repository', detail: 'Start a home for your code', href: '/repositories/new', keywords: 'create', kind: 'create' },
     { label: 'New organization', detail: 'Create a shared home for projects', href: '/organizations?new=1', keywords: 'create team workspace', kind: 'organization' },
     { label: 'New issue', detail: 'Track a bug, proposal, or task', href: '/issues/new', keywords: 'create bug task', kind: 'create' },
     { label: 'New pull', detail: 'Put a branch up for review', href: '/pulls/new', keywords: 'create pull request review', kind: 'create' },
@@ -231,7 +232,7 @@
       <a class:active={active('/inbox')} href="/inbox" aria-label="Inbox" data-label="Inbox" onclick={() => (mobileOpen = false)}><Inbox size={17} /><span>Inbox</span></a>
       <a class:active={active('/issues')} href="/issues" aria-label="Issues" data-label="Issues" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Issues</span></a>
       <a class:active={active('/pulls')} href="/pulls" aria-label="Pulls" data-label="Pulls" onclick={() => (mobileOpen = false)}><GitPullRequest size={17} /><span>Pulls</span></a>
-      <a class:active={active('/runs')} href="/runs" aria-label="Runs" data-label="Runs" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Runs</span></a>
+      <a class:active={active('/runs')} href="/runs" aria-label="Runs" data-label="Runs" onclick={() => (mobileOpen = false)}><CirclePlay size={17} /><span>Runs</span></a>
       <a class:active={active('/repositories')} href="/repositories" aria-label="Repositories" data-label="Repositories" onclick={() => (mobileOpen = false)}><BookOpen size={17} /><span>Repositories</span></a>
       <a class:active={active('/runners')} href="/runners" aria-label="Runners" data-label="Runners" onclick={() => (mobileOpen = false)}><Server size={17} /><span>Runners</span></a>
     </nav>
@@ -259,7 +260,7 @@
         {#if searchLoading}<p role="status">Searching Marl…</p>{/if}
         {#each results as command, index (command.href)}
           <button id="command-result-{index}" data-command={index} role="option" aria-selected={index === selectedIndex} tabindex="-1" class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'inbox'}<Inbox size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'issue'}<CircleDot size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CircleDot size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
+            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'inbox'}<Inbox size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'issue'}<CircleDot size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CirclePlay size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
             <span><strong>{command.label}</strong><small>{command.detail}</small></span>
           </button>
         {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, issue, pull, or run.</span></div>{/if}{/each}

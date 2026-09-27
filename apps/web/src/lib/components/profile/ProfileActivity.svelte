@@ -1,7 +1,7 @@
 <script lang="ts">
   import GitCommit from 'lucide-svelte/icons/git-commit-horizontal';
-  import Time from '../Time.svelte';
-  import UserProfileLink from '../UserProfileLink.svelte';
+  import Time from '../page/Time.svelte';
+  import UserProfileLink from '../identity/UserProfileLink.svelte';
   type Activity = { id: string; title: string; authoredAt: string; owner?: string; repository: string; author?: string | null; authorDisplayName?: string | null };
   let { activity, owner = '' } = $props<{ activity: Activity[]; owner?: string }>();
 </script>

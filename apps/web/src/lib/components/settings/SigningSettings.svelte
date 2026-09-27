@@ -2,8 +2,8 @@
   import { untrack } from 'svelte';
   import type { SigningMode } from '@marl/contracts';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
   import SettingRow from './SettingRow.svelte';
   import SettingsChoices from './SettingsChoices.svelte';
 

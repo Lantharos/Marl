@@ -4,9 +4,9 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { twoFactor, username } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/d1';
-import { validIdentitySlug } from '../domain';
-import { sendTransactionalEmail } from '../email';
-import type { Env } from '../platform';
+import { validIdentitySlug } from '../core/domain';
+import { sendTransactionalEmail } from '../core/email';
+import type { Env } from '../core/platform';
 import { authSchema } from './schema';
 import { stepUp } from './step-up';
 

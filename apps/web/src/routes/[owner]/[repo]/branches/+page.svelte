@@ -1,19 +1,19 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import Search from 'lucide-svelte/icons/search';
-  import Seo from '$lib/components/Seo.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import { encodeRevision } from '$lib/repository-path';
+  import Seo from '$lib/components/page/Seo.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import { encodeRevision } from '$lib/repositories/repository-path';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
   const base = $derived(`/${owner}/${repo}`);
   let query = $state('');
   type Branch = { name: string; commitId: string; commit: string; title: string; updatedAt: string; isDefault: boolean; canDelete: boolean };
@@ -40,7 +40,7 @@
   }
 </script>
 
-<Seo title={`Branches · ${owner}/${repo} · Marl`} description={`Browse branches and active lines of work for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`Branches · ${owner}/${repo} · Marl`} description={`Browse branches and active lines of work for ${owner}/${repo} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <header><h1>Branches</h1></header>
 <label class="search"><Search size={14} /><input bind:value={query} placeholder="Find a branch" /></label>
 <section class="list">

@@ -2,9 +2,9 @@
   import { goto } from '$app/navigation';
   import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
   import PullQueue from '$lib/pulls/PullQueue.svelte';
   import type { PageData } from './$types';
   import { api, MarlApiError } from '$lib/api';

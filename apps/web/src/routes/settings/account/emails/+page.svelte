@@ -4,8 +4,8 @@
   import Clock3 from 'lucide-svelte/icons/clock-3';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
-  import Modal from '$lib/components/Modal.svelte';
-  import Button from '$lib/components/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import type { PageData } from './$types';
 
   type Email = { id: string; email: string; primary: boolean; verified: boolean; verifiedAt: string | null; createdAt: string };

@@ -6,7 +6,7 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import InboxList from '$lib/inbox/InboxList.svelte';
-  import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
+  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
 
   type DashboardData = {

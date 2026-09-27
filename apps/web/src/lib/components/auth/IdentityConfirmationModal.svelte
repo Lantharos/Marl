@@ -1,8 +1,8 @@
 <script lang="ts">
   import KeyRound from 'lucide-svelte/icons/key-round';
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
-  import Button from '../Button.svelte';
-  import Modal from '../Modal.svelte';
+  import Button from '../controls/Button.svelte';
+  import Modal from '../controls/Modal.svelte';
 
   type Method = 'passkey' | 'totp' | 'password';
   let { open, method, description = 'Confirm this sensitive account change before continuing.', onClose, onVerified } = $props<{

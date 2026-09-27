@@ -2,8 +2,8 @@
   import type { RunnerSummary } from '@marl/contracts';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import Cpu from 'lucide-svelte/icons/cpu';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
   const runners = $derived(data.runners as RunnerSummary[]);

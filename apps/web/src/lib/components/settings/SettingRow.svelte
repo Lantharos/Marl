@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   let { title, value, action = 'Change', disabled = false, onclick } = $props<{
     title: string; value: string; action?: string; disabled?: boolean; onclick: () => void;
   }>();

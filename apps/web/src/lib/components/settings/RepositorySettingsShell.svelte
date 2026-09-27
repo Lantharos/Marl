@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import KeyRound from 'lucide-svelte/icons/key-round';
   import Settings from 'lucide-svelte/icons/settings';
@@ -9,7 +9,7 @@
   let { owner, repository, children } = $props<{ owner: string; repository: string; children: import('svelte').Snippet }>();
   const base = $derived(`/${owner}/${repository}`);
   const settings = $derived(`${base}/settings`);
-  const path = $derived($page.url.pathname);
+  const path = $derived(page.url.pathname);
 </script>
 
 {#snippet sidebar()}

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { onDestroy, tick, untrack } from 'svelte';
-  import CommitSignature from '$lib/components/CommitSignature.svelte';
+  import CommitSignature from '$lib/code/CommitSignature.svelte';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import File from 'lucide-svelte/icons/file';
@@ -13,12 +13,12 @@
   import { dismissable } from '$lib/actions/dismissable';
   import { popoverMotion } from '$lib/ui/popover';
   import { api } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
   import EmptyRepository from '$lib/repositories/EmptyRepository.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
-  import { encodeRepositoryPath, encodeRevision } from '$lib/repository-path';
+  import Time from '$lib/components/page/Time.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
+  import { encodeRepositoryPath, encodeRevision } from '$lib/repositories/repository-path';
   import type { PageData } from './$types';
 
   type BranchItem = { name: string; commit: string; updatedAt: string };
@@ -28,8 +28,8 @@
   type Commit = { id: string; shortId: string; title: string; author: string; authorHandle?: string | null; authorDisplayName?: string | null; authorAvatarUrl?: string | null; signatureStatus: string };
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
   let selectedBranch = $state(untrack(() => data.defaultBranch));
   let branchItems = $state<BranchItem[]>(untrack(() => data.branches.map((branch: BranchData) => ({ name: branch.name, commit: branch.commitId.slice(0, 7), updatedAt: branch.updatedAt }))));
   let fileItems = $state<FileItem[]>(untrack(() => mapEntries(data.tree?.entries ?? [])));
@@ -99,7 +99,7 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-<Seo title={`Code · ${owner}/${repo} · Marl`} description={`Browse the source, branches, and commit history for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`Code · ${owner}/${repo} · Marl`} description={`Browse the source, branches, and commit history for ${owner}/${repo} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 <div class="code-page">
   {#if latestCommit}

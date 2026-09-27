@@ -1,6 +1,6 @@
 import type { PullRevisionSummary, PullRevisionWindow, PullTimelineItem, PullTimelineWindow, ReviewThread } from '@marl/contracts';
 import { SvelteMap } from 'svelte/reactivity';
-import { ReviewThreadState } from './ReviewThreadState.svelte';
+import { ReviewThreadState } from './review/ReviewThreadState.svelte';
 
 type TimelineKind = PullTimelineItem['kind'];
 

@@ -1,19 +1,19 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
   import PullQueue from '$lib/pulls/PullQueue.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner);
-  const repo = $derived($page.params.repo);
+  const owner = $derived(page.params.owner);
+  const repo = $derived(page.params.repo);
   let items = $state.raw<PullRequestSummary[]>(untrack(() => data.pullRequests));
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let query = $state(untrack(() => data.query));
@@ -74,7 +74,7 @@
   onDestroy(() => clearTimeout(queryTimer));
 </script>
 
-<Seo title={`Pulls · ${owner}/${repo} · Marl`} description={`Review proposed changes, discussion, and merge state for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`Pulls · ${owner}/${repo} · Marl`} description={`Review proposed changes, discussion, and merge state for ${owner}/${repo} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <div class="page">
 <PageHeader title="Pulls" actionHref={data.shellUser ? data.repository?.upstream ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}` : `/pulls/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? data.repository?.upstream ? 'Contribute upstream' : 'New pull' : undefined} />
 <FilterBar placeholder="Search this repository" tabs={['Open', 'Merged', 'Closed']} labelOptions={data.availableLabels} bind:active={activeFilter} bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(activeFilter, query, labels)} />

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
   import type { MergeMethod, PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, PullRevisionSummary, PullRevisionWindow, PullTimelineWindow, ReviewThread as ReviewThreadType } from '@marl/contracts';
-  import CommitSignature from '$lib/components/CommitSignature.svelte';
+  import CommitSignature from '$lib/code/CommitSignature.svelte';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
@@ -12,38 +12,38 @@
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import X from 'lucide-svelte/icons/x';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import Chip from '$lib/components/Chip.svelte';
-  import DiscussionEntry from '$lib/components/DiscussionEntry.svelte';
-  import MarkdownBody from '$lib/components/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import PullActionComposer, { type PullComposerAction } from '$lib/components/PullActionComposer.svelte';
-  import ReferenceTimelineEvent from '$lib/components/ReferenceTimelineEvent.svelte';
-  import ReviewChangesPopover from '$lib/components/ReviewChangesPopover.svelte';
-  import PullTimelineEvent from '$lib/components/PullTimelineEvent.svelte';
-  import ReviewThread from '$lib/components/ReviewThread.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Chip from '$lib/components/controls/Chip.svelte';
+  import DiscussionEntry from '$lib/components/discussion/DiscussionEntry.svelte';
+  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import PullActionComposer, { type PullComposerAction } from '$lib/pulls/review/PullActionComposer.svelte';
+  import ReferenceTimelineEvent from '$lib/components/discussion/ReferenceTimelineEvent.svelte';
+  import ReviewChangesPopover from '$lib/pulls/review/ReviewChangesPopover.svelte';
+  import PullTimelineEvent from '$lib/pulls/PullTimelineEvent.svelte';
+  import ReviewThread from '$lib/pulls/review/ReviewThread.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import { PullMergeability } from '$lib/pulls/PullMergeability.svelte';
   import PullSummary from '$lib/pulls/PullSummary.svelte';
   import PullLifecycleActions, { type PullLifecycleAction } from '$lib/pulls/PullLifecycleActions.svelte';
-  import PullRevisionGroup from '$lib/pulls/PullRevisionGroup.svelte';
-  import PullRevisionActivity from '$lib/pulls/PullRevisionActivity.svelte';
-  import type { DiscussionItem } from '$lib/pulls/group-review-activity';
+  import PullRevisionGroup from '$lib/pulls/review/PullRevisionGroup.svelte';
+  import PullRevisionActivity from '$lib/pulls/review/PullRevisionActivity.svelte';
+  import type { DiscussionItem } from '$lib/pulls/review/group-review-activity';
   import { PullTimelineState } from '$lib/pulls/PullTimelineState.svelte';
   import { connectPullLive } from '$lib/pulls/pull-live';
-  import { reviewThreadContext, type ThreadCodeLine } from '$lib/diff';
+  import { reviewThreadContext, type ThreadCodeLine } from '$lib/code/diff';
   import { seoExcerpt } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
 
   type Tab = 'overview' | 'commits' | 'changes' | 'checks';
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
-  const number = $derived(Number($page.params.number));
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
+  const number = $derived(Number(page.params.number));
   const markdownContext = $derived({ owner, repository: repo });
   let pull = $derived<PullRequestDetail>(data.pull);
   const timeline = $derived(new PullTimelineState(data.pull.timeline));
@@ -52,7 +52,7 @@
     if (!['draft','merged','closed'].includes(pull.state)) return mergeability.check(`/repositories/${owner}/${repo}/pulls/${number}`, pull.targetCommitId, pull.sourceCommitId);
   });
   let diff = $state<PullRequestDiff | null>(null);
-  let DiffViewer = $state<typeof import('$lib/components/DiffViewer.svelte').default | null>(null);
+  let DiffViewer = $state<typeof import('$lib/code/DiffViewer.svelte').default | null>(null);
   let diffLoading = $state(false);
   let tab = $state<Tab>('overview');
   let error = $state('');
@@ -292,7 +292,7 @@
     try {
       const [loadedDiff, viewer] = await Promise.all([
         api<PullRequestDiff>(`/repositories/${route.owner}/${route.repo}/pulls/${route.number}/diff`),
-        import('$lib/components/DiffViewer.svelte')
+        import('$lib/code/DiffViewer.svelte')
       ]);
       if (request !== diffRequest || generation !== pullGeneration) return;
       diff = loadedDiff; DiffViewer = viewer.default;
@@ -484,7 +484,7 @@
   {/if}
 {/snippet}
 
-<Seo title={`${pull?.title ?? `Pull !${number}`} · ${owner}/${repo} · Marl`} description={seoExcerpt(pull?.body, `${pull?.title ?? `Pull !${number}`} — proposed changes for ${owner}/${repo}.`)} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`${pull?.title ?? `Pull !${number}`} · ${owner}/${repo} · Marl`} description={seoExcerpt(pull?.body, `${pull?.title ?? `Pull !${number}`} — proposed changes for ${owner}/${repo}.`)} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 {#if !pull}
   <div class="fatal"><CircleAlert size={24} /><strong>Pull unavailable</strong><p>{error}</p><a href="/{owner}/{repo}/pulls">Back to pulls</a></div>
@@ -526,7 +526,7 @@
   {:else if tab === 'changes'}
     <section class="changes-view" bind:this={changesView}>
       <header class="changes-head"><div><strong>Latest revision</strong><span>Reviewing <code>{pull.sourceCommitId.slice(0,7)}</code> from {pull.sourceBranch} against {pull.targetBranch}</span></div>{#if pull.canManage && !pull.locked && pull.state !== 'merged' && pull.state !== 'closed'}<ReviewChangesPopover bind:open={reviewOpen} bind:reviewState bind:body={reviewBody} context={markdownContext} {busy} onSubmit={submitReview} />{/if}</header>
-      {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer canResolve={pull.canModerate} canModerate={pull.canModerate} viewerId={data.shellUser?.id} files={diff.files} comparison={{ old: { owner: $page.params.owner!, repository: $page.params.repo!, revision: diff.mergeBase }, new: { owner: pull.sourceRepository?.owner ?? $page.params.owner!, repository: pull.sourceRepository?.name ?? $page.params.repo!, revision: diff.head } }} threads={changeThreads} context={markdownContext} {busy} reviewable={pull.canManage && !pull.locked && pull.state !== 'merged' && pull.state !== 'closed'} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
+      {#if diffLoading}<div class="changes-loading" aria-label="Loading changes"></div>{:else if diff && DiffViewer}<DiffViewer canResolve={pull.canModerate} canModerate={pull.canModerate} viewerId={data.shellUser?.id} files={diff.files} comparison={{ old: { owner: page.params.owner!, repository: page.params.repo!, revision: diff.mergeBase }, new: { owner: pull.sourceRepository?.owner ?? page.params.owner!, repository: pull.sourceRepository?.name ?? page.params.repo!, revision: diff.head } }} threads={changeThreads} context={markdownContext} {busy} reviewable={pull.canManage && !pull.locked && pull.state !== 'merged' && pull.state !== 'closed'} onLoadPatch={loadPatch} onCreate={createLineComment} onReply={reply} onResolve={setThreadResolved} onEdit={saveComment} onDelete={deleteComment} />{/if}
     </section>
   {:else}
     <section class="checks-page">

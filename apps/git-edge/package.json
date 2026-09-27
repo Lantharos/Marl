@@ -18,8 +18,8 @@
     "valibot": "^1.5.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260920.1",
+    "@cloudflare/workers-types": "^5.20260927.1",
     "typescript": "^7.0.2",
-    "wrangler": "^4.135.0"
+    "wrangler": "^4.142.0"
   }
 }

@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Trash2 from 'lucide-svelte/icons/trash-2';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
   import OrganizationSettingsShell from '$lib/components/settings/OrganizationSettingsShell.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
@@ -32,7 +32,7 @@
   let busy = $state('');
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
-  const slug = $derived($page.params.slug ?? '');
+  const slug = $derived(page.params.slug ?? '');
   const canAdminister = $derived(data.viewerRole === 'owner' || data.viewerRole === 'admin');
   const isOwner = $derived(data.viewerRole === 'owner');
   const base = $derived(`/organizations/${slug}/access`);

@@ -4,12 +4,12 @@
   import type { RepositorySummary } from '@marl/contracts';
   import Lock from 'lucide-svelte/icons/lock';
   import { api, MarlApiError } from '$lib/api';
-  import InfiniteScroll from '$lib/components/InfiniteScroll.svelte';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
-  import BackLink from '$lib/components/BackLink.svelte';
+  import InfiniteScroll from '$lib/components/controls/InfiniteScroll.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
+  import BackLink from '$lib/components/page/BackLink.svelte';
   type RepositoryData = { repositories: RepositorySummary[]; nextCursor: string | null; query: string; visibility: string };
 
   let { data, endpoint = '/repositories', path = '/repositories', owner = '', filters = ['All', 'Public', 'Private', 'Archived'] } = $props<{ data: RepositoryData; endpoint?: string; path?: string; owner?: string; filters?: string[] }>();

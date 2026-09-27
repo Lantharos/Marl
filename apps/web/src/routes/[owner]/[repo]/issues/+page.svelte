@@ -1,20 +1,20 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import type { IssueSummary } from '@marl/contracts';
-  import Button from '$lib/components/Button.svelte';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
   import IssueList from '$lib/issues/IssueList.svelte';
   import IssueViews from '$lib/issues/IssueViews.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner);
-  const repo = $derived($page.params.repo);
+  const owner = $derived(page.params.owner);
+  const repo = $derived(page.params.repo);
   let issues = $state.raw<IssueSummary[]>(untrack(() => data.issues));
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let query = $state(untrack(() => data.query));
@@ -31,7 +31,7 @@
   onDestroy(() => clearTimeout(timer));
 </script>
 
-<Seo title={`Issues · ${owner}/${repo} · Marl`} description={`Track bugs, ideas, and project work for ${owner}/${repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`Issues · ${owner}/${repo} · Marl`} description={`Track bugs, ideas, and project work for ${owner}/${repo} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <div class="page">
   <PageHeader title="Issues" actionHref={data.shellUser ? `/issues/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? 'New issue' : undefined} />
   <FilterBar placeholder="Search issues" tabs={['Open', 'Closed', 'All']} labelOptions={data.availableLabels} bind:active bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(active, query, labels)} />

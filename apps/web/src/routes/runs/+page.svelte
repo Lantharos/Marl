@@ -8,10 +8,10 @@
   import GitBranch from 'lucide-svelte/icons/git-branch';
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
-  import Time from '$lib/components/Time.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import Time from '$lib/components/page/Time.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
   import type { PageData } from './$types';
 

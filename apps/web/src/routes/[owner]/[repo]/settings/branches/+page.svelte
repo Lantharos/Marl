@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Minus from 'lucide-svelte/icons/minus';
   import Plus from 'lucide-svelte/icons/plus';
@@ -7,9 +7,9 @@
   import Check from 'lucide-svelte/icons/check';
   import type { MergeMethod } from '@marl/contracts';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
   import type { BranchRule as Rule } from './+page';
@@ -63,7 +63,7 @@
     saving = true; error = '';
     const submitted = { ...draft, requiredChecks: [...draft.requiredChecks], allowedMergeMethods: [...draft.allowedMergeMethods] };
     try {
-      const result = await api<{ branchRule: Rule }>('/repositories/' + $page.params.owner + '/' + $page.params.repo + '/branch-rules', { method: 'PUT', body: JSON.stringify(submitted) });
+      const result = await api<{ branchRule: Rule }>('/repositories/' + page.params.owner + '/' + page.params.repo + '/branch-rules', { method: 'PUT', body: JSON.stringify(submitted) });
       rules = [...rules.filter(rule => rule.pattern !== submitted.pattern), result.branchRule];
       field = null;
     } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'Branch rule could not be saved.'; }
@@ -71,7 +71,7 @@
   }
 </script>
 
-<svelte:head><title>Branches · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<svelte:head><title>Branches · {page.params.owner}/{page.params.repo} · Marl</title></svelte:head>
 <header class="page-head"><h2>Branches</h2></header>
 <div class="branch-scope"><Select bind:value={pattern} options={branchOptions} ariaLabel="Protected branch" /></div>
 {#if !exact && inherited}<p class="inheritance">Using the all-branches rule. Changes create an override for {pattern}.</p>{/if}

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Plus from 'lucide-svelte/icons/plus';
-  import Button from '$lib/components/Button.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
-  import OrganizationAvatar from '$lib/components/OrganizationAvatar.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import OrganizationAvatar from '$lib/components/identity/OrganizationAvatar.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
@@ -22,7 +22,7 @@
   let slugEdited = $state(false);
   const roles = [{ value: 'read', label: 'Read', description: 'Members can view repositories' }, { value: 'triage', label: 'Triage', description: 'Members can manage reviews and issues' }, { value: 'write', label: 'Write', description: 'Members can push code' }, { value: 'maintain', label: 'Maintain', description: 'Members can manage repository settings' }];
 
-  $effect(() => { if ($page.url.searchParams.get('new') === '1') open = true; });
+  $effect(() => { if (page.url.searchParams.get('new') === '1') open = true; });
 
   function updateName(value: string) {
     name = value;
@@ -36,7 +36,7 @@
     baseRole = 'read';
     slugEdited = false;
     error = '';
-    if ($page.url.searchParams.has('new')) void goto('/organizations', { replaceState: true, noScroll: true });
+    if (page.url.searchParams.has('new')) void goto('/organizations', { replaceState: true, noScroll: true });
   }
 
   async function create() {

@@ -4,7 +4,7 @@
   import Volume2 from 'lucide-svelte/icons/volume-2';
   import VolumeX from 'lucide-svelte/icons/volume-x';
   import Maximize from 'lucide-svelte/icons/maximize';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
 
   let { src, title = 'Attached video' } = $props<{ src: string; title?: string }>();
   let video: HTMLVideoElement;

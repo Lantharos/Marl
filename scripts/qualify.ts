@@ -409,7 +409,7 @@ try {
   assert((await client.text(`/api/v1/release-assets/${qualifiedRelease.assetId}/download`)) === qualifiedRelease.assetBody, 'Release asset did not survive the service restart.');
 
   stage('Run deterministic publication crash boundaries');
-  await run(['bun', 'test', 'apps/git-edge/src/reliability-harness.test.ts', 'apps/git-edge/src/reconciliation.test.ts', 'apps/git-edge/src/canonical.test.ts'], { cwd: root, timeoutMs: 120_000 });
+  await run(['bun', 'test', 'apps/git-edge/src/reliability-harness.test.ts', 'apps/git-edge/src/state/reconciliation.test.ts', 'apps/git-edge/src/state/canonical.test.ts'], { cwd: root, timeoutMs: 120_000 });
   console.log(`\nMarl qualification passed. Git history, SSH commit signing, PR publication, releases, supersession, restart recovery, and strict clone integrity are healthy.${skipRunner ? ' Runner execution was explicitly skipped.' : ' Runner execution is healthy.'}`);
   console.log(`Cloudflare state and repositories were isolated under ${temporary} and have been removed.`);
 } catch (error) {

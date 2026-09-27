@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import Tokens from './Tokens.svelte';
   import { codeLanguage, highlight } from './highlight';
   import type { CodeLines } from './types';

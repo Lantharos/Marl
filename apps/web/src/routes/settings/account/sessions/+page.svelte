@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import MonitorSmartphone from 'lucide-svelte/icons/monitor-smartphone';
   import { authClient } from '$lib/auth-client';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { formatTimestamp } from '$lib/time';
   import type { PageData } from './$types';
 

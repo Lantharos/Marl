@@ -26,6 +26,15 @@ crates/runner        Self-hosted job execution
 
 The discarded prototype is not part of this workspace and has no compatibility layer.
 
+Each application groups its sources by domain rather than by file type. The API keeps
+`repositories`, `pulls` (with `review` and `merge`), `issues`, `ci` (runs, runners, and
+workflows), `releases`, `identity`, `account`, `home`, and `git` side by side, with shared
+request handling in `http` and `core`. The Git edge separates repository `state`, `storage`,
+`push`, and `quota`. The Rust gateway separates `transport` (Smart HTTP, SSH, and receive),
+`storage`, `pack`, `merge`, `signing`, and read-only `browse` operations. Web components are
+grouped into `controls`, `identity`, `page`, `markdown`, and `discussion`, while feature
+folders such as `pulls`, `issues`, and `code` hold their own components and state.
+
 ## Web application
 
 The web application uses SvelteKit and a semantic design-token layer. Product pages render

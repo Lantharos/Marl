@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import CommitSignature from '$lib/components/CommitSignature.svelte';
+  import { page } from '$app/state';
+  import CommitSignature from '$lib/code/CommitSignature.svelte';
   import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import { api } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import LinkButton from '$lib/components/LinkButton.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
-  import { encodeRevision } from '$lib/repository-path';
+  import Button from '$lib/components/controls/Button.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
+  import { encodeRevision } from '$lib/repositories/repository-path';
   import { timestampGroup } from '$lib/time';
   import type { CommitSummary } from './+page';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const base = $derived(`/${$page.params.owner}/${$page.params.repo}`);
-  const revision = $derived($page.params.revision ?? 'main');
+  const base = $derived(`/${page.params.owner}/${page.params.repo}`);
+  const revision = $derived(page.params.revision ?? 'main');
   let loadedCommits = $state<CommitSummary[]>();
   let loadedCursor = $state<string | null>();
   const commits = $derived(loadedCommits ?? data.history.commits);
@@ -36,7 +36,7 @@
     loading = true;
     loadFailed = false;
     try {
-      const result = await api<{ commits: CommitSummary[]; nextCursor: string | null }>(`/repositories/${$page.params.owner}/${$page.params.repo}/commits?revision=${encodeURIComponent(revision)}&limit=50&cursor=${encodeURIComponent(nextCursor)}`);
+      const result = await api<{ commits: CommitSummary[]; nextCursor: string | null }>(`/repositories/${page.params.owner}/${page.params.repo}/commits?revision=${encodeURIComponent(revision)}&limit=50&cursor=${encodeURIComponent(nextCursor)}`);
       loadedCommits = [...commits, ...result.commits];
       loadedCursor = result.nextCursor;
     } catch {
@@ -51,7 +51,7 @@
   }
 </script>
 
-<Seo title={`Commits · ${$page.params.owner}/${$page.params.repo} · Marl`} description={`Browse the commit history for ${revision} in ${$page.params.owner}/${$page.params.repo} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`Commits · ${page.params.owner}/${page.params.repo} · Marl`} description={`Browse the commit history for ${revision} in ${page.params.owner}/${page.params.repo} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <svelte:window onscroll={loadIfNearEnd} />
 
 <header class="page-head">

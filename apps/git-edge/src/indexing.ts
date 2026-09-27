@@ -1,10 +1,10 @@
 import { getContainer } from '@cloudflare/containers';
 import { DurableObject } from 'cloudflare:workers';
-import { beginOperation, completeOperation, operationResponse, readOperation, retryOperation, scheduleOperation } from './durable-operation';
+import { beginOperation, completeOperation, operationResponse, readOperation, retryOperation, scheduleOperation } from './state/durable-operation';
 import type { GitEdgeEnv } from './env';
-import { hydrateRepository, indexHydratedRepository } from './hydration';
-import { parseStateBody, stateFailure } from './state-http';
-import { repositoryIndexTaskBody } from './state-schemas';
+import { hydrateRepository, indexHydratedRepository } from './storage/hydration';
+import { parseStateBody, stateFailure } from './state/state-http';
+import { repositoryIndexTaskBody } from './state/state-schemas';
 
 type IndexTask = { owner: string; repository: string; repositoryId: string; generation: number; actorId?: string };
 

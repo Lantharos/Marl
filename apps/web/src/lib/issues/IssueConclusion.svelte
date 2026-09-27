@@ -3,11 +3,11 @@
   import type { IssueComment, IssueConclusion } from '@marl/contracts';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Plus from 'lucide-svelte/icons/plus';
-  import Button from '$lib/components/Button.svelte';
-  import MarkdownBody from '$lib/components/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import Time from '$lib/components/Time.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Time from '$lib/components/page/Time.svelte';
   import type { MarkdownContext } from '$lib/markdown';
 
   let { conclusion, canEdit, busy, context, draftKey, onSave, onSource } = $props<{

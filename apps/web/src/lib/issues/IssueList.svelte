@@ -3,7 +3,7 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
   import MessageCircle from 'lucide-svelte/icons/message-circle';
-  import Time from '$lib/components/Time.svelte';
+  import Time from '$lib/components/page/Time.svelte';
 
   let { issues, showRepository = false, emptyTitle, emptyDescription } = $props<{
     issues: IssueSummary[];

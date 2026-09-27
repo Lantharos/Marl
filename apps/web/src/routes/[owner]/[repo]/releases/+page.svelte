@@ -1,20 +1,20 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import type { ReleaseSummary } from '@marl/contracts';
   import Download from 'lucide-svelte/icons/download';
   import Tag from 'lucide-svelte/icons/tag';
-  import InfiniteScroll from '$lib/components/InfiniteScroll.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import Time from '$lib/components/Time.svelte';
+  import InfiniteScroll from '$lib/components/controls/InfiniteScroll.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
+  import Time from '$lib/components/page/Time.svelte';
   import { api, MarlApiError } from '$lib/api';
   import { releasePath } from '$lib/releases/release-path';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repository = $derived($page.params.repo ?? '');
+  const owner = $derived(page.params.owner ?? '');
+  const repository = $derived(page.params.repo ?? '');
   let releases = $state.raw<ReleaseSummary[]>(untrack(() => data.releases));
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let loading = $state(false);
@@ -42,7 +42,7 @@
   }
 </script>
 
-<Seo title={`Releases · ${owner}/${repository} · Marl`} description={`Browse releases, release notes, source archives, and downloadable files for ${owner}/${repository} on Marl.`} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`Releases · ${owner}/${repository} · Marl`} description={`Browse releases, release notes, source archives, and downloadable files for ${owner}/${repository} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 <main class="page">
   <PageHeader title="Releases" actionHref={data.canCreate ? `/${owner}/${repository}/releases/new` : undefined} actionLabel={data.canCreate ? 'New release' : undefined} />
   <div class="list">

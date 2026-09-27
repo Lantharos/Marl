@@ -7,7 +7,7 @@
   import CircleDot from 'lucide-svelte/icons/circle-dot';
   import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
   import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
-  import Time from '$lib/components/Time.svelte';
+  import Time from '$lib/components/page/Time.svelte';
   import { api } from '$lib/api';
 
   let { items, compact = false, emptyTitle = 'All caught up.', emptyDescription = 'Mentions, assignments, and updates will appear here.', onChange = () => {} } = $props<{ items: InboxItem[]; compact?: boolean; emptyTitle?: string; emptyDescription?: string; onChange?: () => void | Promise<void> }>();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { tick } from 'svelte';
   import type { IssueComment, IssueDetail, IssueEvent, IssueLabel, IssueTimelineItem, IssueTimelineWindow } from '@marl/contracts';
   import ArrowDown from 'lucide-svelte/icons/arrow-down';
@@ -9,14 +9,14 @@
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import Pencil from 'lucide-svelte/icons/pencil';
   import X from 'lucide-svelte/icons/x';
-  import Button from '$lib/components/Button.svelte';
-  import MarkdownBody from '$lib/components/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import ReferenceTimelineEvent from '$lib/components/ReferenceTimelineEvent.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import ReferenceTimelineEvent from '$lib/components/discussion/ReferenceTimelineEvent.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import IssuePullLinks from '$lib/issues/IssuePullLinks.svelte';
   import IssueConclusion from '$lib/issues/IssueConclusion.svelte';
   import IssueDiscussionThread from '$lib/issues/IssueDiscussionThread.svelte';
@@ -26,9 +26,9 @@
   import { seoExcerpt } from '$lib/seo';
 
   let { data } = $props<{ data: { issue: IssueDetail; repository: { visibility: string }; shellUser: { id: string } | null } }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
-  const number = $derived(Number($page.params.number));
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
+  const number = $derived(Number(page.params.number));
   const context = $derived({ owner, repository: repo });
   const endpoint = $derived(`/repositories/${owner}/${repo}/issues/${number}`);
   let issue = $derived<IssueDetail>(data.issue);
@@ -225,7 +225,7 @@
   }
 </script>
 
-<Seo title={`${issue.title} · #${issue.number} · ${owner}/${repo} · Marl`} description={seoExcerpt(issue.body, `${issue.title} — issue #${issue.number} in ${owner}/${repo}.`)} path={$page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo title={`${issue.title} · #${issue.number} · ${owner}/${repo} · Marl`} description={seoExcerpt(issue.body, `${issue.title} — issue #${issue.number} in ${owner}/${repo}.`)} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
 
 <header class="issue-header">
   <h1>{issue.title} <span>#{issue.number}</span></h1>

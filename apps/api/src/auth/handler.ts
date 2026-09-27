@@ -1,5 +1,5 @@
-import { problem } from '../http';
-import type { Env } from '../platform';
+import { problem } from '../http/http';
+import type { Env } from '../core/platform';
 import { createAuth } from './instance';
 
 export async function handleAuth(request: Request, env: Env) {

@@ -2,8 +2,8 @@
   import { page } from '$app/state';
   import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
   import RefreshCw from 'lucide-svelte/icons/refresh-cw';
-  import Button from '$lib/components/Button.svelte';
-  import LinkButton from '$lib/components/LinkButton.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
   import ErrorPage from '$lib/errors/ErrorPage.svelte';
   import '$lib/errors/error-page.css';
 

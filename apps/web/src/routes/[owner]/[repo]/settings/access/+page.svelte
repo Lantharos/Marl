@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Trash2 from 'lucide-svelte/icons/trash-2';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import CheckApprovalSettings from '$lib/components/settings/CheckApprovalSettings.svelte';
   import SigningSettings from '$lib/components/settings/SigningSettings.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import Select from '$lib/components/Select.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
@@ -22,8 +22,8 @@
   let selectedTeam = $state('');
   let role = $state('read');
   let error = $state('');
-  const base = $derived(`/repositories/${$page.params.owner}/${$page.params.repo}/access`);
-  const settingsEndpoint = $derived(`/repositories/${$page.params.owner}/${$page.params.repo}/settings`);
+  const base = $derived(`/repositories/${page.params.owner}/${page.params.repo}/access`);
+  const settingsEndpoint = $derived(`/repositories/${page.params.owner}/${page.params.repo}/settings`);
   const peopleOptions = $derived((data.availableMembers as Person[]).filter((person) => !collaborators.some((item) => item.id === person.id)).map((person) => ({ value: person.id, label: person.displayName, description: `@${person.handle}` })));
   const teamOptions = $derived((data.availableTeams as Team[]).filter((team) => !teams.some((item) => item.id === team.id)).map((team) => ({ value: team.id, label: team.name, description: team.slug })));
 
@@ -56,7 +56,7 @@
   }
 </script>
 
-<svelte:head><title>Access and security · {$page.params.owner}/{$page.params.repo} · Marl</title></svelte:head>
+<svelte:head><title>Access and security · {page.params.owner}/{page.params.repo} · Marl</title></svelte:head>
 <header class="page-head"><h2>Access and security</h2></header>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 {#key data.repository.id}<div class="security-settings"><SigningSettings endpoint={settingsEndpoint} initialMode={data.signingMode} /><CheckApprovalSettings endpoint={settingsEndpoint} initialValue={data.requireCheckApproval} /></div>{/key}

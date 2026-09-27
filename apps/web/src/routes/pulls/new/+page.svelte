@@ -6,11 +6,11 @@
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import FileDiff from 'lucide-svelte/icons/file-diff';
   import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import Checkbox from '$lib/components/Checkbox.svelte';
-  import Button from '$lib/components/Button.svelte';
-  import FormShell from '$lib/components/FormShell.svelte';
-  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
-  import Select from '$lib/components/Select.svelte';
+  import Checkbox from '$lib/components/controls/Checkbox.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import FormShell from '$lib/components/controls/FormShell.svelte';
+  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 

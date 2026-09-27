@@ -10,9 +10,9 @@
   import { dismissable } from '$lib/actions/dismissable';
   import { anchoredPopover, popoverMotion } from '$lib/ui/popover';
   import '$lib/styles/metadata-picker.css';
-  import Button from '$lib/components/Button.svelte';
-  import UserAvatar from '$lib/components/UserAvatar.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import UserAvatar from '$lib/components/identity/UserAvatar.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
 
   let { issue, busy, onUpdate, onCreateLabel } = $props<{ issue: IssueDetail; busy: boolean; onUpdate: (body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) => Promise<void>; onCreateLabel: (name: string) => Promise<void> }>();
   let open = $state<'assignees' | 'labels' | null>(null);

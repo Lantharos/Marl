@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { onMount } from 'svelte';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
@@ -10,7 +10,7 @@
   let detail = $state('Verifying your email address…');
 
   onMount(async () => {
-    const token = $page.url.searchParams.get('token');
+    const token = page.url.searchParams.get('token');
     if (!token) { verificationState = 'error'; detail = 'This verification link is incomplete.'; return; }
     try { await api('/emails/verify', { method: 'POST', body: JSON.stringify({ token }) }); verificationState = 'verified'; detail = 'Commits authored with this email now link to your Marl profile.'; }
     catch (cause) { verificationState = 'error'; detail = cause instanceof MarlApiError ? cause.message : 'The email could not be verified.'; }

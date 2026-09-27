@@ -2,7 +2,7 @@ import { APIError, createAuthEndpoint, sessionMiddleware } from 'better-auth/api
 import { setSessionCookie } from 'better-auth/cookies';
 import { symmetricDecrypt, type SecretConfig } from 'better-auth/crypto';
 import { literal, object, string, union } from 'valibot';
-import type { Env } from '../platform';
+import type { Env } from '../core/platform';
 
 const verificationBody = object({
   method: union([literal('password'), literal('totp')]),

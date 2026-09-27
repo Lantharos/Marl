@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import OrganizationSettingsShell from '$lib/components/settings/OrganizationSettingsShell.svelte';
   import SecretSettings from '$lib/components/settings/SecretSettings.svelte';
   import type { PageData } from './$types';
   let { data } = $props<{ data: PageData }>();
-  const slug = $derived($page.params.slug ?? '');
+  const slug = $derived(page.params.slug ?? '');
 </script>
 
 <svelte:head><title>CI secrets · {data.organizationName} · Marl</title></svelte:head>

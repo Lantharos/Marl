@@ -5,11 +5,11 @@
   import Reply from 'lucide-svelte/icons/reply';
   import { dismissable } from '$lib/actions/dismissable';
   import { popoverMotion } from '$lib/ui/popover';
-  import Button from '$lib/components/Button.svelte';
-  import MarkdownBody from '$lib/components/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/MarkdownComposer.svelte';
-  import Time from '$lib/components/Time.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import type { MarkdownContext } from '$lib/markdown';
 
   let { comment, sequence, context, canReply, canConclude, busy, replyTarget, draftKey, onReply, onSave, onDelete, onConclude, onSource } = $props<{

@@ -1,29 +1,11 @@
-mod archive;
-mod blob;
-mod branches;
-mod compare;
-mod cross_repository;
-mod delete;
-mod fork;
+mod browse;
 mod merge;
-mod merge_operations;
-mod mergeability;
-mod metadata;
 mod pack;
-mod pack_graph;
-mod pack_signatures;
 mod process;
-mod receive;
-mod refs;
-mod relocate;
-mod remote_storage;
-mod repository_files;
-mod repository_storage;
-mod signatures;
-mod signing_hook;
-mod smart_http;
-mod ssh;
+mod signing;
 mod state;
+mod storage;
+mod transport;
 
 use anyhow::{Context, Result};
 use axum::{Router, routing::any};
@@ -58,10 +40,12 @@ async fn main() -> Result<()> {
     });
     let repository_root = state.repositories.display().to_string();
     if std::env::args().nth(1).as_deref() == Some("--signing-hook") {
-        return signing_hook::run(&state).await;
+        return signing::hook::run(&state).await;
     }
     if state.local_storage {
-        tokio::spawn(metadata::backfill_pending_repositories(state.clone()));
+        tokio::spawn(browse::metadata::backfill_pending_repositories(
+            state.clone(),
+        ));
     }
     let ssh_address = std::env::var("MARL_SSH_LISTEN")
         .ok()
@@ -70,24 +54,24 @@ async fn main() -> Result<()> {
         .route("/health", axum::routing::get(|| async { "ok\n" }))
         .route(
             "/_marl/repositories/{owner}/{repository}/status",
-            axum::routing::get(repository_storage::repository_status),
+            axum::routing::get(storage::repository::repository_status),
         )
         .route(
             "/_marl/repositories/{owner}/{repository}/packs/{pack}/{kind}",
-            axum::routing::put(repository_storage::upload_repository_pack),
+            axum::routing::put(storage::repository::upload_repository_pack),
         )
         .route(
             "/_marl/repositories/{owner}/{repository}/activate",
-            axum::routing::post(repository_storage::activate_repository),
+            axum::routing::post(storage::repository::activate_repository),
         )
         .route(
             "/_marl/repositories/{owner}/{repository}/captures/{push}",
-            axum::routing::post(repository_storage::capture_repository)
-                .delete(repository_storage::delete_capture),
+            axum::routing::post(storage::repository::capture_repository)
+                .delete(storage::repository::delete_capture),
         )
         .route(
             "/_marl/repositories/{owner}/{repository}/captures/{push}/{kind}",
-            axum::routing::get(repository_storage::read_capture),
+            axum::routing::get(storage::repository::read_capture),
         )
         .route(
             "/_marl/packs/{push}/known/{index}",
@@ -103,11 +87,11 @@ async fn main() -> Result<()> {
         )
         .route(
             "/_marl/packs/{push}/{pack}/signatures/scan",
-            axum::routing::post(pack_signatures::scan),
+            axum::routing::post(pack::signatures::scan),
         )
         .route(
             "/_marl/packs/{push}/{pack}/signatures/check",
-            axum::routing::post(pack_signatures::check),
+            axum::routing::post(pack::signatures::check),
         )
         .route(
             "/_marl/packs/{push}/refs",
@@ -124,47 +108,62 @@ async fn main() -> Result<()> {
         .route("/_marl/merge", axum::routing::post(merge::merge_request))
         .route(
             "/_marl/mergeability",
-            axum::routing::post(mergeability::mergeability),
+            axum::routing::post(merge::mergeability::mergeability),
         )
-        .route("/_marl/pulls/pin", axum::routing::post(refs::pin_pull))
-        .route("/_marl/tags/list", axum::routing::post(refs::list_tags))
-        .route("/_marl/tags/create", axum::routing::post(refs::create_tag))
+        .route(
+            "/_marl/pulls/pin",
+            axum::routing::post(browse::refs::pin_pull),
+        )
+        .route(
+            "/_marl/tags/list",
+            axum::routing::post(browse::refs::list_tags),
+        )
+        .route(
+            "/_marl/tags/create",
+            axum::routing::post(browse::refs::create_tag),
+        )
         .route(
             "/_marl/branches/delete",
-            axum::routing::post(branches::delete_branch),
+            axum::routing::post(browse::branches::delete_branch),
         )
         .route(
             "/_marl/repositories/purge",
-            axum::routing::post(delete::delete_repository),
+            axum::routing::post(storage::delete::delete_repository),
         )
         .route(
             "/_marl/repositories/relocate",
-            axum::routing::post(relocate::relocate_repository),
+            axum::routing::post(storage::relocate::relocate_repository),
         )
         .route(
             "/_marl/repositories/fork",
-            axum::routing::post(fork::fork_repository),
+            axum::routing::post(storage::fork::fork_repository),
         )
-        .route("/_marl/blob", axum::routing::post(blob::read_blob))
+        .route("/_marl/blob", axum::routing::post(browse::blob::read_blob))
         .route(
             "/_marl/archive",
-            axum::routing::post(archive::repository_archive),
+            axum::routing::post(browse::archive::repository_archive),
         )
-        .route("/_marl/tree", axum::routing::post(metadata::read_tree))
+        .route(
+            "/_marl/tree",
+            axum::routing::post(browse::metadata::read_tree),
+        )
         .route(
             "/_marl/index",
-            axum::routing::post(metadata::index_repository),
+            axum::routing::post(browse::metadata::index_repository),
         )
         .route(
             "/_marl/compare",
-            axum::routing::post(compare::compare_request),
+            axum::routing::post(browse::compare::compare_request),
         )
-        .route("/_marl/patch", axum::routing::post(compare::patch_request))
+        .route(
+            "/_marl/patch",
+            axum::routing::post(browse::compare::patch_request),
+        )
         .route(
             "/_marl/commit",
-            axum::routing::post(compare::commit_request),
+            axum::routing::post(browse::compare::commit_request),
         )
-        .route("/{*path}", any(smart_http::git_request))
+        .route("/{*path}", any(transport::smart_http::git_request))
         .with_state(state.clone());
     let address = std::env::var("MARL_GIT_LISTEN").unwrap_or_else(|_| "127.0.0.1:42619".into());
     let listener = tokio::net::TcpListener::bind(&address)
@@ -180,7 +179,7 @@ async fn main() -> Result<()> {
             .context("serve Git gateway")
     };
     if let Some(ssh_address) = ssh_address {
-        tokio::try_join!(http, ssh::serve(state, ssh_address))?;
+        tokio::try_join!(http, transport::ssh::serve(state, ssh_address))?;
     } else {
         http.await?;
     }

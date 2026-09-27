@@ -4,7 +4,7 @@
   import Check from 'lucide-svelte/icons/check';
   import Copy from 'lucide-svelte/icons/copy';
   import GitBranch from 'lucide-svelte/icons/git-branch';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
 
   let { name, defaultBranch, cloneUrl, sshCloneUrl, canPush }: { name: string; defaultBranch: string; cloneUrl: string; sshCloneUrl: string | null; canPush: boolean } = $props();
   let protocol = $state<'https' | 'ssh'>('https');

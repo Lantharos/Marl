@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   let { value, personal = false, onChange } = $props<{ value: string; personal?: boolean; onChange: (value: string) => void }>();
   const views = $derived(personal ? ['all', 'unanswered', 'following', 'unread'] : ['all', 'unanswered']);
 </script>

@@ -2,9 +2,9 @@
 
 Marl is a focused code-hosting platform for repositories, issues, pulls, and self-hosted CI.
 
-This repository is undergoing a ground-up rebuild. The current product contract lives in
-[`docs/product.md`](docs/product.md), and the implementation boundaries live in
-[`docs/architecture.md`](docs/architecture.md).
+The product contract lives in [`docs/product.md`](docs/product.md), and the implementation
+boundaries live in [`docs/architecture.md`](docs/architecture.md). Plans and their economics are
+proposed in [`docs/launch-plans.md`](docs/launch-plans.md).
 
 Runner registration, repository workflows, service installation, labels, logs, and
 artifacts are documented in [`docs/runners.md`](docs/runners.md).
@@ -19,7 +19,7 @@ Production resources, routes, secrets, and deployment order are documented in
 
 Install JavaScript dependencies once:
 
-```powershell
+```sh
 bun install
 ```
 
@@ -34,7 +34,7 @@ Production authentication email is sent directly through Cloudflare Email Servic
 
 Start the web application, API, and local Git gateway together:
 
-```powershell
+```sh
 bun dev
 ```
 
@@ -52,7 +52,7 @@ others are stopped as well so a partial Marl stack is not left running.
 
 Or run a smaller surface:
 
-```powershell
+```sh
 bun dev:web
 bun dev:api
 bun dev:git
@@ -74,7 +74,7 @@ to build and validate the container image as well.
 
 Before considering a milestone complete:
 
-```powershell
+```sh
 bun check
 bun run build
 bun run test
@@ -83,7 +83,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Run the isolated dogfood qualification after Docker Engine is available:
 
-```powershell
+```sh
 bun qualify
 ```
 

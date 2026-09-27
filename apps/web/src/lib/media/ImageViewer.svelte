@@ -1,7 +1,7 @@
 <script lang="ts">
   import X from 'lucide-svelte/icons/x';
   import ExternalLink from 'lucide-svelte/icons/external-link';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
 
   let { src, alt, onClose } = $props<{ src: string; alt: string; onClose: () => void }>();
   const titleId = $props.id();

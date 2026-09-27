@@ -1,8 +1,8 @@
 <script lang="ts">
   import sanitizeHtml from 'sanitize-html';
-  import Button from '$lib/components/Button.svelte';
-  import MarkdownBody from '$lib/components/MarkdownBody.svelte';
-  import Modal from '$lib/components/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
   import { renderMarkdown, type MarkdownContext } from '$lib/markdown';
 
   let { body, title, context } = $props<{ body: string; title: string; context: MarkdownContext }>();

@@ -1,6 +1,6 @@
 <script lang="ts">
   import RefreshCw from 'lucide-svelte/icons/refresh-cw';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import ErrorPage from './ErrorPage.svelte';
 </script>
 

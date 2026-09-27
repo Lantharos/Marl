@@ -1,7 +1,7 @@
 import type { InboxItem, RepositorySummary, RunSummary } from '@marl/contracts';
 import { error, redirect } from '@sveltejs/kit';
 import { apiWith, MarlApiError } from '$lib/api';
-import { isPublicRepositoryPath } from '$lib/repository-route';
+import { isPublicRepositoryPath } from '$lib/repositories/repository-route';
 import { cachedShell, clearShellCache, rememberShell, type ShellData, type ShellUser } from '$lib/shell-cache';
 import type { LayoutLoad } from './$types';
 

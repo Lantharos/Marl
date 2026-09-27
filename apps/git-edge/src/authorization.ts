@@ -1,4 +1,4 @@
-import { readBoundedJson } from './bounded-body';
+import { readBoundedJson } from './push/bounded-body';
 import type { GitEdgeEnv } from './env';
 
 export type GitAuthorization = {

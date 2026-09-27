@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Archive from 'lucide-svelte/icons/archive';
   import Check from 'lucide-svelte/icons/check';
@@ -13,20 +13,20 @@
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/Button.svelte';
-  import ImageUploadButton from '$lib/components/ImageUploadButton.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import RepositoryIcon from '$lib/components/RepositoryIcon.svelte';
-  import Select from '$lib/components/Select.svelte';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repository-name';
+  import Button from '$lib/components/controls/Button.svelte';
+  import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
+  import Select from '$lib/components/controls/Select.svelte';
+  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
   import type { PageData } from './$types';
 
   type Organization = { slug: string; name: string };
   type BranchOption = { name: string };
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner ?? '');
-  const repo = $derived($page.params.repo ?? '');
+  const owner = $derived(page.params.owner ?? '');
+  const repo = $derived(page.params.repo ?? '');
   let description = $state(untrack(() => data.repository.description));
   let savedDescription = $state(untrack(() => data.repository.description));
   let iconUrl = $state<string | null>(untrack(() => data.repository.iconUrl));
@@ -36,8 +36,8 @@
   let nextVisibility = $state(untrack(() => data.repository.visibility));
   let defaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
   let nextDefaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
-  let newName = $state($page.params.repo ?? '');
-  let destination = $state(untrack(() => data.organizations.find((organization: Organization) => organization.slug !== ($page.params.owner ?? ''))?.slug ?? ($page.params.owner ?? '')));
+  let newName = $state(page.params.repo ?? '');
+  let destination = $state(untrack(() => data.organizations.find((organization: Organization) => organization.slug !== (page.params.owner ?? ''))?.slug ?? (page.params.owner ?? '')));
   let deleteConfirmation = $state('');
   let archived = $state(untrack(() => Boolean(data.repository.archivedAt)));
   let upstream = $state(untrack(() => data.repository.upstream));

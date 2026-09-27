@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import type { RunDetail, RunJob } from '@marl/contracts';
@@ -14,15 +14,15 @@
   import Square from 'lucide-svelte/icons/square';
   import Terminal from 'lucide-svelte/icons/terminal';
   import { api, apiTextCursorAll, MarlApiError } from '$lib/api';
-  import Time from '$lib/components/Time.svelte';
-  import Button from '$lib/components/Button.svelte';
+  import Time from '$lib/components/page/Time.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner);
-  const repo = $derived($page.params.repo);
-  const number = $derived(Number($page.params.number));
+  const owner = $derived(page.params.owner);
+  const repo = $derived(page.params.repo);
+  const number = $derived(Number(page.params.number));
   let run = $derived<RunDetail>(data.run);
   let selected = $derived(data.selected);
   let logs = $derived(data.logs);

@@ -6,10 +6,10 @@
   import ProfileActivity from '$lib/components/profile/ProfileActivity.svelte';
   import ProfileRepositoryList from '$lib/components/profile/ProfileRepositoryList.svelte';
   import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
-  import OrganizationAvatar from '$lib/components/OrganizationAvatar.svelte';
-  import UserAvatar from '$lib/components/UserAvatar.svelte';
-  import LinkButton from '$lib/components/LinkButton.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import OrganizationAvatar from '$lib/components/identity/OrganizationAvatar.svelte';
+  import UserAvatar from '$lib/components/identity/UserAvatar.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import Seo from '$lib/components/page/Seo.svelte';
   import { isoTimestamp } from '$lib/time';
   import type { PageData } from './$types';
 

@@ -2,9 +2,9 @@
   import { goto } from '$app/navigation';
   import { onDestroy, untrack } from 'svelte';
   import type { IssueSummary } from '@marl/contracts';
-  import Button from '$lib/components/Button.svelte';
-  import FilterBar from '$lib/components/FilterBar.svelte';
-  import PageHeader from '$lib/components/PageHeader.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
+  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import PageHeader from '$lib/components/page/PageHeader.svelte';
   import IssueList from '$lib/issues/IssueList.svelte';
   import IssueViews from '$lib/issues/IssueViews.svelte';
   import { api, MarlApiError } from '$lib/api';

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { WorkflowDetail, WorkflowTrigger } from '@marl/contracts';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import CircleAlert from 'lucide-svelte/icons/circle-alert';
   import CircleCheck from 'lucide-svelte/icons/circle-check';
@@ -13,16 +13,16 @@
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Timer from 'lucide-svelte/icons/timer';
   import Zap from 'lucide-svelte/icons/zap';
-  import BackLink from '$lib/components/BackLink.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import Button from '$lib/components/Button.svelte';
+  import BackLink from '$lib/components/page/BackLink.svelte';
+  import Modal from '$lib/components/controls/Modal.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import { api, MarlApiError } from '$lib/api';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const owner = $derived($page.params.owner);
-  const repo = $derived($page.params.repo);
+  const owner = $derived(page.params.owner);
+  const repo = $derived(page.params.repo);
   let workflow = $derived<WorkflowDetail>(data.workflow);
   let dispatchOpen = $state(false);
   let busy = $state(false);

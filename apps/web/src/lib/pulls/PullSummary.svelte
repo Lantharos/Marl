@@ -4,11 +4,11 @@
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ArrowRight from 'lucide-svelte/icons/arrow-right';
   import Pencil from 'lucide-svelte/icons/pencil';
-  import Button from '$lib/components/Button.svelte';
+  import Button from '$lib/components/controls/Button.svelte';
   import PullBrief from './PullBrief.svelte';
-  import PullMetadata from '$lib/components/PullMetadata.svelte';
-  import UserProfileLink from '$lib/components/UserProfileLink.svelte';
-  import WorkItemLinks from '$lib/components/WorkItemLinks.svelte';
+  import PullMetadata from '$lib/pulls/PullMetadata.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
+  import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
   import type { MarkdownContext } from '$lib/markdown';
   import { pullDetailSignal } from './pull-signal';
 

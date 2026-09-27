@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import { api, MarlApiError } from '$lib/api';
-  import ImageUploadButton from '$lib/components/ImageUploadButton.svelte';
-  import OrganizationAvatar from '$lib/components/OrganizationAvatar.svelte';
+  import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
+  import OrganizationAvatar from '$lib/components/identity/OrganizationAvatar.svelte';
   import OrganizationSettingsShell from '$lib/components/settings/OrganizationSettingsShell.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
   import type { PageData } from './$types';
 
   let { data } = $props<{ data: PageData }>();
-  const slug = $derived($page.params.slug ?? '');
+  const slug = $derived(page.params.slug ?? '');
   const canEdit = $derived(data.viewerRole === 'owner');
   let name = $state(untrack(() => data.organization.name as string));
   let description = $state(untrack(() => data.organization.description as string ?? ''));
