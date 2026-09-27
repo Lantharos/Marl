@@ -34,3 +34,15 @@ export interface RepositoryTag {
   targetCommitId: string;
   annotated: boolean;
 }
+
+export interface RepositoryImport {
+  id: Identifier;
+  source: string;
+  status: 'running' | 'completed' | 'failed';
+  step: 'git' | 'labels' | 'pulls' | 'issues' | 'comments' | 'releases' | 'finished';
+  stats: Partial<Record<'labels' | 'pulls' | 'issues' | 'comments' | 'releases', number>>;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  repository: { owner: string; name: string };
+}

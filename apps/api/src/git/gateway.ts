@@ -14,6 +14,15 @@ export interface GitGatewayRequestMap {
     format: 'zip' | 'tar.gz';
   };
   '/_marl/bundle': { owner: string; repository: string };
+  '/_marl/import': {
+    owner: string;
+    repository: string;
+    repositoryId: string;
+    actorId: string;
+    source: string;
+    token?: string;
+    defaultBranch: string;
+  };
   '/_marl/blob': { owner: string; repository: string; objectId: string };
   '/_marl/tree': {
     owner: string;

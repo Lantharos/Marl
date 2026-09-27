@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Import from '@lucide/svelte/icons/import';
   import BookOpen from '@lucide/svelte/icons/book-open';
   import Building2 from '@lucide/svelte/icons/building-complex';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -13,6 +14,7 @@
   let { open = $bindable(false) }: { open?: boolean } = $props();
   const items = [
     { href: '/repositories/new', label: 'Repository', icon: BookOpen },
+    { href: '/import', label: 'Import from GitHub', icon: Import },
     { href: '/issues/new', label: 'Issue', icon: CircleDot },
     { href: '/pulls/new', label: 'Pull', icon: GitPullRequest },
     { href: '/organizations?new=1', label: 'Organization', icon: Building2 },

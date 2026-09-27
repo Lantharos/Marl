@@ -33,6 +33,12 @@ export async function mergePull(
   if (!permission.allowed) return problem(403, 'merge_not_allowed', 'You do not have permission to merge this pull.');
   if (pull.state === 'merged' && pull.mergedCommitId) return json({ merged: true, commitId: pull.mergedCommitId });
   if (pull.state !== 'open') return problem(409, 'pull_request_not_open', 'Pull request is not open.');
+  if (pull.sourceBranch.includes(':'))
+    return problem(
+      409,
+      'pull_source_unavailable',
+      'This pull was imported from a fork on GitHub. Push its branch here and open a new pull to merge it.'
+    );
   const body = await readJson(request, mergeBody);
   if (!body || body.commitId !== pull.sourceCommitId)
     return problem(409, 'pull_head_changed', 'The pull changed. Check the latest revision before merging.');

@@ -41,8 +41,14 @@
     }
   ],
   "queues": {
-    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "marl-webhooks" }],
-    "consumers": [{ "queue": "marl-webhooks", "max_batch_size": 10, "max_retries": 6 }]
+    "producers": [
+      { "binding": "WEBHOOK_QUEUE", "queue": "marl-webhooks" },
+      { "binding": "IMPORT_QUEUE", "queue": "marl-imports" }
+    ],
+    "consumers": [
+      { "queue": "marl-webhooks", "max_batch_size": 10, "max_retries": 6 },
+      { "queue": "marl-imports", "max_batch_size": 1, "max_retries": 10 }
+    ]
   },
   "r2_buckets": [
     {

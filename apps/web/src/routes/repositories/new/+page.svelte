@@ -9,30 +9,13 @@
   import Notice from '$lib/components/feedback/Notice.svelte';
   import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
   import { api, MarlApiError } from '$lib/api';
+  import { ownerOptions } from '$lib/repositories/owner-options';
   import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
   import type { PageData } from './$types';
-  type Organization = { slug: string; name: string; kind: 'personal' | 'team'; role: 'owner' | 'admin' | 'member' };
   let { data }: { data: PageData } = $props();
-  const organizations = $derived(
-    (data.organizations as Organization[]).toSorted(
-      (left, right) =>
-        Number(right.kind === 'personal') - Number(left.kind === 'personal') || left.name.localeCompare(right.name)
-    )
-  );
-  const ownerOptions = $derived(
-    organizations.map((organization) => ({
-      value: organization.slug,
-      label: organization.kind === 'personal' ? (data.shellUser?.displayName ?? organization.name) : organization.name,
-      description:
-        organization.kind === 'personal'
-          ? `@${organization.slug} · Personal account`
-          : `@${organization.slug} · Organization`
-    }))
-  );
+  const options = $derived(ownerOptions(data.organizations, data.shellUser?.displayName));
   let owner = $state(
-    untrack(
-      () => (data.organizations as Organization[]).find((organization) => organization.kind === 'personal')?.slug ?? ''
-    )
+    untrack(() => data.organizations.find((organization) => organization.kind === 'personal')?.slug ?? '')
   );
   let name = $state('');
   let visibility = $state<'private' | 'public'>('private');
@@ -60,7 +43,13 @@
 </script>
 
 <svelte:head><title>New repository · Marl</title></svelte:head>
-<FormShell title="Create a repository" backHref="/repositories" backLabel="Repositories">
+<FormShell
+  title="Create a repository"
+  description="Moving a project from GitHub? Import it with its history, issues, pulls, and releases instead."
+  backHref="/repositories"
+  backLabel="Repositories"
+>
+  <LinkButton size="small" class="mb-6" href="/import">Import from GitHub</LinkButton>
   <form
     class="grid gap-6"
     onsubmit={(event) => {
@@ -69,7 +58,7 @@
     }}
   >
     <div class="grid gap-5 sm:grid-cols-2">
-      <Field label="Owner"><Select bind:value={owner} ariaLabel="Repository owner" options={ownerOptions} /></Field>
+      <Field label="Owner"><Select bind:value={owner} ariaLabel="Repository owner" {options} /></Field>
       <Field label="Repository name">
         <input
           class="field min-h-11"

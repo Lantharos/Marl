@@ -332,3 +332,12 @@ export const agentUpdateBody = strictObject({
   displayName: pipe(string(), minLength(1), maxLength(80)),
   description: pipe(string(), maxLength(280))
 });
+
+export const importBody = strictObject({
+  source: pipe(string(), minLength(3), maxLength(300)),
+  token: optional(pipe(string(), maxLength(300))),
+  owner: pipe(string(), minLength(1), maxLength(100)),
+  name: optional(pipe(string(), maxLength(100))),
+  visibility: optional(picklist(['public', 'private'])),
+  include: strictObject({ issues: boolean(), pulls: boolean(), releases: boolean() })
+});

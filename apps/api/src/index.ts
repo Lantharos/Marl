@@ -9,6 +9,8 @@ import { homeRoutes } from './home/routes';
 import { json, problem } from './http/http';
 import { matchRoute, route, type RequestContext } from './http/router';
 import { identityRoutes } from './identity/routes';
+import { runImports } from './imports/queue';
+import { importRoutes } from './imports/routes';
 import { issueRoutes } from './issues/routes';
 import { moderationRoutes } from './moderation/routes';
 import { sendNotificationEmails } from './notifications/digest';
@@ -35,7 +37,8 @@ const routes = [
   ...ciRoutes,
   ...moderationRoutes,
   ...notificationRoutes,
-  ...webhookRoutes
+  ...webhookRoutes,
+  ...importRoutes
 ];
 
 const notificationCron = '*/10 * * * *';
@@ -89,7 +92,10 @@ export default {
     else await purgeDeletedRepositories(env);
   },
   fetch: handle,
-  queue: deliverWebhooks
+  async queue(batch: MessageBatch, env: Env) {
+    if (batch.queue === 'marl-imports') await runImports(batch as MessageBatch<{ importId: string }>, env);
+    else await deliverWebhooks(batch as MessageBatch<{ deliveryId: string }>, env);
+  }
 };
 
 export { PullRoom } from './pulls/realtime/room';

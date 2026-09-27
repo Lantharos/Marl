@@ -2,6 +2,7 @@ export * from './auth';
 export * from './automation';
 export * from './git';
 export * from './identity';
+export * from './imports';
 export * from './issues';
 export * from './moderation';
 export * from './notifications';

@@ -476,6 +476,31 @@ CREATE UNIQUE INDEX `users_by_auth_user` ON `users` (`auth_user_id`) WHERE auth_
 CREATE UNIQUE INDEX `users_handle_unique` ON `users` ("handle" COLLATE NOCASE);--> statement-breakpoint
 CREATE INDEX `users_by_display_name` ON `users` ("display_name" COLLATE NOCASE);--> statement-breakpoint
 CREATE INDEX `users_by_operator` ON `users` (`operator_organization_id`) WHERE operator_organization_id IS NOT NULL;--> statement-breakpoint
+CREATE TABLE `repository_imports` (
+	`id` text PRIMARY KEY NOT NULL,
+	`repository_id` text NOT NULL,
+	`requested_by` text NOT NULL,
+	`source` text NOT NULL,
+	`default_branch` text NOT NULL,
+	`token_ciphertext` text,
+	`token_nonce` text,
+	`github_login` text,
+	`options_json` text NOT NULL,
+	`step` text DEFAULT 'git' NOT NULL,
+	`cursor` integer DEFAULT 1 NOT NULL,
+	`status` text DEFAULT 'running' NOT NULL,
+	`stats_json` text DEFAULT '{}' NOT NULL,
+	`error` text,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`completed_at` text,
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`requested_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "repository_imports_status" CHECK(status IN ('running','completed','failed'))
+);
+--> statement-breakpoint
+CREATE INDEX `repository_imports_by_requester` ON `repository_imports` (`requested_by`,"created_at" COLLATE BINARY DESC);--> statement-breakpoint
+CREATE UNIQUE INDEX `repository_imports_running` ON `repository_imports` (`repository_id`) WHERE status = 'running';--> statement-breakpoint
 CREATE TABLE `content_mentions` (
 	`user_id` text NOT NULL,
 	`actor_id` text NOT NULL,

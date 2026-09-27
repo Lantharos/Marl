@@ -74,15 +74,19 @@ export async function listShellRepositories(env: Env, principal: Principal): Pro
   return result.results.map(({ organizationId: _, defaultBranch: __, ...repository }) => repository);
 }
 
-export async function createRepository(request: Request, env: Env, principal: Principal): Promise<Response> {
-  if (principal.authType === 'token')
-    return problem(403, 'browser_session_required', 'Repositories must be created from a browser session.');
-  const body = await readJson(request, createRepositoryBody);
-  if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
-  const { owner, name, description = '', visibility = 'private' } = body;
+export type NewRepository = {
+  owner: string;
+  name: string;
+  description: string;
+  visibility: 'public' | 'private';
+  defaultLabels: boolean;
+};
+
+export async function insertRepository(env: Env, principal: Principal, repository: NewRepository) {
+  const { owner, name, description, visibility } = repository;
   if (!validIdentitySlug(owner) || !validSlug(name))
     return problem(422, 'invalid_repository_name', 'Owner and repository names must be URL-safe slugs.');
-  if (typeof description !== 'string' || description.length > 280 || !validVisibility(visibility))
+  if (description.length > 280 || !validVisibility(visibility))
     return problem(422, 'invalid_repository', 'Description or visibility is invalid.');
   const organization = await env.DB.prepare(
     `SELECT organizations.id FROM organizations JOIN organization_members ON organization_members.organization_id = organizations.id WHERE organizations.slug = ? COLLATE NOCASE AND organization_members.user_id = ? AND organization_members.role IN ('owner','admin')`
@@ -91,12 +95,14 @@ export async function createRepository(request: Request, env: Env, principal: Pr
     .first<{ id: string }>();
   if (!organization) return problem(403, 'owner_required', 'You cannot create repositories for this owner.');
   const id = identifier('repo');
-  const defaults = [
-    ['bug', '#e16f73', 'Something is not working'],
-    ['enhancement', '#8c7ad8', 'New or improved functionality'],
-    ['documentation', '#68a7b8', 'Documentation changes'],
-    ['needs review', '#d3a45f', 'Ready for reviewer attention']
-  ];
+  const defaults = repository.defaultLabels
+    ? [
+        ['bug', '#e16f73', 'Something is not working'],
+        ['enhancement', '#8c7ad8', 'New or improved functionality'],
+        ['documentation', '#68a7b8', 'Documentation changes'],
+        ['needs review', '#d3a45f', 'Ready for reviewer attention']
+      ]
+    : [];
   try {
     await env.DB.batch([
       env.DB.prepare(
@@ -122,10 +128,23 @@ export async function createRepository(request: Request, env: Env, principal: Pr
       return problem(409, 'repository_exists', 'A repository with this name already exists.');
     throw error;
   }
+  return { id, organizationId: organization.id };
+}
+
+export async function createRepository(request: Request, env: Env, principal: Principal): Promise<Response> {
+  if (principal.authType === 'token')
+    return problem(403, 'browser_session_required', 'Repositories must be created from a browser session.');
+  const body = await readJson(request, createRepositoryBody);
+  if (!body) return problem(400, 'invalid_json', 'Expected a JSON request body.');
+  const { owner, name, description = '', visibility = 'private' } = body;
+  if (typeof description !== 'string' || !validVisibility(visibility))
+    return problem(422, 'invalid_repository', 'Description or visibility is invalid.');
+  const created = await insertRepository(env, principal, { owner, name, description, visibility, defaultLabels: true });
+  if (created instanceof Response) return created;
   return json(
     {
       repository: {
-        id,
+        id: created.id,
         owner,
         name,
         description,

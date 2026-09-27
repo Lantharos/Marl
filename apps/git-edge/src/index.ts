@@ -28,6 +28,7 @@ const INTERNAL_REPOSITORY_ROUTES = new Set([
   '/_marl/blob',
   '/_marl/commit',
   '/_marl/compare',
+  '/_marl/import',
   '/_marl/merge',
   '/_marl/patch',
   '/_marl/pulls/pin',
@@ -170,6 +171,7 @@ async function repositoryRoute(request: Request): Promise<RepositoryRoute | null
       repository: body.repository,
       writes:
         url.pathname === '/_marl/branches/delete' ||
+        url.pathname === '/_marl/import' ||
         url.pathname === '/_marl/merge' ||
         url.pathname === '/_marl/pulls/pin' ||
         url.pathname === '/_marl/tags/create',
