@@ -1,6 +1,6 @@
 {
-  "id": "7c0b3867-0b6c-4554-9ec2-9758769f8ebc",
-  "prevId": "02be6761-40ca-45ec-9935-44e2cd450421",
+  "id": "44ed06cb-c18b-4269-8658-8ac6d65c99d4",
+  "prevId": "fddd30cd-9303-43b3-a8ec-c2b0f89bf0ad",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -4922,6 +4922,146 @@
         "abuse_reports_state": {
           "name": "abuse_reports_state",
           "value": "state IN ('open','actioned','dismissed')"
+        }
+      }
+    },
+    "notification_settings": {
+      "name": "notification_settings",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email_mode": {
+          "name": "email_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'immediate'"
+        },
+        "reasons_json": {
+          "name": "reasons_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[\"mention\",\"assignment\",\"participating\",\"authored\",\"failure\"]'"
+        },
+        "last_emailed_at": {
+          "name": "last_emailed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "notification_settings_due": {
+          "name": "notification_settings_due",
+          "columns": [
+            "email_mode",
+            "last_emailed_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "notification_settings_user_id_users_id_fk": {
+          "name": "notification_settings_user_id_users_id_fk",
+          "tableFrom": "notification_settings",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "notification_settings_mode": {
+          "name": "notification_settings_mode",
+          "value": "email_mode IN ('immediate','daily','off')"
+        }
+      }
+    },
+    "repository_notification_levels": {
+      "name": "repository_notification_levels",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "repository_id": {
+          "name": "repository_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "repository_notification_levels_user_id_users_id_fk": {
+          "name": "repository_notification_levels_user_id_users_id_fk",
+          "tableFrom": "repository_notification_levels",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "repository_notification_levels_repository_id_repositories_id_fk": {
+          "name": "repository_notification_levels_repository_id_repositories_id_fk",
+          "tableFrom": "repository_notification_levels",
+          "columnsFrom": [
+            "repository_id"
+          ],
+          "tableTo": "repositories",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "repository_notification_levels_user_id_repository_id_pk": {
+          "columns": [
+            "user_id",
+            "repository_id"
+          ],
+          "name": "repository_notification_levels_user_id_repository_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "repository_notification_levels_level": {
+          "name": "repository_notification_levels_level",
+          "value": "level IN ('mentions','ignore')"
         }
       }
     },

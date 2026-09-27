@@ -290,3 +290,12 @@ export const reportResolutionBody = strictObject({
   action: picklist(['dismiss', 'remove_content', 'disable_repository', 'suspend_user']),
   note: pipe(string(), maxLength(1_000))
 });
+
+export const notificationPreferencesBody = strictObject({
+  mode: optional(picklist(['immediate', 'daily', 'off'])),
+  reasons: optional(
+    pipe(array(picklist(['mention', 'assignment', 'participating', 'authored', 'failure'])), maxLength(5))
+  )
+});
+
+export const repositoryNotificationBody = strictObject({ level: picklist(['all', 'mentions', 'ignore']) });

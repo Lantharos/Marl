@@ -11,6 +11,8 @@ import { matchRoute, route, type RequestContext } from './http/router';
 import { identityRoutes } from './identity/routes';
 import { issueRoutes } from './issues/routes';
 import { moderationRoutes } from './moderation/routes';
+import { sendNotificationEmails } from './notifications/digest';
+import { notificationRoutes } from './notifications/routes';
 import { pullRoutes } from './pulls/routes';
 import { releaseRoutes } from './releases/routes';
 import { purgeDeletedRepositories } from './repositories/lifecycle';
@@ -29,8 +31,11 @@ const routes = [
   ...pullRoutes,
   ...releaseRoutes,
   ...ciRoutes,
-  ...moderationRoutes
+  ...moderationRoutes,
+  ...notificationRoutes
 ];
+
+const notificationCron = '*/10 * * * *';
 
 const notFound = () => problem(404, 'not_found', 'The requested Marl API route does not exist.');
 
@@ -76,8 +81,9 @@ async function handle(request: Request, env: Env, execution: ExecutionContext): 
 }
 
 export default {
-  async scheduled(_controller: ScheduledController, env: Env) {
-    await purgeDeletedRepositories(env);
+  async scheduled(controller: ScheduledController, env: Env) {
+    if (controller.cron === notificationCron) await sendNotificationEmails(env);
+    else await purgeDeletedRepositories(env);
   },
   fetch: handle
 };

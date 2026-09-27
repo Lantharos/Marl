@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import DatabaseBackup from '@lucide/svelte/icons/database-backup';
   import KeyRound from '@lucide/svelte/icons/key-round';
+  import Bell from '@lucide/svelte/icons/bell';
   import Mail from '@lucide/svelte/icons/mail';
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
   import TerminalSquare from '@lucide/svelte/icons/square-terminal';
@@ -25,6 +26,12 @@
       label: 'Emails',
       icon: Mail,
       active: path.startsWith('/settings/account/emails')
+    },
+    {
+      href: '/settings/account/notifications',
+      label: 'Notifications',
+      icon: Bell,
+      active: path === '/settings/account/notifications'
     },
     {
       href: '/settings/account',

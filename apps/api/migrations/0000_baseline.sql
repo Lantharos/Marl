@@ -674,6 +674,26 @@ CREATE TABLE `abuse_reports` (
 --> statement-breakpoint
 CREATE INDEX `abuse_reports_by_state` ON `abuse_reports` (`state`,`created_at`);--> statement-breakpoint
 CREATE UNIQUE INDEX `abuse_reports_open_by_reporter` ON `abuse_reports` (`reporter_id`,`subject_type`,`subject_id`) WHERE state = 'open';--> statement-breakpoint
+CREATE TABLE `notification_settings` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`email_mode` text DEFAULT 'immediate' NOT NULL,
+	`reasons_json` text DEFAULT '["mention","assignment","participating","authored","failure"]' NOT NULL,
+	`last_emailed_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "notification_settings_mode" CHECK(email_mode IN ('immediate','daily','off'))
+);
+--> statement-breakpoint
+CREATE INDEX `notification_settings_due` ON `notification_settings` (`email_mode`,`last_emailed_at`);--> statement-breakpoint
+CREATE TABLE `repository_notification_levels` (
+	`user_id` text NOT NULL,
+	`repository_id` text NOT NULL,
+	`level` text NOT NULL,
+	PRIMARY KEY(`user_id`, `repository_id`),
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "repository_notification_levels_level" CHECK(level IN ('mentions','ignore'))
+);
+--> statement-breakpoint
 CREATE TABLE `organization_invitations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,

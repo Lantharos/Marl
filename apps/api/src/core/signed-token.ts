@@ -45,10 +45,17 @@ export async function signToken(env: Env, purpose: string, subject: string, life
 export async function verifyToken(env: Env, purpose: string, token: string | null) {
   const [payload, signature] = token?.split('.') ?? [];
   if (!payload || !signature) return null;
-  const valid = await crypto.subtle
-    .verify('HMAC', await hmacKey(signingSecret(env)), fromBase64Url(signature), encoder.encode(payload))
-    .catch(() => false);
-  if (!valid) return null;
-  const claims = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as { p: string; s: string; e: number };
-  return claims.p === purpose && claims.e > Date.now() / 1000 ? claims.s : null;
+  try {
+    const valid = await crypto.subtle.verify(
+      'HMAC',
+      await hmacKey(signingSecret(env)),
+      fromBase64Url(signature),
+      encoder.encode(payload)
+    );
+    if (!valid) return null;
+    const claims = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as { p: string; s: string; e: number };
+    return claims.p === purpose && claims.e > Date.now() / 1000 ? claims.s : null;
+  } catch {
+    return null;
+  }
 }

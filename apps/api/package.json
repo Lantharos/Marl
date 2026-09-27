@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --ip 127.0.0.1 --port 42618 --inspector-port 42620",
+    "dev": "wrangler dev --ip 127.0.0.1 --port 42618 --inspector-port 42620 --test-scheduled",
     "types": "wrangler types worker-configuration.d.ts --include-runtime=false --strict-vars=false --env-interface CloudflareBindings",
     "types:check": "bun run types --check",
     "check": "bun run types:check && tsc --noEmit",

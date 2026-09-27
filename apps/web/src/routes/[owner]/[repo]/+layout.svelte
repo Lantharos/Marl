@@ -19,6 +19,7 @@
   import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
   import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
   import CloneMenu from '$lib/repositories/CloneMenu.svelte';
+  import RepositoryNotifications from '$lib/repositories/RepositoryNotifications.svelte';
   import ForkDialog from '$lib/repositories/ForkDialog.svelte';
   import RepositoryTabs from '$lib/repositories/RepositoryTabs.svelte';
   import type { LayoutData } from './$types';
@@ -181,6 +182,7 @@
             >{/if}</Button
         >
       {/if}
+      {#if data.shellUser}<RepositoryNotifications {owner} repository={repo} />{/if}
       {#if repository}<CloneMenu
           cloneUrl={repository.cloneUrl}
           sshCloneUrl={repository.sshCloneUrl}

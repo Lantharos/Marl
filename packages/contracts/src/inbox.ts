@@ -37,3 +37,13 @@ export interface DashboardData {
   onboarding: OnboardingProgress[] | null;
   runs: RunSummary[];
 }
+
+export type EmailNotificationMode = 'immediate' | 'daily' | 'off';
+export type RepositoryNotificationLevel = 'all' | 'mentions' | 'ignore';
+
+export interface NotificationPreferences {
+  email: string | null;
+  mode: EmailNotificationMode;
+  reasons: InboxReason[];
+  repositories: Array<{ owner: string; name: string; level: Exclude<RepositoryNotificationLevel, 'all'> }>;
+}

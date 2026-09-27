@@ -110,7 +110,7 @@ function inboxCounts(items: InboxItem[]) {
   };
 }
 
-async function inboxItems(env: Env, principal: Principal): Promise<InboxItem[]> {
+export async function inboxItems(env: Env, principal: Principal): Promise<InboxItem[]> {
   if (principal.authType === 'token') return [];
   const candidates = await candidateItems(env, principal);
   const states = await itemStates(env, principal.id, [...candidates.keys()]);
