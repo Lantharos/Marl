@@ -10,6 +10,7 @@ import { createRepositoryBody } from '../http/request-schemas';
 import {
   authorizeRepository,
   authorizeRepositoryId,
+  lookupRepository,
   repositoryListFilter,
   repositoryPermissions,
   repositoryReadFilter
@@ -172,6 +173,13 @@ export async function readRepositoryIcon(env: Env, repositoryId: string, file: s
   return readImageAsset(env, `repository-icons/${repositoryId}/${file}`);
 }
 
+async function repositoryUnavailable(env: Env, principal: Principal | null, owner: string, name: string) {
+  const repository = await lookupRepository(env, owner, name, principal);
+  if (repository?.disabledAt && (repository.visibility === 'public' || repository.role))
+    return problem(451, 'repository_disabled', repository.disabledReason || 'This repository has been disabled.');
+  return problem(404, 'repository_not_found', 'Repository not found.');
+}
+
 export async function getRepository(
   env: Env,
   principal: Principal | null,
@@ -179,7 +187,7 @@ export async function getRepository(
   name: string
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
-  if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
+  if (!repo) return repositoryUnavailable(env, principal, owner, name);
   const sshBase =
     env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
   const forkAccess = repositoryReadFilter(principal, 'forks');

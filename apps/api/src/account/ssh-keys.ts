@@ -97,7 +97,7 @@ export async function authorizeSsh(request: Request, env: Env) {
   const service = url.searchParams.get('service');
   if (!fingerprint) return problem(422, 'invalid_ssh_authorization', 'SSH fingerprint is required.');
   const user = await env.DB.prepare(
-    `SELECT users.id,users.handle,users.display_name AS displayName,users.email,users.avatar_url AS avatarUrl,ssh_keys.id AS keyId FROM ssh_keys JOIN users ON users.id=ssh_keys.user_id WHERE ssh_keys.fingerprint=?`
+    `SELECT users.id,users.handle,users.display_name AS displayName,users.email,users.avatar_url AS avatarUrl,ssh_keys.id AS keyId FROM ssh_keys JOIN users ON users.id=ssh_keys.user_id WHERE ssh_keys.fingerprint=? AND users.suspended_at IS NULL`
   )
     .bind(fingerprint)
     .first<{
@@ -118,6 +118,7 @@ export async function authorizeSsh(request: Request, env: Env) {
     displayName: user.displayName,
     email: user.email,
     avatarUrl: user.avatarUrl,
+    staff: false,
     authType: 'session'
   };
   const access = await authorizeRepository(

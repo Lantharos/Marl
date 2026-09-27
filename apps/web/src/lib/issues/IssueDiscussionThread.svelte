@@ -9,6 +9,7 @@
 
   let {
     thread,
+    viewerId,
     context,
     canReply,
     canConclude,
@@ -22,6 +23,7 @@
     onSource
   }: {
     thread: DiscussionThread;
+    viewerId?: string;
     context: MarkdownContext;
     canReply: boolean;
     canConclude: boolean;
@@ -70,6 +72,7 @@
   <div class="p-4 sm:px-5 sm:py-4.5">
     <IssueDiscussionComment
       comment={thread.root.comment}
+      {viewerId}
       sequence={thread.root.sequence}
       {context}
       {canReply}
@@ -87,6 +90,7 @@
       {#each thread.replies as reply (reply.comment.id)}<div class="min-w-0 rounded-lg bg-surface-muted p-3.5 sm:p-4">
           <IssueDiscussionComment
             comment={reply.comment}
+            {viewerId}
             sequence={reply.sequence}
             replyTarget={reply.comment.replyToId ? comments.get(reply.comment.replyToId) : undefined}
             {context}

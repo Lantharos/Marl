@@ -144,6 +144,10 @@ async fn main() -> Result<()> {
             axum::routing::post(browse::archive::repository_archive),
         )
         .route(
+            "/_marl/bundle",
+            axum::routing::post(browse::bundle::repository_bundle),
+        )
+        .route(
             "/_marl/tree",
             axum::routing::post(browse::metadata::read_tree),
         )

@@ -276,3 +276,17 @@ export const markdownPreviewBody = strictObject({
 });
 
 export const legalAcceptanceBody = strictObject({ version: shortString });
+
+export const accountDeletionBody = strictObject({ confirmation: shortString });
+
+export const abuseReportBody = strictObject({
+  subjectType: picklist(['repository', 'issue', 'pull', 'issue_comment', 'pull_comment', 'review_comment', 'user']),
+  subjectId: identifier,
+  reason: picklist(['spam', 'malware', 'harassment', 'copyright', 'private_information', 'illegal', 'other']),
+  details: pipe(string(), maxLength(5_000))
+});
+
+export const reportResolutionBody = strictObject({
+  action: picklist(['dismiss', 'remove_content', 'disable_repository', 'suspend_user']),
+  note: pipe(string(), maxLength(1_000))
+});

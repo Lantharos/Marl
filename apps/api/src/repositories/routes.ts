@@ -10,6 +10,7 @@ import {
 } from './access/access-api';
 import { listBranchRules, putBranchRule } from './branch-rules';
 import { deleteBranch } from './branches';
+import { downloadRepositoryBundle } from './content/bundle';
 import { renderRepositoryDocument } from './content/documents';
 import { listDeletedRepositories, restoreRepository } from './lifecycle';
 import { readRepositoryMedia, uploadRepositoryMedia } from './content/media';
@@ -132,6 +133,9 @@ export const repositoryRoutes = [
   ),
   route('POST', `${repository}/settings/restore`, 'user', ({ request, env, principal }, { owner, repo }) =>
     restoreRepository(request, env, principal, owner, repo)
+  ),
+  route('GET', `${repository}/bundle`, 'optional', ({ env, principal }, { owner, repo }) =>
+    downloadRepositoryBundle(env, principal, owner, repo)
   ),
   route('GET', `${repository}/access`, 'user', ({ env, principal }, { owner, repo }) =>
     getRepositoryAccess(env, principal, owner, repo)

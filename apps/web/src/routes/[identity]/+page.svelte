@@ -56,7 +56,7 @@
 <PublicProfileNav visible={!data.shellUser} />
 
 {#if 'profile' in identity}
-  <UserProfilePage data={identity} own={ownProfile} />
+  <UserProfilePage data={identity} own={ownProfile} signedIn={Boolean(data.shellUser)} />
 {:else}
   <OrganizationProfilePage data={identity} {canManage} />
 {/if}

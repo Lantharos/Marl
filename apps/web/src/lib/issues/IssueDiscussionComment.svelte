@@ -9,9 +9,11 @@
   import Time from '$lib/components/page/Time.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import type { MarkdownContext } from '$lib/markdown/context';
+  import { reporting } from '$lib/moderation/reporting.svelte';
 
   let {
     comment,
+    viewerId,
     sequence,
     context,
     canReply,
@@ -26,6 +28,7 @@
     onSource
   }: {
     comment: IssueComment;
+    viewerId?: string;
     sequence?: number;
     context: MarkdownContext;
     canReply: boolean;
@@ -81,6 +84,14 @@
           },
           { label: 'Delete', danger: true, onSelect: () => (deleting = true) }
         ]
+      : []),
+    ...(viewerId && viewerId !== comment.authorId
+      ? [
+          {
+            label: 'Report',
+            onSelect: () => reporting.open({ type: 'issue_comment', id: comment.id, label: 'comment' })
+          }
+        ]
       : [])
   ]);
 </script>
@@ -103,7 +114,7 @@
     >
     {#if comment.updatedAt !== comment.createdAt && !comment.deleted}<span class="text-xs text-ink-faint">edited</span
       >{/if}
-    {#if !comment.deleted}<div class="-mr-1.5">
+    {#if !comment.deleted && actions.length}<div class="-mr-1.5">
         <ActionMenu label={`Options for ${comment.authorDisplayName}’s comment`} {actions} />
       </div>{/if}
   </header>

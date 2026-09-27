@@ -462,6 +462,10 @@ CREATE TABLE `users` (
 	`website` text,
 	`signing_mode` text DEFAULT 'optional' NOT NULL,
 	`onboarding_dismissed_at` text,
+	`deleted_at` text,
+	`staff` integer DEFAULT 0 NOT NULL,
+	`suspended_at` text,
+	`suspension_reason` text,
 	CONSTRAINT "users_check_0" CHECK(signing_mode IN ('optional','vigilant','firewall'))
 );
 --> statement-breakpoint
@@ -647,6 +651,29 @@ CREATE INDEX `work_item_references_target_pull` ON `work_item_references` (`targ
 CREATE INDEX `work_item_references_target_issue` ON `work_item_references` (`target_issue_id`);--> statement-breakpoint
 CREATE INDEX `work_item_references_source_pull` ON `work_item_references` (`source_pull_id`);--> statement-breakpoint
 CREATE INDEX `work_item_references_source_issue` ON `work_item_references` (`source_issue_id`);--> statement-breakpoint
+CREATE TABLE `abuse_reports` (
+	`id` text PRIMARY KEY NOT NULL,
+	`reporter_id` text NOT NULL,
+	`subject_type` text NOT NULL,
+	`subject_id` text NOT NULL,
+	`repository_id` text,
+	`reason` text NOT NULL,
+	`details` text DEFAULT '' NOT NULL,
+	`state` text DEFAULT 'open' NOT NULL,
+	`resolution` text,
+	`resolved_by` text,
+	`resolved_at` text,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`resolved_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "abuse_reports_subject" CHECK(subject_type IN ('repository','issue','pull','issue_comment','pull_comment','review_comment','user')),
+	CONSTRAINT "abuse_reports_reason" CHECK(reason IN ('spam','malware','harassment','copyright','private_information','illegal','other')),
+	CONSTRAINT "abuse_reports_state" CHECK(state IN ('open','actioned','dismissed'))
+);
+--> statement-breakpoint
+CREATE INDEX `abuse_reports_by_state` ON `abuse_reports` (`state`,`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `abuse_reports_open_by_reporter` ON `abuse_reports` (`reporter_id`,`subject_type`,`subject_id`) WHERE state = 'open';--> statement-breakpoint
 CREATE TABLE `organization_invitations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -797,7 +824,7 @@ CREATE UNIQUE INDEX `releases_repository_id_tag_name_unique` ON `releases` (`rep
 CREATE UNIQUE INDEX `releases_source_job_id_unique` ON `releases` (`source_job_id`);--> statement-breakpoint
 CREATE TABLE `audit_events` (
 	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
+	`organization_id` text,
 	`repository_id` text,
 	`actor_id` text,
 	`actor_handle` text NOT NULL,
@@ -821,6 +848,8 @@ CREATE TABLE `repositories` (
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`archived_at` text,
+	`disabled_at` text,
+	`disabled_reason` text,
 	`deletion_scheduled_at` text,
 	`deletion_started_at` text,
 	`forked_from_repository_id` text,

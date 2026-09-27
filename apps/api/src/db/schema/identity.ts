@@ -68,7 +68,13 @@ export const users = sqliteTable(
     signingMode: text('signing_mode')
       .notNull()
       .default(sql`'optional'`),
-    onboardingDismissedAt: text('onboarding_dismissed_at')
+    onboardingDismissedAt: text('onboarding_dismissed_at'),
+    deletedAt: text('deleted_at'),
+    staff: integer('staff')
+      .notNull()
+      .default(sql`0`),
+    suspendedAt: text('suspended_at'),
+    suspensionReason: text('suspension_reason')
   },
   (table) => [
     uniqueIndex('users_by_auth_user')

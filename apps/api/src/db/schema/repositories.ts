@@ -9,7 +9,7 @@ export const auditEvents = sqliteTable(
   'audit_events',
   {
     id: text('id').primaryKey(),
-    organizationId: text('organization_id').notNull(),
+    organizationId: text('organization_id'),
     repositoryId: text('repository_id'),
     actorId: text('actor_id'),
     actorHandle: text('actor_handle').notNull(),
@@ -54,6 +54,8 @@ export const repositories = sqliteTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
     archivedAt: text('archived_at'),
+    disabledAt: text('disabled_at'),
+    disabledReason: text('disabled_reason'),
     deletionScheduledAt: text('deletion_scheduled_at'),
     deletionStartedAt: text('deletion_started_at'),
     forkedFromRepositoryId: text('forked_from_repository_id').references((): AnySQLiteColumn => repositories.id, {

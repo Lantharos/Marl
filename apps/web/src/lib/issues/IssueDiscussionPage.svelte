@@ -3,6 +3,7 @@
   import { tick } from 'svelte';
   import type { IssueComment, IssueDetail, IssueTimelineItem } from '@marl/contracts';
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
+  import Flag from '@lucide/svelte/icons/flag';
   import Bell from '@lucide/svelte/icons/bell';
   import BellOff from '@lucide/svelte/icons/bell-off';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -19,6 +20,7 @@
   import Modal from '$lib/components/overlays/Modal.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
   import Time from '$lib/components/page/Time.svelte';
+  import { reporting } from '$lib/moderation/reporting.svelte';
   import { seoExcerpt } from '$lib/seo';
   import IssueConclusion from './IssueConclusion.svelte';
   import IssueDiscussionThread from './IssueDiscussionThread.svelte';
@@ -163,6 +165,11 @@
         onclick={pageState.toggleFollowing}
         >{#if issue.participation.following}<BellOff size={14} />Following{:else}<Bell size={14} />Follow{/if}</Button
       >{/if}
+    {#if data.shellUser && !issue.canEdit}<Button
+        size="small"
+        variant="ghost"
+        onclick={() => reporting.open({ type: 'issue', id: issue.id, label: 'issue' })}><Flag size={14} />Report</Button
+      >{/if}
   </div>
 </header>
 
@@ -238,6 +245,7 @@
         {#each threads as item (item.kind === 'thread' ? item.id : item.sequence)}
           {#if item.kind === 'thread'}<IssueDiscussionThread
               thread={item}
+              viewerId={data.shellUser?.id}
               {context}
               {canReply}
               canConclude={issue.canConclude}

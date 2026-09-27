@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { ReviewThread } from '@marl/contracts';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Flag from '@lucide/svelte/icons/flag';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Reply from '@lucide/svelte/icons/reply';
   import Trash2 from '@lucide/svelte/icons/trash';
   import type { ThreadCodeLine } from '$lib/code/diff';
   import type { MarkdownContext } from '$lib/markdown/context';
+  import { reporting } from '$lib/moderation/reporting.svelte';
   import { ReviewThreadState } from '$lib/pulls/review/ReviewThreadState.svelte';
   import Button from '../../components/controls/Button.svelte';
   import DiscussionEntry from '../../components/discussion/DiscussionEntry.svelte';
@@ -215,6 +217,15 @@
                 >
               {/if}
             {/if}
+            {#if viewerId && !comment.deleted && comment.authorId !== viewerId}<Button
+                variant="ghost"
+                size="small"
+                icon
+                aria-label="Report comment"
+                title="Report comment"
+                onclick={() => reporting.open({ type: 'review_comment', id: comment.id, label: 'comment' })}
+                ><Flag size={14} /></Button
+              >{/if}
           {/snippet}
           {#snippet children()}
             {#if comment.deleted}<p class="text-sm text-ink-muted italic">Comment deleted</p>

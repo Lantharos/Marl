@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Flag from '@lucide/svelte/icons/flag';
+  import Button from '$lib/components/controls/Button.svelte';
+  import { reporting } from '$lib/moderation/reporting.svelte';
   import type { PublicUserProfile } from '@marl/contracts';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -10,7 +13,7 @@
   import ProfileRepositoryList from './ProfileRepositoryList.svelte';
   import ContributionGraph from './ContributionGraph.svelte';
 
-  let { data, own }: { data: PublicUserProfile; own: boolean } = $props();
+  let { data, own, signedIn }: { data: PublicUserProfile; own: boolean; signedIn: boolean } = $props();
   const userProfile = $derived(data.profile);
   const canonicalIdentity = $derived(data.profile.handle);
   const websiteLabel = $derived(userProfile.website ? new URL(userProfile.website).host : '');
@@ -51,6 +54,12 @@
     </div>
     {#if own}<LinkButton class="mt-5 w-full" href="/settings/account/profile"
         ><Settings size={15} />Edit profile</LinkButton
+      >{:else if signedIn}<Button
+        class="mt-4 -ml-2"
+        size="small"
+        variant="ghost"
+        onclick={() => reporting.open({ type: 'user', id: userProfile.handle, label: `@${userProfile.handle}` })}
+        ><Flag size={14} />Report account</Button
       >{/if}
     {#if data.organizations.length}
       <section class="mt-7">

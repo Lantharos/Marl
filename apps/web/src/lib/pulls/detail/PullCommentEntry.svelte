@@ -6,6 +6,7 @@
   import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
   import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
   import type { MarkdownContext } from '$lib/markdown/context';
+  import { reporting } from '$lib/moderation/reporting.svelte';
 
   let {
     comment,
@@ -29,8 +30,18 @@
   let editedBody = $state('');
   let uploading = $state(false);
   const own = $derived(comment.authorId === viewerId);
+  const report = $derived(
+    viewerId && !own
+      ? [
+          {
+            label: 'Report',
+            onSelect: () => reporting.open({ type: 'pull_comment', id: comment.id, label: 'comment' })
+          }
+        ]
+      : []
+  );
   const menu = $derived(
-    comment.deleted || !(own || canModerate)
+    comment.deleted
       ? []
       : [
           ...(own
@@ -44,7 +55,8 @@
                 }
               ]
             : []),
-          { label: 'Delete', danger: true, onSelect: () => (deleting = true) }
+          ...(own || canModerate ? [{ label: 'Delete', danger: true, onSelect: () => (deleting = true) }] : []),
+          ...report
         ]
   );
 

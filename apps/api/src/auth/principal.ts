@@ -8,6 +8,7 @@ export interface Principal {
   email: string | null;
   avatarUrl: string | null;
   twoFactorEnabled?: boolean;
+  staff: boolean;
   authType: 'session' | 'token';
   tokenScopes?: string[];
   tokenRepositoryIds?: string[] | null;
@@ -25,7 +26,9 @@ export async function authenticate(request: Request, env: Env): Promise<Principa
   const session = await createAuth(env, request).api.getSession({ headers: request.headers });
   if (!session) return null;
   const user = await ensureApplicationUser(env, session.user);
-  return { ...user, twoFactorEnabled: Boolean(session.user.twoFactorEnabled), authType: 'session' };
+  if (user.suspended) return null;
+  const { suspended: _, ...principal } = user;
+  return { ...principal, twoFactorEnabled: Boolean(session.user.twoFactorEnabled), authType: 'session' };
 }
 
 export async function requireFreshSession(request: Request, env: Env, principal: Principal) {
@@ -44,7 +47,7 @@ export function principalHasScope(principal: Principal, scope: string) {
 async function authenticatePersonalToken(env: Env, token: string): Promise<Principal | null> {
   const tokenHash = await sha256(token);
   const row = await env.DB.prepare(
-    `SELECT users.id,users.handle,users.display_name AS displayName,users.email,users.avatar_url AS avatarUrl,personal_access_tokens.id AS tokenId,personal_access_tokens.scopes_json AS scopesJson,personal_access_tokens.repository_ids_json AS repositoryIdsJson,personal_access_tokens.last_used_at AS lastUsedAt FROM personal_access_tokens JOIN users ON users.id=personal_access_tokens.user_id WHERE personal_access_tokens.token_hash=? AND personal_access_tokens.revoked_at IS NULL AND personal_access_tokens.expires_at>CURRENT_TIMESTAMP`
+    `SELECT users.id,users.handle,users.display_name AS displayName,users.email,users.avatar_url AS avatarUrl,users.staff,personal_access_tokens.id AS tokenId,personal_access_tokens.scopes_json AS scopesJson,personal_access_tokens.repository_ids_json AS repositoryIdsJson,personal_access_tokens.last_used_at AS lastUsedAt FROM personal_access_tokens JOIN users ON users.id=personal_access_tokens.user_id WHERE personal_access_tokens.token_hash=? AND personal_access_tokens.revoked_at IS NULL AND personal_access_tokens.expires_at>CURRENT_TIMESTAMP AND users.suspended_at IS NULL`
   )
     .bind(tokenHash)
     .first<{
@@ -53,6 +56,7 @@ async function authenticatePersonalToken(env: Env, token: string): Promise<Princ
       displayName: string;
       email: string | null;
       avatarUrl: string | null;
+      staff: number;
       tokenId: string;
       scopesJson: string;
       repositoryIdsJson: string | null;
@@ -69,6 +73,7 @@ async function authenticatePersonalToken(env: Env, token: string): Promise<Princ
     displayName: row.displayName,
     email: row.email,
     avatarUrl: row.avatarUrl,
+    staff: Boolean(row.staff),
     authType: 'token',
     tokenScopes: JSON.parse(row.scopesJson) as string[],
     tokenRepositoryIds: row.repositoryIdsJson ? (JSON.parse(row.repositoryIdsJson) as string[]) : null
@@ -98,7 +103,7 @@ async function ensureApplicationUser(
   }
 ) {
   const existing = await env.DB.prepare(
-    'SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId,EXISTS(SELECT 1 FROM user_emails WHERE user_emails.user_id=users.id AND user_emails.email=users.email COLLATE NOCASE AND user_emails.primary_email=1) AS primaryEmailReady,EXISTS(SELECT 1 FROM user_emails WHERE user_emails.user_id=users.id AND user_emails.email=users.email COLLATE NOCASE AND user_emails.verified_at IS NOT NULL) AS primaryEmailVerified FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE'
+    'SELECT id,handle,display_name AS displayName,email,avatar_url AS avatarUrl,auth_user_id AS authUserId,staff,suspended_at AS suspendedAt,EXISTS(SELECT 1 FROM user_emails WHERE user_emails.user_id=users.id AND user_emails.email=users.email COLLATE NOCASE AND user_emails.primary_email=1) AS primaryEmailReady,EXISTS(SELECT 1 FROM user_emails WHERE user_emails.user_id=users.id AND user_emails.email=users.email COLLATE NOCASE AND user_emails.verified_at IS NOT NULL) AS primaryEmailVerified FROM users WHERE auth_user_id=? OR email=? COLLATE NOCASE'
   )
     .bind(authUser.id, authUser.email)
     .first<{
@@ -108,6 +113,8 @@ async function ensureApplicationUser(
       email: string | null;
       avatarUrl: string | null;
       authUserId: string | null;
+      staff: number;
+      suspendedAt: string | null;
       primaryEmailReady: number;
       primaryEmailVerified: number;
     }>();
@@ -128,7 +135,9 @@ async function ensureApplicationUser(
       handle: existing.handle,
       displayName: existing.displayName,
       email: existing.email,
-      avatarUrl: existing.avatarUrl ?? authUser.image ?? null
+      avatarUrl: existing.avatarUrl ?? authUser.image ?? null,
+      staff: Boolean(existing.staff),
+      suspended: Boolean(existing.suspendedAt)
     };
   }
   const handle = authUser.username ?? (await availableHandle(env, authUser.email.split('@')[0] || authUser.name));
@@ -150,7 +159,9 @@ async function ensureApplicationUser(
     handle,
     displayName: authUser.name,
     email: authUser.email,
-    avatarUrl: authUser.image ?? null
+    avatarUrl: authUser.image ?? null,
+    staff: false,
+    suspended: false
   };
 }
 

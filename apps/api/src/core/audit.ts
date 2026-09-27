@@ -3,7 +3,7 @@ import { identifier } from './domain';
 import type { D1PreparedStatement, Env } from './platform';
 
 export type AuditEvent = {
-  organizationId: string;
+  organizationId?: string | null;
   repositoryId?: string | null;
   actor?: Principal | null;
   action: string;
@@ -17,7 +17,7 @@ export function auditStatement(env: Env, event: AuditEvent): D1PreparedStatement
     'INSERT INTO audit_events (id,organization_id,repository_id,actor_id,actor_handle,action,subject_type,subject_id,details_json) VALUES (?,?,?,?,?,?,?,?,?)'
   ).bind(
     identifier('audit'),
-    event.organizationId,
+    event.organizationId ?? null,
     event.repositoryId ?? null,
     event.actor?.id ?? null,
     event.actor?.handle ?? 'system',

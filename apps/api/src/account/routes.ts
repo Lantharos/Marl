@@ -1,6 +1,8 @@
 import { getSigningSettings, updateSigningSettings } from '../git/commit-signing';
 import { json } from '../http/http';
 import { route } from '../http/router';
+import { deleteAccount, previewAccountDeletion } from './data/deletion';
+import { createExportLink, downloadExport } from './data/export';
 import { acceptLegalTerms } from './legal';
 import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAccessToken } from './developer-tokens';
 import { getProfile, listSessions, updateProfile, uploadAvatar } from './profile';
@@ -39,6 +41,10 @@ export const accountRoutes = [
     deleteSshKey(request, env, principal, id)
   ),
   route('POST', '/legal/accept', 'user', ({ request, env, principal }) => acceptLegalTerms(request, env, principal)),
+  route('POST', '/account/export', 'user', ({ request, env, principal }) => createExportLink(request, env, principal)),
+  route('GET', '/account/export', 'user', ({ env, principal, url }) => downloadExport(env, principal, url)),
+  route('GET', '/account/deletion', 'user', ({ env, principal }) => previewAccountDeletion(env, principal)),
+  route('DELETE', '/account', 'user', ({ request, env, principal }) => deleteAccount(request, env, principal)),
   route('GET', '/signing', 'user', ({ env, principal }) => getSigningSettings(env, principal)),
   route('PATCH', '/signing', 'user', ({ request, env, principal }) => updateSigningSettings(request, env, principal))
 ];

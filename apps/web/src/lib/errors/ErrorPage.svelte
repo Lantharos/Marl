@@ -2,8 +2,13 @@
   import type { Snippet } from 'svelte';
   import WifiOff from '@lucide/svelte/icons/wifi-off';
 
-  let { status, title, scene, children }: { status?: number; title: string; scene: string; children: Snippet } =
-    $props();
+  let {
+    status,
+    title,
+    detail,
+    scene,
+    children
+  }: { status?: number; title: string; detail?: string; scene: string; children: Snippet } = $props();
   const offline = $derived(!status);
 </script>
 
@@ -39,6 +44,7 @@
         >
           {title}
         </h1>
+        {#if detail}<p class="mt-3 max-w-[46ch] text-sm leading-relaxed text-ink-muted">{detail}</p>{/if}
         <div class={['mt-5 flex flex-wrap items-center justify-center gap-2', !offline && 'sm:justify-start']}>
           {@render children()}
         </div>

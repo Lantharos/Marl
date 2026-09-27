@@ -8,6 +8,7 @@
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import LegalUpdateNotice from '$lib/legal/LegalUpdateNotice.svelte';
+  import ReportDialog from '$lib/moderation/ReportDialog.svelte';
   import SiteFooter from '$lib/components/shell/SiteFooter.svelte';
   import NavigationProgress from '$lib/components/shell/NavigationProgress.svelte';
   import { isIndexableRepositoryPath, privateRoots } from '$lib/repositories/repository-route';
@@ -51,6 +52,7 @@
   {@render children()}
 {/if}
 {#if !page.error && (data.shellUser || page.url.pathname !== '/')}<SiteFooter />{/if}
+{#if data.shellUser}<ReportDialog />{/if}
 <IdentityConfirmationModal
   open={confirmation.open}
   method={confirmation.method}

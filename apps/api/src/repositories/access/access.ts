@@ -18,6 +18,8 @@ export type RepositoryAccess = {
   defaultBranch: string;
   updatedAt: string;
   archivedAt: string | null;
+  disabledAt: string | null;
+  disabledReason: string | null;
   deletionScheduledAt: string | null;
   forkedFromRepositoryId: string | null;
   forkRootRepositoryId: string | null;
@@ -31,7 +33,7 @@ type RepositoryRow = Omit<RepositoryAccess, 'role'> & {
   teamRoleWeight: number | null;
 };
 
-const repositorySelect = `SELECT repositories.id,repositories.organization_id AS organizationId,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt,repositories.archived_at AS archivedAt,repositories.deletion_scheduled_at AS deletionScheduledAt,repositories.forked_from_repository_id AS forkedFromRepositoryId,repositories.fork_root_repository_id AS forkRootRepositoryId,organization_members.role AS organizationRole,CASE WHEN organization_members.user_id IS NOT NULL THEN organizations.base_repository_role END AS baseRole,(SELECT role FROM repository_collaborators WHERE repository_id=repositories.id AND user_id=?) AS directRole,(SELECT MAX(CASE repository_team_grants.role WHEN 'read' THEN 1 WHEN 'triage' THEN 2 WHEN 'write' THEN 3 WHEN 'maintain' THEN 4 WHEN 'admin' THEN 5 ELSE 0 END) FROM repository_team_grants JOIN team_members ON team_members.team_id=repository_team_grants.team_id JOIN organization_members AS team_access_members ON team_access_members.organization_id=repositories.organization_id AND team_access_members.user_id=team_members.user_id WHERE repository_team_grants.repository_id=repositories.id AND team_members.user_id=?) AS teamRoleWeight FROM repositories JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN organization_members ON organization_members.organization_id=repositories.organization_id AND organization_members.user_id=?`;
+const repositorySelect = `SELECT repositories.id,repositories.organization_id AS organizationId,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt,repositories.archived_at AS archivedAt,repositories.disabled_at AS disabledAt,repositories.disabled_reason AS disabledReason,repositories.deletion_scheduled_at AS deletionScheduledAt,repositories.forked_from_repository_id AS forkedFromRepositoryId,repositories.fork_root_repository_id AS forkRootRepositoryId,organization_members.role AS organizationRole,CASE WHEN organization_members.user_id IS NOT NULL THEN organizations.base_repository_role END AS baseRole,(SELECT role FROM repository_collaborators WHERE repository_id=repositories.id AND user_id=?) AS directRole,(SELECT MAX(CASE repository_team_grants.role WHEN 'read' THEN 1 WHEN 'triage' THEN 2 WHEN 'write' THEN 3 WHEN 'maintain' THEN 4 WHEN 'admin' THEN 5 ELSE 0 END) FROM repository_team_grants JOIN team_members ON team_members.team_id=repository_team_grants.team_id JOIN organization_members AS team_access_members ON team_access_members.organization_id=repositories.organization_id AND team_access_members.user_id=team_members.user_id WHERE repository_team_grants.repository_id=repositories.id AND team_members.user_id=?) AS teamRoleWeight FROM repositories JOIN organizations ON organizations.id=repositories.organization_id LEFT JOIN organization_members ON organization_members.organization_id=repositories.organization_id AND organization_members.user_id=?`;
 
 function accessibleRepositoryPredicate(alias: string, adminOnly = false) {
   if (!/^[a-z_]+$/.test(alias)) throw new Error('Invalid repository SQL alias.');
@@ -49,7 +51,7 @@ export function repositoryListFilter(
   )
     return { sql: '0=1', values: [] };
   const accessible = accessibleRepositoryPredicate(alias, adminOnly);
-  const visible = includeDeleted ? accessible : `${accessible} AND ${alias}.deletion_scheduled_at IS NULL`;
+  const visible = `${includeDeleted ? accessible : `${accessible} AND ${alias}.deletion_scheduled_at IS NULL`} AND ${alias}.disabled_at IS NULL`;
   const values: string[] = [principal.id, principal.id, principal.id];
   if (principal.authType !== 'token' || !principal.tokenRepositoryIds) return { sql: visible, values };
   if (principal.tokenRepositoryIds.length === 0) return { sql: '0=1', values: [] };
@@ -61,14 +63,17 @@ export function repositoryListFilter(
 
 export function repositoryReadFilter(principal: Principal | null, alias = 'repositories') {
   if (!principal)
-    return { sql: `${alias}.visibility='public' AND ${alias}.deletion_scheduled_at IS NULL`, values: [] as string[] };
+    return {
+      sql: `${alias}.visibility='public' AND ${alias}.deletion_scheduled_at IS NULL AND ${alias}.disabled_at IS NULL`,
+      values: [] as string[]
+    };
   if (
     principal.authType === 'token' &&
     !principal.tokenScopes?.some((scope) => ['repo:read', 'repo:write', 'repo:admin'].includes(scope))
   )
     return { sql: '0=1', values: [] as string[] };
   const values = [principal.id, principal.id, principal.id];
-  const readable = `(${alias}.visibility='public' OR ${accessibleRepositoryPredicate(alias)}) AND ${alias}.deletion_scheduled_at IS NULL`;
+  const readable = `(${alias}.visibility='public' OR ${accessibleRepositoryPredicate(alias)}) AND ${alias}.deletion_scheduled_at IS NULL AND ${alias}.disabled_at IS NULL`;
   if (principal.authType !== 'token' || !principal.tokenRepositoryIds) return { sql: readable, values };
   if (principal.tokenRepositoryIds.length === 0) return { sql: '0=1', values: [] as string[] };
   return {
@@ -149,7 +154,7 @@ function allowRepository(
   principal: Principal | null,
   capability: RepositoryCapability
 ) {
-  if (!repository || repository.deletionScheduledAt) return null;
+  if (!repository || repository.deletionScheduledAt || repository.disabledAt) return null;
   if (capability === 'repository.read' && repository.visibility === 'public')
     return tokenAllows(principal, repository, capability) ? repository : null;
   if (!repository.role || !tokenAllows(principal, repository, capability)) return null;

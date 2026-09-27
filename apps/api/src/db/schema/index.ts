@@ -3,6 +3,7 @@ export * from './automation';
 export * from './git';
 export * from './identity';
 export * from './issues';
+export * from './moderation';
 export * from './organizations';
 export * from './releases';
 export * from './repositories';

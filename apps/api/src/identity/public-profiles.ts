@@ -20,7 +20,7 @@ const activePublicRepositories = `${publicRepositories} AND repositories.archive
 export async function getPublicIdentityProfile(env: Env, handle: string) {
   if (!validIdentitySlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
   const user = await env.DB.prepare(
-    'SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE'
+    'SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE AND deleted_at IS NULL'
   )
     .bind(handle)
     .first<UserRow>();
@@ -32,7 +32,7 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
   const user =
     loadedUser ??
     (await env.DB.prepare(
-      'SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE'
+      'SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE AND deleted_at IS NULL'
     )
       .bind(handle)
       .first<UserRow>());
@@ -97,7 +97,7 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
 async function getPublicOrganizationProfile(env: Env, slug: string) {
   if (!validIdentitySlug(slug)) return notFound('organization');
   const organization = await env.DB.prepare(
-    'SELECT id,slug,name,avatar_url AS avatarUrl,description,website,kind,created_at AS createdAt FROM organizations WHERE slug=? COLLATE NOCASE'
+    'SELECT id,slug,name,avatar_url AS avatarUrl,description,website,kind,created_at AS createdAt FROM organizations WHERE slug=? COLLATE NOCASE AND EXISTS (SELECT 1 FROM organization_members WHERE organization_members.organization_id=organizations.id)'
   )
     .bind(slug)
     .first<{

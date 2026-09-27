@@ -10,6 +10,7 @@ import { json, problem } from './http/http';
 import { matchRoute, route, type RequestContext } from './http/router';
 import { identityRoutes } from './identity/routes';
 import { issueRoutes } from './issues/routes';
+import { moderationRoutes } from './moderation/routes';
 import { pullRoutes } from './pulls/routes';
 import { releaseRoutes } from './releases/routes';
 import { purgeDeletedRepositories } from './repositories/lifecycle';
@@ -27,7 +28,8 @@ const routes = [
   ...issueRoutes,
   ...pullRoutes,
   ...releaseRoutes,
-  ...ciRoutes
+  ...ciRoutes,
+  ...moderationRoutes
 ];
 
 const notFound = () => problem(404, 'not_found', 'The requested Marl API route does not exist.');

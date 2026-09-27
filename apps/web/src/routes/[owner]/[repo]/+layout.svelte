@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
+  import { reporting } from '$lib/moderation/reporting.svelte';
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
@@ -183,6 +185,15 @@
           cloneUrl={repository.cloneUrl}
           sshCloneUrl={repository.sshCloneUrl}
           signedIn={Boolean(data.shellUser)}
+        />{/if}
+      {#if repository && data.shellUser && !repository.permissions.admin}<ActionMenu
+          label="More repository options"
+          actions={[
+            {
+              label: 'Report repository',
+              onSelect: () => reporting.open({ type: 'repository', id: repository.id, label: `${owner}/${repo}` })
+            }
+          ]}
         />{/if}
     </div>
   </div>

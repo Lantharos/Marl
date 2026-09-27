@@ -13,6 +13,7 @@ export interface GitGatewayRequestMap {
     commitId: string;
     format: 'zip' | 'tar.gz';
   };
+  '/_marl/bundle': { owner: string; repository: string };
   '/_marl/blob': { owner: string; repository: string; objectId: string };
   '/_marl/tree': {
     owner: string;

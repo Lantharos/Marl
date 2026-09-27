@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
+  import DatabaseBackup from '@lucide/svelte/icons/database-backup';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Mail from '@lucide/svelte/icons/mail';
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
@@ -48,6 +49,12 @@
       label: 'SSH keys',
       icon: TerminalSquare,
       active: path === '/settings/account/ssh-keys'
+    },
+    {
+      href: '/settings/account/data',
+      label: 'Data and deletion',
+      icon: DatabaseBackup,
+      active: path === '/settings/account/data'
     }
   ]);
 </script>

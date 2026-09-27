@@ -31,6 +31,13 @@ export function createAuth(env: Env, request: Request) {
       before: createAuthMiddleware(async (context) => {
         if (context.path === '/update-user' && context.body?.username !== undefined)
           throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
+        if (context.path === '/sign-in/email' || context.path === '/sign-in/username') {
+          if (await suspendedAccount(env, String(context.body?.email ?? context.body?.username ?? '')))
+            throw new APIError('FORBIDDEN', {
+              message: 'This account has been suspended. Write to legal@marl.sh to appeal.'
+            });
+          return;
+        }
         if (context.path !== '/sign-up/email') return;
         if (context.body?.termsVersion !== legalVersion)
           throw new APIError('BAD_REQUEST', { message: 'Accept the Terms of Service and Privacy Policy to continue.' });
@@ -153,6 +160,15 @@ async function usernameUnavailable(env: Env, candidate: string) {
   if (organization) return true;
   if (!user) return false;
   return user.email !== null || user.authUserId !== null;
+}
+
+async function suspendedAccount(env: Env, identity: string) {
+  const row = await env.DB.prepare(
+    'SELECT 1 AS suspended FROM users WHERE (handle=?1 COLLATE NOCASE OR email=?1 COLLATE NOCASE) AND suspended_at IS NOT NULL'
+  )
+    .bind(identity)
+    .first();
+  return Boolean(row);
 }
 
 async function recordSignUpAcceptance(env: Env, email: string, request: Request | undefined) {

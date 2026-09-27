@@ -3,6 +3,7 @@
   import type { PullRequestDetail } from '@marl/contracts';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
+  import Flag from '@lucide/svelte/icons/flag';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Button from '$lib/components/controls/Button.svelte';
   import PullBrief from './PullBrief.svelte';
@@ -20,6 +21,7 @@
     onEdit,
     onUpdate,
     onCreateLabel,
+    onReport,
     actions
   }: {
     pull: PullRequestDetail;
@@ -29,6 +31,7 @@
     onEdit: () => void;
     onUpdate: (body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) => Promise<void>;
     onCreateLabel: (name: string) => Promise<void>;
+    onReport?: () => void;
     actions: Snippet;
   } = $props();
   let metadataOpen = $state(false);
@@ -53,6 +56,13 @@
           aria-label="Edit pull"
           disabled={busy}
           onclick={onEdit}><Pencil size={15} /></Button
+        >{:else if onReport}<Button
+          icon
+          size="small"
+          variant="ghost"
+          aria-label="Report pull"
+          title="Report pull"
+          onclick={onReport}><Flag size={15} /></Button
         >{/if}
     </header>
     <h1

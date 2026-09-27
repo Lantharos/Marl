@@ -15,6 +15,7 @@
     if (status === 429) return { title: 'Woah, slow down.', scene: 'rate-limit' };
     if (status === 408 || status === 504) return { title: 'That took too long.', scene: 'timeout' };
     if (status === 410) return { title: 'Gone for good.', scene: 'gone' };
+    if (status === 451) return { title: 'This repository is unavailable.', scene: 'gone' };
     if (status === 503) return { title: 'Marl needs a minute.', scene: 'server' };
     if (status >= 500) return { title: 'That one’s on us.', scene: 'server' };
     return { title: 'This page couldn’t\nbe opened.', scene: 'request' };
@@ -27,7 +28,7 @@
   ><title>{copy.title.replace('\n', ' ')} · Marl</title><meta name="robots" content="noindex, nofollow" /></svelte:head
 >
 
-<ErrorPage {status} title={copy.title} scene={copy.scene}>
+<ErrorPage {status} title={copy.title} detail={status === 451 ? page.error?.message : undefined} scene={copy.scene}>
   {#if status === 401}
     <LinkButton variant="primary" href={signInHref}>Sign in<ArrowUpRight size={15} /></LinkButton>
   {:else if canRetry}

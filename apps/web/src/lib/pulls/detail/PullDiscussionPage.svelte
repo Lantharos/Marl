@@ -10,6 +10,7 @@
   import Button from '$lib/components/controls/Button.svelte';
   import Chip from '$lib/components/controls/Chip.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
+  import { reporting } from '$lib/moderation/reporting.svelte';
   import { seoExcerpt } from '$lib/seo';
   import { plainKey, stepThrough } from '$lib/ui/keyboard';
   import { connectPullLive } from '../pull-live';
@@ -114,6 +115,7 @@
     onEdit={() => (editing = true)}
     onUpdate={pageState.updateMetadata}
     onCreateLabel={pageState.createLabel}
+    onReport={viewerId ? () => reporting.open({ type: 'pull', id: pull.id, label: 'pull' }) : undefined}
   >
     {#snippet actions()}{#key pull.sourceCommitId}<PullLifecycleActions
           conflicted={mergeability.conflicted}
