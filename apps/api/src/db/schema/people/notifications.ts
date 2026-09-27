@@ -18,10 +18,13 @@ export const notificationSettings = sqliteTable(
       .default(sql`'["mention","assignment","participating","authored","failure"]'`),
     lastEmailedAt: text('last_emailed_at')
       .notNull()
-      .default(sql`CURRENT_TIMESTAMP`)
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+    pendingAt: text('pending_at')
   },
   (table) => [
-    index('notification_settings_due').on(table.emailMode, table.lastEmailedAt),
+    index('notification_settings_pending')
+      .on(table.userId)
+      .where(sql`pending_at IS NOT NULL`),
     check('notification_settings_mode', sql`email_mode IN ('immediate','daily','off')`)
   ]
 );

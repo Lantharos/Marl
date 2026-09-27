@@ -95,3 +95,73 @@ BEGIN SELECT RAISE(ABORT,'pull_head_changed'); END;
 CREATE TRIGGER automatic_runs_match_pull_head BEFORE INSERT ON runs
 WHEN NEW.trigger_name='pull_request' AND NOT EXISTS (SELECT 1 FROM pull_requests WHERE id=NEW.pull_request_id AND repository_id=NEW.repository_id AND source_commit_id=NEW.commit_id AND state='open')
 BEGIN SELECT RAISE(ABORT,'pull_head_changed'); END;
+--> statement-breakpoint
+CREATE TRIGGER issue_activity_notifies
+AFTER INSERT ON issue_timeline
+BEGIN
+  UPDATE notification_settings SET pending_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  WHERE email_mode != 'off'
+    AND user_id IN (
+      SELECT author_id FROM issues WHERE id = NEW.issue_id
+      UNION SELECT user_id FROM issue_assignees WHERE issue_id = NEW.issue_id
+      UNION SELECT author_id FROM issue_comments WHERE issue_id = NEW.issue_id
+      UNION SELECT user_id FROM issue_participants WHERE issue_id = NEW.issue_id AND following = 1
+    )
+    AND user_id IS NOT CASE NEW.kind
+      WHEN 'comment' THEN (SELECT author_id FROM issue_comments WHERE id = NEW.entity_id)
+      WHEN 'event' THEN (SELECT actor_id FROM issue_events WHERE id = NEW.entity_id)
+      WHEN 'reference' THEN (SELECT created_by FROM work_item_references WHERE id = NEW.entity_id)
+    END;
+END;
+--> statement-breakpoint
+CREATE TRIGGER pull_activity_notifies
+AFTER INSERT ON pull_timeline
+WHEN NEW.kind != 'thread'
+BEGIN
+  UPDATE notification_settings SET pending_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  WHERE email_mode != 'off'
+    AND user_id IN (
+      SELECT author_id FROM pull_requests WHERE id = NEW.pull_request_id
+      UNION SELECT user_id FROM pull_request_assignees WHERE pull_request_id = NEW.pull_request_id
+      UNION SELECT author_id FROM pull_request_comments WHERE pull_request_id = NEW.pull_request_id
+      UNION SELECT author_id FROM pull_request_reviews WHERE pull_request_id = NEW.pull_request_id
+      UNION SELECT review_comments.author_id FROM review_comments JOIN review_threads ON review_threads.id = review_comments.thread_id WHERE review_threads.pull_request_id = NEW.pull_request_id
+    )
+    AND user_id IS NOT CASE NEW.kind
+      WHEN 'comment' THEN (SELECT author_id FROM pull_request_comments WHERE id = NEW.entity_id)
+      WHEN 'review' THEN (SELECT author_id FROM pull_request_reviews WHERE id = NEW.entity_id)
+      WHEN 'event' THEN (SELECT actor_id FROM pull_request_events WHERE id = NEW.entity_id)
+      WHEN 'reference' THEN (SELECT created_by FROM work_item_references WHERE id = NEW.entity_id)
+    END;
+END;
+--> statement-breakpoint
+CREATE TRIGGER review_thread_notifies
+AFTER INSERT ON review_comments
+WHEN NOT EXISTS (SELECT 1 FROM review_comments WHERE thread_id = NEW.thread_id AND id != NEW.id)
+BEGIN
+  UPDATE notification_settings SET pending_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  WHERE email_mode != 'off'
+    AND user_id != NEW.author_id
+    AND user_id IN (
+      SELECT pull_requests.author_id FROM pull_requests JOIN review_threads ON review_threads.pull_request_id = pull_requests.id WHERE review_threads.id = NEW.thread_id
+      UNION SELECT pull_request_assignees.user_id FROM pull_request_assignees JOIN review_threads ON review_threads.pull_request_id = pull_request_assignees.pull_request_id WHERE review_threads.id = NEW.thread_id
+      UNION SELECT pull_request_comments.author_id FROM pull_request_comments JOIN review_threads ON review_threads.pull_request_id = pull_request_comments.pull_request_id WHERE review_threads.id = NEW.thread_id
+      UNION SELECT pull_request_reviews.author_id FROM pull_request_reviews JOIN review_threads ON review_threads.pull_request_id = pull_request_reviews.pull_request_id WHERE review_threads.id = NEW.thread_id
+    );
+END;
+--> statement-breakpoint
+CREATE TRIGGER mention_notifies
+AFTER INSERT ON content_mentions
+WHEN NEW.user_id IS NOT NEW.actor_id
+BEGIN
+  UPDATE notification_settings SET pending_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  WHERE email_mode != 'off' AND user_id = NEW.user_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER failed_run_notifies
+AFTER UPDATE OF state ON runs
+WHEN NEW.state = 'failure' AND OLD.state != 'failure' AND NEW.actor_id IS NOT NULL
+BEGIN
+  UPDATE notification_settings SET pending_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  WHERE email_mode != 'off' AND user_id = NEW.actor_id;
+END;

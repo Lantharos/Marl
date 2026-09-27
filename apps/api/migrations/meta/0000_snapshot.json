@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3b34bcc3-424c-4d32-a54f-6fea5b5b49d2",
+  "id": "92f397ec-624b-477b-8c84-adf662092aa2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "auth_account": {
@@ -5168,17 +5168,24 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+        },
+        "pending_at": {
+          "name": "pending_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "notification_settings_due": {
-          "name": "notification_settings_due",
+        "notification_settings_pending": {
+          "name": "notification_settings_pending",
           "columns": [
-            "email_mode",
-            "last_emailed_at"
+            "user_id"
           ],
-          "isUnique": false
+          "isUnique": false,
+          "where": "pending_at IS NOT NULL"
         }
       },
       "foreignKeys": {

@@ -129,9 +129,11 @@ further sign-in.
 ## Background work
 
 The API Worker runs two cron triggers: an hourly repository purge and a ten-minute notification
-pass. The notification pass computes each due person's Inbox, keeps items newer than their last
-email that match their preferences and repository levels, and sends one email. Its watermark
-advances even when nothing is sent, so a busy person is processed in bounded batches.
+schedule. Database triggers mark a person as pending when someone else comments, reviews, changes,
+or references a thread they are involved in, mentions them, or when one of their runs fails. The
+schedule reads only pending people whose last email is old enough for their chosen frequency and
+enqueues one message per person. The consumer computes that person's Inbox, keeps items newer than
+their last email that match their preferences and repository levels, and sends one email.
 
 Webhook deliveries and GitHub imports use Cloudflare Queues. An event writes a delivery row per
 subscribed webhook and enqueues it; the consumer signs the body with HMAC-SHA256, records the

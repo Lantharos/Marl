@@ -28,11 +28,12 @@ bunx wrangler r2 bucket create marl-objects
 bunx wrangler r2 bucket create marl-git-repositories
 ```
 
-Create the two queues used for webhooks and imports:
+Create the queues used for webhooks, imports, and notification email:
 
 ```sh
 bunx wrangler queues create marl-webhooks
 bunx wrangler queues create marl-imports
+bunx wrangler queues create marl-notifications
 ```
 
 Configure the `marl-git-repositories` bucket with the retention lock described in
@@ -123,4 +124,4 @@ handled from the same queue.
 
 Follow [Database changes](database.md) for Drizzle generation and local initialization. Apply both the generated baseline and invariant triggers before starting the application. Do not reuse local databases created with the previous migration history.
 
-Keep both API cron triggers enabled: the hourly one runs [repository deletion and recovery](repository-lifecycle.md), and the ten-minute one sends notification email. Test the authenticated readiness endpoint and a complete deletion in staging, including storage accounting and retained audit history. Configure object-storage multipart expiry and monitor failed or overdue purges.
+Keep both API cron triggers enabled: the hourly one runs [repository deletion and recovery](repository-lifecycle.md), and the ten-minute one queues notification email for people with new activity. Test the authenticated readiness endpoint and a complete deletion in staging, including storage accounting and retained audit history. Configure object-storage multipart expiry and monitor failed or overdue purges.

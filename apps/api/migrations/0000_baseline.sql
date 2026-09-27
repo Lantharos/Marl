@@ -707,12 +707,13 @@ CREATE TABLE `notification_settings` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`email_mode` text DEFAULT 'immediate' NOT NULL,
 	`reasons_json` text DEFAULT '["mention","assignment","participating","authored","failure"]' NOT NULL,
-	`last_emailed_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`last_emailed_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) NOT NULL,
+	`pending_at` text,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "notification_settings_mode" CHECK(email_mode IN ('immediate','daily','off'))
 );
 --> statement-breakpoint
-CREATE INDEX `notification_settings_due` ON `notification_settings` (`email_mode`,`last_emailed_at`);--> statement-breakpoint
+CREATE INDEX `notification_settings_pending` ON `notification_settings` (`user_id`) WHERE pending_at IS NOT NULL;--> statement-breakpoint
 CREATE TABLE `repository_notification_levels` (
 	`user_id` text NOT NULL,
 	`repository_id` text NOT NULL,

@@ -1,6 +1,6 @@
 {
-  "id": "191341b4-e78b-4782-aeaf-c9bc42c82901",
-  "prevId": "3b34bcc3-424c-4d32-a54f-6fea5b5b49d2",
+  "id": "a014e047-dcdd-48bf-bc81-4717646f5f95",
+  "prevId": "92f397ec-624b-477b-8c84-adf662092aa2",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -5168,16 +5168,23 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+        },
+        "pending_at": {
+          "name": "pending_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "notification_settings_due": {
-          "name": "notification_settings_due",
+        "notification_settings_pending": {
+          "name": "notification_settings_pending",
           "columns": [
-            "email_mode",
-            "last_emailed_at"
+            "user_id"
           ],
+          "where": "pending_at IS NOT NULL",
           "isUnique": false
         }
       },

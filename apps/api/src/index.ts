@@ -13,7 +13,7 @@ import { runImports } from './imports/queue';
 import { importRoutes } from './imports/routes';
 import { issueRoutes } from './issues/routes';
 import { moderationRoutes } from './moderation/routes';
-import { sendNotificationEmails } from './notifications/digest';
+import { scheduleNotificationEmails, sendNotificationEmails } from './notifications/delivery';
 import { notificationRoutes } from './notifications/routes';
 import { deliverWebhooks } from './webhooks/delivery';
 import { webhookRoutes } from './webhooks/routes';
@@ -88,12 +88,14 @@ async function handle(request: Request, env: Env, execution: ExecutionContext): 
 
 export default {
   async scheduled(controller: ScheduledController, env: Env) {
-    if (controller.cron === notificationCron) await sendNotificationEmails(env);
+    if (controller.cron === notificationCron) await scheduleNotificationEmails(env);
     else await purgeDeletedRepositories(env);
   },
   fetch: handle,
   async queue(batch: MessageBatch, env: Env) {
     if (batch.queue === 'marl-imports') await runImports(batch as MessageBatch<{ importId: string }>, env);
+    else if (batch.queue === 'marl-notifications')
+      await sendNotificationEmails(batch as MessageBatch<{ userId: string }>, env);
     else await deliverWebhooks(batch as MessageBatch<{ deliveryId: string }>, env);
   }
 };

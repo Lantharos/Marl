@@ -159,7 +159,8 @@ async function ensureApplicationUser(
     ).bind(organizationId, handle, authUser.name),
     env.DB.prepare(
       `INSERT OR IGNORE INTO organization_members (organization_id,user_id,role) VALUES (?,?,'owner')`
-    ).bind(organizationId, authUser.id)
+    ).bind(organizationId, authUser.id),
+    env.DB.prepare('INSERT OR IGNORE INTO notification_settings (user_id) VALUES (?)').bind(authUser.id)
   ]);
   await ensurePrimaryEmail(env, authUser.id, authUser.email, Boolean(authUser.emailVerified));
   return {
