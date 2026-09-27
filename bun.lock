@@ -42,13 +42,6 @@
         "wrangler": "^4.142.0",
       },
     },
-    "apps/status": {
-      "name": "@marl/status",
-      "devDependencies": {
-        "@types/bun": "^1.4.2",
-        "typescript": "^7.0.2",
-      },
-    },
     "apps/web": {
       "name": "@marl/web",
       "version": "0.0.0",
@@ -316,8 +309,6 @@
     "@marl/git-edge": ["@marl/git-edge@workspace:apps/git-edge"],
 
     "@marl/markdown": ["@marl/markdown@workspace:packages/markdown"],
-
-    "@marl/status": ["@marl/status@workspace:apps/status"],
 
     "@marl/web": ["@marl/web@workspace:apps/web"],
 

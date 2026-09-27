@@ -108,31 +108,6 @@ push through both `git.marl.sh` and `ssh.marl.sh`, cross-protocol fetch visibili
 publication, release asset download, repository browsing, and a self-hosted runner job. The local
 qualification command does not exercise live Cloudflare R2, Durable Objects, Containers, DNS,
 email, or retention settings.
-
-## Status page
-
-The status page is built and published by the `Status page` GitHub Actions workflow, so it stays
-reachable when Cloudflare is not. Enable GitHub Pages with GitHub Actions as its source, then add a
-`status.marl.sh` CNAME record pointing at `lantharos.github.io` with Cloudflare's proxy disabled.
-The workflow checks the website, API, Git over HTTPS, and Git over SSH every ten minutes, carries
-90 days of history forward from the published page, and redeploys.
-
-Report an incident by adding a Markdown file under `apps/status/incidents/`:
-
-```md
----
-title: Pushes are slow
-status: investigating
-components: git, ssh
-started: 2026-10-01T10:00:00Z
----
-We are looking into slow pushes over HTTPS and SSH.
-```
-
-Add a paragraph for each update, and set `status: resolved` with a `resolved` time when it is over.
-`status` is one of `investigating`, `identified`, `monitoring`, or `resolved`; `components` lists
-any of `web`, `api`, `git`, and `ssh`.
-
 ## Moderation
 
 Grant staff access to the people who review reports:

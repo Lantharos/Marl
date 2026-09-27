@@ -17,7 +17,6 @@
 apps/web            SvelteKit application
 apps/api            TypeScript control-plane Worker
 apps/git-edge       Cloudflare Worker and Container routing for Git
-apps/status         Status page published from outside Cloudflare
 packages/contracts  Shared transport types and validation
 packages/markdown   Markdown rendering shared by the API
 crates/repository    Local repository engine
