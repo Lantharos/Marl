@@ -17,6 +17,7 @@
 apps/web            SvelteKit application
 apps/api            TypeScript control-plane Worker
 apps/git-edge       Cloudflare Worker and Container routing for Git
+apps/status         Status page published from outside Cloudflare
 packages/contracts  Shared transport types and validation
 packages/markdown   Markdown rendering shared by the API
 crates/repository    Local repository engine
@@ -113,6 +114,32 @@ and token restrictions into `read`, `triage`, `push`, `maintain`, and `admin` de
 handlers do not recreate membership SQL or infer permissions from the UI. Organization owners and
 administrators manage invitations and teams, only owners change organization-wide policy, and
 personal organizations cannot gain additional members.
+
+Agents are application users with `kind = 'agent'` and an operating organization. They have no
+authentication identity, so they can only act through personal access tokens that an operator
+issues. Repository access comes from ordinary collaborator grants, and author queries return each
+author's kind so the interface can mark automated work. Imported authors who are not on Marl are
+stored the same way with `kind = 'mannequin'` and a handle that cannot be routed or signed into.
+
+Staff are ordinary accounts with the `staff` flag set directly in the database. Moderation actions
+are audited without an organization. A disabled repository is excluded by the capability resolver
+everywhere, including Git, and its detail endpoint answers 451 with the recorded reason. Suspending
+an account deletes its sessions, revokes its tokens, disables its personal repositories, and blocks
+further sign-in.
+
+## Background work
+
+The API Worker runs two cron triggers: an hourly repository purge and a ten-minute notification
+pass. The notification pass computes each due person's Inbox, keeps items newer than their last
+email that match their preferences and repository levels, and sends one email. Its watermark
+advances even when nothing is sent, so a busy person is processed in bounded batches.
+
+Webhook deliveries and GitHub imports use Cloudflare Queues. An event writes a delivery row per
+subscribed webhook and enqueues it; the consumer signs the body with HMAC-SHA256, records the
+response, and retries with exponential backoff. An import runs one bounded step per message: the Git
+step asks the gateway to fetch branches, tags, and pull heads through the same capture and
+publication path as a push, and each later step copies one page from the GitHub API before
+enqueuing the next. GitHub rate limits delay the message until the limit resets.
 
 ## Git and the local core
 

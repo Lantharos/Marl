@@ -1,9 +1,9 @@
 import { sqliteTable, integer, text, primaryKey, foreignKey, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { organizations } from './organizations';
-import { users } from './identity';
-import { repositories } from './repositories';
+import { organizations } from '../organizations';
+import { users } from '../people/identity';
+import { repositories } from '../code/repositories';
 import { pullRequests } from './reviews';
 
 export const artifactUploadParts = sqliteTable(

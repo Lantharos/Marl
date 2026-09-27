@@ -28,6 +28,13 @@ bunx wrangler r2 bucket create marl-objects
 bunx wrangler r2 bucket create marl-git-repositories
 ```
 
+Create the two queues used for webhooks and imports:
+
+```sh
+bunx wrangler queues create marl-webhooks
+bunx wrangler queues create marl-imports
+```
+
 Configure the `marl-git-repositories` bucket with the retention lock described in
 [`repository-reliability.md`](repository-reliability.md), and enable D1 Time Travel before
 accepting production writes.
@@ -62,6 +69,9 @@ docker compose -f deploy/ssh/compose.yaml up -d --build
 The named volume is a performance cache, not repository authority. It can be replaced without
 losing a published repository. The host key must remain stable so clients do not receive host-key
 change warnings. Restrict TCP port 22 to Git clients and do not expose the container's HTTP port.
+
+Route `legal@marl.sh`, `privacy@marl.sh`, and `abuse@marl.sh` to monitored inboxes with Cloudflare
+Email Routing; the published policies direct people there.
 
 Cloudflare Email Sending must be active for `marl.sh`; the API binding is restricted to
 `noreply@marl.sh`. Before deploying the API route, `marl.sh` must have a proxied DNS record. Use an
@@ -99,8 +109,43 @@ publication, release asset download, repository browsing, and a self-hosted runn
 qualification command does not exercise live Cloudflare R2, Durable Objects, Containers, DNS,
 email, or retention settings.
 
+## Status page
+
+The status page is built and published by the `Status page` GitHub Actions workflow, so it stays
+reachable when Cloudflare is not. Enable GitHub Pages with GitHub Actions as its source, then add a
+`status.marl.sh` CNAME record pointing at `lantharos.github.io` with Cloudflare's proxy disabled.
+The workflow checks the website, API, Git over HTTPS, and Git over SSH every ten minutes, carries
+90 days of history forward from the published page, and redeploys.
+
+Report an incident by adding a Markdown file under `apps/status/incidents/`:
+
+```md
+---
+title: Pushes are slow
+status: investigating
+components: git, ssh
+started: 2026-10-01T10:00:00Z
+---
+We are looking into slow pushes over HTTPS and SSH.
+```
+
+Add a paragraph for each update, and set `status: resolved` with a `resolved` time when it is over.
+`status` is one of `investigating`, `identified`, `monitoring`, or `resolved`; `components` lists
+any of `web`, `api`, `git`, and `ssh`.
+
+## Moderation
+
+Grant staff access to the people who review reports:
+
+```sh
+bunx wrangler d1 execute marl --remote --config apps/api/wrangler.jsonc --command "UPDATE users SET staff=1 WHERE handle='name'"
+```
+
+Staff see Moderation in the account menu. Copyright notices and appeals arrive by email and are
+handled from the same queue.
+
 ## Schema and repository maintenance
 
 Follow [Database changes](database.md) for Drizzle generation and local initialization. Apply both the generated baseline and invariant triggers before starting the application. Do not reuse local databases created with the previous migration history.
 
-Keep the API hourly cron enabled for [repository deletion and recovery](repository-lifecycle.md). Test the authenticated readiness endpoint and a complete deletion in staging, including storage accounting and retained audit history. Configure object-storage multipart expiry and monitor failed or overdue purges.
+Keep both API cron triggers enabled: the hourly one runs [repository deletion and recovery](repository-lifecycle.md), and the ten-minute one sends notification email. Test the authenticated readiness endpoint and a complete deletion in staging, including storage accounting and retained audit history. Configure object-storage multipart expiry and monitor failed or overdue purges.

@@ -1,9 +1,9 @@
 import { sqliteTable, integer, text, primaryKey, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { nocaseText } from './types';
-import { organizations, teams } from './organizations';
-import { users } from './identity';
+import { nocaseText } from '../types';
+import { organizations, teams } from '../organizations';
+import { users } from '../people/identity';
 
 export const auditEvents = sqliteTable(
   'audit_events',

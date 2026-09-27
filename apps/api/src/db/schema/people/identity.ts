@@ -1,7 +1,7 @@
 import { sqliteTable, integer, text, index, uniqueIndex, check, primaryKey } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { nocaseText } from './types';
+import { nocaseText } from '../types';
 
 export const personalAccessTokens = sqliteTable(
   'personal_access_tokens',

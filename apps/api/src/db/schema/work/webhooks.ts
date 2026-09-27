@@ -1,9 +1,9 @@
 import { sqliteTable, integer, text, index, check } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { users } from './identity';
-import { organizations } from './organizations';
-import { repositories } from './repositories';
+import { users } from '../people/identity';
+import { organizations } from '../organizations';
+import { repositories } from '../code/repositories';
 
 export const webhooks = sqliteTable(
   'webhooks',

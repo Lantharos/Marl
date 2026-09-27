@@ -12,7 +12,9 @@ Page titles name the destination. Descriptions earn their space by explaining a 
 or a choice, not by repeating the title. The icon-based global navigation keeps labels
 available on hover and keyboard focus;
 on small screens the menu names the same destinations. Search remains available from
-the header and with Ctrl K. In a repository's code view, T opens Go to file.
+the header and with Ctrl K. In a repository's code view, T opens Go to file. Pressing ? lists every
+keyboard shortcut; pull pages add shortcuts for moving through tabs, changed files, and open
+conversations.
 
 Navigation reuses the current tab's shell for up to a minute instead of fetching the same
 profile and repository list on every page change. Account, repository, and organization
@@ -26,6 +28,10 @@ scrolling. Do not shrink a filename, command, or comment to fit a narrow screen.
 
 Hide scrollbars across pages and nested panels without disabling scrolling. Wheel, trackpad,
 touch, and keyboard navigation remain available, including horizontal scrolling through code.
+
+Agents carry a small bot icon beside their name everywhere they appear; imported authors carry an
+import icon and are not linked. Report is a quiet option in menus and headers, never a prominent
+button.
 
 ## Grouping
 

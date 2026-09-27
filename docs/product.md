@@ -83,6 +83,11 @@ Home opens with a compact Inbox preview, then keeps recent runs and frequently u
 within reach. It does not invent a generic attention score or present empty operational queues as
 personal work.
 
+New accounts see a short setup checklist beside their repositories: create or import a
+repository, push a first commit, invite a collaborator, open a pull, and connect a runner. Steps
+tick themselves off from real activity, and the checklist disappears when everything is done or
+when it is hidden.
+
 ## Inbox
 
 Inbox answers one question: what changed that is relevant to me? It contains direct mentions,
@@ -93,6 +98,11 @@ while the full Inbox separates active, unread, and done work.
 
 Repository membership alone never subscribes someone to every event. Marl only adds an item when
 it can explain the direct relationship between the user and the work.
+
+Email follows the same rules. Unread Inbox items are emailed about ten minutes after they appear,
+or once a day as a summary, and people choose which kinds of activity to email. A bell on each
+repository limits it to mentions or ignores it entirely. Every notification email has a one-click
+unsubscribe link; account and security email is sent regardless.
 
 ## Code
 
@@ -171,6 +181,18 @@ ready-for-review actions live beside the summary and never submit an unfinished 
 repository labels make ownership and triage visible without replacing review state. The commits,
 changes, checks, and overview views all describe the same pinned head revision.
 
+A pull that targets another open pull's branch is part of a stack. Its summary links the pull it
+builds on and the pulls that build on it. When the base pull merges, every pull built on it is
+retargeted to the base's target branch and records the change in its timeline.
+
+A reviewer who returns after new commits can switch the changes view to show only what changed
+since their last review. Marl compares the reviewed revision directly with the current head and
+limits the result to files the pull touches, so a rebase does not bury the new work.
+
+Reviews can be driven from the keyboard: number keys switch between overview, changes, commits,
+and checks; J and K move between changed files; N and P move between open conversations; C starts
+a comment and R opens the review. Pressing ? anywhere lists every shortcut.
+
 Pull descriptions can close linked issues with `fixes`, `closes`, or `resolves`. Closing
 occurs atomically with a successful merge into the repository's default branch; merging into any
 other branch preserves the link without changing issue state.
@@ -203,6 +225,39 @@ A release has Markdown notes, automatic ZIP and tar.gz source archives, and opti
 assets. Asset uploads are resumable multipart transfers with bounded sizes and exact part
 validation. Deleting a release removes its uploaded assets but deliberately leaves the Git tag in
 history. See [`releases.md`](releases.md) for lifecycle and limits.
+
+## Imports
+
+Importing from GitHub copies a repository's branches, tags, and pull heads, then its labels,
+issues, pulls, conversation comments, and releases with their original numbers and dates. People
+who are not on Marl appear under their GitHub username without a profile; work by the person who
+started the import is attributed to their account. Pulls from forks keep their origin and must be
+reopened from a branch in the repository before they can merge. Line-level review comments stay on
+GitHub.
+
+## Integrations
+
+Repository and organization webhooks send push, pull, review, issue, comment, release, and run
+events. JSON payloads are signed with a shared secret; Slack and Discord formats deliver a readable
+message instead. Failed deliveries retry with increasing delays, and settings show recent
+deliveries with the response each endpoint returned.
+
+## Agents
+
+Agents are accounts for bots and AI tools. An organization or person creates them, issues their
+tokens, and adds them to repositories like any collaborator. Agents never sign in, their profile
+names who operates them, and everything they write carries an agent marker so readers can tell
+automated work apart.
+
+## Accounts, safety, and data
+
+Signing up requires accepting the Terms of Service and Privacy Policy, and Marl records the
+version each person accepted; when the policies change, people accept the new version before
+continuing. Anyone can download a copy of their data or delete their account from settings.
+
+Repositories, issues, pulls, comments, and accounts can be reported. Staff review reports in a
+moderation queue and can remove comments, disable repositories, or suspend accounts. A disabled
+repository shows its reason instead of its content.
 
 ## Runs and runners
 

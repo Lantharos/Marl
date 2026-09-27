@@ -2,7 +2,7 @@ import { sqliteTable, text, primaryKey, index, uniqueIndex, check } from 'drizzl
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { nocaseText } from './types';
-import { users } from './identity';
+import { users } from './people/identity';
 
 export const organizationInvitations = sqliteTable(
   'organization_invitations',

@@ -1,8 +1,8 @@
 import { sqliteTable, integer, text, primaryKey, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { jobs } from './automation';
-import { users } from './identity';
+import { jobs } from '../work/automation';
+import { users } from '../people/identity';
 import { repositories } from './repositories';
 
 export const releases = sqliteTable(

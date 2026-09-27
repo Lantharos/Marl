@@ -1,8 +1,8 @@
 import { sqliteTable, integer, text, primaryKey, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { users } from './identity';
-import { repositories, repositoryLabels } from './repositories';
+import { users } from '../people/identity';
+import { repositories, repositoryLabels } from '../code/repositories';
 
 export const pullRealtimeUpdates = sqliteTable(
   'pull_realtime_updates',

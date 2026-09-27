@@ -2,7 +2,7 @@ import { sqliteTable, text, index, uniqueIndex, check } from 'drizzle-orm/sqlite
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { users } from './identity';
-import { repositories } from './repositories';
+import { repositories } from '../code/repositories';
 
 export const abuseReports = sqliteTable(
   'abuse_reports',

@@ -1,7 +1,7 @@
 import { sqliteTable, integer, text, primaryKey, foreignKey, index, check } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { users } from './identity';
+import { users } from '../people/identity';
 import { repositories } from './repositories';
 
 export const branchRules = sqliteTable(

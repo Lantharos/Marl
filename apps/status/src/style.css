@@ -1,0 +1,259 @@
+@font-face {
+  font-family: 'Open Runde';
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/OpenRunde-Regular-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Open Runde';
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/OpenRunde-Semibold-latin.woff2') format('woff2');
+}
+
+:root {
+  color-scheme: light dark;
+  --canvas: light-dark(#f7f6f3, #0d0d0f);
+  --surface: light-dark(#fcfbf9, #111113);
+  --muted: light-dark(#efeeea, #1b1b1e);
+  --line: light-dark(#e9e7e1, #202023);
+  --ink-strong: light-dark(#1b1a18, #f1f0ed);
+  --ink: light-dark(#3e3c38, #d0cfcb);
+  --ink-muted: light-dark(#6e6b65, #aaa9a4);
+  --brand: light-dark(#b64f35, #df7557);
+  --up: light-dark(#27744c, #68b88c);
+  --up-soft: light-dark(#e3f1e8, #16251d);
+  --partial: light-dark(#91621f, #d3a45f);
+  --partial-soft: light-dark(#f7edd9, #2a2115);
+  --down: light-dark(#b83f45, #e16f73);
+  --down-soft: light-dark(#f8e5e6, #2b191b);
+  --shadow:
+    0 0 0 1px light-dark(rgb(24 23 20 / 0.07), rgb(255 255 255 / 0.055)),
+    0 2px 8px light-dark(rgb(24 23 20 / 0.05), rgb(0 0 0 / 0.14));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font:
+    14px/1.55 'Open Runde',
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  width: min(760px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0 24px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 32px;
+  color: var(--ink-muted);
+}
+
+.brand {
+  color: var(--ink-strong);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.brand span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  background: var(--brand);
+}
+
+.overall {
+  margin-bottom: 28px;
+  padding: 22px 24px;
+  border-radius: 14px;
+}
+
+.overall h1 {
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.overall p {
+  margin-top: 6px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.overall.up {
+  background: var(--up-soft);
+}
+.overall.partial {
+  background: var(--partial-soft);
+}
+.overall.down {
+  background: var(--down-soft);
+}
+
+.components {
+  display: grid;
+  gap: 12px;
+}
+
+.component {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.component header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.component h2 {
+  font-size: 15px;
+}
+
+.component header p {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.state {
+  flex: none;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.state.up,
+.state.resolved {
+  color: var(--up);
+}
+.state.partial,
+.state.identified,
+.state.monitoring,
+.state.investigating {
+  color: var(--partial);
+}
+.state.down {
+  color: var(--down);
+}
+
+.bars {
+  display: grid;
+  grid-template-columns: repeat(90, 1fr);
+  gap: 2px;
+  height: 30px;
+}
+
+.bar {
+  border-radius: 2px;
+  background: var(--muted);
+}
+.bar.up {
+  background: var(--up);
+}
+.bar.partial {
+  background: var(--partial);
+}
+.bar.down {
+  background: var(--down);
+}
+
+.component footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.section {
+  margin: 36px 0 12px;
+  font-size: 15px;
+}
+
+.incident {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.incident header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.incident h3 {
+  font-size: 15px;
+}
+
+.incident .when {
+  margin: 2px 0 8px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.incident p + p {
+  margin-top: 8px;
+}
+
+.quiet {
+  color: var(--ink-muted);
+}
+
+.bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(760px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 40px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.bottom a {
+  color: var(--ink-muted);
+}
+
+@media (max-width: 560px) {
+  .bars {
+    grid-template-columns: repeat(45, 1fr);
+  }
+  .bar:nth-child(-n + 45) {
+    display: none;
+  }
+  .component footer span:first-child {
+    display: none;
+  }
+}
