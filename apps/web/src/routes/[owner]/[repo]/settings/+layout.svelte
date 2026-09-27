@@ -1,8 +1,9 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import RepositorySettingsShell from '$lib/components/settings/RepositorySettingsShell.svelte';
 
-  let { children } = $props<{ children: import('svelte').Snippet }>();
+  let { children }: { children: Snippet } = $props();
   const owner = $derived(page.params.owner ?? '');
   const repository = $derived(page.params.repo ?? '');
 </script>

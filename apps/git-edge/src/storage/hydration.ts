@@ -6,7 +6,13 @@ import { repositoryState, type RepositorySnapshotResponse } from '../state/state
 export type ContainerStub = DurableObjectStub<Container<GitEdgeEnv>>;
 type ContainerStatus = { generation: number | null; cachedPacks: string[] };
 
-export async function hydrateRepository(container: ContainerStub, env: GitEdgeEnv, owner: string, repository: string, storageKey: string) {
+export async function hydrateRepository(
+  container: ContainerStub,
+  env: GitEdgeEnv,
+  owner: string,
+  repository: string,
+  storageKey: string
+) {
   const snapshot = await repositoryState(env, storageKey).request<RepositorySnapshotResponse>('/snapshot');
   const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
   const statusResponse = await expectContainer(container.fetch(internalRequest(`${base}/status`, env)));
@@ -16,26 +22,70 @@ export async function hydrateRepository(container: ContainerStub, env: GitEdgeEn
   const cached = new Set(status.cachedPacks);
   const missing = snapshot.state.packs.filter((pack) => !cached.has(pack.id));
   for (let offset = 0; offset < missing.length; offset += 4) {
-    await Promise.all(missing.slice(offset, offset + 4).map(async (pack) => {
-      const [packObject, indexObject] = await Promise.all([env.REPOSITORIES.get(pack.packKey), env.REPOSITORIES.get(pack.indexKey)]);
-      if (!packObject || !indexObject) throw new Error(`Canonical pack ${pack.id} is incomplete.`);
-      await Promise.all([
-        expectContainer(container.fetch(internalRequest(`${base}/packs/${pack.id}/pack`, env, { method: 'PUT', body: packObject.body }))),
-        expectContainer(container.fetch(internalRequest(`${base}/packs/${pack.id}/idx`, env, { method: 'PUT', body: indexObject.body })))
-      ]);
-    }));
+    await Promise.all(
+      missing.slice(offset, offset + 4).map(async (pack) => {
+        const [packObject, indexObject] = await Promise.all([
+          env.REPOSITORIES.get(pack.packKey),
+          env.REPOSITORIES.get(pack.indexKey)
+        ]);
+        if (!packObject || !indexObject) throw new Error(`Canonical pack ${pack.id} is incomplete.`);
+        await Promise.all([
+          expectContainer(
+            container.fetch(
+              internalRequest(`${base}/packs/${pack.id}/pack`, env, { method: 'PUT', body: packObject.body })
+            )
+          ),
+          expectContainer(
+            container.fetch(
+              internalRequest(`${base}/packs/${pack.id}/idx`, env, { method: 'PUT', body: indexObject.body })
+            )
+          )
+        ]);
+      })
+    );
   }
-  await expectContainer(container.fetch(internalRequest(`${base}/activate`, env, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ generation: snapshot.state.generation, refs: snapshot.state.refs, packs: snapshot.state.packs.map((pack) => pack.id) })
-  })));
+  await expectContainer(
+    container.fetch(
+      internalRequest(`${base}/activate`, env, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          generation: snapshot.state.generation,
+          refs: snapshot.state.refs,
+          packs: snapshot.state.packs.map((pack) => pack.id)
+        })
+      })
+    )
+  );
   return snapshot.state;
 }
 
-export async function indexHydratedRepository(container: ContainerStub, env: GitEdgeEnv, repositoryId: string, owner: string, repository: string, generation: number, excludeCommits: string[], actorId?: string) {
-  const response = await expectContainer(container.fetch(internalRequest('http://container/_marl/index', env, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ repositoryId, owner, repository, indexId: `generation_${generation}`, excludeCommits, actorId })
-  })));
+export async function indexHydratedRepository(
+  container: ContainerStub,
+  env: GitEdgeEnv,
+  repositoryId: string,
+  owner: string,
+  repository: string,
+  generation: number,
+  excludeCommits: string[],
+  actorId?: string
+) {
+  const response = await expectContainer(
+    container.fetch(
+      internalRequest('http://container/_marl/index', env, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          repositoryId,
+          owner,
+          repository,
+          indexId: `generation_${generation}`,
+          excludeCommits,
+          actorId
+        })
+      })
+    )
+  );
   const result = await readBoundedJson<{ heads: string[] }>(response, 1024 * 1024);
   if (!result) throw new Error('Git container returned invalid index metadata.');
   return result;
@@ -49,6 +99,9 @@ export function internalRequest(url: string, env: GitEdgeEnv, init: RequestInit 
 
 export async function expectContainer(promise: Promise<Response>) {
   const response = await promise;
-  if (!response.ok) throw new Error((await readBoundedText(response.body, 64 * 1024)) || `Git container failed with ${response.status}.`);
+  if (!response.ok)
+    throw new Error(
+      (await readBoundedText(response.body, 64 * 1024)) || `Git container failed with ${response.status}.`
+    );
   return response;
 }

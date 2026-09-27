@@ -5,12 +5,20 @@ import { reserveArtifactUploadSql, reserveEmptyArtifactSql, reserveLogChunkSql, 
 describe('runner aggregate quota reservations', () => {
   test('serializes log reservations at the exact per-job boundary', () => {
     const database = quotaDatabase();
-    database.run('INSERT INTO job_log_chunks VALUES (?,?,?,?,?)', ['log_existing', 'job_one', 0, 'logs/existing', runnerQuotas.logBytesPerJob - 1]);
+    database.run('INSERT INTO job_log_chunks VALUES (?,?,?,?,?)', [
+      'log_existing',
+      'job_one',
+      0,
+      'logs/existing',
+      runnerQuotas.logBytesPerJob - 1
+    ]);
 
     expect(reserveLog(database, 'log_boundary', 'job_one', 1, 1).changes).toBe(1);
     expect(reserveLog(database, 'log_overflow', 'job_one', 2, 1).changes).toBe(0);
     expect(reserveLog(database, 'log_duplicate', 'job_one', 1, 1).changes).toBe(0);
-    expect(database.query('SELECT SUM(byte_size) AS bytes FROM job_log_chunks WHERE job_id=?').get('job_one')).toEqual({ bytes: runnerQuotas.logBytesPerJob });
+    expect(database.query('SELECT SUM(byte_size) AS bytes FROM job_log_chunks WHERE job_id=?').get('job_one')).toEqual({
+      bytes: runnerQuotas.logBytesPerJob
+    });
   });
 
   test('bounds tiny log chunks independently of their byte total', () => {
@@ -21,9 +29,32 @@ describe('runner aggregate quota reservations', () => {
 
   test('counts completed and in-flight artifacts in one atomic reservation', () => {
     const database = quotaDatabase();
-    database.run('INSERT INTO artifacts VALUES (?,?,?,?,?,?)', ['artifact_existing', 'job_one', 'existing', 'artifacts/existing', runnerQuotas.artifactBytesPerJob - 20, 'application/octet-stream']);
-    database.run("INSERT INTO artifact_uploads VALUES (?,?,?,?,?,?,?,'uploading',datetime('now','+1 hour'))", ['upload_active', 'job_one', 'active', 'artifacts/active', 'multipart_active', 5, 'application/octet-stream']);
-    database.run("INSERT INTO artifact_uploads VALUES (?,?,?,?,?,?,?,'uploading',datetime('now','-1 hour'))", ['upload_expired', 'job_one', 'expired', 'artifacts/expired', 'multipart_expired', runnerQuotas.artifactBytesPerJob, 'application/octet-stream']);
+    database.run('INSERT INTO artifacts VALUES (?,?,?,?,?,?)', [
+      'artifact_existing',
+      'job_one',
+      'existing',
+      'artifacts/existing',
+      runnerQuotas.artifactBytesPerJob - 20,
+      'application/octet-stream'
+    ]);
+    database.run("INSERT INTO artifact_uploads VALUES (?,?,?,?,?,?,?,'uploading',datetime('now','+1 hour'))", [
+      'upload_active',
+      'job_one',
+      'active',
+      'artifacts/active',
+      'multipart_active',
+      5,
+      'application/octet-stream'
+    ]);
+    database.run("INSERT INTO artifact_uploads VALUES (?,?,?,?,?,?,?,'uploading',datetime('now','-1 hour'))", [
+      'upload_expired',
+      'job_one',
+      'expired',
+      'artifacts/expired',
+      'multipart_expired',
+      runnerQuotas.artifactBytesPerJob,
+      'application/octet-stream'
+    ]);
 
     expect(reserveArtifact(database, 'upload_boundary', 'job_one', 'boundary', 15).changes).toBe(1);
     expect(reserveArtifact(database, 'upload_overflow', 'job_one', 'overflow', 1).changes).toBe(0);
@@ -32,16 +63,38 @@ describe('runner aggregate quota reservations', () => {
 
   test('prevents active and completed artifacts from claiming the same name', () => {
     const database = quotaDatabase();
-    database.run("INSERT INTO artifact_uploads VALUES (?,?,?,?,?,?,?,'uploading',datetime('now','+1 hour'))", ['upload_active', 'job_one', 'shared', 'artifacts/shared', 'multipart_shared', 1, 'application/octet-stream']);
+    database.run("INSERT INTO artifact_uploads VALUES (?,?,?,?,?,?,?,'uploading',datetime('now','+1 hour'))", [
+      'upload_active',
+      'job_one',
+      'shared',
+      'artifacts/shared',
+      'multipart_shared',
+      1,
+      'application/octet-stream'
+    ]);
     expect(reserveEmptyArtifact(database, 'artifact_shared', 'job_one', 'shared').changes).toBe(0);
 
-    database.run('INSERT INTO artifacts VALUES (?,?,?,?,?,?)', ['artifact_done', 'job_one', 'done', 'artifacts/done', 0, 'application/octet-stream']);
+    database.run('INSERT INTO artifacts VALUES (?,?,?,?,?,?)', [
+      'artifact_done',
+      'job_one',
+      'done',
+      'artifacts/done',
+      0,
+      'application/octet-stream'
+    ]);
     expect(reserveArtifact(database, 'upload_done', 'job_one', 'done', 1).changes).toBe(0);
   });
 
   test('bounds artifact object counts independently of their byte total', () => {
     const database = quotaDatabase();
-    database.run('INSERT INTO artifacts VALUES (?,?,?,?,?,?)', ['artifact_existing', 'job_one', 'existing', 'artifacts/existing', 0, 'application/octet-stream']);
+    database.run('INSERT INTO artifacts VALUES (?,?,?,?,?,?)', [
+      'artifact_existing',
+      'job_one',
+      'existing',
+      'artifacts/existing',
+      0,
+      'application/octet-stream'
+    ]);
     expect(reserveEmptyArtifact(database, 'artifact_blocked', 'job_one', 'blocked', 1).changes).toBe(0);
     expect(reserveArtifact(database, 'upload_blocked', 'job_one', 'upload', 1, 1).changes).toBe(0);
   });
@@ -57,14 +110,74 @@ function quotaDatabase() {
   return database;
 }
 
-function reserveLog(database: Database, id: string, jobId: string, sequence: number, bytes: number, countLimit = runnerQuotas.logChunksPerJob) {
-  return database.run(reserveLogChunkSql, [id, jobId, sequence, `logs/${id}`, bytes, bytes, runnerQuotas.logBytesPerJob, jobId, jobId, countLimit]);
+function reserveLog(
+  database: Database,
+  id: string,
+  jobId: string,
+  sequence: number,
+  bytes: number,
+  countLimit = runnerQuotas.logChunksPerJob
+) {
+  return database.run(reserveLogChunkSql, [
+    id,
+    jobId,
+    sequence,
+    `logs/${id}`,
+    bytes,
+    bytes,
+    runnerQuotas.logBytesPerJob,
+    jobId,
+    jobId,
+    countLimit
+  ]);
 }
 
-function reserveArtifact(database: Database, id: string, jobId: string, name: string, bytes: number, countLimit = runnerQuotas.artifactsPerJob) {
-  return database.run(reserveArtifactUploadSql, [id, jobId, name, `artifacts/${id}`, `multipart_${id}`, bytes, 'application/octet-stream', jobId, name, bytes, runnerQuotas.artifactBytesPerJob, jobId, jobId, jobId, jobId, countLimit]);
+function reserveArtifact(
+  database: Database,
+  id: string,
+  jobId: string,
+  name: string,
+  bytes: number,
+  countLimit = runnerQuotas.artifactsPerJob
+) {
+  return database.run(reserveArtifactUploadSql, [
+    id,
+    jobId,
+    name,
+    `artifacts/${id}`,
+    `multipart_${id}`,
+    bytes,
+    'application/octet-stream',
+    jobId,
+    name,
+    bytes,
+    runnerQuotas.artifactBytesPerJob,
+    jobId,
+    jobId,
+    jobId,
+    jobId,
+    countLimit
+  ]);
 }
 
-function reserveEmptyArtifact(database: Database, id: string, jobId: string, name: string, countLimit = runnerQuotas.artifactsPerJob) {
-  return database.run(reserveEmptyArtifactSql, [id, jobId, name, `artifacts/${id}`, 0, 'application/octet-stream', jobId, name, jobId, jobId, countLimit]);
+function reserveEmptyArtifact(
+  database: Database,
+  id: string,
+  jobId: string,
+  name: string,
+  countLimit = runnerQuotas.artifactsPerJob
+) {
+  return database.run(reserveEmptyArtifactSql, [
+    id,
+    jobId,
+    name,
+    `artifacts/${id}`,
+    0,
+    'application/octet-stream',
+    jobId,
+    name,
+    jobId,
+    jobId,
+    countLimit
+  ]);
 }

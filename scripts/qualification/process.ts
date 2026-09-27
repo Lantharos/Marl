@@ -93,11 +93,13 @@ export async function waitForHttp(url: string, service: ManagedService, timeoutM
 }
 
 export function reservePorts(count: number) {
-  const listeners = Array.from({ length: count }, () => Bun.listen({
-    hostname: '127.0.0.1',
-    port: 0,
-    socket: { data() {} }
-  }));
+  const listeners = Array.from({ length: count }, () =>
+    Bun.listen({
+      hostname: '127.0.0.1',
+      port: 0,
+      socket: { data() {} }
+    })
+  );
   const ports = listeners.map((listener) => listener.port);
   for (const listener of listeners) listener.stop(true);
   return ports;

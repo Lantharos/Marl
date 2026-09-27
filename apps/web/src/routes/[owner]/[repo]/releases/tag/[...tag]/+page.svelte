@@ -1,38 +1,101 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Download from 'lucide-svelte/icons/download';
-  import FileArchive from 'lucide-svelte/icons/file-archive';
-  import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
-  import Pencil from 'lucide-svelte/icons/pencil';
-  import Tag from 'lucide-svelte/icons/tag';
+  import Download from '@lucide/svelte/icons/download';
+  import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
+  import Pencil from '@lucide/svelte/icons/pencil';
+  import Tag from '@lucide/svelte/icons/tag';
   import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
+  import BackLink from '$lib/components/page/BackLink.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
   import Time from '$lib/components/page/Time.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import ReleaseAssets from '$lib/releases/ReleaseAssets.svelte';
   import { seoExcerpt } from '$lib/seo';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner ?? '');
   const repository = $derived(page.params.repo ?? '');
   const release = $derived(data.release);
   const title = $derived(release.name || release.tagName);
+  const archiveBase = $derived(`/api/v1/repositories/${owner}/${repository}/releases/${release.id}/archive`);
 </script>
 
-<Seo title={`${title} · ${owner}/${repository} · Marl`} description={seoExcerpt(release.body, `${title} is a release of ${owner}/${repository}, hosted on Marl.`)} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
-<main class="page">
-  <a class="back" href="/{owner}/{repository}/releases">← All releases</a>
-  <header><div class="heading"><div class="tag-icon"><Tag size={19} /></div><div><h1>{title}</h1><div class="status">{#if release.latest}<span class="latest">Latest</span>{/if}{#if release.draft}<span>Draft</span>{:else if release.prerelease}<span>Prerelease</span>{/if}</div><div class="meta"><code>{release.tagName}</code><span>·</span><GitCommitHorizontal size={13} /><a href="/{owner}/{repository}/commit/{release.targetCommitId}">{release.targetCommitId.slice(0, 8)}</a><span>·</span><UserProfileLink handle={release.author} displayName={release.authorDisplayName} avatarUrl={release.authorAvatarUrl} size={19} /><span>{release.draft ? 'created' : 'published'}</span><Time value={release.publishedAt ?? release.createdAt} /></div></div></div>{#if release.canEdit}<LinkButton href="/{owner}/{repository}/releases/edit/{release.id}"><Pencil size={13} />Edit</LinkButton>{/if}</header>
-  <div class="release-workspace"><aside>
-  {#key release.id}<ReleaseAssets {owner} {repository} releaseId={release.id} assets={release.assets} />{/key}
-  <section class="source"><header><div><h2>Source code</h2><p>Archives are generated from the tagged commit.</p></div><FileArchive size={18} /></header><div><a href="/api/v1/repositories/{owner}/{repository}/releases/{release.id}/archive/zip"><Download size={14} /><span><strong>Source code</strong><small>ZIP archive</small></span></a><a href="/api/v1/repositories/{owner}/{repository}/releases/{release.id}/archive/tar.gz"><Download size={14} /><span><strong>Source code</strong><small>tar.gz archive</small></span></a></div></section>
-  </aside>  <section class="notes"><h2>Release notes</h2>{#if release.body}<MarkdownBody source={release.body} context={{ owner, repository }} />{:else}<p>No release notes provided.</p>{/if}</section>
-</div>
-</main>
+<Seo
+  title={`${title} · ${owner}/${repository} · Marl`}
+  description={seoExcerpt(release.bodyText, `${title} is a release of ${owner}/${repository}, hosted on Marl.`)}
+  path={page.url.pathname}
+  robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
+/>
 
-<style>
- .page>header{align-items:flex-start}
- .page{width:min(1200px,100%);margin:0 auto}.back{display:inline-flex;margin-bottom:24px;color:var(--text-muted);font-size:13px;text-decoration:none}.back:hover{color:var(--brand)}.page>header{display:flex;justify-content:space-between;gap:24px;margin-bottom:32px}.heading{display:flex;gap:14px;min-width:0}.tag-icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border-radius:12px;background:var(--surface);color:var(--brand)}h1{margin:5px 0 0;color:var(--text-strong);font-size:32px;line-height:1.2;letter-spacing:-.04em;overflow-wrap:anywhere}.status{display:flex;gap:8px;margin-top:10px;color:var(--text-muted);font-size:12px}.status:empty{display:none}.latest{color:var(--brand)}.meta{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:12px;color:var(--text-muted);font-size:12px}.meta a{color:inherit;text-decoration:none}.release-workspace{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start;gap:28px}.release-workspace>aside{grid-column:2;grid-row:1;min-width:0;display:grid;gap:20px}.notes{grid-column:1;grid-row:1;min-width:0;padding:28px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-surface)}h2{margin:0 0 20px;color:var(--text-strong);font-size:15px}.notes>p{color:var(--text-muted);font-size:14px}.source{padding:20px;border-radius:14px;background:var(--surface)}.source>header{display:flex;justify-content:space-between;color:var(--text-muted)}.source h2{margin:0;font-size:14px}.source header p{margin:6px 0 14px;color:var(--text-muted);font-size:12px;line-height:1.6}.source>div{display:flex;gap:8px}.source a{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:9px;background:var(--surface-muted);color:var(--text);text-decoration:none}.source a:hover{background:var(--surface-hover)}.source strong{display:none}.source small{font-size:12px}@media(max-width:850px){.release-workspace{grid-template-columns:1fr}.release-workspace>aside,.notes{grid-column:1;grid-row:auto}.notes{padding:22px}.page>header{flex-wrap:wrap}h1{font-size:27px}}
-</style>
+<BackLink href="/{owner}/{repository}/releases" label="All releases" />
+<header class="mt-5 mb-8 flex flex-wrap items-start justify-between gap-6">
+  <div class="flex min-w-0 gap-3.5">
+    <span class="grid size-10.5 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><Tag size={19} /></span
+    >
+    <div class="min-w-0">
+      <h1
+        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-semibold tracking-tight wrap-anywhere text-ink-strong sm:text-3xl"
+      >
+        {title}
+        {#if release.latest}<span
+            class="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold tracking-normal text-brand">Latest</span
+          >{/if}
+        {#if release.draft}<span
+            class="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tracking-normal text-ink-muted"
+            >Draft</span
+          >{:else if release.prerelease}<span
+            class="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold tracking-normal text-warning"
+            >Prerelease</span
+          >{/if}
+      </h1>
+      <p class="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+        <code class="font-mono text-xs text-ink">{release.tagName}</code>
+        <a
+          class="inline-flex items-center gap-1 font-mono text-xs hover:text-brand"
+          href="/{owner}/{repository}/commit/{release.targetCommitId}"
+          ><GitCommitHorizontal size={13} />{release.targetCommitId.slice(0, 8)}</a
+        >
+        <span class="inline-flex items-center gap-1.5"
+          ><UserProfileLink
+            handle={release.author}
+            displayName={release.authorDisplayName}
+            avatarUrl={release.authorAvatarUrl}
+            size={18}
+          />
+          {release.draft ? 'created' : 'published'}
+          <Time value={release.publishedAt ?? release.createdAt} /></span
+        >
+      </p>
+    </div>
+  </div>
+  {#if release.canEdit}<LinkButton size="small" href="/{owner}/{repository}/releases/edit/{release.id}"
+      ><Pencil size={13} />Edit</LinkButton
+    >{/if}
+</header>
+
+<div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+  <section class="min-w-0 surface p-5 sm:p-7" aria-label="Release notes">
+    {#if release.body}<MarkdownBody html={release.bodyHtml} variant="document" />{:else}<p
+        class="text-sm text-ink-muted"
+      >
+        No release notes provided.
+      </p>{/if}
+  </section>
+  <aside class="grid min-w-0 gap-6">
+    {#key release.id}<ReleaseAssets {owner} {repository} releaseId={release.id} assets={release.assets} />{/key}
+    <section>
+      <h2 class="mb-2 text-base font-semibold text-ink-strong">Source code</h2>
+      <div class="grid grid-cols-2 gap-2">
+        {#each [['zip', 'ZIP'], ['tar.gz', 'tar.gz']] as [format, label] (format)}
+          <a
+            class="flex items-center justify-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-surface-hover hover:text-ink-strong"
+            href="{archiveBase}/{format}"
+            aria-label="Download source code as {label}"><Download size={14} />{label}</a
+          >
+        {/each}
+      </div>
+    </section>
+  </aside>
+</div>

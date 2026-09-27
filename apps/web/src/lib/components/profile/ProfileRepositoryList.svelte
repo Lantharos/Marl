@@ -1,17 +1,40 @@
 <script lang="ts">
   import type { PublicProfileRepository } from '@marl/contracts';
-  import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
+  import EmptyState from '../feedback/EmptyState.svelte';
   import Time from '../page/Time.svelte';
   import RepositoryIcon from '../identity/RepositoryIcon.svelte';
-  let { repositories, empty = 'No public repositories yet.' } = $props<{ repositories: PublicProfileRepository[]; empty?: string }>();
+  let {
+    repositories,
+    empty = 'No public repositories yet'
+  }: { repositories: PublicProfileRepository[]; empty?: string } = $props();
 </script>
 
-<div class="repositories">
+<div class="surface p-1.5">
   {#each repositories as repository (repository.id)}
-    <a href="/{repository.owner}/{repository.name}"><RepositoryIcon name={repository.name} src={repository.iconUrl} size={24} /><span><strong>{repository.name}</strong><p>{repository.description || ''}</p><small>{repository.defaultBranch} · Updated <Time value={repository.updatedAt} /></small></span><ArrowUpRight size={14} /></a>
-  {:else}<p class="empty">{empty}</p>{/each}
+    <a
+      href="/{repository.owner}/{repository.name}"
+      class="group grid grid-cols-[28px_minmax(0,1fr)_16px] items-start gap-3 rounded-lg px-3 py-4 transition-colors hover:bg-surface-hover"
+    >
+      <RepositoryIcon name={repository.name} src={repository.iconUrl} size={28} />
+      <span class="min-w-0">
+        <strong class="block truncate text-base font-semibold text-ink-strong group-hover:text-brand"
+          >{repository.name}</strong
+        >
+        {#if repository.description}<span class="mt-1 block truncate text-sm text-ink-muted"
+            >{repository.description}</span
+          >{/if}
+        <span class="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-ink-muted"
+          >{repository.defaultBranch}<span aria-hidden="true">·</span>Updated <Time
+            value={repository.updatedAt}
+            class="text-xs text-ink-muted"
+          /></span
+        >
+      </span>
+      <ArrowUpRight size={15} class="mt-1 text-ink-faint group-hover:text-brand" />
+    </a>
+  {:else}
+    <EmptyState compact icon={FolderGit2} title={empty} />
+  {/each}
 </div>
-
-<style>
-  .repositories{padding:6px;border-radius:12px;background:var(--surface)}.repositories>a{display:grid;grid-template-columns:24px minmax(0,1fr) 16px;align-items:start;gap:9px;padding:16px 12px;border-radius:8px;color:var(--text-faint);text-decoration:none}.repositories>a:hover{background:var(--surface-hover);color:var(--brand)}.repositories span{min-width:0}.repositories strong{display:block;color:var(--text-strong);font-size:13px}.repositories p:empty{display:none}.repositories p{overflow:hidden;margin:4px 0;color:var(--text-muted);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.repositories small{display:flex;flex-wrap:wrap;align-items:center;gap:3px;color:var(--text-faint);font-size:11px}.repositories small :global(time){font-size:inherit}.empty{margin:0;padding:20px 12px;color:var(--text-faint);font-size:11px}
-</style>

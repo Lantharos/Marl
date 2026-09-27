@@ -4,42 +4,105 @@ import { mergeRequirements } from './requirements';
 
 const pull = { authorId: 'author', sourceCommitId: 'head-2', state: 'open' as const };
 const producer = { workflowId: 'workflow_target', jobKey: 'check' };
-const checks = { total: 1, passed: 1, failed: 0, running: 0, items: [{ name: 'Project checks / Check repository', state: 'success', ...producer }] };
-const rule: BranchRule = { pattern: 'main', requiredApprovals: 1, requiredChecks: [{ name: 'Project checks / Check repository', ...producer }], requireConversations: true, carryApprovalsForward: false, allowAuthorMerge: false, allowedMergeMethods: ['merge'] };
+const checks = {
+  total: 1,
+  passed: 1,
+  failed: 0,
+  running: 0,
+  items: [{ name: 'Project checks / Check repository', state: 'success', ...producer }]
+};
+const rule: BranchRule = {
+  pattern: 'main',
+  requiredApprovals: 1,
+  requiredChecks: [{ name: 'Project checks / Check repository', ...producer }],
+  requireConversations: true,
+  carryApprovalsForward: false,
+  allowAuthorMerge: false,
+  allowedMergeMethods: ['merge']
+};
 
 describe('pull merge requirements', () => {
   test('requires a non-author approval, successful checks, and resolved conversations', () => {
-    const result = mergeRequirements(pull, rule, checks, [
-      { authorId: 'author', state: 'approved', commitId: 'head-2' },
-      { authorId: 'reviewer', state: 'approved', commitId: 'head-2' }
-    ], 1);
+    const result = mergeRequirements(
+      pull,
+      rule,
+      checks,
+      [
+        { authorId: 'author', state: 'approved', commitId: 'head-2' },
+        { authorId: 'reviewer', state: 'approved', commitId: 'head-2' }
+      ],
+      1
+    );
     expect(result.ready).toBe(false);
     expect(result.approvals).toBe(1);
     expect(result.reasons).toEqual(['1 review conversation must be resolved.']);
   });
 
   test('dismisses approval and change requests from a previous head', () => {
-    const result = mergeRequirements(pull, rule, checks, [
-      { authorId: 'reviewer', state: 'approved', commitId: 'head-1' },
-      { authorId: 'second-reviewer', state: 'changes_requested', commitId: 'head-1' }
-    ], 0);
+    const result = mergeRequirements(
+      pull,
+      rule,
+      checks,
+      [
+        { authorId: 'reviewer', state: 'approved', commitId: 'head-1' },
+        { authorId: 'second-reviewer', state: 'changes_requested', commitId: 'head-1' }
+      ],
+      0
+    );
     expect(result.ready).toBe(false);
     expect(result.approvals).toBe(0);
     expect(result.reasons).toEqual(['1 more approval required.']);
   });
 
   test('blocks pending or absent required checks', () => {
-    expect(mergeRequirements(pull, rule, { total: 0, passed: 0, failed: 0, running: 0, items: [] }, [], 0).checksPass).toBe(false);
-    expect(mergeRequirements(pull, rule, { total: 1, passed: 0, failed: 0, running: 1, items: [{ name: 'Project checks / Check repository', state: 'running', ...producer }] }, [], 0).checksPass).toBe(false);
+    expect(
+      mergeRequirements(pull, rule, { total: 0, passed: 0, failed: 0, running: 0, items: [] }, [], 0).checksPass
+    ).toBe(false);
+    expect(
+      mergeRequirements(
+        pull,
+        rule,
+        {
+          total: 1,
+          passed: 0,
+          failed: 0,
+          running: 1,
+          items: [{ name: 'Project checks / Check repository', state: 'running', ...producer }]
+        },
+        [],
+        0
+      ).checksPass
+    ).toBe(false);
   });
 
   test('does not block on optional failing checks', () => {
-    const result = mergeRequirements(pull, { ...rule, requiredApprovals: 0 }, { total: 2, passed: 1, failed: 1, running: 0, items: [...checks.items, { name: 'Optional preview', state: 'failure', workflowId: 'workflow_target', jobKey: 'preview' }] }, [], 0);
+    const result = mergeRequirements(
+      pull,
+      { ...rule, requiredApprovals: 0 },
+      {
+        total: 2,
+        passed: 1,
+        failed: 1,
+        running: 0,
+        items: [
+          ...checks.items,
+          { name: 'Optional preview', state: 'failure', workflowId: 'workflow_target', jobKey: 'preview' }
+        ]
+      },
+      [],
+      0
+    );
     expect(result.ready).toBe(true);
   });
 
   test('does not accept a same-named check from another workflow producer', () => {
-    const result = mergeRequirements(pull, { ...rule, requiredApprovals: 0 }, { total: 1, passed: 1, failed: 0, running: 0, items: [{ ...checks.items[0], workflowId: 'workflow_fork' }] }, [], 0);
+    const result = mergeRequirements(
+      pull,
+      { ...rule, requiredApprovals: 0 },
+      { total: 1, passed: 1, failed: 0, running: 0, items: [{ ...checks.items[0], workflowId: 'workflow_fork' }] },
+      [],
+      0
+    );
     expect(result.ready).toBe(false);
     expect(result.checksPass).toBe(false);
   });

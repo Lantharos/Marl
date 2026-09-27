@@ -1,0 +1,10 @@
+**/dist
+**/.svelte-kit
+**/.wrangler
+**/node_modules
+target
+bun.lock
+Cargo.lock
+apps/api/migrations
+**/worker-configuration.d.ts
+*.md

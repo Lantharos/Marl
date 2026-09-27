@@ -1,35 +1,19 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { readTheme, type Theme } from '$lib/theme';
-
-  let { scene, sizes, eager = false } = $props<{
-    scene: 'landscape' | 'courtyard' | 'inlay';
-    sizes: string;
-    eager?: boolean;
-  }>();
-
-  let theme = $state<Theme | null>(null);
-  onMount(() => { theme = readTheme(); });
+  let { scene, class: className = '' }: { scene: 'landscape' | 'courtyard' | 'inlay'; class?: string } = $props();
+  const url = (theme: 'dark' | 'light', small: boolean) =>
+    `url('/landing/${scene}-${theme}${small ? '-small' : ''}.webp')`;
+  const responsive = (theme: 'dark' | 'light') => `image-set(${url(theme, true)} 1x, ${url(theme, false)} 2x)`;
 </script>
 
-<div class="artwork" data-theme={theme} aria-hidden="true">
-  {#if theme}
-    <img
-      src={`/landing/${scene}-${theme}.webp`}
-      srcset={`/landing/${scene}-${theme}-small.webp 960w, /landing/${scene}-${theme}.webp 1536w`}
-      {sizes}
-      width="1536"
-      height={scene === 'landscape' ? 768 : 1024}
-      alt=""
-      loading={eager ? 'eager' : 'lazy'}
-      decoding="async"
-      fetchpriority={eager ? 'high' : 'low'}
-    />
-  {/if}
-</div>
-
-<style>
-  .artwork{width:100%;aspect-ratio:3/2;isolation:isolate;background:var(--canvas);pointer-events:none;user-select:none}
-  img{display:block;width:100%;height:auto;mix-blend-mode:lighten}
-  .artwork[data-theme='light'] img{mix-blend-mode:multiply;filter:brightness(1.05)}
-</style>
+<div
+  aria-hidden="true"
+  class={[
+    'pointer-events-none bg-canvas bg-no-repeat bg-blend-lighten select-none light:bg-blend-multiply',
+    'bg-(image:--art-dark) lg:bg-(image:--art-dark-large) light:bg-(image:--art-light) lg:light:bg-(image:--art-light-large)',
+    className
+  ]}
+  style:--art-dark={responsive('dark')}
+  style:--art-light={responsive('light')}
+  style:--art-dark-large={url('dark', false)}
+  style:--art-light-large={url('light', false)}
+></div>

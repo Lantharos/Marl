@@ -1,9 +1,30 @@
 import { DurableObject } from 'cloudflare:workers';
 import { readBoundedJson } from './bounded-body';
 import { StorageError } from '../storage/storage-model';
-import { attachMultipart, claimPart, completePart, createUploadSession, failPart, markServerUploaded, markUploaded, prepareServerUpload, trackCleanupKey, uploadedParts, type UploadSession } from './upload-model';
+import {
+  attachMultipart,
+  claimPart,
+  completePart,
+  createUploadSession,
+  failPart,
+  markServerUploaded,
+  markUploaded,
+  prepareServerUpload,
+  trackCleanupKey,
+  uploadedParts,
+  type UploadSession
+} from './upload-model';
 import { parseStateBody, stateFailure, stateFetch, stateResponse, trusted, type StateEnv } from '../state/state-http';
-import { attachUploadBody, claimPartBody, completePartBody, emptyBody, failPartBody, initializeUploadBody, prepareServerUploadBody, trackCleanupBody } from '../state/state-schemas';
+import {
+  attachUploadBody,
+  claimPartBody,
+  completePartBody,
+  emptyBody,
+  failPartBody,
+  initializeUploadBody,
+  prepareServerUploadBody,
+  trackCleanupBody
+} from '../state/state-schemas';
 
 export class UploadSessionObject extends DurableObject<StateEnv> {
   async fetch(request: Request): Promise<Response> {
@@ -11,11 +32,21 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
     try {
       const path = new URL(request.url).pathname;
       const existing = await this.ctx.storage.get<UploadSession>('session');
-      if (request.method === 'GET' && path === '/snapshot') return existing ? stateResponse({ session: existing }) : stateResponse({ error: 'upload_missing' }, 404);
+      if (request.method === 'GET' && path === '/snapshot')
+        return existing ? stateResponse({ session: existing }) : stateResponse({ error: 'upload_missing' }, 404);
       if (request.method === 'POST' && path === '/initialize') {
         const body = await parseStateBody(request, initializeUploadBody);
-        const proposed = createUploadSession(body.pushId, body.repository, body.organizationId, body.expiresAt, body.expectedGeneration, body.refs, body.packs);
-        if (existing && JSON.stringify(existing) !== JSON.stringify(proposed)) throw new StorageError('upload_conflict', 'The upload session already exists with different limits.');
+        const proposed = createUploadSession(
+          body.pushId,
+          body.repository,
+          body.organizationId,
+          body.expiresAt,
+          body.expectedGeneration,
+          body.refs,
+          body.packs
+        );
+        if (existing && JSON.stringify(existing) !== JSON.stringify(proposed))
+          throw new StorageError('upload_conflict', 'The upload session already exists with different limits.');
         if (!existing) {
           await this.ctx.storage.put('session', proposed);
           await this.ctx.storage.setAlarm(proposed.expiresAt);
@@ -50,7 +81,10 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
       if (request.method === 'POST' && path === '/ready') {
         await parseStateBody(request, emptyBody);
         markUploaded(existing, Date.now());
-        return stateResponse({ session: existing, packs: existing.packs.map((pack) => ({ ...pack, uploadedParts: uploadedParts(existing, pack.number) })) });
+        return stateResponse({
+          session: existing,
+          packs: existing.packs.map((pack) => ({ ...pack, uploadedParts: uploadedParts(existing, pack.number) }))
+        });
       }
       if (request.method === 'POST' && path === '/uploaded') {
         await parseStateBody(request, emptyBody);
@@ -102,7 +136,9 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
     if (!session || session.state === 'aborted') return;
     if (session.state === 'published') {
       try {
-        const acknowledged = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/acknowledge', { pushId: session.pushId });
+        const acknowledged = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/acknowledge', {
+          pushId: session.pushId
+        });
         if (!acknowledged.ok) throw new Error(`Publication acknowledgement failed with ${acknowledged.status}.`);
         await this.ctx.storage.deleteAlarm();
       } catch (error) {
@@ -112,23 +148,38 @@ export class UploadSessionObject extends DurableObject<StateEnv> {
       return;
     }
     try {
-      const committed = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/committed', { pushId: session.pushId });
+      const committed = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/committed', {
+        pushId: session.pushId
+      });
       if (committed.ok) {
         const value = await readBoundedJson<{ committed: { actualBytes: number } }>(committed, 64 * 1024);
         if (!value) throw new Error('Commit reconciliation returned an invalid response.');
-        const settled = await stateFetch(this.env.ORGANIZATION_QUOTAS, session.organizationId, this.env, '/settle', { id: session.pushId, actualBytes: value.committed.actualBytes });
+        const settled = await stateFetch(this.env.ORGANIZATION_QUOTAS, session.organizationId, this.env, '/settle', {
+          id: session.pushId,
+          actualBytes: value.committed.actualBytes
+        });
         if (!settled.ok) throw new Error(`Quota settlement failed with ${settled.status}.`);
         await this.ctx.storage.put('session', { ...session, state: 'published' });
-        await Promise.allSettled([...session.packs.map((pack) => pack.key), ...session.cleanupKeys.filter((key) => key.startsWith('quarantine/'))].map((key) => this.env.REPOSITORIES.delete(key)));
-        const acknowledged = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/acknowledge', { pushId: session.pushId });
+        await Promise.allSettled(
+          [
+            ...session.packs.map((pack) => pack.key),
+            ...session.cleanupKeys.filter((key) => key.startsWith('quarantine/'))
+          ].map((key) => this.env.REPOSITORIES.delete(key))
+        );
+        const acknowledged = await stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/acknowledge', {
+          pushId: session.pushId
+        });
         if (!acknowledged.ok) throw new Error(`Publication acknowledgement failed with ${acknowledged.status}.`);
         return;
       }
       if (committed.status !== 404) throw new Error(`Commit reconciliation failed with ${committed.status}.`);
-      await Promise.allSettled(session.packs.map(async (pack) => {
-        if (pack.multipartUploadId) await this.env.REPOSITORIES.resumeMultipartUpload(pack.key, pack.multipartUploadId).abort();
-        await this.env.REPOSITORIES.delete(pack.key);
-      }));
+      await Promise.allSettled(
+        session.packs.map(async (pack) => {
+          if (pack.multipartUploadId)
+            await this.env.REPOSITORIES.resumeMultipartUpload(pack.key, pack.multipartUploadId).abort();
+          await this.env.REPOSITORIES.delete(pack.key);
+        })
+      );
       await Promise.allSettled(session.cleanupKeys.map((key) => this.env.REPOSITORIES.delete(key)));
       await Promise.allSettled([
         stateFetch(this.env.REPOSITORY_STATE, session.repository, this.env, '/abort', { pushId: session.pushId }),

@@ -1,16 +1,29 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import type { InboxItem } from '@marl/contracts';
-  import AtSign from 'lucide-svelte/icons/at-sign';
-  import Check from 'lucide-svelte/icons/check';
-  import CircleAlert from 'lucide-svelte/icons/circle-alert';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
-  import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
+  import AtSign from '@lucide/svelte/icons/at-sign';
+  import Check from '@lucide/svelte/icons/check';
+  import CircleAlert from '@lucide/svelte/icons/circle-alert';
+  import CircleDot from '@lucide/svelte/icons/circle-dot';
+  import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
   import Time from '$lib/components/page/Time.svelte';
   import { api } from '$lib/api';
 
-  let { items, compact = false, emptyTitle = 'All caught up.', emptyDescription = 'Mentions, assignments, and updates will appear here.', onChange = () => {} } = $props<{ items: InboxItem[]; compact?: boolean; emptyTitle?: string; emptyDescription?: string; onChange?: () => void | Promise<void> }>();
+  let {
+    items,
+    compact = false,
+    emptyTitle = 'All caught up',
+    emptyDescription = 'Mentions, assignments, and updates will appear here.',
+    onChange = () => {}
+  }: {
+    items: InboxItem[];
+    compact?: boolean;
+    emptyTitle?: string;
+    emptyDescription?: string;
+    onChange?: () => void | Promise<void>;
+  } = $props();
 
   function reason(item: InboxItem) {
     if (item.reason === 'mention') return 'mentioned you';
@@ -23,30 +36,73 @@
   async function open(event: MouseEvent, item: InboxItem) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    if (item.unread) await api(`/inbox/${item.kind}/${item.id.slice(item.id.indexOf(':') + 1)}`, { method: 'PATCH', body: JSON.stringify({ read: true }) });
+    if (item.unread)
+      await api(`/inbox/${item.kind}/${item.id.slice(item.id.indexOf(':') + 1)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ read: true })
+      });
     await goto(item.href);
   }
 
   async function setDone(item: InboxItem) {
-    await api(`/inbox/${item.kind}/${item.id.slice(item.id.indexOf(':') + 1)}`, { method: 'PATCH', body: JSON.stringify({ done: !item.done }) });
+    await api(`/inbox/${item.kind}/${item.id.slice(item.id.indexOf(':') + 1)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ done: !item.done })
+    });
     await onChange();
   }
 </script>
 
-<section class:compact class="items" aria-label="Inbox items">
+<section class="surface p-1.5" aria-label="Inbox items">
   {#each items as item (item.id)}
-    <article class:unread={item.unread}>
-      <a href={item.href} onclick={(event) => open(event, item)}>
-        <span class="kind" class:failed={item.kind === 'run'}>{#if item.reason === 'mention'}<AtSign size={16} />{:else if item.kind === 'issue'}<CircleDot size={16} />{:else if item.kind === 'pull'}<GitPullRequest size={16} />{:else}<CircleAlert size={16} />{/if}</span>
-        <span class="copy"><span class="title-line"><strong>{item.title}</strong>{#if item.unread}<i aria-label="Unread"></i>{/if}</span><small><span>{item.repository.owner}/{item.repository.name}</span> · {item.kind === 'issue' ? `#${item.number}` : item.kind === 'pull' ? `!${item.number}` : `run ${item.number}`} · {reason(item)} · <Time value={item.updatedAt} /></small></span>
+    <article class="group relative flex items-center gap-1 rounded-lg transition-colors hover:bg-surface-hover">
+      <a
+        href={item.href}
+        onclick={(event) => open(event, item)}
+        class={[
+          'grid min-w-0 flex-1 grid-cols-[32px_minmax(0,1fr)] items-center gap-3 px-3',
+          compact ? 'min-h-15 py-2.5' : 'min-h-17 py-3'
+        ]}
+      >
+        <span
+          class={[
+            'grid size-8 place-items-center rounded-full',
+            item.kind === 'run'
+              ? 'bg-danger-soft text-danger'
+              : item.unread
+                ? 'bg-brand-soft text-brand'
+                : 'bg-surface-muted text-ink-muted'
+          ]}
+          >{#if item.reason === 'mention'}<AtSign size={16} />{:else if item.kind === 'issue'}<CircleDot
+              size={16}
+            />{:else if item.kind === 'pull'}<GitPullRequest size={16} />{:else}<CircleAlert size={16} />{/if}</span
+        >
+        <span class="min-w-0">
+          <span class="flex min-w-0 items-center gap-2">
+            <strong class={['truncate text-sm', item.unread ? 'font-semibold text-ink-strong' : 'font-medium text-ink']}
+              >{item.title}</strong
+            >
+            {#if item.unread}<span class="size-1.5 shrink-0 rounded-full bg-brand" role="img" aria-label="Unread"
+              ></span>{/if}
+          </span>
+          <span class="mt-0.5 block truncate text-xs text-ink-muted"
+            ><span class="text-ink">{item.repository.owner}/{item.repository.name}</span> · {item.kind === 'issue'
+              ? `#${item.number}`
+              : item.kind === 'pull'
+                ? `!${item.number}`
+                : `run ${item.number}`} · {reason(item)} · <Time value={item.updatedAt} class="text-ink-muted" /></span
+          >
+        </span>
       </a>
-      {#if !compact}<button aria-label={item.done ? 'Move back to inbox' : 'Mark as done'} title={item.done ? 'Move back to inbox' : 'Mark as done'} onclick={() => setDone(item)}>{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</button>{/if}
+      {#if !compact}<button
+          class="mr-2 grid size-8 shrink-0 place-items-center rounded-md text-ink-muted opacity-100 transition hover:bg-surface-muted hover:text-ink-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          aria-label={item.done ? 'Move back to inbox' : 'Mark as done'}
+          title={item.done ? 'Move back to inbox' : 'Mark as done'}
+          onclick={() => setDone(item)}
+          >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</button
+        >{/if}
     </article>
   {:else}
-    <div class="empty"><span><Check size={19} /></span><strong>{emptyTitle}</strong><p>{emptyDescription}</p></div>
+    <EmptyState compact icon={Check} title={emptyTitle} description={emptyDescription} />
   {/each}
 </section>
-
-<style>
-  .items{display:grid;gap:4px;padding:6px;border-radius:12px;background:var(--surface)}.items article{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center;border-radius:8px}.items article:hover{background:var(--surface-hover)}.items article>a{display:grid;min-width:0;grid-template-columns:32px minmax(0,1fr);align-items:center;gap:10px;min-height:76px;padding:12px;color:inherit;text-decoration:none}.kind{display:grid;width:29px;height:29px;place-items:center;border-radius:7px;background:var(--surface-muted);color:var(--text-muted)}.unread .kind{background:var(--brand-soft);color:var(--brand)}.kind.failed{background:var(--danger-soft);color:var(--danger)}.copy{min-width:0}.title-line{display:flex;min-width:0;align-items:center;gap:7px}.title-line strong,.copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.title-line strong{color:var(--text-strong);font-size:13px;font-weight:620}.title-line i{width:5px;height:5px;flex:none;border-radius:50%;background:var(--brand)}.copy small{line-height:1.6;margin-top:6px;color:var(--text-faint);font-size:11px}.copy small>span{color:var(--text-muted)}article>button{display:grid;width:30px;height:30px;border:0;border-radius:6px;background:transparent;color:var(--text-faint);cursor:pointer;place-items:center}article>button:hover{background:var(--surface-muted);color:var(--text-strong)}article>button:focus-visible{outline:1px solid var(--brand);outline-offset:2px}.compact article{grid-template-columns:minmax(0,1fr)}.compact article>a{min-height:70px;padding-inline:10px}.empty{display:grid;justify-items:start;padding:24px 18px}.empty>span{display:grid;width:31px;height:31px;place-items:center;border-radius:50%;background:var(--success-soft);color:var(--success)}.empty strong{margin-top:12px;color:var(--text-strong);font-size:14px}.empty p{margin:4px 0 0;color:var(--text-faint);font-size:11px}@media(max-width:560px){.items article{grid-template-columns:minmax(0,1fr) 32px}.items article>a{padding-inline:4px}.copy small{white-space:normal}.copy small>span{display:inline}}
-</style>

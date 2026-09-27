@@ -4,6 +4,11 @@ import { routeLoad } from '$lib/load';
 import { encodeRepositoryPath, encodeRevision } from '$lib/repositories/repository-path';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch, params }) => ({
-  preview: await routeLoad(apiWith<SourcePreview>(fetch, `/repositories/${params.owner}/${params.repo}/source/${encodeRevision(params.revision)}/${encodeRepositoryPath(params.path ?? 'README.md')}`))
-});
+export const load = (async ({ fetch, params }) => ({
+  preview: await routeLoad(
+    apiWith<SourcePreview>(
+      fetch,
+      `/repositories/${params.owner}/${params.repo}/source/${encodeRevision(params.revision)}/${encodeRepositoryPath(params.path ?? 'README.md')}`
+    )
+  )
+})) satisfies PageLoad;

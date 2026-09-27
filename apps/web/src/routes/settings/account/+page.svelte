@@ -1,15 +1,19 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import QRCode from 'qrcode';
-  import Check from 'lucide-svelte/icons/check';
-  import KeyRound from 'lucide-svelte/icons/key-round';
-  import Modal from '$lib/components/controls/Modal.svelte';
+  import Check from '@lucide/svelte/icons/check';
+  import KeyRound from '@lucide/svelte/icons/key-round';
+  import Modal from '$lib/components/overlays/Modal.svelte';
   import Button from '$lib/components/controls/Button.svelte';
-  import SigningSettings from '$lib/components/settings/SigningSettings.svelte';
+  import Field from '$lib/components/controls/Field.svelte';
+  import Notice from '$lib/components/feedback/Notice.svelte';
+  import SettingItem from '$lib/components/settings/SettingItem.svelte';
+  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
+  import SigningSettings from '$lib/components/settings/panels/SigningSettings.svelte';
   import { authClient } from '$lib/auth-client';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   let twoFactorDialog = $state(false);
   let twoFactorEnabled = $state(untrack(() => data.twoFactorEnabled));
   let disablingTwoFactor = $state(false);
@@ -24,55 +28,176 @@
   let error = $state('');
 
   async function addPasskey() {
-    busy = 'passkey'; passkeyState = 'saving'; error = '';
+    busy = 'passkey';
+    passkeyState = 'saving';
+    error = '';
     const result = await authClient.passkey.addPasskey({ name: 'Marl passkey' });
     busy = '';
-    if (result.error) { passkeyState = 'idle'; error = result.error.message || 'The passkey could not be added.'; return; }
+    if (result.error) {
+      passkeyState = 'idle';
+      error = result.error.message || 'The passkey could not be added.';
+      return;
+    }
     passkeyState = 'saved';
     setTimeout(() => (passkeyState = 'idle'), 1800);
   }
 
   async function beginTwoFactor() {
-    busy = 'two-factor'; error = '';
+    busy = 'two-factor';
+    error = '';
     const result = await authClient.twoFactor.enable({ password: twoFactorPassword, method: 'totp' });
     busy = '';
-    if (result.error) { error = result.error.message || 'Two-factor authentication could not be enabled.'; return; }
-    if (result.data.method !== 'totp') { error = 'Two-factor setup returned an unexpected verification method.'; return; }
+    if (result.error) {
+      error = result.error.message || 'Two-factor authentication could not be enabled.';
+      return;
+    }
+    if (result.data.method !== 'totp') {
+      error = 'Two-factor setup returned an unexpected verification method.';
+      return;
+    }
     totpUri = result.data.totpURI;
     backupCodes = result.data.backupCodes;
-    totpQr = await QRCode.toDataURL(totpUri, { width: 220, margin: 1, color: { dark: '#171719', light: '#f1f0ed' } });
+    totpQr = await QRCode.toDataURL(totpUri, { width: 220, margin: 1, color: { dark: '#171719', light: '#ffffff' } });
   }
 
   async function confirmTwoFactor() {
-    busy = 'two-factor'; error = '';
+    busy = 'two-factor';
+    error = '';
     const result = await authClient.twoFactor.verifyTotp({ code: twoFactorCode });
     busy = '';
-    if (result.error) { error = result.error.message || 'That authentication code is not valid.'; return; }
-    twoFactorEnabled = true; twoFactorConfirmed = true;
+    if (result.error) {
+      error = result.error.message || 'That authentication code is not valid.';
+      return;
+    }
+    twoFactorEnabled = true;
+    twoFactorConfirmed = true;
   }
 
   async function disableTwoFactor() {
-    busy = 'two-factor'; error = '';
+    busy = 'two-factor';
+    error = '';
     const result = await authClient.twoFactor.disable({ password: twoFactorPassword });
     busy = '';
-    if (result.error) { error = result.error.message || 'Two-factor authentication could not be disabled.'; return; }
-    twoFactorEnabled = false; twoFactorDialog = false; twoFactorPassword = '';
+    if (result.error) {
+      error = result.error.message || 'Two-factor authentication could not be disabled.';
+      return;
+    }
+    twoFactorEnabled = false;
+    twoFactorDialog = false;
+    twoFactorPassword = '';
   }
 </script>
 
 <svelte:head><title>Sign-in and security · Marl</title></svelte:head>
-<header class="page-head"><h2>Sign-in and security</h2></header>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
-<div class="security-settings"><section><div><h3>Passkeys</h3><p>Use your device or security key without entering a password.</p></div><Button loading={passkeyState === 'saving'} onclick={addPasskey} disabled={passkeyState !== 'idle'}>{#if passkeyState === 'saved'}<Check size={14} />Added!{:else}<KeyRound size={14} />{passkeyState === 'saving' ? 'Adding' : 'Add passkey'}{/if}</Button></section>
-<section><div><h3>Two-factor authentication</h3><p>{twoFactorEnabled ? 'Enabled' : 'Not set up'}</p></div><Button variant={twoFactorEnabled ? 'danger-soft' : 'secondary'} onclick={() => { disablingTwoFactor = twoFactorEnabled; twoFactorConfirmed = false; twoFactorDialog = true; twoFactorPassword = ''; twoFactorCode = ''; totpUri = ''; backupCodes = []; }}>{twoFactorEnabled ? 'Disable' : 'Set up'}</Button></section>
-<SigningSettings endpoint="/signing" initialMode={data.signingMode} personal /></div>
+<SettingsHeader
+  title="Sign-in and security"
+  description="Protect your account with a passkey, a second factor, and signed commits."
+/>
+{#if error && !twoFactorDialog}<Notice class="mb-4">{error}</Notice>{/if}
+<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+  <SettingItem title="Passkeys" description="Use your device or security key without entering a password.">
+    <Button size="small" loading={passkeyState === 'saving'} onclick={addPasskey} disabled={passkeyState !== 'idle'}
+      >{#if passkeyState === 'saved'}<Check size={15} />Added{:else if passkeyState === 'idle'}<KeyRound size={15} />Add
+        passkey{:else}Adding{/if}</Button
+    >
+  </SettingItem>
+  <SettingItem
+    title="Two-factor authentication"
+    description={twoFactorEnabled ? 'Enabled with an authenticator app' : 'Not set up'}
+  >
+    <Button
+      size="small"
+      variant={twoFactorEnabled ? 'danger-soft' : 'secondary'}
+      onclick={() => {
+        disablingTwoFactor = twoFactorEnabled;
+        twoFactorConfirmed = false;
+        twoFactorDialog = true;
+        twoFactorPassword = '';
+        twoFactorCode = '';
+        totpUri = '';
+        backupCodes = [];
+        error = '';
+      }}>{twoFactorEnabled ? 'Disable' : 'Set up'}</Button
+    >
+  </SettingItem>
+  <SigningSettings endpoint="/signing" initialMode={data.signingMode} personal />
+</div>
 
-{#snippet twoFactorActions()}{#if disablingTwoFactor}<Button size="small" onclick={() => (twoFactorDialog = false)}>Cancel</Button><Button size="small" variant="danger" disabled={!twoFactorPassword || busy === 'two-factor'} onclick={disableTwoFactor}>Disable two-factor</Button>{:else if twoFactorConfirmed}<Button size="small" variant="primary" onclick={() => (twoFactorDialog = false)}>Done</Button>{:else if !totpUri}<Button size="small" onclick={() => (twoFactorDialog = false)}>Cancel</Button><Button size="small" variant="primary" disabled={!twoFactorPassword || busy === 'two-factor'} onclick={beginTwoFactor}>Continue</Button>{:else}<Button size="small" variant="primary" disabled={twoFactorCode.length !== 6 || busy === 'two-factor'} onclick={confirmTwoFactor}>Verify and enable</Button>{/if}{/snippet}
-<Modal open={twoFactorDialog} title={disablingTwoFactor ? 'Disable two-factor authentication?' : 'Set up two-factor authentication'} description={disablingTwoFactor ? 'Your account will return to password and passkey protection.' : 'Enter your Marl password before changing account security.'} onClose={() => (twoFactorDialog = false)} actions={twoFactorActions}>{#if disablingTwoFactor || !totpUri}<label class="security-field"><span>Password</span><input type="password" autocomplete="current-password" bind:value={twoFactorPassword} /></label>{:else}<div class="totp-setup"><img src={totpQr} alt="Authenticator setup QR code" /><p>{twoFactorConfirmed ? 'Two-factor authentication is active. Save these recovery codes now.' : 'Scan this with your authenticator, then enter the six-digit code.'}</p>{#if !twoFactorConfirmed}<label class="security-field"><span>Authentication code</span><input inputmode="numeric" maxlength="6" autocomplete="one-time-code" bind:value={twoFactorCode} /></label>{/if}<details open={twoFactorConfirmed}><summary>Recovery codes</summary><div class="backup-codes">{#each backupCodes as code (code)}<code>{code}</code>{/each}</div></details></div>{/if}</Modal>
-
-
-
-<style>
-  .security-settings{padding:0 20px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-surface)}
-  .page-head{padding-bottom:25px;}h2{margin:0;color:var(--text-strong);font-size:23px;letter-spacing:-.03em}section p{margin:6px 0 0;color:var(--text-muted);font-size:11px;line-height:1.5}section{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:82px;padding:18px 0;}h3{margin:0;color:var(--text-strong);font-size:13px}.error{display:flex;align-items:center;gap:7px;padding:9px 10px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:11px}.security-field{display:grid;gap:8px}.security-field span{color:var(--text-strong);font-size:11px;font-weight:630}.security-field input{height:37px;padding:0 9px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong)}.totp-setup{display:grid;gap:12px}.totp-setup img{width:180px;margin:auto;border-radius:8px}.totp-setup p{margin:0;color:var(--text-muted);font-size:11px}.totp-setup details{color:var(--text-muted);font-size:11px}.backup-codes{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:9px}.backup-codes code{padding:6px;border-radius:4px;background:var(--canvas);text-align:center}
-</style>
+{#snippet twoFactorActions()}
+  {#if disablingTwoFactor}
+    <Button size="small" onclick={() => (twoFactorDialog = false)}>Cancel</Button>
+    <Button
+      size="small"
+      variant="danger"
+      loading={busy === 'two-factor'}
+      disabled={!twoFactorPassword}
+      onclick={disableTwoFactor}>Disable two-factor</Button
+    >
+  {:else if twoFactorConfirmed}
+    <Button size="small" variant="primary" onclick={() => (twoFactorDialog = false)}>Done</Button>
+  {:else if !totpUri}
+    <Button size="small" onclick={() => (twoFactorDialog = false)}>Cancel</Button>
+    <Button
+      size="small"
+      variant="primary"
+      loading={busy === 'two-factor'}
+      disabled={!twoFactorPassword}
+      onclick={beginTwoFactor}>Continue</Button
+    >
+  {:else}
+    <Button
+      size="small"
+      variant="primary"
+      loading={busy === 'two-factor'}
+      disabled={twoFactorCode.length !== 6}
+      onclick={confirmTwoFactor}>Verify and enable</Button
+    >
+  {/if}
+{/snippet}
+<Modal
+  open={twoFactorDialog}
+  title={disablingTwoFactor ? 'Disable two-factor authentication?' : 'Set up two-factor authentication'}
+  description={disablingTwoFactor
+    ? 'Your account will return to password and passkey protection.'
+    : totpUri
+      ? undefined
+      : 'Enter your Marl password before changing account security.'}
+  size="small"
+  onClose={() => (twoFactorDialog = false)}
+  actions={twoFactorActions}
+>
+  <div class="grid gap-4">
+    {#if disablingTwoFactor || !totpUri}
+      <Field label="Password">
+        <input class="field" type="password" autocomplete="current-password" bind:value={twoFactorPassword} />
+      </Field>
+    {:else}
+      <img src={totpQr} alt="Authenticator setup QR code" class="mx-auto w-45 rounded-lg" />
+      <p class="text-sm text-ink-muted">
+        {twoFactorConfirmed
+          ? 'Two-factor authentication is active. Save these recovery codes now.'
+          : 'Scan this with your authenticator, then enter the six-digit code.'}
+      </p>
+      {#if !twoFactorConfirmed}
+        <Field label="Authentication code">
+          <input
+            class="field text-center font-mono tracking-[0.4em]"
+            inputmode="numeric"
+            maxlength="6"
+            autocomplete="one-time-code"
+            bind:value={twoFactorCode}
+          />
+        </Field>
+      {/if}
+      <details open={twoFactorConfirmed} class="text-sm text-ink-muted">
+        <summary class="cursor-pointer font-medium text-ink-strong">Recovery codes</summary>
+        <div class="mt-2.5 grid grid-cols-2 gap-1.5">
+          {#each backupCodes as code (code)}<code class="rounded-md bg-canvas p-1.5 text-center font-mono text-xs"
+              >{code}</code
+            >{/each}
+        </div>
+      </details>
+    {/if}
+    {#if error}<Notice>{error}</Notice>{/if}
+  </div>
+</Modal>

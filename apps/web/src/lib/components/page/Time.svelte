@@ -1,11 +1,9 @@
 <script lang="ts">
   import { formatAbsoluteTime, formatTimestamp } from '$lib/time';
 
-  let { value, class: className = '' } = $props<{ value: string; class?: string }>();
+  let { value, class: className = '' }: { value: string; class?: string } = $props();
 </script>
 
-<time class={className} datetime={value} title={formatAbsoluteTime(value)}>{formatTimestamp(value)}</time>
-
-<style>
-  time{color:var(--text-muted);font-size:11px}.end{margin-left:auto}.right{text-align:right}
-</style>
+<time class={className || 'text-xs text-ink-muted'} datetime={value} title={formatAbsoluteTime(value)}
+  >{formatTimestamp(value)}</time
+>

@@ -18,6 +18,7 @@ apps/web            SvelteKit application
 apps/api            TypeScript control-plane Worker
 apps/git-edge       Cloudflare Worker and Container routing for Git
 packages/contracts  Shared transport types and validation
+packages/markdown   Markdown rendering shared by the API
 crates/repository    Local repository engine
 crates/cli           The `marl` executable
 crates/git           Smart HTTP Git gateway
@@ -35,10 +36,23 @@ request handling in `http` and `core`. The Git edge separates repository `state`
 grouped into `controls`, `identity`, `page`, `markdown`, and `discussion`, while feature
 folders such as `pulls`, `issues`, and `code` hold their own components and state.
 
+Each API domain exports a route table. The Worker matches the method and path against these
+typed tables, then applies the access level each route declares (public, signed-in user,
+runner, or Git gateway) before calling its handler. Unknown paths return 404 and known paths
+with the wrong method return 405 with an `Allow` header.
+
 ## Web application
 
-The web application uses SvelteKit and a semantic design-token layer. Product pages render
-control-plane state; demo fixtures do not ship in product routes.
+The web application uses SvelteKit and Tailwind. Colors, the type scale, radii, and shadows are
+semantic tokens defined once in `app.css`; colors resolve through `light-dark()`, so a single
+class works in both appearances. The saved appearance is a cookie the server reads while
+rendering, which avoids a flash of the wrong theme. Product pages render control-plane state;
+demo fixtures do not ship in product routes.
+
+Markdown is rendered and sanitized by the API, which returns HTML beside every source body.
+Composer previews and repository documents use the same renderer through dedicated endpoints.
+The browser only enhances rendered documents: syntax highlighting, math, diagrams, and models
+load on demand when they scroll into view.
 
 The global shell owns repository switching, search, command access, current
 identity, and global navigation. Repository pages render inside that shell rather than

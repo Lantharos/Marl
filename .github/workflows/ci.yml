@@ -26,6 +26,7 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: bun ci
+      - run: bun run format:check
       - run: bun check
       - run: bun run build
       - run: bun run test

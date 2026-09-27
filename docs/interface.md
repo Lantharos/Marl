@@ -3,6 +3,8 @@
 Marl keeps the work readable without turning every piece of metadata into an alert.
 Open Runde, the warm neutral canvas, and terracotta actions carry across public pages,
 repositories, and account settings. Light and dark appearances use the same hierarchy.
+Marl follows the device appearance until someone picks Light or Dark from the account menu;
+that choice is remembered and applied before the page first paints.
 
 ## Reading and navigation
 
@@ -10,15 +12,16 @@ Page titles name the destination. Descriptions earn their space by explaining a 
 or a choice, not by repeating the title. The icon-based global navigation keeps labels
 available on hover and keyboard focus;
 on small screens the menu names the same destinations. Search remains available from
-the header and with Ctrl K.
+the header and with Ctrl K. In a repository's code view, T opens Go to file.
 
 Navigation reuses the current tab's shell for up to a minute instead of fetching the same
 profile and repository list on every page change. Account, repository, and organization
 changes refresh it immediately; sign-in changes also refresh other open tabs. This cache
 is held in browser memory only. The home dashboard still loads current activity on each visit.
 
-Use 13–14 px for readable working content, 12 px for controls and field labels, and at
-least 11 px for supporting metadata. Code has its own monospace scale and horizontal
+Text follows one scale: 11, 12, 13, 14, 15, 17, 20, 24, 30, and 38 px. Working content
+reads at 14 px, controls and field labels at 13 px, and supporting metadata at 12 px, never
+below 11 px. Page titles use 24–30 px. Code has its own monospace scale and horizontal
 scrolling. Do not shrink a filename, command, or comment to fit a narrow screen.
 
 Hide scrollbars across pages and nested panels without disabling scrolling. Wheel, trackpad,
@@ -42,17 +45,17 @@ part of the interface, not exceptions to it.
 Account signing preferences live with sign-in and security. Repository signing and approval
 for outside contributors' checks live with access and security. Each policy row shows its current
 value beside an explicit Change action. Choice dialogs show each option and its effect together.
-General settings keep description saving beside the field and default-branch changes in a
-separate confirmation modal.
+General settings keep the icon and description together, then group code and visibility,
+ownership, and lifecycle operations. Each operation opens its own dialog; visibility, archiving,
+and detaching a fork confirm their consequences first.
 
-Branch rules group merge requirements separately from review and merge preferences. Each row
+Branch rules group review requirements separately from merge preferences. Each row
 opens a focused editor; changing one setting preserves the other rules. Branches without their
 own rule show the all-branches policy they inherit. Secrets use a compact list with separate
 add and change dialogs, and confirmation before deletion.
 
 Account pages use the same spacing and list surfaces. Email and SSH-key creation open focused
-dialogs; existing credentials and devices remain the primary content. The default branch name
-is itself the button that opens its editor.
+dialogs; existing credentials and devices remain the primary content.
 
 ## Profile repositories
 

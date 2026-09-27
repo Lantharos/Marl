@@ -2,20 +2,18 @@
   import { goto } from '$app/navigation';
   import { onDestroy, untrack } from 'svelte';
   import type { RunSummary } from '@marl/contracts';
-  import CircleAlert from 'lucide-svelte/icons/circle-alert';
-  import CircleCheck from 'lucide-svelte/icons/circle-check';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import GitBranch from 'lucide-svelte/icons/git-branch';
-  import ShieldCheck from 'lucide-svelte/icons/shield-check';
+  import CirclePlay from '@lucide/svelte/icons/circle-play';
   import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
+  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
+  import Page from '$lib/components/page/Page.svelte';
+  import FilterBar from '$lib/components/page/FilterBar.svelte';
   import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
+  import RunRow from '$lib/runs/RunRow.svelte';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   let runs = $state.raw<RunSummary[]>(untrack(() => data.runs));
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let query = $state(untrack(() => data.query));
@@ -55,13 +53,16 @@
     loadingMore = true;
     loadError = '';
     try {
-      const result = await api<{ runs: RunSummary[]; nextCursor: string | null }>(`/runs?limit=30&state=${activeFilter.toLowerCase()}&q=${encodeURIComponent(query.trim())}&cursor=${encodeURIComponent(cursor)}`);
+      const result = await api<{ runs: RunSummary[]; nextCursor: string | null }>(
+        `/runs?limit=30&state=${activeFilter.toLowerCase()}&q=${encodeURIComponent(query.trim())}&cursor=${encodeURIComponent(cursor)}`
+      );
       if (generation !== listGeneration) return;
       const ids = new Set(runs.map((run) => run.id));
       runs = [...runs, ...result.runs.filter((run) => !ids.has(run.id))];
       nextCursor = result.nextCursor;
     } catch (cause) {
-      if (generation === listGeneration) loadError = cause instanceof MarlApiError ? cause.message : 'More runs could not be loaded.';
+      if (generation === listGeneration)
+        loadError = cause instanceof MarlApiError ? cause.message : 'More runs could not be loaded.';
     } finally {
       if (generation === listGeneration) loadingMore = false;
     }
@@ -71,32 +72,36 @@
 
 <svelte:head><title>Runs · Marl</title></svelte:head>
 
-<main class="page">
+<Page>
   <PageHeader title="Runs" />
-  <FilterBar placeholder="Search runs" tabs={['All', 'Active', 'Success', 'Failure', 'Canceled']} bind:active={activeFilter} bind:query onActiveChange={() => navigate()} onQueryChange={changeQuery} />
-  <section class="list" aria-label="Workflow runs">
+  <FilterBar
+    placeholder="Search runs"
+    tabs={['All', 'Active', 'Success', 'Failure', 'Canceled']}
+    bind:active={activeFilter}
+    bind:query
+    onActiveChange={() => navigate()}
+    onQueryChange={changeQuery}
+  />
+  <section class="surface p-1.5" aria-label="Workflow runs">
     {#each runs as run (run.id)}
-      <a class="row" href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}">
-        <span class="state {run.state}" title={runStateLabel(run)}>{#if awaitingCheckApproval(run)}<ShieldCheck size={18} />{:else if run.state === 'running' || run.state === 'queued'}<CircleDot size={18} />{:else if run.state === 'failure'}<CircleAlert size={18} />{:else}<CircleCheck size={18} />{/if}</span>
-        <span class="main">
-          <strong>{run.name}</strong>
-          <small>{run.repository.owner}/{run.repository.name} · run #{run.number} · <Time value={run.queuedAt} /></small>
-          <code><GitBranch size={12} />{run.branch}<i>{run.commit.slice(0, 7)}</i></code>
-        </span>
-        <span class="run-meta"><span class="run-state {run.state}">{runStateLabel(run)}</span><small>{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</small></span>
-      </a>
+      <RunRow {run} />
     {:else}
-      <div class="empty">
-        <strong>{query ? 'No matching runs' : `No ${activeFilter === 'All' ? '' : activeFilter.toLowerCase() + ' '}runs yet`}</strong>
-        <p>{query ? 'Try another workflow, repository, branch, or commit.' : activeFilter === 'All' ? 'Connect a runner and push a workflow to start your first run.' : 'Runs will appear here when they reach this state.'}</p>
-        {#if !query && activeFilter === 'All'}<a href="/runners/new">Connect a runner</a>{/if}
-      </div>
+      <EmptyState
+        icon={CirclePlay}
+        title={query
+          ? 'No matching runs'
+          : `No ${activeFilter === 'All' ? '' : activeFilter.toLowerCase() + ' '}runs yet`}
+        description={query
+          ? 'Try another workflow, repository, branch, or commit.'
+          : activeFilter === 'All'
+            ? 'Connect a runner and push a workflow to start your first run.'
+            : 'Runs will appear here when they reach this state.'}
+      >
+        {#if !query && activeFilter === 'All'}<LinkButton size="small" variant="primary" href="/runners/new"
+            >Connect a runner</LinkButton
+          >{/if}
+      </EmptyState>
     {/each}
   </section>
-  {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}
-  {#if nextCursor}<Button class="load-more" loading={loadingMore} onclick={loadMore}>Load more</Button>{/if}
-</main>
-
-<style>
-  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.list{display:grid;gap:4px;padding:6px;border-radius:12px;background:var(--surface)}.row{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:80px;padding:10px 12px;border-radius:8px;color:inherit;text-decoration:none;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.state{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--surface-muted);color:var(--text-muted)}.state.running,.state.queued{background:var(--brand-soft);color:var(--brand)}.state.failure{background:var(--danger-soft);color:var(--danger)}.state.success{background:var(--success-soft);color:var(--success)}.main{min-width:0}.main strong,.main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.main strong{color:var(--text-strong);font-size:13px}.main small{margin-top:4px;color:var(--text-muted);font-size:11px}.main small :global(time){font-size:11px}code{display:flex;align-items:center;gap:5px;margin-top:5px;color:var(--text);font-size:11px}code i{color:var(--text-muted);font-style:normal}.run-meta{display:grid;justify-items:end;gap:5px}.run-meta small{color:var(--text-faint);font-size:11px}.run-state{padding:0;color:var(--text-muted);font-size:11px;font-weight:650;text-transform:capitalize}.run-state.running,.run-state.queued{color:var(--brand)}.run-state.failure{color:var(--danger)}.run-state.success{color:var(--success)}.empty{padding:68px 4px;color:var(--text-muted);text-align:center}.empty strong{color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:15px;color:var(--brand-strong);font-size:12px;text-decoration:none}.load-error{margin:16px 0 0;color:var(--danger);font-size:11px;text-align:center}.page :global(.load-more.button){display:flex;margin:18px auto 0}@media(max-width:680px){.page{width:calc(100% - 28px);padding-top:32px}.row{grid-template-columns:36px minmax(0,1fr);padding-inline:6px}.run-meta{grid-column:2;justify-items:start}.run-meta small{display:none}}
-</style>
+  <InfiniteScroll cursor={nextCursor} loading={loadingMore} error={loadError} onload={loadMore} />
+</Page>

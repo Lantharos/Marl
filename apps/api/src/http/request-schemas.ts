@@ -1,4 +1,21 @@
-import { array, boolean, integer, maxLength, maxValue, minLength, minValue, nullable, number, optional, picklist, pipe, record, strictObject, string, unknown } from 'valibot';
+import {
+  array,
+  boolean,
+  integer,
+  maxLength,
+  maxValue,
+  minLength,
+  minValue,
+  nullable,
+  number,
+  optional,
+  picklist,
+  pipe,
+  record,
+  strictObject,
+  string,
+  unknown
+} from 'valibot';
 
 const shortString = pipe(string(), maxLength(1_000));
 const bodyString = pipe(string(), maxLength(100_000));
@@ -111,7 +128,10 @@ export const reviewBody = strictObject({
   state: picklist(['commented', 'approved', 'changes_requested']),
   body: optional(pipe(string(), maxLength(20_000)))
 });
-export const mergeBody = strictObject({ method: optional(mergeMethod), commitId: pipe(string(), minLength(40), maxLength(64)) });
+export const mergeBody = strictObject({
+  method: optional(mergeMethod),
+  commitId: pipe(string(), minLength(40), maxLength(64))
+});
 
 export const createIssueBody = strictObject({
   title: pipe(string(), minLength(1), maxLength(240)),
@@ -247,4 +267,10 @@ export const userEmailBody = strictObject({
 });
 export const verifyUserEmailBody = strictObject({
   token: pipe(string(), minLength(32), maxLength(256))
+});
+
+export const markdownPreviewBody = strictObject({
+  source: pipe(string(), maxLength(100_000)),
+  owner: optional(pipe(string(), maxLength(100))),
+  repository: optional(pipe(string(), maxLength(100)))
 });

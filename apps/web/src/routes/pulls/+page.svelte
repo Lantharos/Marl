@@ -2,14 +2,15 @@
   import { goto } from '$app/navigation';
   import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
-  import FilterBar from '$lib/components/controls/FilterBar.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
+  import FilterBar from '$lib/components/page/FilterBar.svelte';
+  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
+  import Page from '$lib/components/page/Page.svelte';
   import PageHeader from '$lib/components/page/PageHeader.svelte';
   import PullQueue from '$lib/pulls/PullQueue.svelte';
   import type { PageData } from './$types';
   import { api, MarlApiError } from '$lib/api';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   let items = $state.raw<PullRequestSummary[]>(untrack(() => data.pullRequests));
   let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
   let query = $state(untrack(() => data.query));
@@ -61,7 +62,8 @@
       items = [...items, ...result.pullRequests.filter((pull) => !ids.has(pull.id))];
       nextCursor = result.nextCursor;
     } catch (cause) {
-      if (generation === listGeneration) loadError = cause instanceof MarlApiError ? cause.message : 'More pulls could not be loaded.';
+      if (generation === listGeneration)
+        loadError = cause instanceof MarlApiError ? cause.message : 'More pulls could not be loaded.';
     } finally {
       if (generation === listGeneration) loadingMore = false;
     }
@@ -70,14 +72,30 @@
 </script>
 
 <svelte:head><title>Pulls · Marl</title></svelte:head>
-<main class="page">
+<Page>
   <PageHeader title="Pulls" actionHref="/pulls/new" actionLabel="New pull" />
-  <FilterBar placeholder="Search pulls" tabs={['Open', 'Merged', 'Closed']} labelOptions={data.availableLabels} bind:active={activeFilter} bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(activeFilter, query, labels)} />
-  <PullQueue pulls={items} showRepository grouped={activeFilter === 'Open'} emptyTitle={query ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`} emptyDescription={query ? 'Try a different title, branch, author, or repository.' : activeFilter === 'Open' ? 'Open a pull when a change is ready to move through review.' : `Pulls will appear here after they are ${activeFilter.toLowerCase()}.`} createHref={!query && activeFilter === 'Open' ? '/pulls/new' : undefined} />
-  {#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}
-  {#if nextCursor}<Button class="load-more" loading={loadingMore} onclick={loadMore}>Load more</Button>{/if}
-</main>
-
-<style>
-  .page{width:min(1040px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.load-error{margin:16px 0 0;color:var(--danger);font-size:10px;text-align:center}.page :global(.load-more.button){display:flex;margin:20px auto 0}@media(max-width:760px){.page{width:calc(100% - 28px);padding-top:28px}}
-</style>
+  <FilterBar
+    placeholder="Search pulls"
+    tabs={['Open', 'Merged', 'Closed']}
+    labelOptions={data.availableLabels}
+    bind:active={activeFilter}
+    bind:query
+    bind:selectedLabels
+    onActiveChange={() => navigate()}
+    onQueryChange={changeQuery}
+    onLabelsChange={(labels) => navigate(activeFilter, query, labels)}
+  />
+  <PullQueue
+    pulls={items}
+    showRepository
+    grouped={activeFilter === 'Open'}
+    emptyTitle={query ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
+    emptyDescription={query
+      ? 'Try a different title, branch, author, or repository.'
+      : activeFilter === 'Open'
+        ? 'Open a pull when a change is ready to move through review.'
+        : `Pulls will appear here after they are ${activeFilter.toLowerCase()}.`}
+    createHref={!query && activeFilter === 'Open' ? '/pulls/new' : undefined}
+  />
+  <InfiniteScroll cursor={nextCursor} loading={loadingMore} error={loadError} onload={loadMore} />
+</Page>

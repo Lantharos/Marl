@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { InboxItem, RepositorySummary, RunSummary } from '@marl/contracts';
-  import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
-  import CircleAlert from 'lucide-svelte/icons/circle-alert';
-  import CircleCheck from 'lucide-svelte/icons/circle-check';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import ShieldCheck from 'lucide-svelte/icons/shield-check';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import CirclePlay from '@lucide/svelte/icons/circle-play';
+  import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
+  import Plus from '@lucide/svelte/icons/plus';
   import InboxList from '$lib/inbox/InboxList.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
+  import Notice from '$lib/components/feedback/Notice.svelte';
   import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
+  import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
 
   type DashboardData = {
@@ -17,7 +20,7 @@
     unavailable: boolean;
   };
 
-  let { data } = $props<{ data: DashboardData }>();
+  let { data }: { data: DashboardData } = $props();
   const inbox = $derived(data.inbox);
   const repositories = $derived(data.repositories);
   const runs = $derived(data.runs);
@@ -30,83 +33,94 @@
   <meta name="robots" content="noindex, noarchive" />
 </svelte:head>
 
-<main class="page">
-  <header class="hello">
-    <div>
-      <h1>Hey, {firstName}.</h1>
-      {#if inbox.counts.unread > 0}<p>{inbox.counts.unread} new {inbox.counts.unread === 1 ? 'update' : 'updates'} in your inbox.</p>{/if}
-    </div>
+{#snippet sectionHeader(title: string, href: string, label: string)}
+  <header class="mb-3 flex items-center justify-between gap-4">
+    <h2 class="text-base font-semibold text-ink-strong">{title}</h2>
+    <a class="inline-flex items-center gap-1 text-sm text-ink-muted transition-colors hover:text-brand" {href}
+      >{label}<ArrowUpRight size={14} /></a
+    >
+  </header>
+{/snippet}
+
+<main class="mx-auto w-full max-w-290 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+  <header class="mb-8">
+    <h1 class="text-3xl font-semibold tracking-tight text-ink-strong sm:text-4xl">Hey, {firstName}.</h1>
+    {#if inbox.counts.unread > 0}<p class="mt-2 text-base text-ink-muted">
+        {inbox.counts.unread} new {inbox.counts.unread === 1 ? 'update' : 'updates'} in your inbox.
+      </p>{/if}
   </header>
 
-  {#if data.unavailable}
-    <p class="unavailable">Some live data couldn’t be reached. What loaded is still shown below.</p>
-  {/if}
+  {#if data.unavailable}<Notice tone="warning" class="mb-6"
+      >Some live data couldn’t be reached. What loaded is still shown below.</Notice
+    >{/if}
 
-  <div class="workspace">
-    <section class="primary">
-      <header>
-        <h2>Inbox</h2>
-        <a href="/inbox">View inbox <ArrowUpRight size={13} /></a>
-      </header>
-      <InboxList items={inbox.items} compact />
+  <div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
+    <div class="grid min-w-0 gap-9">
+      <section>
+        {@render sectionHeader('Inbox', '/inbox', 'View inbox')}
+        <InboxList items={inbox.items} compact />
+      </section>
+      <section>
+        {@render sectionHeader('Recent runs', '/runs', 'All runs')}
+        <div class="surface p-1.5">
+          {#each runs.slice(0, 5) as run (run.id)}
+            <a
+              href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"
+              class="grid min-h-15 grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
+            >
+              <RunStateIcon
+                state={run.state}
+                awaitingApproval={awaitingCheckApproval(run)}
+                label={runStateLabel(run)}
+              />
+              <span class="min-w-0">
+                <strong class="block truncate text-sm font-semibold text-ink-strong">{run.name}</strong>
+                <span class="mt-0.5 block truncate text-xs text-ink-muted"
+                  >{run.repository.name} · {run.branch}{awaitingCheckApproval(run) ? ' · Awaiting approval' : ''}</span
+                >
+              </span>
+              <code class="font-mono text-xs text-ink-faint">{run.commit.slice(0, 7)}</code>
+            </a>
+          {:else}
+            <EmptyState
+              compact
+              icon={CirclePlay}
+              title="No runs yet"
+              description="Runs appear here once a repository with a workflow pushes to a self-hosted runner."
+            />
+          {/each}
+        </div>
+      </section>
+    </div>
 
-      <header class="recent-title">
-        <h2>Recent runs</h2>
-        <a href="/runs">All runs <ArrowUpRight size={13} /></a>
-      </header>
-      <div class="runs">
-        {#each runs.slice(0, 5) as run (run.id)}
-          <a href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}">
-            <span class="run-state {run.state}" title={runStateLabel(run)}>
-              {#if awaitingCheckApproval(run)}
-                <ShieldCheck size={15} />
-              {:else if run.state === 'success'}
-                <CircleCheck size={15} />
-              {:else if run.state === 'failure'}
-                <CircleAlert size={15} />
-              {:else}
-                <CircleDot size={15} />
-              {/if}
-            </span>
-            <span>
-              <strong>{run.name}</strong>
-              <small>{run.repository.name} · {run.branch}{awaitingCheckApproval(run) ? ' · Awaiting approval' : ''}</small>
-            </span>
-            <code>{run.commit.slice(0, 7)}</code>
-          </a>
-        {:else}
-          <p class="quiet">No runs yet. Your first self-hosted workflow will show up here.</p>
-        {/each}
-      </div>
-    </section>
-
-    <aside>
-      <header>
-        <h2>Repositories</h2>
-        <a href="/repositories">All repositories</a>
-      </header>
-      <div class="repo-list">
+    <aside class="min-w-0">
+      {@render sectionHeader('Repositories', '/repositories', 'All repositories')}
+      <div class="surface p-1.5">
         {#each repositories.slice(0, 7) as repository (repository.id)}
-          <a href="/{repository.owner}/{repository.name}">
-            <RepositoryIcon name={repository.name} src={repository.iconUrl} size={25} />
-            <span>
-              <strong>{repository.name}</strong>
-              <small>{repository.owner}</small>
+          <a
+            href="/{repository.owner}/{repository.name}"
+            class="group grid grid-cols-[26px_minmax(0,1fr)_14px] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
+          >
+            <RepositoryIcon name={repository.name} src={repository.iconUrl} size={26} />
+            <span class="min-w-0">
+              <strong class="block truncate text-sm font-semibold text-ink-strong">{repository.name}</strong>
+              <span class="block truncate text-xs text-ink-muted">{repository.owner}</span>
             </span>
-            <ArrowUpRight size={13} />
+            <ArrowUpRight size={14} class="text-ink-faint group-hover:text-brand" />
           </a>
         {:else}
-          <div class="no-repos">
-            <p>No repositories yet.</p>
-            <a href="/repositories/new">Create the first one</a>
-          </div>
+          <EmptyState
+            compact
+            icon={FolderGit2}
+            title="No repositories yet"
+            description="Create one, then push your code."
+          >
+            <LinkButton size="small" variant="primary" href="/repositories/new"
+              ><Plus size={14} />New repository</LinkButton
+            >
+          </EmptyState>
         {/each}
       </div>
     </aside>
   </div>
 </main>
-
-<style>
-  .page{width:min(1040px,calc(100% - 56px));margin:0 auto;padding:50px 0 80px}.hello{display:flex;align-items:flex-end;justify-content:space-between}.hello h1{margin:0;color:var(--text-strong);font-size:30px;font-weight:640;letter-spacing:-.045em}.hello p{margin:7px 0 0;color:var(--text-muted);font-size:12px}.unavailable{margin:12px 0 -5px;color:var(--warning);font-size:11px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:32px;padding-top:32px}.primary>header,aside>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.primary h2,aside h2{margin:0;color:var(--text-strong);font-size:14px;font-weight:650}.primary header>a,aside header>a{display:inline-flex;align-items:center;gap:4px;color:var(--text-faint);font-size:11px;text-decoration:none}.primary header>a:hover,aside header>a:hover{color:var(--brand)}.runs,.repo-list{display:grid;gap:4px;padding:6px;border-radius:12px;background:var(--surface)}.runs>a:hover,.repo-list>a:hover{background:var(--surface-hover)}.runs strong,.runs small,.repo-list strong,.repo-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.repo-list>a>:global(svg:last-child){color:var(--text-faint)}.quiet{margin:4px 0 0;color:var(--text-faint);font-size:11px}.recent-title{margin-top:30px!important}.runs>a{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:60px;padding:10px 12px;border-radius:7px;color:inherit;text-decoration:none}.run-state{display:grid;place-items:center;color:var(--text-faint)}.run-state.success{color:var(--success)}.run-state.failure{color:var(--danger)}.run-state.running,.run-state.queued{color:var(--brand)}.runs strong{color:var(--text-strong);font-size:13px}.runs small{margin-top:3px;color:var(--text-faint);font-size:11px}.runs code{color:var(--text-faint);font-size:11px}.quiet{padding:20px 14px}.repo-list>a{display:grid;grid-template-columns:27px minmax(0,1fr) 14px;align-items:center;gap:9px;min-height:48px;padding:10px 12px;border-radius:7px;color:inherit;text-decoration:none}.repo-list strong{color:var(--text-strong);font-size:13px}.repo-list small{margin-top:2px;color:var(--text-faint);font-size:11px}.no-repos{padding:20px 14px}.no-repos p{margin:0 0 5px;color:var(--text-faint);font-size:11px}.no-repos a{color:var(--brand);font-size:11px}
-  @media(max-width:850px){.workspace{grid-template-columns:1fr;gap:40px}.page{width:calc(100% - 36px);padding-top:38px}.hello h1{font-size:29px}}@media(max-width:560px){.hello{align-items:flex-start;gap:16px;flex-wrap:wrap}.workspace{padding-top:28px}.page{width:calc(100% - 28px)}}
-</style>

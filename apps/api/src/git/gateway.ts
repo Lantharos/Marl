@@ -63,7 +63,14 @@ export interface GitGatewayRequestMap {
     sourceRepository?: string;
     sourceRepositoryId?: string;
   };
-  '/_marl/branches/delete': { owner: string; repository: string; repositoryId: string; branch: string; expectedCommitId: string; actorId: string };
+  '/_marl/branches/delete': {
+    owner: string;
+    repository: string;
+    repositoryId: string;
+    branch: string;
+    expectedCommitId: string;
+    actorId: string;
+  };
   '/_marl/tags/list': { owner: string; repository: string };
   '/_marl/tags/create': {
     owner: string;
@@ -99,7 +106,12 @@ function gatewayToken(env: Env) {
   return token;
 }
 
-export async function requestGitGateway<Path extends GitGatewayPath>(env: Env, path: Path, body: GitGatewayRequestMap[Path], options: GatewayRequestOptions = {}) {
+export async function requestGitGateway<Path extends GitGatewayPath>(
+  env: Env,
+  path: Path,
+  body: GitGatewayRequestMap[Path],
+  options: GatewayRequestOptions = {}
+) {
   const attempts = options.attempts ?? 1;
   const gatewayUrl = env.ENVIRONMENT === 'development' ? env.GIT_GATEWAY_URL : env.GIT_PUBLIC_URL;
   if (!gatewayUrl) throw new Error('Git gateway URL is required.');

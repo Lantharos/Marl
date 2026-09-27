@@ -41,7 +41,11 @@ export class MarlClient {
     return response.text();
   }
 
-  async git(args: string[], token: string, options: { cwd?: string; allowFailure?: boolean } = {}): Promise<CommandResult> {
+  async git(
+    args: string[],
+    token: string,
+    options: { cwd?: string; allowFailure?: boolean } = {}
+  ): Promise<CommandResult> {
     return run(['git', ...args], {
       cwd: options.cwd ?? this.workspace,
       allowFailure: options.allowFailure,
@@ -55,7 +59,12 @@ export class MarlClient {
     });
   }
 
-  async waitFor<T>(operation: () => Promise<T>, ready: (value: T) => boolean, message: string, timeoutMs = 30_000): Promise<T> {
+  async waitFor<T>(
+    operation: () => Promise<T>,
+    ready: (value: T) => boolean,
+    message: string,
+    timeoutMs = 30_000
+  ): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     let lastError: unknown;
     let lastValue: T | undefined;

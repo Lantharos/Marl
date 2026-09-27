@@ -1,4 +1,10 @@
-import type { PullRevisionSummary, PullRevisionWindow, PullTimelineItem, PullTimelineWindow, ReviewThread } from '@marl/contracts';
+import type {
+  PullRevisionSummary,
+  PullRevisionWindow,
+  PullTimelineItem,
+  PullTimelineWindow,
+  ReviewThread
+} from '@marl/contracts';
 import { SvelteMap } from 'svelte/reactivity';
 import { ReviewThreadState } from './review/ReviewThreadState.svelte';
 
@@ -59,14 +65,27 @@ export class PullTimelineState {
 
   append(entries: unknown[]) {
     if (!entries.length) return;
-    let sequence = Math.max(this.revisions.at(-1)?.sequence ?? 0, ...this.order.map((key) => this.items.get(key)?.sequence ?? 0)) + 1;
+    let sequence =
+      Math.max(this.revisions.at(-1)?.sequence ?? 0, ...this.order.map((key) => this.items.get(key)?.sequence ?? 0)) +
+      1;
     const added: string[] = [];
     for (const entry of entries) {
       const candidate = entry as { kind?: TimelineKind; value?: { id?: string; kind?: string }; createdAt?: string };
-      if (!candidate.kind || !candidate.value?.id || !candidate.createdAt || ['commits_added', 'thread_resolved', 'thread_reopened'].includes(candidate.value.kind ?? '')) continue;
+      if (
+        !candidate.kind ||
+        !candidate.value?.id ||
+        !candidate.createdAt ||
+        ['commits_added', 'thread_resolved', 'thread_reopened'].includes(candidate.value.kind ?? '')
+      )
+        continue;
       const key = timelineKey(candidate.kind, candidate.value.id);
       if (this.items.has(key)) continue;
-      this.items.set(key, { sequence: sequence++, kind: candidate.kind, value: candidate.value, createdAt: candidate.createdAt } as PullTimelineItem);
+      this.items.set(key, {
+        sequence: sequence++,
+        kind: candidate.kind,
+        value: candidate.value,
+        createdAt: candidate.createdAt
+      } as PullTimelineItem);
       added.push(key);
     }
     if (!added.length) return;

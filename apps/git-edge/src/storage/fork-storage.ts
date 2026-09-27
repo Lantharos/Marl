@@ -16,7 +16,8 @@ type ForkRequest = {
 };
 
 export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
-  if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+  if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN)
+    return new Response(null, { status: 404 });
   const body = await readBoundedJson<ForkRequest>(request, 64 * 1024);
   if (!body || !valid(body)) return Response.json({ error: 'invalid_fork' }, { status: 422 });
   const source = await repositoryState(env, body.sourceRepositoryId).request<RepositorySnapshotResponse>('/snapshot');
@@ -31,7 +32,12 @@ export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
     const catalogs: Array<{ packId: string; objects: unknown[] }> = [];
     for (const pack of source.state.packs) {
       const prefix = `repositories/${body.repositoryId}/packs/${pack.id}`;
-      const copied = { ...pack, packKey: `${prefix}.pack`, indexKey: `${prefix}.idx`, objectIndexKey: `${prefix}.objects.json` };
+      const copied = {
+        ...pack,
+        packKey: `${prefix}.pack`,
+        indexKey: `${prefix}.idx`,
+        objectIndexKey: `${prefix}.objects.json`
+      };
       await Promise.all([
         copy(env.REPOSITORIES, pack.packKey, copied.packKey, 'application/x-git-packed-objects'),
         copy(env.REPOSITORIES, pack.indexKey, copied.indexKey, 'application/x-git-packed-objects-toc'),
@@ -54,13 +60,28 @@ export async function forkRepositoryStorage(request: Request, env: GitEdgeEnv) {
     const quota = organizationQuota(env, body.destinationOrganizationId);
     await quota.request('/adjust', { id: `fork_${body.repositoryId}_create`, deltaBytes: source.state.storedBytes });
     adjusted = true;
-    for (const catalog of catalogs) for (let offset = 0; offset < catalog.objects.length; offset += 500) await destination.request('/catalog', { packId: catalog.packId, objects: catalog.objects.slice(offset, offset + 500) });
+    for (const catalog of catalogs)
+      for (let offset = 0; offset < catalog.objects.length; offset += 500)
+        await destination.request('/catalog', {
+          packId: catalog.packId,
+          objects: catalog.objects.slice(offset, offset + 500)
+        });
     await destination.request('/fork', { refs: source.state.refs, manifestKey, manifestHash, packs });
-    await scheduleRepositoryIndex(env, body.destinationOwner, body.destinationRepository, body.repositoryId, generation, body.actorId).catch((error) => console.error('fork indexing scheduling deferred', error));
+    await scheduleRepositoryIndex(
+      env,
+      body.destinationOwner,
+      body.destinationRepository,
+      body.repositoryId,
+      generation,
+      body.actorId
+    ).catch((error) => console.error('fork indexing scheduling deferred', error));
     return new Response(null, { status: 201 });
   } catch (error) {
     await Promise.allSettled(keys.map((key) => env.REPOSITORIES.delete(key)));
-    if (adjusted) await organizationQuota(env, body.destinationOrganizationId).request('/adjust', { id: `fork_${body.repositoryId}_rollback`, deltaBytes: -source.state.storedBytes }).catch(() => {});
+    if (adjusted)
+      await organizationQuota(env, body.destinationOrganizationId)
+        .request('/adjust', { id: `fork_${body.repositoryId}_rollback`, deltaBytes: -source.state.storedBytes })
+        .catch(() => {});
     console.error(error);
     return Response.json({ error: 'fork_failed' }, { status: 502 });
   }
@@ -73,9 +94,18 @@ async function copy(bucket: R2Bucket, source: string, destination: string, conte
 }
 
 function valid(body: ForkRequest) {
-  return [body.repositoryId, body.sourceRepositoryId, body.destinationOrganizationId, body.actorId].every((value) => typeof value === 'string' && value.length > 0) && [body.sourceOwner, body.sourceRepository, body.destinationOwner, body.destinationRepository].every((value) => /^[a-zA-Z0-9._-]+$/.test(value));
+  return (
+    [body.repositoryId, body.sourceRepositoryId, body.destinationOrganizationId, body.actorId].every(
+      (value) => typeof value === 'string' && value.length > 0
+    ) &&
+    [body.sourceOwner, body.sourceRepository, body.destinationOwner, body.destinationRepository].every((value) =>
+      /^[a-zA-Z0-9._-]+$/.test(value)
+    )
+  );
 }
 
 async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }

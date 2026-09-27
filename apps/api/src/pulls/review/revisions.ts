@@ -20,12 +20,27 @@ export type RevisionReview = Pick<PullRequestReview, 'id' | 'state'> & { authorI
 
 type TimelineCommit = { id: string; title: string };
 
-export function summarizePullRevisions(rows: RevisionTimelineRow[], boundaries: RevisionBoundary[], reviews: RevisionReview[], currentHead: string): PullRevisionSummary[] {
+export function summarizePullRevisions(
+  rows: RevisionTimelineRow[],
+  boundaries: RevisionBoundary[],
+  reviews: RevisionReview[],
+  currentHead: string
+): PullRevisionSummary[] {
   const orderedBoundaries: RevisionBoundary[] = [];
   for (const boundary of [...boundaries].sort((left, right) => left.sequence - right.sequence)) {
     const previous = orderedBoundaries.at(-1);
     if (boundary.kind === 'head_updated' && previous) {
-      const commits = boundary.details.forcePushed === 'true' ? parseCommits(boundary.details.commits) : [...new Map([...parseCommits(previous.details.commits), ...parseCommits(boundary.details.commits)].map((commit) => [commit.id, commit])).values()];
+      const commits =
+        boundary.details.forcePushed === 'true'
+          ? parseCommits(boundary.details.commits)
+          : [
+              ...new Map(
+                [...parseCommits(previous.details.commits), ...parseCommits(boundary.details.commits)].map((commit) => [
+                  commit.id,
+                  commit
+                ])
+              ).values()
+            ];
       previous.details = { ...previous.details, ...boundary.details, commits: JSON.stringify(commits) };
     } else orderedBoundaries.push({ ...boundary, details: { ...boundary.details } });
   }
@@ -53,8 +68,16 @@ export function summarizePullRevisions(rows: RevisionTimelineRow[], boundaries: 
       createdAt: boundary.createdAt,
       commitCount: commits.length,
       activityCount: activity.length,
-      conversationCount: activity.filter((row) => row.kind === 'comment' || row.kind === 'review' || row.kind === 'thread').length,
-      reviewState: states.includes('changes_requested') ? 'changes_requested' : states.includes('approved') ? 'approved' : states.includes('commented') ? 'commented' : 'none',
+      conversationCount: activity.filter(
+        (row) => row.kind === 'comment' || row.kind === 'review' || row.kind === 'thread'
+      ).length,
+      reviewState: states.includes('changes_requested')
+        ? 'changes_requested'
+        : states.includes('approved')
+          ? 'approved'
+          : states.includes('commented')
+            ? 'commented'
+            : 'none',
       forcePushed: boundary.details.forcePushed === 'true',
       current
     };
@@ -65,7 +88,14 @@ function parseCommits(value?: string): TimelineCommit[] {
   try {
     const parsed = JSON.parse(value ?? '[]') as unknown;
     return Array.isArray(parsed)
-      ? parsed.filter((commit): commit is TimelineCommit => Boolean(commit && typeof commit === 'object' && typeof (commit as TimelineCommit).id === 'string' && typeof (commit as TimelineCommit).title === 'string'))
+      ? parsed.filter((commit): commit is TimelineCommit =>
+          Boolean(
+            commit &&
+            typeof commit === 'object' &&
+            typeof (commit as TimelineCommit).id === 'string' &&
+            typeof (commit as TimelineCommit).title === 'string'
+          )
+        )
       : [];
   } catch {
     return [];

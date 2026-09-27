@@ -2,15 +2,23 @@
   import type { WorkItemReferenceEvent } from '@marl/contracts';
   import Time from '../page/Time.svelte';
 
-  let { reference } = $props<{ reference: WorkItemReferenceEvent }>();
-  const href = $derived(reference.source ? `/${encodeURIComponent(reference.source.repository.owner)}/${encodeURIComponent(reference.source.repository.name)}/${reference.source.kind === 'issue' ? 'issues' : 'pulls'}/${reference.source.number}` : '');
+  let { reference }: { reference: WorkItemReferenceEvent } = $props();
+  const href = $derived(
+    reference.source
+      ? `/${encodeURIComponent(reference.source.repository.owner)}/${encodeURIComponent(reference.source.repository.name)}/${reference.source.kind === 'issue' ? 'issues' : 'pulls'}/${reference.source.number}`
+      : ''
+  );
 </script>
 
-<article class="reference-event">
-  <span class="mark"></span>
-  <p>{#if reference.source}<a {href}>{reference.source.repository.owner}/{reference.source.repository.name}{reference.source.kind === 'issue' ? '#' : '!'}{reference.source.number}</a> mentioned this in <span>{reference.source.title}</span>{:else}Referenced from private work{/if}<Time value={reference.createdAt} /></p>
+<article class="grid grid-cols-[10px_minmax(0,1fr)] items-start gap-2.5 px-3 py-1.5">
+  <span class="mt-2 size-1.5 rounded-full bg-brand" aria-hidden="true"></span>
+  <p class="min-w-0 text-sm leading-relaxed text-ink-muted">
+    {#if reference.source}<a {href} class="font-semibold text-ink-strong hover:underline"
+        >{reference.source.repository.owner}/{reference.source.repository.name}{reference.source.kind === 'issue'
+          ? '#'
+          : '!'}{reference.source.number}</a
+      >
+      mentioned this in <span class="text-ink">{reference.source.title}</span>{:else}Referenced from private work{/if}
+    <Time value={reference.createdAt} class="ml-1 text-xs text-ink-faint" />
+  </p>
 </article>
-
-<style>
-  .reference-event{display:grid;grid-template-columns:10px minmax(0,1fr);align-items:start;gap:9px;padding:5px 12px}.mark{width:5px;height:5px;margin-top:7px;border-radius:50%;background:var(--brand)}p{min-width:0;margin:0;color:var(--text-muted);font-size:11px;line-height:1.55}a{color:var(--text-strong);font-weight:650;text-decoration:none}a:hover{text-decoration:underline}p>span{color:var(--text-faint)}p :global(time){margin-left:4px}
-</style>

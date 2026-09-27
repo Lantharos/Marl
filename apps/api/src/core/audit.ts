@@ -13,7 +13,17 @@ export type AuditEvent = {
 };
 
 export function auditStatement(env: Env, event: AuditEvent): D1PreparedStatement {
-  return env.DB.prepare('INSERT INTO audit_events (id,organization_id,repository_id,actor_id,actor_handle,action,subject_type,subject_id,details_json) VALUES (?,?,?,?,?,?,?,?,?)').bind(
-    identifier('audit'), event.organizationId, event.repositoryId ?? null, event.actor?.id ?? null, event.actor?.handle ?? 'system', event.action, event.subjectType, event.subjectId, JSON.stringify(event.details ?? {})
+  return env.DB.prepare(
+    'INSERT INTO audit_events (id,organization_id,repository_id,actor_id,actor_handle,action,subject_type,subject_id,details_json) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).bind(
+    identifier('audit'),
+    event.organizationId,
+    event.repositoryId ?? null,
+    event.actor?.id ?? null,
+    event.actor?.handle ?? 'system',
+    event.action,
+    event.subjectType,
+    event.subjectId,
+    JSON.stringify(event.details ?? {})
   );
 }

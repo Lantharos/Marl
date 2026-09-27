@@ -1,7 +1,19 @@
 import type { RepositorySummary } from '@marl/contracts';
 
-export type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
-export type ShellOrganization = { slug: string; name: string; avatarUrl: string | null; kind: 'personal' | 'team'; role: string };
+export type ShellUser = {
+  id: string;
+  handle: string;
+  displayName: string;
+  email: string | null;
+  avatarUrl: string | null;
+};
+export type ShellOrganization = {
+  slug: string;
+  name: string;
+  avatarUrl: string | null;
+  kind: 'personal' | 'team';
+  role: string;
+};
 export type ShellData = { user: ShellUser; repositories: RepositorySummary[]; repositoryOwners: ShellOrganization[] };
 
 type Snapshot = { data: ShellData | null; expiresAt: number };
@@ -45,20 +57,26 @@ export function cachedShell(load: () => Promise<ShellData | null>): Promise<Shel
   if (snapshot && snapshot.expiresAt > Date.now()) return Promise.resolve(snapshot.data);
   if (pending) return pending;
   const version = generation;
-  const request = load().then((data) => {
-    if (generation === version) snapshot = { data, expiresAt: Date.now() + lifetime };
-    return data;
-  }).finally(() => {
-    if (pending === request) pending = undefined;
-  });
+  const request = load()
+    .then((data) => {
+      if (generation === version) snapshot = { data, expiresAt: Date.now() + lifetime };
+      return data;
+    })
+    .finally(() => {
+      if (pending === request) pending = undefined;
+    });
   pending = request;
   return request;
 }
 
 export function changesShell(path: string) {
   const pathname = path.split('?')[0];
-  return /^\/profile(?:\/avatar)?$/.test(pathname)
-    || /^\/repositories(?:\/[^/]+\/[^/]+(?:\/(?:icon|forks|star|settings(?:\/(?:rename|transfer|detach-fork|delete))?|access(?:\/.*)?))?)?$/.test(pathname)
-    || /^\/organizations(?:\/[^/]+(?:\/(?:avatar|access)(?:\/.*)?)?)?$/.test(pathname)
-    || /^\/invitations\/[^/]+\/accept$/.test(pathname);
+  return (
+    /^\/profile(?:\/avatar)?$/.test(pathname) ||
+    /^\/repositories(?:\/[^/]+\/[^/]+(?:\/(?:icon|forks|star|settings(?:\/(?:rename|transfer|detach-fork|delete))?|access(?:\/.*)?))?)?$/.test(
+      pathname
+    ) ||
+    /^\/organizations(?:\/[^/]+(?:\/(?:avatar|access)(?:\/.*)?)?)?$/.test(pathname) ||
+    /^\/invitations\/[^/]+\/accept$/.test(pathname)
+  );
 }

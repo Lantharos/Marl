@@ -22,13 +22,34 @@ function context(organizationId: string, repositoryId: string | null, name: stri
   return new TextEncoder().encode(`${organizationId}:${repositoryId ?? 'organization'}:${name}`);
 }
 
-export async function encryptSecret(env: Env, organizationId: string, repositoryId: string | null, name: string, value: string) {
+export async function encryptSecret(
+  env: Env,
+  organizationId: string,
+  repositoryId: string | null,
+  name: string,
+  value: string
+) {
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: context(organizationId, repositoryId, name) }, await key(env), new TextEncoder().encode(value));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, additionalData: context(organizationId, repositoryId, name) },
+    await key(env),
+    new TextEncoder().encode(value)
+  );
   return { ciphertext: encoded(ciphertext), nonce: encoded(nonce) };
 }
 
-export async function decryptSecret(env: Env, secret: { organizationId: string; repositoryId: string | null; name: string; ciphertext: string; nonce: string }) {
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(secret.nonce), additionalData: context(secret.organizationId, secret.repositoryId, secret.name) }, await key(env), bytes(secret.ciphertext));
+export async function decryptSecret(
+  env: Env,
+  secret: { organizationId: string; repositoryId: string | null; name: string; ciphertext: string; nonce: string }
+) {
+  const plaintext = await crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: bytes(secret.nonce),
+      additionalData: context(secret.organizationId, secret.repositoryId, secret.name)
+    },
+    await key(env),
+    bytes(secret.ciphertext)
+  );
   return new TextDecoder().decode(plaintext);
 }

@@ -1,300 +1,97 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { invalidateAll } from '$app/navigation';
-  import { page } from '$app/state';
-  import { onMount, tick } from 'svelte';
+  import type { Snippet } from 'svelte';
+  import { onMount } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
-  import BookOpen from 'lucide-svelte/icons/book-open';
-  import Building2 from 'lucide-svelte/icons/building-2';
-  import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import CirclePlay from 'lucide-svelte/icons/circle-play';
-  import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
-  import GitCommit from 'lucide-svelte/icons/git-commit-horizontal';
-  import GitBranch from 'lucide-svelte/icons/git-branch';
-  import FileCode from 'lucide-svelte/icons/file-code-2';
-  import Home from 'lucide-svelte/icons/house';
-  import Inbox from 'lucide-svelte/icons/inbox';
-  import KeyRound from 'lucide-svelte/icons/key-round';
-  import LogOut from 'lucide-svelte/icons/log-out';
-  import Menu from 'lucide-svelte/icons/menu';
-  import Moon from 'lucide-svelte/icons/moon';
-  import Plus from 'lucide-svelte/icons/plus';
-  import Search from 'lucide-svelte/icons/search';
-  import Server from 'lucide-svelte/icons/server';
-  import ShieldCheck from 'lucide-svelte/icons/shield-check';
-  import Settings from 'lucide-svelte/icons/settings';
-  import Sun from 'lucide-svelte/icons/sun';
-  import UserRound from 'lucide-svelte/icons/user-round';
-  import X from 'lucide-svelte/icons/x';
+  import Menu from '@lucide/svelte/icons/menu';
+  import Search from '@lucide/svelte/icons/search';
+  import X from '@lucide/svelte/icons/x';
   import { dismissable } from '$lib/actions/dismissable';
   import BrandMark from '../identity/BrandMark.svelte';
-  import UserAvatar from '../identity/UserAvatar.svelte';
-  import { api } from '$lib/api';
-  import { applyTheme, readTheme } from '$lib/theme';
-  import { clearShellCache } from '$lib/shell-cache';
-  import { popoverMotion } from '$lib/ui/popover';
+  import AccountMenu from './AccountMenu.svelte';
+  import CommandPalette from './CommandPalette.svelte';
+  import type { ShellOrganization, ShellUser } from '$lib/shell-cache';
+  import { shellCommands } from './commands';
+  import CreateMenu from './CreateMenu.svelte';
+  import GlobalNav from './GlobalNav.svelte';
 
-  type CommandKind = 'home' | 'inbox' | 'repository' | 'organization' | 'user' | 'commit' | 'file' | 'issue' | 'pull' | 'run' | 'runner' | 'create' | 'settings' | 'security' | 'branch' | 'key';
-  type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
-
-  function uniqueCommands(entries: Command[]) {
-    const destinations = Object.create(null) as Record<string, boolean>;
-    return entries.filter((command) => {
-      if (destinations[command.href]) return false;
-      destinations[command.href] = true;
-      return true;
-    });
-  }
-
-  type ShellUser = { id: string; handle: string; displayName: string; email: string | null; avatarUrl: string | null };
-  type ShellOrganization = { slug: string; name: string; avatarUrl: string | null; role: string };
-  let { repositories, organizations, user, children } = $props<{ repositories: RepositorySummary[]; organizations: ShellOrganization[]; user: ShellUser; children: import('svelte').Snippet }>();
-  let theme = $state<'light' | 'dark'>('dark');
+  let {
+    repositories,
+    organizations,
+    user,
+    children
+  }: {
+    repositories: RepositorySummary[];
+    organizations: ShellOrganization[];
+    user: ShellUser;
+    children: Snippet;
+  } = $props();
   let searchOpen = $state(false);
   let mobileOpen = $state(false);
   let createOpen = $state(false);
-  let profileOpen = $state(false);
-  let searchTrigger = $state<HTMLButtonElement>();
-  let searchInput = $state<HTMLInputElement>();
-  let commandList = $state<HTMLElement>();
-  let query = $state('');
-  let remoteResults = $state<Command[]>([]);
-  let searchLoading = $state(false);
-  let selectedIndex = $state(0);
-  const currentPath = $derived(page.url.pathname);
-  const commands = $derived<Command[]>(uniqueCommands([
-    { label: 'Home', detail: 'Your work across Marl', href: '/', keywords: 'dashboard overview', kind: 'home' },
-    { label: 'Inbox', detail: 'Mentions, assignments, and updates', href: '/inbox', keywords: 'notifications attention unread', kind: 'inbox' },
-    { label: user.displayName, detail: `Your public profile · @${user.handle}`, href: `/${user.handle}`, keywords: 'user account profile activity contributions', kind: 'user' },
-    ...repositories.map((repository: RepositorySummary) => ({
-      label: `${repository.owner}/${repository.name}`,
-      detail: repository.description || 'Repository overview',
-      href: `/${repository.owner}/${repository.name}`,
-      keywords: `repository code ${repository.visibility}`,
-      kind: 'repository' as const
-    })),
-    ...repositories.flatMap((repository: RepositorySummary) => {
-      const base = `/${repository.owner}/${repository.name}`;
-      return [
-        { label: `${repository.owner}/${repository.name} code`, detail: 'Browse branches and files', href: `${base}/code`, keywords: 'repository source tree files', kind: 'repository' as const },
-        { label: `${repository.owner}/${repository.name} issues`, detail: 'Repository issues', href: `${base}/issues`, keywords: 'repository bugs tasks work', kind: 'issue' as const },
-        { label: `${repository.owner}/${repository.name} pulls`, detail: 'Repository pulls', href: `${base}/pulls`, keywords: 'repository pull requests reviews merge', kind: 'pull' as const },
-        { label: `${repository.owner}/${repository.name} runs`, detail: 'Repository workflow runs', href: `${base}/runs`, keywords: 'repository automation jobs checks', kind: 'run' as const },
-        { label: `${repository.owner}/${repository.name} settings`, detail: 'Repository general settings', href: `${base}/settings`, keywords: 'repository settings general', kind: 'settings' as const },
-        { label: `${repository.owner}/${repository.name} branch rules`, detail: 'Protected branches and merge requirements', href: `${base}/settings/branches`, keywords: 'repository settings branches protection', kind: 'branch' as const },
-        { label: `${repository.owner}/${repository.name} access`, detail: 'Collaborators and team access', href: `${base}/settings/access`, keywords: 'repository settings people teams permissions', kind: 'security' as const },
-        { label: `${repository.owner}/${repository.name} secrets`, detail: 'Repository CI secrets', href: `${base}/settings/secrets`, keywords: 'repository settings ci environment', kind: 'key' as const }
-      ];
-    }),
-    { label: 'Settings', detail: 'Your profile and account', href: '/settings/account/profile', keywords: 'account preferences profile', kind: 'settings' },
-    { label: 'Sign-in and security', detail: 'Password, passkeys, and two-factor authentication', href: '/settings/account', keywords: 'settings account authentication', kind: 'security' },
-    { label: 'Sessions', detail: 'Devices signed in to your account', href: '/settings/account/sessions', keywords: 'settings account devices', kind: 'security' },
-    { label: 'Developer access', detail: 'Personal access tokens', href: '/settings/account/tokens', keywords: 'settings account api tokens', kind: 'key' },
-    { label: 'SSH keys', detail: 'Git authentication and commit signing', href: '/settings/account/ssh-keys', keywords: 'settings developer git signing', kind: 'key' },
-    { label: 'Organizations', detail: 'Every organization you belong to', href: '/organizations', keywords: 'teams workspaces settings', kind: 'organization' },
-    ...organizations.flatMap((organization: ShellOrganization) => {
-      const base = `/organizations/${organization.slug}/settings`;
-      return [
-        { label: organization.name, detail: `Organization · ${organization.slug}`, href: `/${organization.slug}`, keywords: `organization public profile ${organization.slug}`, kind: 'organization' as const },
-        { label: `${organization.name} settings`, detail: 'Organization profile settings', href: `${base}/profile`, keywords: `organization settings profile ${organization.slug}`, kind: 'settings' as const },
-        { label: `${organization.name} people and teams`, detail: 'Organization members and default access', href: `${base}/access`, keywords: `organization settings access ${organization.slug}`, kind: 'security' as const },
-        ...(organization.role === 'member' ? [] : [{ label: `${organization.name} CI secrets`, detail: 'Organization workflow secrets', href: `${base}/secrets`, keywords: `organization settings ci ${organization.slug}`, kind: 'key' as const }])
-      ];
-    }),
-    { label: 'Issues', detail: 'Work across your repositories', href: '/issues', keywords: 'bugs tasks work', kind: 'issue' },
-    { label: 'Pulls', detail: 'Your review queue', href: '/pulls', keywords: 'pull requests reviews merge changes', kind: 'pull' },
-    { label: 'Runs', detail: 'Automation across your code', href: '/runs', keywords: 'workflows jobs checks', kind: 'run' },
-    { label: 'Repositories', detail: 'Browse every project', href: '/repositories', keywords: 'code projects', kind: 'repository' },
-    { label: 'Runners', detail: 'Connected self-hosted machines', href: '/runners', keywords: 'machines agents docker', kind: 'runner' },
-    { label: 'New repository', detail: 'Start a home for your code', href: '/repositories/new', keywords: 'create', kind: 'create' },
-    { label: 'New organization', detail: 'Create a shared home for projects', href: '/organizations?new=1', keywords: 'create team workspace', kind: 'organization' },
-    { label: 'New issue', detail: 'Track a bug, proposal, or task', href: '/issues/new', keywords: 'create bug task', kind: 'create' },
-    { label: 'New pull', detail: 'Put a branch up for review', href: '/pulls/new', keywords: 'create pull request review', kind: 'create' },
-    { label: 'Connect runner', detail: 'Add a self-hosted machine', href: '/runners/new', keywords: 'create machine agent', kind: 'create' }
-  ]));
-  const results = $derived.by(() => {
-    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) return commands;
-    const local = commands.filter((command) => {
-      const haystack = `${command.label} ${command.detail} ${command.keywords}`.toLowerCase();
-      return terms.every((term) => haystack.includes(term));
-    });
-    return uniqueCommands([...local, ...remoteResults]);
-  });
-
-  $effect(() => {
-    if (!searchOpen) {
-      remoteResults = [];
-      searchLoading = false;
-      return;
-    }
-    const value = query.trim();
-    remoteResults = [];
-    searchLoading = value.length >= 2;
-    if (value.length < 2) return;
-    let canceled = false;
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const response = await api<{ results: Command[] }>(`/search?q=${encodeURIComponent(value)}`, { signal: controller.signal });
-        if (!canceled) remoteResults = response.results.map((result) => ({ ...result, keywords: result.detail }));
-      } catch {
-        if (!canceled) remoteResults = [];
-      } finally {
-        if (!canceled) searchLoading = false;
-      }
-    }, 140);
-    return () => { canceled = true; clearTimeout(timer); controller.abort(); };
-  });
+  let accountOpen = $state(false);
+  let shortcut = $state('Ctrl K');
+  const commands = $derived(shellCommands(user, repositories, organizations));
 
   onMount(() => {
-    theme = readTheme();
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) shortcut = '⌘K';
   });
 
-  function globalKeydown(event: KeyboardEvent) {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault();
-      searchOpen ? closeSearch() : openSearch();
-    }
-    if (event.key === 'Escape') closeAll();
-  }
-
-  function toggleTheme() {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('marl-theme', theme);
-    applyTheme(theme);
-    profileOpen = false;
+  function closeMenus() {
+    mobileOpen = false;
+    createOpen = false;
+    accountOpen = false;
   }
 
   function openSearch() {
-    query = '';
-    selectedIndex = 0;
+    closeMenus();
     searchOpen = true;
-    createOpen = false;
-    profileOpen = false;
-    void tick().then(() => searchInput?.focus());
   }
 
-  function closeSearch() {
-    if (!searchOpen) return;
-    searchOpen = false;
-  }
-
-  function showSearchDialog(dialog: HTMLDialogElement) {
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      searchTrigger?.focus({ preventScroll: true });
-    };
-  }
-  function closeAll() { closeSearch(); mobileOpen = false; createOpen = false; profileOpen = false; }
-  function active(path: string) { return path === '/' ? currentPath === '/' : currentPath.startsWith(path); }
-
-  async function runCommand(command: Command) {
-    closeAll();
-    await goto(command.href);
-  }
-
-  async function signOut() {
-    const { authClient } = await import('$lib/auth-client');
-    await authClient.signOut();
-    clearShellCache(true);
-    await invalidateAll();
-    await goto('/sign-in');
-  }
-
-  async function commandKeydown(event: KeyboardEvent) {
-    if (!results.length) return;
-    if (event.key === 'ArrowDown') { event.preventDefault(); selectedIndex = (selectedIndex + 1) % results.length; }
-    if (event.key === 'ArrowUp') { event.preventDefault(); selectedIndex = (selectedIndex - 1 + results.length) % results.length; }
-    if (event.key === 'Home') { event.preventDefault(); selectedIndex = 0; }
-    if (event.key === 'End') { event.preventDefault(); selectedIndex = results.length - 1; }
-    if (event.key === 'Enter' && results[selectedIndex]) { event.preventDefault(); void runCommand(results[selectedIndex]); }
-    await tick();
-    commandList?.querySelector(`[data-command="${selectedIndex}"]`)?.scrollIntoView({ block: 'nearest' });
-  }
-
-  function trapSearchFocus(event: KeyboardEvent) {
-    if (event.key !== 'Tab') return;
-    event.preventDefault();
-    searchInput?.focus();
+  function keydown(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (searchOpen) searchOpen = false;
+      else openSearch();
+    }
+    if (event.key === 'Escape') closeMenus();
   }
 </script>
 
-<svelte:window onkeydown={globalKeydown} />
+<svelte:window onkeydown={keydown} />
 
-<div class="shell">
-  <header class="workbar" use:dismissable={() => (mobileOpen = false)}>
-    <a class="brand-link" href="/"><BrandMark /></a>
-    <nav class:open={mobileOpen} aria-label="Global navigation">
-      <a class:active={active('/')} href="/" aria-label="Home" data-label="Home" onclick={() => (mobileOpen = false)}><Home size={17} /><span>Home</span></a>
-      <a class:active={active('/inbox')} href="/inbox" aria-label="Inbox" data-label="Inbox" onclick={() => (mobileOpen = false)}><Inbox size={17} /><span>Inbox</span></a>
-      <a class:active={active('/issues')} href="/issues" aria-label="Issues" data-label="Issues" onclick={() => (mobileOpen = false)}><CircleDot size={17} /><span>Issues</span></a>
-      <a class:active={active('/pulls')} href="/pulls" aria-label="Pulls" data-label="Pulls" onclick={() => (mobileOpen = false)}><GitPullRequest size={17} /><span>Pulls</span></a>
-      <a class:active={active('/runs')} href="/runs" aria-label="Runs" data-label="Runs" onclick={() => (mobileOpen = false)}><CirclePlay size={17} /><span>Runs</span></a>
-      <a class:active={active('/repositories')} href="/repositories" aria-label="Repositories" data-label="Repositories" onclick={() => (mobileOpen = false)}><BookOpen size={17} /><span>Repositories</span></a>
-      <a class:active={active('/runners')} href="/runners" aria-label="Runners" data-label="Runners" onclick={() => (mobileOpen = false)}><Server size={17} /><span>Runners</span></a>
-    </nav>
-    <button bind:this={searchTrigger} class="search" aria-label="Find anything" onclick={openSearch}><Search size={15} /><span>Find anything</span><kbd>Ctrl K</kbd></button>
-    <div class="actions">
-      <div class="menu-anchor" use:dismissable={() => (createOpen = false)}>
-        <button class="new" aria-expanded={createOpen} onclick={() => { createOpen = !createOpen; profileOpen = false; }}><Plus size={15} /><span>New</span><ChevronDown size={12} /></button>
-        {#if createOpen}<div class="popover create-menu" transition:popoverMotion><a href="/repositories/new" onclick={() => (createOpen = false)}><BookOpen size={15} /><span><strong>Repository</strong></span></a><a href="/organizations?new=1" onclick={() => (createOpen = false)}><Building2 size={15} /><span><strong>Organization</strong></span></a><a href="/issues/new" onclick={() => (createOpen = false)}><CircleDot size={15} /><span><strong>Issue</strong></span></a><a href="/pulls/new" onclick={() => (createOpen = false)}><GitPullRequest size={15} /><span><strong>Pull</strong></span></a></div>{/if}
-      </div>
-      <div class="menu-anchor" use:dismissable={() => (profileOpen = false)}>
-        <button class="avatar-button" aria-label="Account menu" aria-expanded={profileOpen} onclick={() => { profileOpen = !profileOpen; createOpen = false; }}><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={28} /></button>
-        {#if profileOpen}<div class="popover profile-menu" transition:popoverMotion><div><UserAvatar name={user.displayName || user.handle} src={user.avatarUrl} size={29} /><span><strong>{user.displayName}</strong><small>@{user.handle}</small></span></div><a href="/{user.handle}" onclick={() => (profileOpen = false)}><UserRound size={15} />Your profile</a><a href="/settings/account/profile" onclick={() => (profileOpen = false)}><Settings size={15} />Settings</a><a href="/organizations" onclick={() => (profileOpen = false)}><Building2 size={15} />Organizations</a><button onclick={toggleTheme}>{#if theme === 'dark'}<Sun size={15} />Light appearance{:else}<Moon size={15} />Dark appearance{/if}</button><button onclick={signOut}><LogOut size={15} />Sign out</button></div>{/if}
-      </div>
-      <button class="mobile-toggle" aria-label="Toggle navigation" onclick={() => (mobileOpen = !mobileOpen)}>{#if mobileOpen}<X size={18} />{:else}<Menu size={18} />{/if}</button>
+<div class="min-h-dvh bg-canvas text-ink">
+  <header
+    class="fixed inset-x-0 top-0 z-50 grid h-13 grid-cols-[auto_1fr_auto] items-center gap-2.5 border-b border-line-subtle bg-canvas/90 px-3 backdrop-blur-lg sm:gap-3.5 sm:px-5 lg:grid-cols-[auto_auto_1fr_auto]"
+    use:dismissable={() => (mobileOpen = false)}
+  >
+    <a class="flex px-1 py-1.5" href="/" aria-label="Home"><BrandMark /></a>
+    <GlobalNav open={mobileOpen} onNavigate={() => (mobileOpen = false)} />
+    <button
+      class="flex h-8 field min-h-0 w-full max-w-105 cursor-text items-center gap-2 justify-self-center px-2.5 text-ink-faint max-sm:w-8 max-sm:justify-center max-sm:justify-self-end max-sm:border-transparent max-sm:bg-transparent max-sm:p-0 lg:w-[min(420px,calc(100vw-620px))]"
+      aria-label="Find anything"
+      aria-keyshortcuts="Control+K Meta+K"
+      onclick={openSearch}
+    >
+      <Search size={15} class="shrink-0" />
+      <span class="flex-1 text-left text-sm max-sm:hidden">Find anything</span>
+      <kbd
+        class="rounded border border-line bg-surface-muted px-1.5 py-px font-sans text-2xs text-ink-muted max-sm:hidden"
+        >{shortcut}</kbd
+      >
+    </button>
+    <div class="flex items-center justify-end gap-1.5">
+      <CreateMenu bind:open={createOpen} />
+      <AccountMenu {user} bind:open={accountOpen} />
+      <button
+        class="grid size-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink-strong lg:hidden"
+        aria-label="Toggle navigation"
+        aria-expanded={mobileOpen}
+        onclick={() => (mobileOpen = !mobileOpen)}
+        >{#if mobileOpen}<X size={18} />{:else}<Menu size={18} />{/if}</button
+      >
     </div>
   </header>
-  <main class="content">{@render children()}</main>
+  <main class="min-h-dvh pt-13">{@render children()}</main>
 </div>
 
-{#if searchOpen}
-  <dialog class="dialog-layer" {@attach showSearchDialog} aria-label="Search Marl" oncancel={(event) => { event.preventDefault(); closeSearch(); }} onkeydown={trapSearchFocus} onclick={(event) => event.currentTarget === event.target && closeSearch()}>
-    <div class="command-dialog" transition:popoverMotion={{ duration: 160 }}>
-      <header><Search size={18} /><input bind:this={searchInput} bind:value={query} role="combobox" aria-label="Search Marl" aria-autocomplete="list" aria-expanded="true" aria-controls="command-results" aria-activedescendant={results[selectedIndex] ? `command-result-${selectedIndex}` : undefined} oninput={() => (selectedIndex = 0)} onkeydown={commandKeydown} placeholder="Repositories, issues, pulls..." /><kbd>Esc</kbd></header>
-      <div id="command-results" bind:this={commandList} class="command-results" role="listbox" aria-label="Commands">
-        {#if searchLoading}<p role="status">Searching Marl…</p>{/if}
-        {#each results as command, index (command.href)}
-          <button id="command-result-{index}" data-command={index} role="option" aria-selected={index === selectedIndex} tabindex="-1" class:selected={index === selectedIndex} onmouseenter={() => (selectedIndex = index)} onclick={() => runCommand(command)}>
-            {#if command.kind === 'home'}<Home size={16} />{:else if command.kind === 'inbox'}<Inbox size={16} />{:else if command.kind === 'repository'}<BookOpen size={16} />{:else if command.kind === 'organization'}<Building2 size={16} />{:else if command.kind === 'user'}<UserRound size={16} />{:else if command.kind === 'commit'}<GitCommit size={16} />{:else if command.kind === 'file'}<FileCode size={16} />{:else if command.kind === 'issue'}<CircleDot size={16} />{:else if command.kind === 'pull'}<GitPullRequest size={16} />{:else if command.kind === 'run'}<CirclePlay size={16} />{:else if command.kind === 'runner'}<Server size={16} />{:else if command.kind === 'settings'}<Settings size={16} />{:else if command.kind === 'security'}<ShieldCheck size={16} />{:else if command.kind === 'branch'}<GitBranch size={16} />{:else if command.kind === 'key'}<KeyRound size={16} />{:else}<Plus size={16} />{/if}
-            <span><strong>{command.label}</strong><small>{command.detail}</small></span>
-          </button>
-        {:else}{#if !searchLoading}<div class="no-results"><strong>Nothing found</strong><span>Try a repository, path, issue, pull, or run.</span></div>{/if}{/each}
-      </div>
-    </div>
-  </dialog>
-{/if}
-
-<style>
-  .shell{min-height:calc(100vh / var(--interface-scale));background:var(--canvas);color:var(--text)}.workbar{position:fixed;inset:0 0 auto;z-index:50;display:grid;grid-template-columns:auto auto minmax(210px,420px) 1fr;align-items:center;gap:14px;height:52px;padding:0 20px;border-bottom:1px solid var(--border-subtle);background:color-mix(in srgb,var(--canvas) 90%,transparent);backdrop-filter:blur(18px)}.brand-link{display:flex;padding:5px 3px;color:inherit;text-decoration:none}.workbar nav{display:flex;align-items:center;gap:2px}.workbar nav a{position:relative;display:grid;width:34px;height:34px;color:var(--text-muted);text-decoration:none;place-items:center}.workbar nav a>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.workbar nav a:hover,.workbar nav a.active{color:var(--text-strong)}.workbar nav a:hover{border-radius:6px;background:var(--surface-hover)}.workbar nav a::before{position:absolute;top:40px;left:50%;z-index:90;padding:5px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface-raised);box-shadow:var(--shadow-subtle);color:var(--text);content:attr(data-label);font-size:9px;opacity:0;pointer-events:none;transform:translate(-50%,-2px);transition:opacity 100ms ease,transform 100ms ease;white-space:nowrap}.workbar nav a:hover::before,.workbar nav a:focus-visible::before{opacity:1;transform:translate(-50%,0)}.workbar nav a.active::after{position:absolute;inset:auto 8px -9px;height:2px;background:var(--brand);content:''}.search{display:flex;align-items:center;gap:8px;height:30px;padding:0 7px 0 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-faint);cursor:text}.search span{flex:1;text-align:left;font-size:11px}.search kbd{padding:2px 5px;border:1px solid var(--border);border-radius:4px;background:var(--surface-muted);color:var(--text-faint);font-family:inherit;font-size:9px}.actions{display:flex;justify-content:flex-end;align-items:center;gap:5px}.menu-anchor{position:relative}.new,.mobile-toggle{display:inline-flex;height:30px;align-items:center;justify-content:center;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--text-muted);cursor:pointer}.new{gap:5px;padding:0 8px;border-color:var(--border);background:var(--surface);font-size:11px;font-weight:620}.new:hover,.mobile-toggle:hover{background:var(--surface-muted);color:var(--text-strong)}.avatar-button{display:grid;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-weight:760}.avatar-button{width:28px;height:28px;border:0;cursor:pointer;font-size:11px}.popover{position:absolute;top:38px;right:0;z-index:80;width:220px;padding:7px;border:0;border-radius:15px;background:var(--surface-raised);box-shadow:var(--shadow-popover);transform-origin:top right}.create-menu{width:188px}.popover>a,.popover>button{display:flex;width:100%;min-height:39px;align-items:center;gap:11px;padding:9px 10px;border:0;border-radius:9px;background:transparent;color:var(--text);text-align:left;text-decoration:none;font-size:12px;cursor:pointer;transition:background-color 120ms ease,color 120ms ease}.popover>a:hover,.popover>button:hover{background:var(--surface-hover);color:var(--text-strong)}.popover>a>:global(svg),.popover>button>:global(svg){flex:none;color:var(--text-muted)}.popover strong,.popover small{display:block}.popover strong{color:var(--text-strong);font-size:12px;font-weight:600}.popover small{margin-top:3px;color:var(--text-faint);font-size:11px}.profile-menu>div{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:10px;margin-bottom:6px;padding:10px;border-radius:10px;background:var(--surface)}.profile-menu>div>span{min-width:0}.profile-menu>div strong,.profile-menu>div small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mobile-toggle{display:none;width:30px}.content{min-height:calc(100vh / var(--interface-scale));padding-top:52px}
-  .avatar-button{overflow:hidden;padding:0;background:transparent}
-  @media(min-width:1001px){.workbar{grid-template-columns:auto auto 1fr}.search{position:absolute;left:50%;width:min(420px,calc(100vw - 560px));transform:translateX(-50%)}}
-  @media(max-width:1000px){.workbar{grid-template-columns:auto minmax(210px,1fr) auto}.workbar nav{position:absolute;top:52px;left:0;display:none;width:100%;height:auto;padding:8px;border-bottom:1px solid var(--border);background:var(--surface-raised)}.workbar nav.open{display:grid}.workbar nav a{display:flex;width:100%;min-height:36px;gap:10px;padding:0 10px;border-radius:5px}.workbar nav a>span{position:static;width:auto;height:auto;overflow:visible;clip-path:none;font-size:11px;white-space:normal}.workbar nav a::before{display:none}.workbar nav a.active{background:var(--surface-muted)}.workbar nav a.active::after{display:none}.mobile-toggle{display:inline-flex}.search{grid-column:2}.actions{grid-column:3}}
-  @media(max-width:600px){.workbar{grid-template-columns:auto 1fr auto;gap:9px;padding:0 10px}.search{justify-self:end;width:30px;padding:0;justify-content:center;border-color:transparent;background:transparent}.search span,.search kbd,.new span,.new :global(svg:last-child){display:none}.new{width:30px;padding:0}}
-  .dialog-layer{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:calc(10dvh / var(--interface-scale)) 20px 24px;border:0;outline:0;background:transparent;color:var(--text)}
-  .dialog-layer[open]{display:flex;align-items:flex-start;justify-content:center}
-  .dialog-layer::backdrop{background:rgb(0 0 0/.58);backdrop-filter:blur(3px)}
-  .command-dialog{display:flex;flex-direction:column;width:min(610px,100%);max-height:min(570px,100%);min-height:0;padding:7px;overflow:hidden;border:0;border-radius:15px;background:var(--surface-raised);box-shadow:var(--shadow-popover);transform-origin:top center}
-  .command-dialog>header{display:flex;flex:none;align-items:center;gap:10px;min-height:44px;padding:0 12px;border:1px solid transparent;border-radius:9px;background:var(--surface);color:var(--text-muted)}
-  .command-dialog>header:focus-within{border-color:var(--border-strong)}
-  .command-dialog input{min-width:0;flex:1;height:42px;border:0;outline:0;background:transparent;color:var(--text-strong);font:inherit;font-size:14px}
-  .command-dialog kbd{padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text-faint);font-family:inherit;font-size:10px}
-  .command-results{display:flex;min-height:0;flex-direction:column;gap:2px;overflow-y:auto;overscroll-behavior:contain;padding-top:6px}
-  .command-results>p{margin:0;padding:10px;color:var(--text-muted);font-size:12px}
-  .command-results>button{display:grid;flex:none;min-height:44px;width:100%;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:11px;padding:10px;border:0;border-radius:9px;background:transparent;color:var(--text-muted);font:inherit;cursor:pointer;text-align:left;transition:background-color 120ms ease,color 120ms ease}
-  .command-results>button:hover,.command-results>button.selected{background:var(--surface-hover);color:var(--text-strong)}
-  .command-results>button>span{min-width:0}
-  .command-results strong,.command-results small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .command-results strong{color:var(--text-strong);font-size:12px;font-weight:600;line-height:1.5}
-  .command-results small{margin-top:2px;color:var(--text-faint);font-size:11px;line-height:1.5}
-  .no-results{padding:36px 12px;color:var(--text-muted);text-align:center}
-  .no-results strong,.no-results span{display:block}
-  .no-results strong{color:var(--text-strong);font-size:13px;font-weight:600}
-  .no-results span{margin-top:6px;font-size:12px}
-  @media(max-width:600px){.dialog-layer{padding:24px 12px}}
-  @media(prefers-reduced-motion:reduce){.command-results>button{transition:none}}
-</style>
+{#if searchOpen}<CommandPalette {commands} onClose={() => (searchOpen = false)} />{/if}

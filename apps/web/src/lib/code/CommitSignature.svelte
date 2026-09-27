@@ -1,18 +1,22 @@
 <script lang="ts">
-  import BadgeCheck from 'lucide-svelte/icons/badge-check';
-  import ShieldQuestion from 'lucide-svelte/icons/shield-question';
-  import ShieldAlert from 'lucide-svelte/icons/shield-alert';
-  let { status } = $props<{ status?: string | null }>();
+  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import ShieldAlert from '@lucide/svelte/icons/shield-alert';
+  import ShieldQuestion from '@lucide/svelte/icons/shield-question-mark';
+
+  let { status }: { status?: string | null } = $props();
+  const base = 'inline-flex shrink-0 items-center gap-1 text-xs font-semibold whitespace-nowrap';
 </script>
 
 {#if status === 'verified'}
-  <span class="signature verified" title="SSH signature verified against the author’s registered key"><BadgeCheck size={13} />Verified</span>
+  <span class="{base} text-success" title="SSH signature verified against the author’s registered key"
+    ><BadgeCheck size={14} />Verified</span
+  >
 {:else if status === 'invalid'}
-  <span class="signature invalid" title="This signature could not be validated against the author’s registered keys"><ShieldAlert size={13} />Unverified</span>
+  <span class="{base} text-danger" title="This signature could not be validated against the author’s registered keys"
+    ><ShieldAlert size={14} />Unverified</span
+  >
 {:else if status === 'unverified'}
-  <span class="signature" title="No verified SSH signature for this author"><ShieldQuestion size={13} />Unverified</span>
+  <span class="{base} text-ink-muted" title="No verified SSH signature for this author"
+    ><ShieldQuestion size={14} />Unverified</span
+  >
 {/if}
-
-<style>
-  .signature{display:inline-flex;flex:none;align-items:center;gap:4px;color:var(--text-muted);font-size:11px;font-weight:600;white-space:nowrap}.verified{color:var(--success)}.invalid{color:var(--danger)}
-</style>

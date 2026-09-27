@@ -8,17 +8,19 @@ export type PatchLine = {
   line: number | null;
 };
 
-export type ThreadCodeLine = {
-  key: number;
-  kind: 'context' | 'added' | 'removed';
-  line: number;
-  text: string;
-  selected: boolean;
-} | {
-  key: number;
-  kind: 'omitted';
-  count: number;
-};
+export type ThreadCodeLine =
+  | {
+      key: number;
+      kind: 'context' | 'added' | 'removed';
+      line: number;
+      text: string;
+      selected: boolean;
+    }
+  | {
+      key: number;
+      kind: 'omitted';
+      count: number;
+    };
 
 export function parsePatchLines(patch: string): PatchLine[] {
   let oldLine = 0;
@@ -57,7 +59,13 @@ export function parsePatchLines(patch: string): PatchLine[] {
   return output;
 }
 
-export function reviewThreadContext(patch: string, side: 'old' | 'new', startLine: number, endLine: number, maxSelected = 5): ThreadCodeLine[] {
+export function reviewThreadContext(
+  patch: string,
+  side: 'old' | 'new',
+  startLine: number,
+  endLine: number,
+  maxSelected = 5
+): ThreadCodeLine[] {
   const candidates = parsePatchLines(patch)
     .filter((line) => line.kind !== 'hunk')
     .map((line) => ({ line, number: side === 'old' ? line.oldLine : line.newLine }))
@@ -77,6 +85,7 @@ export function reviewThreadContext(patch: string, side: 'old' | 'new', startLin
     text: line.text.slice(1),
     selected: number >= startLine && number <= endLine
   }));
-  if (selected.length > shown.length) lines.push({ key: shown[shown.length - 1].line.key + 0.5, kind: 'omitted', count: selected.length - shown.length });
+  if (selected.length > shown.length)
+    lines.push({ key: shown[shown.length - 1].line.key + 0.5, kind: 'omitted', count: selected.length - shown.length });
   return lines;
 }

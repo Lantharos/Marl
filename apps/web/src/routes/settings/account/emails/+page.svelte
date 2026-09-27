@@ -1,75 +1,180 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import BadgeCheck from 'lucide-svelte/icons/badge-check';
-  import Clock3 from 'lucide-svelte/icons/clock-3';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
+  import type { AccountEmail } from '@marl/contracts';
+  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import Clock3 from '@lucide/svelte/icons/clock-3';
+  import Trash2 from '@lucide/svelte/icons/trash';
   import { api, MarlApiError } from '$lib/api';
-  import Modal from '$lib/components/controls/Modal.svelte';
+  import Modal from '$lib/components/overlays/Modal.svelte';
   import Button from '$lib/components/controls/Button.svelte';
+  import Field from '$lib/components/controls/Field.svelte';
+  import Notice from '$lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
+  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
   import type { PageData } from './$types';
 
-  type Email = { id: string; email: string; primary: boolean; verified: boolean; verifiedAt: string | null; createdAt: string };
-  let { data } = $props<{ data: PageData }>();
-  let emails = $state<Email[]>(untrack(() => data.emails));
+  let { data }: { data: PageData } = $props();
+  let emails = $state<AccountEmail[]>(untrack(() => data.emails));
   let value = $state('');
   let open = $state(false);
   let busy = $state('');
   let error = $state('');
   let notice = $state('');
+  let removing = $state<AccountEmail | null>(null);
 
   async function addEmail() {
     if (busy || !value.trim()) return;
-    busy = 'add'; error = ''; notice = '';
+    busy = 'add';
+    error = '';
+    notice = '';
     try {
-      const result = await api<{ email: Email; verificationSent: boolean }>('/emails', { method: 'POST', body: JSON.stringify({ email: value }) });
+      const result = await api<{ email: AccountEmail; verificationSent: boolean }>('/emails', {
+        method: 'POST',
+        body: JSON.stringify({ email: value })
+      });
       emails = [...emails, result.email];
       value = '';
       open = false;
       notice = result.verificationSent ? 'Verification email sent.' : 'Email verified for local development.';
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The email could not be added.'; }
-    finally { busy = ''; }
+    } catch (cause) {
+      error = cause instanceof MarlApiError ? cause.message : 'The email could not be added.';
+    } finally {
+      busy = '';
+    }
   }
 
-  async function resend(email: Email) {
+  async function resend(email: AccountEmail) {
     if (busy) return;
-    busy = email.id; error = ''; notice = '';
+    busy = email.id;
+    error = '';
+    notice = '';
     try {
       const result = await api<{ verified?: boolean }>(`/emails/${email.id}/resend`, { method: 'POST', body: '{}' });
-      if (result.verified) emails = emails.map((item) => item.id === email.id ? { ...item, verified: true, verifiedAt: new Date().toISOString() } : item);
+      if (result.verified)
+        emails = emails.map((item) =>
+          item.id === email.id ? { ...item, verified: true, verifiedAt: new Date().toISOString() } : item
+        );
       notice = result.verified ? 'Email verified for local development.' : 'A new verification email was sent.';
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The verification email could not be sent.'; }
-    finally { busy = ''; }
+    } catch (cause) {
+      error = cause instanceof MarlApiError ? cause.message : 'The verification email could not be sent.';
+    } finally {
+      busy = '';
+    }
   }
 
-  async function remove(email: Email) {
+  async function remove(email: AccountEmail) {
     if (busy || email.primary) return;
-    busy = email.id; error = ''; notice = '';
-    try { await api(`/emails/${email.id}`, { method: 'DELETE' }); emails = emails.filter((item) => item.id !== email.id); }
-    catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The email could not be removed.'; }
-    finally { busy = ''; }
+    busy = email.id;
+    error = '';
+    notice = '';
+    try {
+      await api(`/emails/${email.id}`, { method: 'DELETE' });
+      emails = emails.filter((item) => item.id !== email.id);
+      removing = null;
+    } catch (cause) {
+      error = cause instanceof MarlApiError ? cause.message : 'The email could not be removed.';
+    } finally {
+      busy = '';
+    }
   }
 </script>
 
 <svelte:head><title>Emails · Marl</title></svelte:head>
-<header class="page-head"><h2>Emails</h2><Button size="small" onclick={() => { error = ''; open = true; }}>Add email</Button></header>
-<Modal {open} title="Add email" onClose={() => { if (!busy) open = false; }} --modal-width="540px">
-<form id="email-form" onsubmit={(event) => { event.preventDefault(); void addEmail(); }}>
-  <label><span>Email address</span><input bind:value type="email" autocomplete="email" data-1p-ignore placeholder="you@example.com" required /></label>
-</form>
-<p class="note">Verified addresses connect your commits to your profile.</p>
-{#if error}<p class="message error" role="alert">{error}</p>{/if}
-{#snippet actions()}<Button size="small" disabled={Boolean(busy)} onclick={() => open = false}>Cancel</Button><Button size="small" type="submit" form="email-form" variant="primary" loading={busy === 'add'} disabled={Boolean(busy) || !value.trim()}>Add email</Button>{/snippet}
-</Modal>
-{#if error && !open}<p class="message error" role="alert">{error}</p>{/if}{#if notice}<p class="message notice" role="status">{notice}</p>{/if}
-<div class="email-list">
+<SettingsHeader title="Emails" description="Verified addresses connect the commits you author to your profile.">
+  {#snippet action()}<Button
+      size="small"
+      onclick={() => {
+        error = '';
+        value = '';
+        open = true;
+      }}>Add email</Button
+    >{/snippet}
+</SettingsHeader>
+
+{#if error && !open && !removing}<Notice class="mb-4">{error}</Notice>{/if}
+{#if notice}<Notice tone="success" class="mb-4">{notice}</Notice>{/if}
+<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
   {#each emails as email (email.id)}
-    <article><span class:verified={email.verified} class="status">{#if email.verified}<BadgeCheck size={17} />{:else}<Clock3 size={17} />{/if}</span><div><strong>{email.email}</strong><small>{email.primary ? 'Sign-in email' : email.verified ? 'Verified commit email' : 'Verification required'}</small></div>{#if !email.verified}<Button size="small" disabled={Boolean(busy)} onclick={() => resend(email)}>Resend</Button>{/if}{#if !email.primary}<Button icon size="small" variant="danger-soft" disabled={Boolean(busy)} aria-label={`Remove ${email.email}`} onclick={() => remove(email)}><Trash2 size={14} /></Button>{/if}</article>
+    <article class="grid min-h-19 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3">
+      <span class={email.verified ? 'text-success' : 'text-warning'}
+        >{#if email.verified}<BadgeCheck size={18} />{:else}<Clock3 size={18} />{/if}</span
+      >
+      <div class="min-w-0">
+        <strong class="block truncate text-base font-semibold text-ink-strong">{email.email}</strong>
+        <span class="mt-0.5 block text-sm text-ink-muted"
+          >{email.primary ? 'Sign-in email' : email.verified ? 'Verified commit email' : 'Verification required'}</span
+        >
+      </div>
+      <div class="flex gap-1.5">
+        {#if !email.verified}<Button
+            size="small"
+            loading={busy === email.id}
+            disabled={Boolean(busy)}
+            onclick={() => resend(email)}>Resend</Button
+          >{/if}
+        {#if !email.primary}<Button
+            icon
+            size="small"
+            variant="ghost"
+            disabled={Boolean(busy)}
+            aria-label={`Remove ${email.email}`}
+            onclick={() => {
+              error = '';
+              removing = email;
+            }}><Trash2 size={15} /></Button
+          >{/if}
+      </div>
+    </article>
   {/each}
 </div>
 
-<style>
-  .page-head{display:flex;align-items:center;justify-content:space-between;gap:16px}.note{font-size:13px;line-height:1.6;color:var(--text-muted)}
-  .email-list{padding:6px 18px;border-radius:12px;background:var(--surface)}
+<Modal
+  {open}
+  title="Add email"
+  description="We’ll send a link to confirm you own this address."
+  onClose={() => !busy && (open = false)}
+>
+  <form
+    id="email-form"
+    onsubmit={(event) => {
+      event.preventDefault();
+      void addEmail();
+    }}
+  >
+    <Field label="Email address">
+      <input
+        class="field"
+        bind:value
+        type="email"
+        autocomplete="email"
+        data-1p-ignore
+        placeholder="you@example.com"
+        required
+      />
+    </Field>
+  </form>
+  {#if error}<Notice class="mt-4">{error}</Notice>{/if}
+  {#snippet actions()}
+    <Button size="small" disabled={Boolean(busy)} onclick={() => (open = false)}>Cancel</Button>
+    <Button
+      size="small"
+      type="submit"
+      form="email-form"
+      variant="primary"
+      loading={busy === 'add'}
+      disabled={!value.trim()}>Add email</Button
+    >
+  {/snippet}
+</Modal>
 
-  .page-head{padding-bottom:24px;}h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}form{display:grid;gap:12px;}label{display:grid;gap:7px}label span{color:var(--text-strong);font-size:12px;font-weight:630}input{box-sizing:border-box;width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong);font:inherit;font-size:13px}input:focus{border-color:var(--brand)}.message{margin:12px 0 0;padding:10px;border-radius:8px;font-size:11px}.error{background:var(--danger-soft);color:var(--danger)}.notice{background:var(--success-soft);color:var(--success)}.email-list article{display:grid;grid-template-columns:36px minmax(0,1fr) auto auto;align-items:center;gap:10px;min-height:70px;}.status{display:grid;width:32px;height:32px;border-radius:50%;background:var(--surface);color:var(--text-faint);place-items:center}.status.verified{background:var(--success-soft);color:var(--success)}.email-list strong,.email-list small{display:block}.email-list strong{overflow:hidden;color:var(--text-strong);font-size:13px;text-overflow:ellipsis;white-space:nowrap}.email-list small{margin-top:3px;color:var(--text-muted);font-size:11px}@media(max-width:620px){form{grid-template-columns:1fr}.email-list article{grid-template-columns:36px minmax(0,1fr) auto}.email-list article>:global(.button:last-child){grid-column:3}.email-list article>:global(.button:nth-last-child(2)){grid-column:2;justify-self:start}}
-</style>
+<ConfirmDialog
+  open={removing !== null}
+  title="Remove email?"
+  confirmLabel="Remove email"
+  busy={Boolean(busy)}
+  {error}
+  onConfirm={() => removing && void remove(removing)}
+  onClose={() => (removing = null)}
+>
+  Commits authored with <strong>{removing?.email}</strong> will no longer link to your profile.
+</ConfirmDialog>

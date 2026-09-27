@@ -21,7 +21,20 @@ type RepositoryRoute = {
   body?: Record<string, unknown>;
 };
 
-const INTERNAL_REPOSITORY_ROUTES = new Set(['/_marl/mergeability', '/_marl/branches/delete', '/_marl/archive', '/_marl/blob', '/_marl/commit', '/_marl/compare', '/_marl/merge', '/_marl/patch', '/_marl/pulls/pin', '/_marl/tags/create', '/_marl/tags/list', '/_marl/tree']);
+const INTERNAL_REPOSITORY_ROUTES = new Set([
+  '/_marl/mergeability',
+  '/_marl/branches/delete',
+  '/_marl/archive',
+  '/_marl/blob',
+  '/_marl/commit',
+  '/_marl/compare',
+  '/_marl/merge',
+  '/_marl/patch',
+  '/_marl/pulls/pin',
+  '/_marl/tags/create',
+  '/_marl/tags/list',
+  '/_marl/tree'
+]);
 
 export class GitContainer extends Container<GitEdgeEnv> {
   defaultPort = 8788;
@@ -49,7 +62,8 @@ export default {
   async fetch(request: Request, env: GitEdgeEnv): Promise<Response> {
     try {
       const path = new URL(request.url).pathname;
-      if (path.startsWith('/_marl/') && request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+      if (path.startsWith('/_marl/') && request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN)
+        return new Response(null, { status: 404 });
       if (path === '/_marl/repositories/relocate' && request.method === 'POST') {
         return new Response(null, {
           status: request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN ? 204 : 404
@@ -58,12 +72,20 @@ export default {
       if (path === '/_marl/repositories/purge' && request.method === 'POST') return purgeRepository(request, env);
       if (path === '/_marl/repositories/fork' && request.method === 'POST') return forkRepositoryStorage(request, env);
       if (path === '/_marl/object' && request.method === 'POST') {
-        if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN) return new Response(null, { status: 404 });
+        if (request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN)
+          return new Response(null, { status: 404 });
         const body = await readBoundedJson<{
           repositoryId?: unknown;
           objectId?: unknown;
         }>(request, 64 * 1024);
-        if (!body || typeof body !== 'object' || typeof body.repositoryId !== 'string' || typeof body.objectId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.objectId)) return new Response(null, { status: 422 });
+        if (
+          !body ||
+          typeof body !== 'object' ||
+          typeof body.repositoryId !== 'string' ||
+          typeof body.objectId !== 'string' ||
+          !/^[0-9a-f]{40,64}$/.test(body.objectId)
+        )
+          return new Response(null, { status: 422 });
         const object = await readPackedObject(env, body.repositoryId, body.objectId);
         return new Response(new Uint8Array(object.bytes).buffer, {
           headers: {
@@ -78,14 +100,40 @@ export default {
       if (nativeRoute) return handleNativePush(request, env, nativeRoute);
       const route = await repositoryRoute(request);
       if (!route) return new Response('Repository not found\n', { status: 404 });
-      const authorization = await authorizeGit(request, env, route.owner, route.repository, route.writes ? 'git-receive-pack' : 'git-upload-pack');
+      const authorization = await authorizeGit(
+        request,
+        env,
+        route.owner,
+        route.repository,
+        route.writes ? 'git-receive-pack' : 'git-upload-pack'
+      );
       const container = getContainer(env.GIT_CONTAINERS, authorization.storageKey);
       if (path === '/_marl/compare' || path === '/_marl/pulls/pin') {
         const body = route.body;
-        if (body && typeof body.sourceOwner === 'string' && typeof body.sourceRepository === 'string' && typeof body.sourceRepositoryId === 'string' && safeSegment(body.sourceOwner) && safeSegment(body.sourceRepository)) await hydrateRepository(container, env, body.sourceOwner, body.sourceRepository, body.sourceRepositoryId);
+        if (
+          body &&
+          typeof body.sourceOwner === 'string' &&
+          typeof body.sourceRepository === 'string' &&
+          typeof body.sourceRepositoryId === 'string' &&
+          safeSegment(body.sourceOwner) &&
+          safeSegment(body.sourceRepository)
+        )
+          await hydrateRepository(container, env, body.sourceOwner, body.sourceRepository, body.sourceRepositoryId);
       }
-      const internalActorId = typeof route.body?.actorId === 'string' && route.body.actorId.length > 0 && route.body.actorId.length <= 200 ? route.body.actorId : undefined;
-      if (route.writes) return handleCompatibilityPush(request, container, env, authorization, route.owner, route.repository, internalActorId);
+      const internalActorId =
+        typeof route.body?.actorId === 'string' && route.body.actorId.length > 0 && route.body.actorId.length <= 200
+          ? route.body.actorId
+          : undefined;
+      if (route.writes)
+        return handleCompatibilityPush(
+          request,
+          container,
+          env,
+          authorization,
+          route.owner,
+          route.repository,
+          internalActorId
+        );
       await hydrateRepository(container, env, route.owner, route.repository, authorization.storageKey);
       return container.fetch(request);
     } catch (error) {
@@ -107,11 +155,24 @@ async function repositoryRoute(request: Request): Promise<RepositoryRoute | null
   if (url.pathname.startsWith('/_marl/')) {
     if (request.method !== 'POST' || !INTERNAL_REPOSITORY_ROUTES.has(url.pathname)) return null;
     const body = await readBoundedJson<Record<string, unknown>>(request.clone(), 1024 * 1024);
-    if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.owner !== 'string' || typeof body.repository !== 'string' || !safeSegment(body.owner) || !safeSegment(body.repository)) return null;
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      typeof body.owner !== 'string' ||
+      typeof body.repository !== 'string' ||
+      !safeSegment(body.owner) ||
+      !safeSegment(body.repository)
+    )
+      return null;
     return {
       owner: body.owner,
       repository: body.repository,
-      writes: url.pathname === '/_marl/branches/delete' || url.pathname === '/_marl/merge' || url.pathname === '/_marl/pulls/pin' || url.pathname === '/_marl/tags/create',
+      writes:
+        url.pathname === '/_marl/branches/delete' ||
+        url.pathname === '/_marl/merge' ||
+        url.pathname === '/_marl/pulls/pin' ||
+        url.pathname === '/_marl/tags/create',
       body
     };
   }

@@ -1,15 +1,22 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import Check from 'lucide-svelte/icons/check';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
+  import type { DeveloperToken } from '@marl/contracts';
+  import Check from '@lucide/svelte/icons/check';
+  import KeyRound from '@lucide/svelte/icons/key-round';
+  import Trash2 from '@lucide/svelte/icons/trash';
   import Button from '$lib/components/controls/Button.svelte';
   import Checkbox from '$lib/components/controls/Checkbox.svelte';
-  import Modal from '$lib/components/controls/Modal.svelte';
+  import Modal from '$lib/components/overlays/Modal.svelte';
+  import Field from '$lib/components/controls/Field.svelte';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
+  import Notice from '$lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
+  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
   import { api, MarlApiError } from '$lib/api';
   import { formatDate, formatTimestamp } from '$lib/time';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   let tokens = $state(untrack(() => [...data.tokens]));
   let tokenDialog = $state(false);
   let tokenName = $state('');
@@ -28,13 +35,20 @@
   async function createToken() {
     const scopes = scopeChoices.filter((choice) => choice.checked).map((choice) => choice.scope);
     if (!tokenName.trim() || !scopes.length) return;
-    busy = true; error = '';
+    busy = true;
+    error = '';
     try {
-      const result = await api<{ token: { id: string; name: string; value: string; tokenPrefix: string; scopes: string[]; expiresAt: string; lastUsedAt: null; createdAt?: string } }>('/tokens', { method: 'POST', body: JSON.stringify({ name: tokenName, scopes, expiresDays: 90 }) });
-      newToken = result.token.value;
-      tokens = [{ ...result.token, createdAt: new Date().toISOString(), lastUsedAt: null }, ...tokens];
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The developer token could not be created.'; }
-    finally { busy = false; }
+      const result = await api<{
+        token: Omit<DeveloperToken, 'createdAt' | 'lastUsedAt'> & { value: string };
+      }>('/tokens', { method: 'POST', body: JSON.stringify({ name: tokenName, scopes, expiresDays: 90 }) });
+      const { value, ...token } = result.token;
+      newToken = value;
+      tokens = [{ ...token, createdAt: new Date().toISOString(), lastUsedAt: null }, ...tokens];
+    } catch (cause) {
+      error = cause instanceof MarlApiError ? cause.message : 'The developer token could not be created.';
+    } finally {
+      busy = false;
+    }
   }
 
   function scopeLabel(scope: string) {
@@ -42,13 +56,17 @@
   }
 
   async function revokeToken(id: string) {
-    busy = true; error = '';
+    busy = true;
+    error = '';
     try {
       await api(`/tokens/${id}`, { method: 'DELETE' });
       tokens = tokens.filter((token) => token.id !== id);
       revoking = null;
-    } catch (cause) { error = cause instanceof MarlApiError ? cause.message : 'The developer token could not be revoked.'; }
-    finally { busy = false; }
+    } catch (cause) {
+      error = cause instanceof MarlApiError ? cause.message : 'The developer token could not be revoked.';
+    } finally {
+      busy = false;
+    }
   }
 
   async function copyToken() {
@@ -59,21 +77,104 @@
 </script>
 
 <svelte:head><title>Developer access · Marl</title></svelte:head>
-<header class="page-head"><div><h2>Developer access</h2><p>Scoped credentials for Git, the Marl CLI, and automation.</p></div><Button size="small" onclick={() => { tokenDialog = true; newToken = ''; copied = false; }}>Create token</Button></header>
-{#if error && !tokenDialog && !revoking}<p class="error" role="alert">{error}</p>{/if}
-<div class="token-list">{#each tokens as token (token.id)}<article><div><strong>{token.name}</strong><span>{token.tokenPrefix}… · expires {formatDate(token.expiresAt)}</span><small>{token.scopes.map(scopeLabel).join(', ')}{token.lastUsedAt ? ` · last used ${formatTimestamp(token.lastUsedAt)}` : ' · never used'}</small></div><Button variant="danger-soft" size="small" icon aria-label={`Revoke ${token.name}`} onclick={() => { error = ''; revoking = token; }}><Trash2 size={14} /></Button></article>{:else}<p class="empty">No developer tokens.</p>{/each}</div>
+<SettingsHeader title="Developer access" description="Scoped credentials for Git, the Marl CLI, and automation.">
+  {#snippet action()}<Button
+      size="small"
+      onclick={() => {
+        tokenDialog = true;
+        newToken = '';
+        tokenName = '';
+        copied = false;
+        error = '';
+      }}>Create token</Button
+    >{/snippet}
+</SettingsHeader>
+{#if error && !tokenDialog && !revoking}<Notice class="mb-4">{error}</Notice>{/if}
+<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+  {#each tokens as token (token.id)}
+    <article class="grid min-h-20 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
+      <KeyRound size={18} class="text-ink-muted" />
+      <div class="min-w-0">
+        <strong class="block truncate text-base font-semibold text-ink-strong">{token.name}</strong>
+        <span class="mt-0.5 block text-sm text-ink-muted">{token.scopes.map(scopeLabel).join(', ')}</span>
+        <span class="mt-0.5 block text-xs text-ink-faint"
+          ><code class="font-mono">{token.tokenPrefix}…</code> · expires {formatDate(token.expiresAt)} · {token.lastUsedAt
+            ? `last used ${formatTimestamp(token.lastUsedAt)}`
+            : 'never used'}</span
+        >
+      </div>
+      <Button
+        variant="ghost"
+        size="small"
+        icon
+        aria-label={`Revoke ${token.name}`}
+        onclick={() => {
+          error = '';
+          revoking = token;
+        }}><Trash2 size={15} /></Button
+      >
+    </article>
+  {:else}
+    <EmptyState
+      compact
+      icon={KeyRound}
+      title="No developer tokens"
+      description="Create a token to push over HTTPS or automate Marl from scripts."
+    />
+  {/each}
+</div>
 
-{#snippet tokenActions()}{#if newToken}<Button size="small" variant="primary" onclick={() => (tokenDialog = false)}>Done</Button>{:else}<Button size="small" onclick={() => (tokenDialog = false)}>Cancel</Button><Button size="small" variant="primary" disabled={busy} onclick={createToken}>Create token</Button>{/if}{/snippet}
-<Modal open={tokenDialog} title="Create developer token" description="The secret is shown once. Store it somewhere safe." onClose={() => (tokenDialog = false)} actions={tokenActions} --modal-width="540px">{#if error}<p class="error" role="alert">{error}</p>{/if}{#if newToken}<div class="token-secret"><code>{newToken}</code><Button size="small" disabled={copied} onclick={copyToken}>{#if copied}<Check size={13} />Copied!{:else}Copy token{/if}</Button></div>{:else}<div class="token-form"><label><span>Name</span><input bind:value={tokenName} placeholder="Laptop or deployment" /></label><div class="scopes">{#each scopeChoices as choice (choice.scope)}<Checkbox bind:checked={choice.checked} label={choice.label} />{/each}</div></div>{/if}</Modal>
-
-<Modal open={revoking !== null} title="Revoke token?" onClose={() => { if (!busy) revoking = null; }} --modal-width="540px">
-  <p class="revoke-note">Anything using <strong>{revoking?.name}</strong> will lose access immediately.</p>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#snippet actions()}<Button size="small" disabled={busy} onclick={() => (revoking = null)}>Cancel</Button><Button size="small" variant="danger" loading={busy} onclick={() => { if (revoking) void revokeToken(revoking.id); }}>Revoke token</Button>{/snippet}
+{#snippet tokenActions()}
+  {#if newToken}<Button size="small" variant="primary" onclick={() => (tokenDialog = false)}>Done</Button>{:else}
+    <Button size="small" onclick={() => (tokenDialog = false)}>Cancel</Button>
+    <Button
+      size="small"
+      variant="primary"
+      loading={busy}
+      disabled={!tokenName.trim() || !scopeChoices.some((choice) => choice.checked)}
+      onclick={createToken}>Create token</Button
+    >
+  {/if}
+{/snippet}
+<Modal
+  open={tokenDialog}
+  title={newToken ? 'Copy your token' : 'Create developer token'}
+  description={newToken
+    ? 'This is the only time the secret is shown. Store it somewhere safe.'
+    : 'Tokens expire after 90 days.'}
+  onClose={() => (tokenDialog = false)}
+  actions={tokenActions}
+>
+  {#if newToken}
+    <div class="grid gap-3">
+      <code class="rounded-lg bg-canvas p-3 font-mono text-sm break-all text-ink-strong">{newToken}</code>
+      <Button size="small" class="justify-self-end" disabled={copied} onclick={copyToken}
+        >{#if copied}<Check size={14} />Copied{:else}Copy token{/if}</Button
+      >
+    </div>
+  {:else}
+    <div class="grid gap-4">
+      <Field label="Name"><input class="field" bind:value={tokenName} placeholder="Laptop or deployment" /></Field>
+      <fieldset class="grid gap-1">
+        <legend class="mb-1.5 text-sm font-semibold text-ink-strong">Access</legend>
+        {#each scopeChoices as choice (choice.scope)}<Checkbox
+            bind:checked={choice.checked}
+            label={choice.label}
+          />{/each}
+      </fieldset>
+    </div>
+  {/if}
+  {#if error}<Notice class="mt-4">{error}</Notice>{/if}
 </Modal>
 
-<style>
-  .token-list{padding:6px 18px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-surface)}
-
-  .page-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:25px;}h2{margin:0;color:var(--text-strong);font-size:23px;letter-spacing:-.03em}.page-head p{margin:6px 0 0;color:var(--text-muted);font-size:11px;line-height:1.5}.token-list article{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:22px 0;}.token-list strong,.token-list span,.token-list small{display:block}.token-list strong{color:var(--text-strong);font-size:11px}.token-list span,.token-list small{margin-top:3px;color:var(--text-faint);font-size:11px}.empty{padding:24px 0;color:var(--text-faint);font-size:11px}.error{display:flex;align-items:center;gap:7px;padding:9px 10px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:11px}.token-form,.token-form label{display:grid;gap:8px}.token-form label span{color:var(--text-strong);font-size:11px;font-weight:630}.token-form input{height:37px;padding:0 9px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong)}.scopes{margin:8px 0}.token-secret{display:grid;gap:12px}.token-secret code{overflow-wrap:anywhere;padding:12px;border-radius:8px;background:var(--canvas);color:var(--text-strong);font-size:11px}.token-secret :global(.button){justify-self:end}.revoke-note{margin:0;color:var(--text-muted);font-size:13px;line-height:1.6}.revoke-note strong{color:var(--text-strong);overflow-wrap:anywhere}
-</style>
+<ConfirmDialog
+  open={revoking !== null}
+  title="Revoke token?"
+  confirmLabel="Revoke token"
+  {busy}
+  {error}
+  onConfirm={() => revoking && void revokeToken(revoking.id)}
+  onClose={() => (revoking = null)}
+>
+  Anything using <strong>{revoking?.name}</strong> will lose access immediately.
+</ConfirmDialog>

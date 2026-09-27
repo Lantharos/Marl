@@ -1,7 +1,13 @@
 import type { IssueComment, IssueEvent, IssueTimelineItem, IssueTimelineWindow } from '@marl/contracts';
 
 export type DiscussionComment = { comment: IssueComment; sequence?: number };
-export type DiscussionThread = { kind: 'thread'; id: string; sequence: number; root: DiscussionComment; replies: DiscussionComment[] };
+export type DiscussionThread = {
+  kind: 'thread';
+  id: string;
+  sequence: number;
+  root: DiscussionComment;
+  replies: DiscussionComment[];
+};
 export type DiscussionItem = DiscussionThread | Exclude<IssueTimelineItem, { kind: 'comment' }>;
 
 export function isDiscussionEvent(event: IssueEvent) {
@@ -37,7 +43,15 @@ export function issueEventCopy(event: IssueEvent) {
   if (event.kind === 'unassigned') return `unassigned @${event.details.handle}`;
   if (event.kind === 'label_added') return `added ${event.details.label}`;
   if (event.kind === 'label_removed') return `removed ${event.details.label}`;
-  return ({ title_changed: 'changed the title', description_changed: 'edited the description', locked: 'locked the conversation', unlocked: 'unlocked the conversation', closed: 'closed this issue', reopened: 'reopened this issue', closed_by_pull: 'closed this issue via' })[event.kind];
+  return {
+    title_changed: 'changed the title',
+    description_changed: 'edited the description',
+    locked: 'locked the conversation',
+    unlocked: 'unlocked the conversation',
+    closed: 'closed this issue',
+    reopened: 'reopened this issue',
+    closed_by_pull: 'closed this issue via'
+  }[event.kind];
 }
 
 export function observeIssueDiscussion(node: HTMLElement, onRead: (sequence: number) => void) {

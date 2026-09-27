@@ -1,4 +1,7 @@
-export async function readBoundedBody(body: ReadableStream<Uint8Array> | null, maximumBytes: number): Promise<ArrayBuffer | null> {
+export async function readBoundedBody(
+  body: ReadableStream<Uint8Array> | null,
+  maximumBytes: number
+): Promise<ArrayBuffer | null> {
   if (!body) return new ArrayBuffer(0);
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
@@ -42,11 +45,17 @@ export async function readBoundedJson<T>(request: BodyRequest, maximumBytes: num
   return parseJson<T>(bytes);
 }
 
-export async function readBoundedJsonBody<T>(body: ReadableStream<Uint8Array> | null, maximumBytes: number): Promise<T | null> {
+export async function readBoundedJsonBody<T>(
+  body: ReadableStream<Uint8Array> | null,
+  maximumBytes: number
+): Promise<T | null> {
   return parseJson<T>(await readBoundedBody(body, maximumBytes));
 }
 
-export async function readBoundedText(body: ReadableStream<Uint8Array> | null, maximumBytes: number): Promise<string | null> {
+export async function readBoundedText(
+  body: ReadableStream<Uint8Array> | null,
+  maximumBytes: number
+): Promise<string | null> {
   const bytes = await readBoundedBody(body, maximumBytes);
   if (!bytes) return null;
   try {

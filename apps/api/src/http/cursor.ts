@@ -14,10 +14,15 @@ export function readCursor(url: URL): PageCursor | null {
   const encoded = url.searchParams.get('cursor');
   if (!encoded) return null;
   try {
-    const base64 = encoded.replaceAll('-', '+').replaceAll('_', '/').padEnd(Math.ceil(encoded.length / 4) * 4, '=');
+    const base64 = encoded
+      .replaceAll('-', '+')
+      .replaceAll('_', '/')
+      .padEnd(Math.ceil(encoded.length / 4) * 4, '=');
     const parsed = JSON.parse(atob(base64)) as Partial<PageCursor>;
-    return typeof parsed.value === 'string' && typeof parsed.id === 'string' && (parsed.rank === undefined || Number.isInteger(parsed.rank))
-      ? parsed as PageCursor
+    return typeof parsed.value === 'string' &&
+      typeof parsed.id === 'string' &&
+      (parsed.rank === undefined || Number.isInteger(parsed.rank))
+      ? (parsed as PageCursor)
       : null;
   } catch {
     return null;

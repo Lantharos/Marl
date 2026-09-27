@@ -3,7 +3,15 @@ import type { GitEdgeEnv } from '../env';
 import { repositoryState, StateRequestError, type RepositorySnapshotResponse } from '../state/state-client';
 import type { CatalogObject } from '../state/repository-state-store';
 
-type Locator = { id: string; packId: string; packKey: string; kind: string; size: number; packedBytes: number; offset: number };
+type Locator = {
+  id: string;
+  packId: string;
+  packKey: string;
+  kind: string;
+  size: number;
+  packedBytes: number;
+  offset: number;
+};
 type PackedObject = { kind: string; bytes: Uint8Array };
 
 export async function readPackedObject(env: GitEdgeEnv, repository: string, objectId: string): Promise<PackedObject> {
@@ -31,18 +39,30 @@ async function repairCatalog(env: GitEdgeEnv, state: ReturnType<typeof repositor
     const stored = await env.REPOSITORIES.get(pack.objectIndexKey);
     if (!stored) throw new Error(`Canonical object index ${pack.id} is missing.`);
     const objects = await readBoundedJsonBody<CatalogObject[]>(stored.body, 64 * 1024 * 1024);
-    if (!Array.isArray(objects) || objects.length !== pack.objectCount) throw new Error(`Canonical object index ${pack.id} is invalid.`);
-    for (let offset = 0; offset < objects.length; offset += 500) await state.request('/catalog', { packId: pack.id, objects: objects.slice(offset, offset + 500) });
+    if (!Array.isArray(objects) || objects.length !== pack.objectCount)
+      throw new Error(`Canonical object index ${pack.id} is invalid.`);
+    for (let offset = 0; offset < objects.length; offset += 500)
+      await state.request('/catalog', { packId: pack.id, objects: objects.slice(offset, offset + 500) });
   }
 }
 
-async function unpack(env: GitEdgeEnv, state: ReturnType<typeof repositoryState>, locator: Locator, visiting: Set<string>, depth: number): Promise<PackedObject> {
-  if (depth > 64 || visiting.has(`${locator.packId}:${locator.offset}`)) throw new Error('Git delta chain is cyclic or too deep.');
+async function unpack(
+  env: GitEdgeEnv,
+  state: ReturnType<typeof repositoryState>,
+  locator: Locator,
+  visiting: Set<string>,
+  depth: number
+): Promise<PackedObject> {
+  if (depth > 64 || visiting.has(`${locator.packId}:${locator.offset}`))
+    throw new Error('Git delta chain is cyclic or too deep.');
   visiting.add(`${locator.packId}:${locator.offset}`);
-  const stored = await env.REPOSITORIES.get(locator.packKey, { range: { offset: locator.offset, length: locator.packedBytes } });
+  const stored = await env.REPOSITORIES.get(locator.packKey, {
+    range: { offset: locator.offset, length: locator.packedBytes }
+  });
   if (!stored) throw new Error(`Git pack ${locator.packId} is missing.`);
   const packedBytes = await readBoundedBody(stored.body, locator.packedBytes);
-  if (!packedBytes || packedBytes.byteLength !== locator.packedBytes) throw new Error(`Git object ${locator.id} has invalid packed bounds.`);
+  if (!packedBytes || packedBytes.byteLength !== locator.packedBytes)
+    throw new Error(`Git object ${locator.id} has invalid packed bounds.`);
   const packed = new Uint8Array(packedBytes);
   const header = parseHeader(packed);
   let base: PackedObject | null = null;
@@ -57,7 +77,9 @@ async function unpack(env: GitEdgeEnv, state: ReturnType<typeof repositoryState>
   } else if (header.type === 7) {
     const hashBytes = locator.id.length / 2;
     if (contentOffset + hashBytes > packed.length) throw new Error('Git REF delta base is truncated.');
-    const baseId = [...packed.subarray(contentOffset, contentOffset + hashBytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const baseId = [...packed.subarray(contentOffset, contentOffset + hashBytes)]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
     contentOffset += hashBytes;
     const found = await state.request<{ locator: Locator }>(`/objects/${baseId}`);
     base = await unpack(env, state, found.locator, visiting, depth + 1);
@@ -91,7 +113,8 @@ function parseOffsetDistance(bytes: Uint8Array, start: number) {
   let value = byte & 127;
   let offset = start + 1;
   while (byte & 128) {
-    if (offset >= bytes.length || value > Number.MAX_SAFE_INTEGER >> 7) throw new Error('Git OFS delta distance is invalid.');
+    if (offset >= bytes.length || value > Number.MAX_SAFE_INTEGER >> 7)
+      throw new Error('Git OFS delta distance is invalid.');
     byte = bytes[offset++];
     value = (value + 1) * 128 + (byte & 127);
   }
@@ -101,15 +124,19 @@ function parseOffsetDistance(bytes: Uint8Array, start: number) {
 async function inflate(bytes: Uint8Array, expectedBytes: number) {
   const stream = new Blob([new Uint8Array(bytes).buffer]).stream().pipeThrough(new DecompressionStream('deflate'));
   const inflated = await readBoundedBody(stream, expectedBytes);
-  if (!inflated || inflated.byteLength !== expectedBytes) throw new Error('Git object expands beyond its declared size.');
+  if (!inflated || inflated.byteLength !== expectedBytes)
+    throw new Error('Git object expands beyond its declared size.');
   return new Uint8Array(inflated);
 }
 
 function applyDelta(base: Uint8Array, delta: Uint8Array) {
   let cursor = 0;
-  const baseSize = readVariableInteger(delta, cursor); cursor = baseSize.cursor;
-  const resultSize = readVariableInteger(delta, cursor); cursor = resultSize.cursor;
-  if (baseSize.value !== base.byteLength || resultSize.value > 100 * 1024 * 1024) throw new Error('Git delta declares an invalid object size.');
+  const baseSize = readVariableInteger(delta, cursor);
+  cursor = baseSize.cursor;
+  const resultSize = readVariableInteger(delta, cursor);
+  cursor = resultSize.cursor;
+  if (baseSize.value !== base.byteLength || resultSize.value > 100 * 1024 * 1024)
+    throw new Error('Git delta declares an invalid object size.');
   const output = new Uint8Array(resultSize.value);
   let written = 0;
   while (cursor < delta.length) {
@@ -125,11 +152,16 @@ function applyDelta(base: Uint8Array, delta: Uint8Array) {
       if (instruction & 32) size |= delta[cursor++] << 8;
       if (instruction & 64) size |= delta[cursor++] << 16;
       if (size === 0) size = 65_536;
-      if (offset + size > base.length || written + size > output.length) throw new Error('Git delta copy exceeds its object bounds.');
-      output.set(base.subarray(offset, offset + size), written); written += size;
+      if (offset + size > base.length || written + size > output.length)
+        throw new Error('Git delta copy exceeds its object bounds.');
+      output.set(base.subarray(offset, offset + size), written);
+      written += size;
     } else {
-      if (instruction === 0 || cursor + instruction > delta.length || written + instruction > output.length) throw new Error('Git delta insert exceeds its object bounds.');
-      output.set(delta.subarray(cursor, cursor + instruction), written); cursor += instruction; written += instruction;
+      if (instruction === 0 || cursor + instruction > delta.length || written + instruction > output.length)
+        throw new Error('Git delta insert exceeds its object bounds.');
+      output.set(delta.subarray(cursor, cursor + instruction), written);
+      cursor += instruction;
+      written += instruction;
     }
   }
   if (written !== output.length) throw new Error('Git delta result is truncated.');

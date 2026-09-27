@@ -18,7 +18,9 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
     if (!trusted(request, this.env)) return stateResponse({ error: 'not_found' }, 404);
     try {
       const path = new URL(request.url).pathname;
-      let deletion = await this.ctx.storage.get<{ storedBytes: number; startedAt: number; complete?: boolean }>('deletion');
+      let deletion = await this.ctx.storage.get<{ storedBytes: number; startedAt: number; complete?: boolean }>(
+        'deletion'
+      );
       if (deletion) this.deleting = true;
       if (path === '/delete' && request.method === 'POST') {
         this.deleting = true;
@@ -48,18 +50,35 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
       if (request.method === 'POST' && path === '/catalog') {
         const body = await readBoundedJson<{ packId?: unknown; objects?: unknown }>(request, 1024 * 1024);
         if (!body || typeof body !== 'object') return stateResponse({ error: 'invalid_catalog' }, 422);
-        if (typeof body.packId !== 'string' || !/^[0-9a-f]{40,64}$/.test(body.packId) || !Array.isArray(body.objects) || body.objects.length > 500) return stateResponse({ error: 'invalid_catalog' }, 422);
-        const objects = body.objects.filter((value): value is { id: string; kind: string; size: number; packedBytes: number; offset: number } => {
-          if (!value || typeof value !== 'object') return false;
-          const object = value as Record<string, unknown>;
-          return typeof object.id === 'string' && /^[0-9a-f]{40,64}$/.test(object.id) && typeof object.kind === 'string' && ['commit', 'tree', 'blob', 'tag'].includes(object.kind) && [object.size, object.packedBytes, object.offset].every((number) => typeof number === 'number' && Number.isSafeInteger(number) && number >= 0);
-        });
+        if (
+          typeof body.packId !== 'string' ||
+          !/^[0-9a-f]{40,64}$/.test(body.packId) ||
+          !Array.isArray(body.objects) ||
+          body.objects.length > 500
+        )
+          return stateResponse({ error: 'invalid_catalog' }, 422);
+        const objects = body.objects.filter(
+          (value): value is { id: string; kind: string; size: number; packedBytes: number; offset: number } => {
+            if (!value || typeof value !== 'object') return false;
+            const object = value as Record<string, unknown>;
+            return (
+              typeof object.id === 'string' &&
+              /^[0-9a-f]{40,64}$/.test(object.id) &&
+              typeof object.kind === 'string' &&
+              ['commit', 'tree', 'blob', 'tag'].includes(object.kind) &&
+              [object.size, object.packedBytes, object.offset].every(
+                (number) => typeof number === 'number' && Number.isSafeInteger(number) && number >= 0
+              )
+            );
+          }
+        );
         if (objects.length !== body.objects.length) return stateResponse({ error: 'invalid_catalog' }, 422);
         if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
         this.store.catalog(body.packId, objects);
         return new Response(null, { status: 204 });
       }
-      if (request.method === 'GET' && path === '/catalogs') return stateResponse({ catalogs: this.store.catalogCounts() });
+      if (request.method === 'GET' && path === '/catalogs')
+        return stateResponse({ catalogs: this.store.catalogCounts() });
       const state = this.store.read();
       if (request.method === 'GET' && path === '/snapshot') return stateResponse({ state });
       const generation = path.match(/^\/generations\/(\d+)$/);
@@ -70,7 +89,17 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
       if (request.method === 'POST' && path === '/begin') {
         const body = await parseStateBody(request, beginPushBody);
         if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
-        const next = beginPush(state, { id: body.pushId, reservationId: body.reservationId, expiresAt: body.expiresAt, proposedRefs: body.proposedRefs }, body.expectedRefs, Date.now());
+        const next = beginPush(
+          state,
+          {
+            id: body.pushId,
+            reservationId: body.reservationId,
+            expiresAt: body.expiresAt,
+            proposedRefs: body.proposedRefs
+          },
+          body.expectedRefs,
+          Date.now()
+        );
         this.store.write(state, next);
         return stateResponse({ state: next });
       }
@@ -88,7 +117,16 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
       if (request.method === 'POST' && path === '/fork') {
         const body = await parseStateBody(request, forkStateBody);
         if (this.deleting) return stateResponse({ error: 'repository_deleted' }, 410);
-        const state: RepositoryState = { generation: 1, refsVersion: Object.keys(body.refs).length ? 1 : 0, refs: body.refs, manifestKey: body.manifestKey, manifestHash: body.manifestHash, packs: body.packs, storedBytes: body.packs.reduce((total, pack) => total + pack.compressedBytes, 0), activePush: null };
+        const state: RepositoryState = {
+          generation: 1,
+          refsVersion: Object.keys(body.refs).length ? 1 : 0,
+          refs: body.refs,
+          manifestKey: body.manifestKey,
+          manifestHash: body.manifestHash,
+          packs: body.packs,
+          storedBytes: body.packs.reduce((total, pack) => total + pack.compressedBytes, 0),
+          activePush: null
+        };
         this.store.initializeFork(state, Date.now());
         return stateResponse({ state }, 201);
       }
@@ -137,13 +175,22 @@ export class RepositoryStateObject extends DurableObject<StateEnv> {
       const remainingKeys: string[] = [];
       for (const objectKey of this.store.retirementKeys(retirement.generation)) {
         if (activeKeys.has(objectKey)) continue;
-        try { await this.env.REPOSITORIES.delete(objectKey); }
-        catch (error) { remainingKeys.push(objectKey); console.error('canonical object retirement deferred', error); }
+        try {
+          await this.env.REPOSITORIES.delete(objectKey);
+        } catch (error) {
+          remainingKeys.push(objectKey);
+          console.error('canonical object retirement deferred', error);
+        }
       }
       let manifestRetirementDeferred = false;
       for (const generation of this.store.generationsBefore(retirement.beforeGeneration)) {
-        try { await this.env.REPOSITORIES.delete(generation.manifestKey); this.store.deleteGeneration(generation.generation); }
-        catch (error) { manifestRetirementDeferred = true; console.error('repository generation retirement deferred', error); }
+        try {
+          await this.env.REPOSITORIES.delete(generation.manifestKey);
+          this.store.deleteGeneration(generation.generation);
+        } catch (error) {
+          manifestRetirementDeferred = true;
+          console.error('repository generation retirement deferred', error);
+        }
       }
       if (remainingKeys.length || manifestRetirementDeferred) {
         const attempts = retirement.attempts + 1;
@@ -187,17 +234,32 @@ async function verifyRepositoryIntegrity(bucket: R2Bucket, state: RepositoryStat
   if (!manifestObject) throw new Error(`Repository manifest ${state.manifestKey} is missing.`);
   const manifest = await readBoundedText(manifestObject.body, 16 * 1024 * 1024);
   if (!manifest) throw new Error(`Repository manifest ${state.manifestKey} is empty or too large.`);
-  if (await sha256(manifest) !== state.manifestHash) throw new Error(`Repository manifest ${state.manifestKey} is corrupt.`);
-  const expected = JSON.stringify({ generation: state.generation, refsVersion: state.refsVersion, refs: state.refs, packs: state.packs });
-  if (manifest !== expected) throw new Error(`Repository manifest ${state.manifestKey} disagrees with repository state.`);
+  if ((await sha256(manifest)) !== state.manifestHash)
+    throw new Error(`Repository manifest ${state.manifestKey} is corrupt.`);
+  const expected = JSON.stringify({
+    generation: state.generation,
+    refsVersion: state.refsVersion,
+    refs: state.refs,
+    packs: state.packs
+  });
+  if (manifest !== expected)
+    throw new Error(`Repository manifest ${state.manifestKey} disagrees with repository state.`);
   for (const pack of state.packs) {
-    const [packObject, indexObject, objectIndex] = await Promise.all([bucket.head(pack.packKey), bucket.head(pack.indexKey), bucket.head(pack.objectIndexKey)]);
-    if (!packObject || packObject.size !== pack.compressedBytes) throw new Error(`Canonical pack ${pack.id} is missing or truncated.`);
+    const [packObject, indexObject, objectIndex] = await Promise.all([
+      bucket.head(pack.packKey),
+      bucket.head(pack.indexKey),
+      bucket.head(pack.objectIndexKey)
+    ]);
+    if (!packObject || packObject.size !== pack.compressedBytes)
+      throw new Error(`Canonical pack ${pack.id} is missing or truncated.`);
     if (!indexObject || indexObject.size === 0) throw new Error(`Canonical pack index ${pack.id} is missing or empty.`);
-    if (!objectIndex || objectIndex.size === 0) throw new Error(`Canonical object index ${pack.id} is missing or empty.`);
+    if (!objectIndex || objectIndex.size === 0)
+      throw new Error(`Canonical object index ${pack.id} is missing or empty.`);
   }
 }
 
 async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }

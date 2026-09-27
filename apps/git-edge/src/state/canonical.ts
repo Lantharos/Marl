@@ -1,4 +1,10 @@
-export async function promoteCanonicalObject(bucket: R2Bucket, sourceKey: string, canonicalKey: string, expectedBytes: number | null, contentType: string) {
+export async function promoteCanonicalObject(
+  bucket: R2Bucket,
+  sourceKey: string,
+  canonicalKey: string,
+  expectedBytes: number | null,
+  contentType: string
+) {
   const existing = await bucket.head(canonicalKey);
   if (existing) {
     assertStoredObject(canonicalKey, existing, expectedBytes);
@@ -20,5 +26,6 @@ export async function promoteCanonicalObject(bucket: R2Bucket, sourceKey: string
 }
 
 function assertStoredObject(key: string, object: R2Object, expectedBytes: number | null) {
-  if (object.size === 0 || (expectedBytes !== null && object.size !== expectedBytes)) throw new Error(`Canonical object ${key} has an unexpected size.`);
+  if (object.size === 0 || (expectedBytes !== null && object.size !== expectedBytes))
+    throw new Error(`Canonical object ${key} has an unexpected size.`);
 }

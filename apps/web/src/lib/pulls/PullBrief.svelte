@@ -1,28 +1,24 @@
 <script lang="ts">
-  import sanitizeHtml from 'sanitize-html';
   import Button from '$lib/components/controls/Button.svelte';
   import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import Modal from '$lib/components/controls/Modal.svelte';
-  import { renderMarkdown, type MarkdownContext } from '$lib/markdown';
+  import Modal from '$lib/components/overlays/Modal.svelte';
 
-  let { body, title, context } = $props<{ body: string; title: string; context: MarkdownContext }>();
+  let { html, text, title }: { html: string; text: string; title: string } = $props();
   let open = $state(false);
   let fitted = $state<{ text: string; truncated: boolean; more: boolean } | null>(null);
-  const rendered = $derived(renderMarkdown(body, context));
-  const preview = $derived(sanitizeHtml(
-    rendered.replace(/<\/(?:p|h[1-6]|li|tr|blockquote|pre|div)>|<br\s*\/?>/g, ' '),
-    { allowedTags: [], allowedAttributes: {}, transformTags: { img: (_tag, attributes) => ({ tagName: 'span', attribs: {}, text: attributes.alt || 'Image' }) } }
-  ).trim());
-  const hasDocumentContent = $derived(/<(?:h[1-6]|ul|ol|pre|table|img|video|details|a|code|strong|em|del|blockquote|hr|input)\b/.test(rendered));
+  const hasDocumentContent = $derived(
+    /<(?:h[1-6]|ul|ol|pre|table|img|video|details|a|code|strong|em|del|blockquote|hr|input)\b/.test(html)
+  );
 
-  function measure(html: string, formatted: boolean) {
+  function measure(text: string, formatted: boolean) {
     return (element: HTMLElement) => {
       const measurement = element.querySelector<HTMLElement>('.measurement')!;
       const copy = measurement.querySelector<HTMLElement>('.measurement-copy')!;
       const ending = measurement.querySelector<HTMLElement>('.ending')!;
       const ellipsis = ending.querySelector<HTMLElement>('.ellipsis')!;
-      const text = new DOMParser().parseFromString(html, 'text/html').body.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-      const characters = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(part => part.segment);
+      const characters = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(
+        (part) => part.segment
+      );
       let active = true;
       let width = 0;
       const update = () => {
@@ -50,33 +46,42 @@
         if (characters[low]?.trim()) excerpt = excerpt.replace(/\s+\S*$/, '');
         fitted = { text: excerpt, truncated: true, more: true };
       };
-      const observer = new ResizeObserver(() => { if (element.clientWidth !== width) update(); });
+      const observer = new ResizeObserver(() => {
+        if (element.clientWidth !== width) update();
+      });
       observer.observe(element);
       void document.fonts.ready.then(update);
-      return () => { active = false; observer.disconnect(); };
+      return () => {
+        active = false;
+        observer.disconnect();
+      };
     };
   }
 </script>
 
-<div class="brief-preview" {@attach measure(preview, hasDocumentContent)}>
-  <p class="preview" class:measured={fitted !== null}>
-    {#if fitted}{fitted.text}{:else}{@html preview}{/if}{#if fitted?.more || (!fitted && hasDocumentContent)}<span class="ending">{#if fitted?.truncated}…{/if} <Button class="read-more" variant="ghost" aria-haspopup="dialog" onclick={() => (open = true)}>Read more</Button></span>{/if}
+<div class="relative" {@attach measure(text, hasDocumentContent)}>
+  <p class={['text-sm leading-[1.65] break-words text-ink', fitted === null && 'line-clamp-3']}>
+    {fitted ? fitted.text : text}{#if fitted?.more || (!fitted && hasDocumentContent)}<span class="whitespace-nowrap"
+        >{#if fitted?.truncated}…{/if}
+        <button
+          type="button"
+          class="font-semibold text-ink-strong hover:text-brand hover:underline hover:underline-offset-3"
+          aria-haspopup="dialog"
+          onclick={() => (open = true)}>Read more</button
+        ></span
+      >{/if}
   </p>
-  <p class="measurement" aria-hidden="true"><span class="measurement-copy"></span><span class="ending"><span class="ellipsis">…</span> <span class="read-more-label">Read more</span></span></p>
+  <p
+    class="measurement pointer-events-none invisible absolute inset-x-0 top-0 text-sm leading-[1.65] break-words [contain:layout_style]"
+    aria-hidden="true"
+  >
+    <span class="measurement-copy"></span><span class="ending whitespace-nowrap"
+      ><span class="ellipsis">…</span> <span class="font-semibold">Read more</span></span
+    >
+  </p>
 </div>
 
-<Modal {open} {title} onClose={() => (open = false)} --modal-width="720px">
-  <div class="full-brief"><MarkdownBody source={body} {context} /></div>
+<Modal {open} {title} size="large" onClose={() => (open = false)}>
+  <MarkdownBody {html} />
   {#snippet actions()}<Button onclick={() => (open = false)}>Close</Button>{/snippet}
 </Modal>
-
-<style>
-  .brief-preview{position:relative}
-  .preview,.measurement{margin:0;color:var(--text);font-size:13px;line-height:1.65;overflow-wrap:anywhere}
-  .preview:not(.measured){display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
-  .measurement{position:absolute;inset:0 0 auto;visibility:hidden;pointer-events:none;contain:layout style}
-  .ending{white-space:nowrap}
-  .brief-preview :global(.read-more.button),.read-more-label{display:inline;min-height:0;margin:0;padding:0;border:0;border-radius:2px;background:none;color:var(--text-strong);font:inherit;font-weight:600;vertical-align:baseline}
-  .brief-preview :global(.read-more.button:hover){background:none;color:var(--brand);text-decoration:underline;text-underline-offset:3px}
-  .full-brief{min-width:0;--markdown-font-size:14px}
-</style>

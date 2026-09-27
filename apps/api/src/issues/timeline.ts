@@ -1,80 +1,177 @@
-import type { IssueComment, IssueEvent, IssueTimelineItem, IssueTimelineWindow, WorkItemReferenceEvent } from '@marl/contracts';
+import type {
+  IssueComment,
+  IssueEvent,
+  IssueTimelineItem,
+  IssueTimelineWindow,
+  WorkItemReferenceEvent
+} from '@marl/contracts';
 import type { Principal } from '../auth/principal';
+import { renderBody, type MarkdownContext } from '../core/markdown';
 import type { Env } from '../core/platform';
-import { hydrateReferenceEvents } from './work-item-references';
+import { hydrateReferenceEvents } from './references/work-items';
 
 type TimelineRow = { sequence: number; kind: IssueTimelineItem['kind']; entityId: string; createdAt: string };
-type CommentRow = Omit<IssueComment, 'deleted' | 'canEdit'> & { deletedAt: string | null };
+type CommentRow = Omit<IssueComment, 'bodyHtml' | 'deleted' | 'canEdit'> & { deletedAt: string | null };
 type EventRow = Omit<IssueEvent, 'details'> & { details: string };
 
-export async function initialIssueTimeline(env: Env, principal: Principal | null, issueId: string, canManage = false): Promise<IssueTimelineWindow> {
+export async function initialIssueTimeline(
+  env: Env,
+  principal: Principal | null,
+  issueId: string,
+  context: MarkdownContext,
+  canManage: boolean
+): Promise<IssueTimelineWindow> {
   const [first, recent, count] = await Promise.all([
     timelineRows(env, issueId, 'ORDER BY sequence LIMIT 2'),
     timelineRows(env, issueId, 'ORDER BY sequence DESC LIMIT 30'),
-    env.DB.prepare('SELECT COUNT(*) AS count FROM issue_timeline WHERE issue_id=?').bind(issueId).first<{ count: number }>()
+    env.DB.prepare('SELECT COUNT(*) AS count FROM issue_timeline WHERE issue_id=?')
+      .bind(issueId)
+      .first<{ count: number }>()
   ]);
   const rows = uniqueRows([...first, ...recent]).sort((left, right) => left.sequence - right.sequence);
   const total = Number(count?.count ?? 0);
-  const items = await hydrate(env, principal, rows, canManage);
-  return { items, context: await replyContext(env, principal, items, canManage), total, hidden: Math.max(0, total - rows.length), loadBeforeSequence: recent.length ? Math.min(...recent.map((row) => row.sequence)) : undefined, firstBoundarySequence: first.at(-1)?.sequence };
+  const items = await hydrate(env, principal, rows, context, canManage);
+  return {
+    items,
+    context: await replyContext(env, principal, items, context, canManage),
+    total,
+    hidden: Math.max(0, total - rows.length),
+    loadBeforeSequence: recent.length ? Math.min(...recent.map((row) => row.sequence)) : undefined,
+    firstBoundarySequence: first.at(-1)?.sequence
+  };
 }
 
-export async function olderIssueTimeline(env: Env, principal: Principal | null, issueId: string, before: number, after: number, canManage = false): Promise<IssueTimelineWindow> {
-  const result = await env.DB.prepare('SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM issue_timeline WHERE issue_id=? AND sequence<? AND sequence>? ORDER BY sequence DESC LIMIT 30').bind(issueId, before, after).all<TimelineRow>();
+export async function olderIssueTimeline(
+  env: Env,
+  principal: Principal | null,
+  issueId: string,
+  before: number,
+  after: number,
+  context: MarkdownContext,
+  canManage: boolean
+): Promise<IssueTimelineWindow> {
+  const result = await env.DB.prepare(
+    'SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM issue_timeline WHERE issue_id=? AND sequence<? AND sequence>? ORDER BY sequence DESC LIMIT 30'
+  )
+    .bind(issueId, before, after)
+    .all<TimelineRow>();
   const rows = result.results.reverse();
   const oldest = rows[0]?.sequence ?? before;
-  const remaining = await env.DB.prepare('SELECT COUNT(*) AS count FROM issue_timeline WHERE issue_id=? AND sequence<? AND sequence>?').bind(issueId, oldest, after).first<{ count: number }>();
-  const items = await hydrate(env, principal, rows, canManage);
-  return { items, context: await replyContext(env, principal, items, canManage), total: Number(remaining?.count ?? 0) + rows.length, hidden: Number(remaining?.count ?? 0), loadBeforeSequence: oldest, firstBoundarySequence: after };
+  const remaining = await env.DB.prepare(
+    'SELECT COUNT(*) AS count FROM issue_timeline WHERE issue_id=? AND sequence<? AND sequence>?'
+  )
+    .bind(issueId, oldest, after)
+    .first<{ count: number }>();
+  const items = await hydrate(env, principal, rows, context, canManage);
+  return {
+    items,
+    context: await replyContext(env, principal, items, context, canManage),
+    total: Number(remaining?.count ?? 0) + rows.length,
+    hidden: Number(remaining?.count ?? 0),
+    loadBeforeSequence: oldest,
+    firstBoundarySequence: after
+  };
 }
 
 function timelineRows(env: Env, issueId: string, suffix: string) {
-  return env.DB.prepare(`SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM issue_timeline WHERE issue_id=? ${suffix}`).bind(issueId).all<TimelineRow>().then((result) => result.results);
+  return env.DB.prepare(
+    `SELECT sequence,kind,entity_id AS entityId,created_at AS createdAt FROM issue_timeline WHERE issue_id=? ${suffix}`
+  )
+    .bind(issueId)
+    .all<TimelineRow>()
+    .then((result) => result.results);
 }
 
 function uniqueRows(rows: TimelineRow[]) {
   return [...new Map(rows.map((row) => [row.sequence, row])).values()];
 }
 
-async function hydrate(env: Env, principal: Principal | null, rows: TimelineRow[], canManage: boolean): Promise<IssueTimelineItem[]> {
+async function hydrate(
+  env: Env,
+  principal: Principal | null,
+  rows: TimelineRow[],
+  context: MarkdownContext,
+  canManage: boolean
+): Promise<IssueTimelineItem[]> {
   const commentIds = rows.filter((row) => row.kind === 'comment').map((row) => row.entityId);
   const eventIds = rows.filter((row) => row.kind === 'event').map((row) => row.entityId);
   const referenceIds = rows.filter((row) => row.kind === 'reference').map((row) => row.entityId);
   const [comments, events, references] = await Promise.all([
     selectIds<CommentRow>(env, commentSelect, commentIds),
-    selectIds<EventRow>(env, `SELECT issue_events.id,users.handle AS actor,users.display_name AS actorDisplayName,issue_events.kind,issue_events.details,issue_events.created_at AS createdAt FROM issue_events JOIN users ON users.id=issue_events.actor_id WHERE issue_events.id IN`, eventIds),
+    selectIds<EventRow>(
+      env,
+      `SELECT issue_events.id,users.handle AS actor,users.display_name AS actorDisplayName,issue_events.kind,issue_events.details,issue_events.created_at AS createdAt FROM issue_events JOIN users ON users.id=issue_events.actor_id WHERE issue_events.id IN`,
+      eventIds
+    ),
     hydrateReferenceEvents(env, principal, referenceIds)
   ]);
   const values = new Map<string, IssueComment | IssueEvent | WorkItemReferenceEvent>();
-  for (const { deletedAt, ...comment } of comments) values.set(comment.id, { ...comment, body: deletedAt ? '' : comment.body, deleted: Boolean(deletedAt), canEdit: canManage || comment.authorId === principal?.id });
+  for (const row of comments) values.set(row.id, issueComment(row, principal, context, canManage));
   for (const event of events) values.set(event.id, { ...event, details: parseDetails(event.details) });
   for (const reference of references) values.set(reference.id, reference);
   const hydrated: IssueTimelineItem[] = [];
   for (const row of rows) {
     const value = values.get(row.entityId);
-    if (row.kind === 'comment' && value && 'author' in value) hydrated.push({ sequence: Number(row.sequence), kind: 'comment', createdAt: row.createdAt, value });
-    if (row.kind === 'event' && value && 'actor' in value) hydrated.push({ sequence: Number(row.sequence), kind: 'event', createdAt: row.createdAt, value });
-    if (row.kind === 'reference' && value && !('actor' in value) && !('author' in value)) hydrated.push({ sequence: Number(row.sequence), kind: 'reference', createdAt: row.createdAt, value });
+    if (row.kind === 'comment' && value && 'author' in value)
+      hydrated.push({ sequence: Number(row.sequence), kind: 'comment', createdAt: row.createdAt, value });
+    if (row.kind === 'event' && value && 'actor' in value)
+      hydrated.push({ sequence: Number(row.sequence), kind: 'event', createdAt: row.createdAt, value });
+    if (row.kind === 'reference' && value && !('actor' in value) && !('author' in value))
+      hydrated.push({ sequence: Number(row.sequence), kind: 'reference', createdAt: row.createdAt, value });
   }
   return hydrated;
 }
 
 const commentSelect = `SELECT issue_comments.id,issue_comments.parent_id AS parentId,issue_comments.reply_to_id AS replyToId,issue_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,issue_comments.body,issue_comments.created_at AS createdAt,issue_comments.updated_at AS updatedAt,issue_comments.deleted_at AS deletedAt FROM issue_comments JOIN users ON users.id=issue_comments.author_id WHERE issue_comments.id IN`;
 
-async function replyContext(env: Env, principal: Principal | null, items: IssueTimelineItem[], canManage: boolean): Promise<IssueComment[]> {
-  const comments = items.flatMap((item) => item.kind === 'comment' ? [item.value] : []);
+async function replyContext(
+  env: Env,
+  principal: Principal | null,
+  items: IssueTimelineItem[],
+  context: MarkdownContext,
+  canManage: boolean
+): Promise<IssueComment[]> {
+  const comments = items.flatMap((item) => (item.kind === 'comment' ? [item.value] : []));
   const loaded = new Set(comments.map((comment) => comment.id));
-  const ids = [...new Set(comments.flatMap((comment) => [comment.parentId, comment.replyToId]).filter((id): id is string => Boolean(id) && !loaded.has(id!)))];
+  const ids = [
+    ...new Set(
+      comments
+        .flatMap((comment) => [comment.parentId, comment.replyToId])
+        .filter((id): id is string => Boolean(id) && !loaded.has(id!))
+    )
+  ];
   const rows = await selectIds<CommentRow>(env, commentSelect, ids);
-  return rows.map(({ deletedAt, ...comment }) => ({ ...comment, body: deletedAt ? '' : comment.body, deleted: Boolean(deletedAt), canEdit: canManage || comment.authorId === principal?.id }));
+  return rows.map((row) => issueComment(row, principal, context, canManage));
+}
+
+function issueComment(
+  { deletedAt, ...comment }: CommentRow,
+  principal: Principal | null,
+  context: MarkdownContext,
+  canManage: boolean
+): IssueComment {
+  const body = deletedAt ? '' : comment.body;
+  return {
+    ...comment,
+    body,
+    bodyHtml: renderBody(body, context, comment.id),
+    deleted: Boolean(deletedAt),
+    canEdit: canManage || comment.authorId === principal?.id
+  };
 }
 
 function selectIds<T>(env: Env, prefix: string, ids: string[]): Promise<T[]> {
   if (!ids.length) return Promise.resolve([]);
-  return env.DB.prepare(`${prefix} (${ids.map(() => '?').join(',')})`).bind(...ids).all<T>().then((result) => result.results);
+  return env.DB.prepare(`${prefix} (${ids.map(() => '?').join(',')})`)
+    .bind(...ids)
+    .all<T>()
+    .then((result) => result.results);
 }
 
 function parseDetails(value: string): Record<string, string> {
-  try { return JSON.parse(value) as Record<string, string>; }
-  catch { return {}; }
+  try {
+    return JSON.parse(value) as Record<string, string>;
+  } catch {
+    return {};
+  }
 }

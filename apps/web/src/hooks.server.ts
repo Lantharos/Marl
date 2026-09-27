@@ -1,10 +1,15 @@
 import { dev } from '$app/environment';
 import type { Handle, HandleFetch } from '@sveltejs/kit';
+import { themeCookie } from '$lib/theme';
 
 const localApi = 'http://127.0.0.1:42618';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  const response = await resolve(event);
+  const theme = event.cookies.get(themeCookie);
+  const themeAttribute = theme === 'light' || theme === 'dark' ? ` data-theme="${theme}"` : '';
+  const response = await resolve(event, {
+    transformPageChunk: ({ html }) => html.replace('%marl.theme%', themeAttribute)
+  });
   response.headers.set('cross-origin-opener-policy', 'same-origin');
   response.headers.set('permissions-policy', 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
   response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');

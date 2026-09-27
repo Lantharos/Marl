@@ -13,7 +13,10 @@ export type CommittedPush = {
 export type PublicationFailureDisposition = 'published' | 'discard' | 'defer';
 export type PublicationResolution<T> = { value: T; recovered: CommittedPush | null };
 
-export function publicationFailureDisposition(error: unknown, committed: CommittedPush | null): PublicationFailureDisposition {
+export function publicationFailureDisposition(
+  error: unknown,
+  committed: CommittedPush | null
+): PublicationFailureDisposition {
   if (committed) return 'published';
   return error instanceof StateRequestError ? 'discard' : 'defer';
 }
@@ -29,7 +32,8 @@ export async function publishWithReconciliation<T>(operations: {
   } catch (error) {
     const committed = await operations.readCommitted();
     const disposition = publicationFailureDisposition(error, committed);
-    if (disposition === 'published' && committed) return { value: await operations.recover(committed), recovered: committed };
+    if (disposition === 'published' && committed)
+      return { value: await operations.recover(committed), recovered: committed };
     if (disposition === 'discard') await operations.discard();
     throw error;
   }
@@ -44,10 +48,17 @@ export async function committedPush(repository: StateClient, pushId: string): Pr
   }
 }
 
-export async function recoverCommittedState(repository: StateClient, committed: CommittedPush): Promise<RepositoryState> {
+export async function recoverCommittedState(
+  repository: StateClient,
+  committed: CommittedPush
+): Promise<RepositoryState> {
   const snapshot = await repository.request<RepositorySnapshotResponse>('/snapshot');
-  if (snapshot.state.generation < committed.generation) throw new Error('Repository state is older than its committed publication record.');
-  if (snapshot.state.generation === committed.generation && (snapshot.state.manifestKey !== committed.manifestKey || snapshot.state.manifestHash !== committed.manifestHash)) {
+  if (snapshot.state.generation < committed.generation)
+    throw new Error('Repository state is older than its committed publication record.');
+  if (
+    snapshot.state.generation === committed.generation &&
+    (snapshot.state.manifestKey !== committed.manifestKey || snapshot.state.manifestHash !== committed.manifestHash)
+  ) {
     throw new Error('Repository state does not match its committed publication record.');
   }
   return snapshot.state;

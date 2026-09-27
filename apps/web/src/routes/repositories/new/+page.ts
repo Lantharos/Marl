@@ -4,7 +4,7 @@ import type { PageLoad } from './$types';
 
 type Organization = { slug: string; name: string; kind: 'personal' | 'team'; role: 'owner' | 'admin' | 'member' };
 
-export const load: PageLoad = async ({ fetch }) => {
+export const load = (async ({ fetch }) => {
   const result = await routeLoad(apiWith<{ repositoryOwners: Organization[] }>(fetch, '/organizations'));
   return { organizations: result.repositoryOwners.filter((organization) => organization.role !== 'member') };
-};
+}) satisfies PageLoad;

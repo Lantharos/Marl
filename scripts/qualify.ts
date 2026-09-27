@@ -38,7 +38,10 @@ try {
   stage('Prepare isolated control plane');
   await mkdir(persistence, { recursive: true });
   await mkdir(repositories, { recursive: true });
-  await run(['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local', '--persist-to', persistence], { cwd: apiRoot, timeoutMs: 120_000 });
+  await run(['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local', '--persist-to', persistence], {
+    cwd: apiRoot,
+    timeoutMs: 120_000
+  });
   await run(['cargo', 'build', '-p', 'git', '-p', 'cli'], {
     cwd: root,
     env: { CARGO_TARGET_DIR: cargoTarget },
@@ -53,7 +56,21 @@ try {
     email: 'qualification@marl.invalid',
     password: qualificationPassword
   });
-  await run(['bunx', 'wrangler', 'd1', 'execute', 'marl', '--local', '--persist-to', persistence, '--command', "UPDATE auth_user SET email_verified=1 WHERE email='qualification@marl.invalid'"], { cwd: apiRoot, timeoutMs: 120_000 });
+  await run(
+    [
+      'bunx',
+      'wrangler',
+      'd1',
+      'execute',
+      'marl',
+      '--local',
+      '--persist-to',
+      persistence,
+      '--command',
+      "UPDATE auth_user SET email_verified=1 WHERE email='qualification@marl.invalid'"
+    ],
+    { cwd: apiRoot, timeoutMs: 120_000 }
+  );
   git = startGit();
   await waitForHttp(`${gitUrl}/health`, git);
   await run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', sshKey], {
@@ -121,7 +138,9 @@ try {
   await run(['git', 'remote', 'set-url', 'origin', remote], { cwd: source });
   await client.git(['push', '--set-upstream', 'origin', 'main'], token);
   const signedCommit = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
-  const signedCommitDetail = await client.request<{ signatureStatus: string }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/commits/${signedCommit}`);
+  const signedCommitDetail = await client.request<{ signatureStatus: string }>(
+    `/api/v1/repositories/${qualificationOwner}/${repositoryName}/commits/${signedCommit}`
+  );
   assert(signedCommitDetail.signatureStatus === 'verified', 'A commit signed by the account SSH key was not verified.');
 
   stage('Authenticate and push through SSH');
@@ -131,7 +150,11 @@ try {
     timeoutMs: 120_000,
     env: sshEnvironment()
   });
-  const sshRefs = await run(['git', 'ls-remote', sshRemote, 'refs/tags/qualification-ssh'], { cwd: source, timeoutMs: 120_000, env: sshEnvironment() });
+  const sshRefs = await run(['git', 'ls-remote', sshRemote, 'refs/tags/qualification-ssh'], {
+    cwd: source,
+    timeoutMs: 120_000,
+    env: sshEnvironment()
+  });
   assert(sshRefs.stdout.includes('refs/tags/qualification-ssh'), 'SSH Git did not return the pushed reference.');
 
   const workflows = await client.waitFor(
@@ -139,7 +162,10 @@ try {
       client.request<{
         workflows: Array<{ id: string; path: string; status: string }>;
       }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/workflows`),
-    (value) => value.workflows.some((workflow) => workflow.path === '.marl/workflows/qualification.yml' && workflow.status === 'valid'),
+    (value) =>
+      value.workflows.some(
+        (workflow) => workflow.path === '.marl/workflows/qualification.yml' && workflow.status === 'valid'
+      ),
     'Workflow indexing did not converge'
   );
   const workflowId = workflows.workflows.find((workflow) => workflow.path === '.marl/workflows/qualification.yml')!.id;
@@ -150,12 +176,19 @@ try {
   await commitMarker('latest queued revision');
   const runnerCommit = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
   await client.git(['push', 'origin', 'main'], token);
-  const queuedRuns = await client.request<{ runs: RunSummary[] }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs?limit=100`);
+  const queuedRuns = await client.request<{ runs: RunSummary[] }>(
+    `/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs?limit=100`
+  );
   const pushRuns = queuedRuns.runs.filter((item) => item.trigger === 'push' && item.branch === 'main');
   assert(pushRuns.length >= 3, 'Expected a workflow run for every main push.');
-  assert(pushRuns.filter((item) => ['queued', 'running'].includes(item.state)).length === 1, 'Only the latest supersedable push may remain active.');
   assert(
-    pushRuns.filter((item) => !['queued', 'running'].includes(item.state)).every((item) => item.state === 'canceled' && item.cancellationReason === 'superseded'),
+    pushRuns.filter((item) => ['queued', 'running'].includes(item.state)).length === 1,
+    'Only the latest supersedable push may remain active.'
+  );
+  assert(
+    pushRuns
+      .filter((item) => !['queued', 'running'].includes(item.state))
+      .every((item) => item.state === 'canceled' && item.cancellationReason === 'superseded'),
     'Older push runs were not marked superseded.'
   );
 
@@ -168,11 +201,42 @@ try {
         expiresMinutes: 15
       })
     });
-    await run([executable('marl'), 'runner', 'register', '--url', apiUrl, '--token', enrollment.enrollment.token, '--name', `qualification-${Date.now().toString(36)}`, '--label', 'docker', '--concurrency', '1', '--work-dir', runnerWork, '--config', runnerConfig], { cwd: root, timeoutMs: 120_000 });
-    await run([executable('marl'), 'runner', 'run', '--once', '--config', runnerConfig], { cwd: root, timeoutMs: 300_000 });
-    const completedRuns = await client.request<{ runs: RunSummary[] }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs?limit=100`);
-    const completed = completedRuns.runs.find((item) => item.trigger === 'push' && item.branch === 'main' && item.commit === runnerCommit);
-    assert(completed, `The runner did not report the latest push workflow for ${runnerCommit}.\n${JSON.stringify(completedRuns.runs, null, 2)}`);
+    await run(
+      [
+        executable('marl'),
+        'runner',
+        'register',
+        '--url',
+        apiUrl,
+        '--token',
+        enrollment.enrollment.token,
+        '--name',
+        `qualification-${Date.now().toString(36)}`,
+        '--label',
+        'docker',
+        '--concurrency',
+        '1',
+        '--work-dir',
+        runnerWork,
+        '--config',
+        runnerConfig
+      ],
+      { cwd: root, timeoutMs: 120_000 }
+    );
+    await run([executable('marl'), 'runner', 'run', '--once', '--config', runnerConfig], {
+      cwd: root,
+      timeoutMs: 300_000
+    });
+    const completedRuns = await client.request<{ runs: RunSummary[] }>(
+      `/api/v1/repositories/${qualificationOwner}/${repositoryName}/runs?limit=100`
+    );
+    const completed = completedRuns.runs.find(
+      (item) => item.trigger === 'push' && item.branch === 'main' && item.commit === runnerCommit
+    );
+    assert(
+      completed,
+      `The runner did not report the latest push workflow for ${runnerCommit}.\n${JSON.stringify(completedRuns.runs, null, 2)}`
+    );
     const runDetail = await client.request<{
       run: {
         jobsDetail: Array<{
@@ -192,9 +256,15 @@ try {
       'The qualification artifact was not published.'
     );
     const artifact = completedJob.artifacts.find((item) => item.name === 'qualification/result.txt')!;
-    assert((await client.text(`/api/v1/artifacts/${artifact.id}`)).trim() === 'passed', 'The stored artifact contents are incorrect.');
+    assert(
+      (await client.text(`/api/v1/artifacts/${artifact.id}`)).trim() === 'passed',
+      'The stored artifact contents are incorrect.'
+    );
     assert(logs.includes('Verify checkout'), 'Persisted job logs are incomplete.');
-    assert(logs.includes('***') && !logs.includes(qualificationSecret), 'A CI secret was not masked from persisted logs.');
+    assert(
+      logs.includes('***') && !logs.includes(qualificationSecret),
+      'A CI secret was not masked from persisted logs.'
+    );
   }
 
   stage('Exercise pull request synchronization and timeline history');
@@ -237,7 +307,10 @@ try {
   const initialTimeline = await client.request<PullQualificationDetail>(timelinePath);
   assert(initialTimeline.pullRequest.state === 'mergeable', 'Reopened pull request was not mergeable.');
   const initialEvents = timelineEvents(initialTimeline);
-  assert(initialEvents.includes('ready') && initialEvents.includes('closed') && initialEvents.includes('reopened'), 'Pull request lifecycle events are incomplete.');
+  assert(
+    initialEvents.includes('ready') && initialEvents.includes('closed') && initialEvents.includes('reopened'),
+    'Pull request lifecycle events are incomplete.'
+  );
   assertRevisionHistory(initialTimeline, [timelineSecond]);
 
   await commitMarker('timeline fast-forward commit');
@@ -249,7 +322,10 @@ try {
     'Pull request did not synchronize a fast-forward push'
   );
   assertRevisionHistory(fastForwardDetail, [timelineSecond, timelineFastForward]);
-  assert(!fastForwardDetail.pullRequest.timeline.revisions.at(-1)?.forcePushed, 'A fast-forward push was recorded as a force push.');
+  assert(
+    !fastForwardDetail.pullRequest.timeline.revisions.at(-1)?.forcePushed,
+    'A fast-forward push was recorded as a force push.'
+  );
 
   await run(['git', 'reset', '--hard', 'origin/main'], { cwd: source });
   await commitMarker('timeline rewritten commit');
@@ -257,16 +333,25 @@ try {
   await client.git(['push', '--force-with-lease', 'origin', 'qualification/timeline'], token);
   const rewrittenDetail = await client.waitFor(
     () => client.request<PullQualificationDetail>(timelinePath),
-    (value) => value.pullRequest.sourceCommitId === timelineRewritten && value.pullRequest.timeline.revisions.at(-1)?.forcePushed === true,
+    (value) =>
+      value.pullRequest.sourceCommitId === timelineRewritten &&
+      value.pullRequest.timeline.revisions.at(-1)?.forcePushed === true,
     'Pull request did not preserve a force-push revision boundary'
   );
   assertRevisionHistory(rewrittenDetail, [timelineSecond, timelineRewritten]);
-  assert(rewrittenDetail.pullRequest.commits.length === 1 && rewrittenDetail.pullRequest.commits[0]?.id === timelineRewritten, 'Current pull request commits did not follow the rewritten head.');
+  assert(
+    rewrittenDetail.pullRequest.commits.length === 1 &&
+      rewrittenDetail.pullRequest.commits[0]?.id === timelineRewritten,
+    'Current pull request commits did not follow the rewritten head.'
+  );
   const rewrittenDiff = await client.request<{ files: unknown[] }>(`${timelinePath}/diff`);
   assert(rewrittenDiff.files.length > 0, 'Pull request diff was empty after a force push.');
   await client.request(`${timelinePath}/merge`, {
     method: 'POST',
-    body: JSON.stringify({ method: 'merge', commitId: (await client.request<PullQualificationDetail>(timelinePath)).pullRequest.sourceCommitId })
+    body: JSON.stringify({
+      method: 'merge',
+      commitId: (await client.request<PullQualificationDetail>(timelinePath)).pullRequest.sourceCommitId
+    })
   });
 
   stage('Exercise pull request publication');
@@ -279,30 +364,42 @@ try {
       cwd: source
     });
     await client.git(['push', '--set-upstream', 'origin', `qualification/${method}`], token);
-    const pull = await client.request<{ pullRequest: { number: number } }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls`, {
-      method: 'POST',
-      body: JSON.stringify({
-        title: `Qualify ${method} publication`,
-        body: `Exercises the ${method} path.`,
-        sourceBranch: `qualification/${method}`,
-        targetBranch: 'main'
-      })
-    });
-    await client.request(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/comments`, {
-      method: 'POST',
-      body: JSON.stringify({
-        body: `Ready to exercise **${method}** publication.`
-      })
-    });
+    const pull = await client.request<{ pullRequest: { number: number } }>(
+      `/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `Qualify ${method} publication`,
+          body: `Exercises the ${method} path.`,
+          sourceBranch: `qualification/${method}`,
+          targetBranch: 'main'
+        })
+      }
+    );
+    await client.request(
+      `/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/comments`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          body: `Ready to exercise **${method}** publication.`
+        })
+      }
+    );
     const reviewedHead = (await run(['git', 'rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
-    const merged = await client.request<{ commitId: string }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/merge`, {
-      method: 'POST',
-      body: JSON.stringify({ method, commitId: reviewedHead })
-    });
-    const retried = await client.request<{ commitId: string }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/merge`, {
-      method: 'POST',
-      body: JSON.stringify({ method, commitId: reviewedHead })
-    });
+    const merged = await client.request<{ commitId: string }>(
+      `/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/merge`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ method, commitId: reviewedHead })
+      }
+    );
+    const retried = await client.request<{ commitId: string }>(
+      `/api/v1/repositories/${qualificationOwner}/${repositoryName}/pulls/${pull.pullRequest.number}/merge`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ method, commitId: reviewedHead })
+      }
+    );
     assert(merged.commitId === retried.commitId, `${method} merge retry produced a different commit.`);
     const detail = await client.request<{
       pullRequest: { timeline: { items: Array<{ kind: string; value: { kind?: string } }> } };
@@ -327,7 +424,10 @@ try {
       makeLatest: true
     })
   });
-  assert(!release.release.draft && release.release.tagName === releaseTag, 'Release publication did not return the published tag.');
+  assert(
+    !release.release.draft && release.release.tagName === releaseTag,
+    'Release publication did not return the published tag.'
+  );
   const publishedTag = await client.git(['ls-remote', remote, `refs/tags/${releaseTag}`], token);
   assert(publishedTag.stdout.includes(`refs/tags/${releaseTag}`), 'Publishing a release did not create its Git tag.');
   const assetBody = 'marl release qualification\n';
@@ -358,16 +458,31 @@ try {
     method: 'POST'
   });
   assert(completedAsset.asset.name === 'qualification.txt', 'Release asset completion returned the wrong asset.');
-  assert((await client.text(`/api/v1/release-assets/${completedAsset.asset.id}/download`)) === assetBody, 'Downloaded release asset did not match the upload.');
+  assert(
+    (await client.text(`/api/v1/release-assets/${completedAsset.asset.id}/download`)) === assetBody,
+    'Downloaded release asset did not match the upload.'
+  );
   const releaseDetail = await client.request<{
     release: { latest: boolean; assets: Array<{ id: string }> };
-  }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/releases/by-tag?tag=${encodeURIComponent(releaseTag)}`);
-  assert(releaseDetail.release.latest && releaseDetail.release.assets.some((asset) => asset.id === completedAsset.asset.id), 'Published release detail is incomplete.');
+  }>(
+    `/api/v1/repositories/${qualificationOwner}/${repositoryName}/releases/by-tag?tag=${encodeURIComponent(releaseTag)}`
+  );
+  assert(
+    releaseDetail.release.latest && releaseDetail.release.assets.some((asset) => asset.id === completedAsset.asset.id),
+    'Published release detail is incomplete.'
+  );
   for (const format of ['zip', 'tar.gz'] as const) {
-    const archive = await client.response(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/releases/${release.release.id}/archive/${format}`);
+    const archive = await client.response(
+      `/api/v1/repositories/${qualificationOwner}/${repositoryName}/releases/${release.release.id}/archive/${format}`
+    );
     assert(archive.ok, `Release ${format} archive failed (${archive.status}).`);
     const signature = new Uint8Array(await archive.arrayBuffer()).slice(0, 2);
-    assert(format === 'zip' ? signature[0] === 0x50 && signature[1] === 0x4b : signature[0] === 0x1f && signature[1] === 0x8b, `Release ${format} archive has an invalid signature.`);
+    assert(
+      format === 'zip'
+        ? signature[0] === 0x50 && signature[1] === 0x4b
+        : signature[0] === 0x1f && signature[1] === 0x8b,
+      `Release ${format} archive has an invalid signature.`
+    );
   }
   qualifiedRelease = {
     id: release.release.id,
@@ -383,7 +498,9 @@ try {
   await commitMarker('move main beyond stale lease');
   await client.git(['push', 'origin', 'main'], token);
   await commitMarker('attempt stale lease update');
-  const rejected = await client.git(['push', `--force-with-lease=main:${stale}`, 'origin', 'main'], token, { allowFailure: true });
+  const rejected = await client.git(['push', `--force-with-lease=main:${stale}`, 'origin', 'main'], token, {
+    allowFailure: true
+  });
   assert(rejected.exitCode !== 0, 'A stale force-with-lease unexpectedly replaced main.');
   await run(['git', 'reset', '--hard', 'origin/main'], { cwd: source });
 
@@ -399,22 +516,49 @@ try {
   });
   await run(['git', 'fsck', '--strict'], { cwd: clone, timeoutMs: 120_000 });
   for (const method of ['merge', 'squash', 'rebase']) {
-    assert(await Bun.file(join(clone, `qualification-${method}.txt`)).exists(), `${method} merge contents disappeared after restart.`);
+    assert(
+      await Bun.file(join(clone, `qualification-${method}.txt`)).exists(),
+      `${method} merge contents disappeared after restart.`
+    );
   }
   assert(qualifiedRelease, 'Release qualification state was not recorded.');
   const restoredRelease = await client.request<{
     release: { id: string; assets: Array<{ id: string }> };
-  }>(`/api/v1/repositories/${qualificationOwner}/${repositoryName}/releases/by-tag?tag=${encodeURIComponent(qualifiedRelease.tag)}`);
-  assert(restoredRelease.release.id === qualifiedRelease.id && restoredRelease.release.assets.some((asset) => asset.id === qualifiedRelease.assetId), 'Release metadata did not survive the service restart.');
-  assert((await client.text(`/api/v1/release-assets/${qualifiedRelease.assetId}/download`)) === qualifiedRelease.assetBody, 'Release asset did not survive the service restart.');
+  }>(
+    `/api/v1/repositories/${qualificationOwner}/${repositoryName}/releases/by-tag?tag=${encodeURIComponent(qualifiedRelease.tag)}`
+  );
+  assert(
+    restoredRelease.release.id === qualifiedRelease.id &&
+      restoredRelease.release.assets.some((asset) => asset.id === qualifiedRelease.assetId),
+    'Release metadata did not survive the service restart.'
+  );
+  assert(
+    (await client.text(`/api/v1/release-assets/${qualifiedRelease.assetId}/download`)) === qualifiedRelease.assetBody,
+    'Release asset did not survive the service restart.'
+  );
 
   stage('Run deterministic publication crash boundaries');
-  await run(['bun', 'test', 'apps/git-edge/src/reliability-harness.test.ts', 'apps/git-edge/src/state/reconciliation.test.ts', 'apps/git-edge/src/state/canonical.test.ts'], { cwd: root, timeoutMs: 120_000 });
-  console.log(`\nMarl qualification passed. Git history, SSH commit signing, PR publication, releases, supersession, restart recovery, and strict clone integrity are healthy.${skipRunner ? ' Runner execution was explicitly skipped.' : ' Runner execution is healthy.'}`);
+  await run(
+    [
+      'bun',
+      'test',
+      'apps/git-edge/src/reliability-harness.test.ts',
+      'apps/git-edge/src/state/reconciliation.test.ts',
+      'apps/git-edge/src/state/canonical.test.ts'
+    ],
+    { cwd: root, timeoutMs: 120_000 }
+  );
+  console.log(
+    `\nMarl qualification passed. Git history, SSH commit signing, PR publication, releases, supersession, restart recovery, and strict clone integrity are healthy.${skipRunner ? ' Runner execution was explicitly skipped.' : ' Runner execution is healthy.'}`
+  );
   console.log(`Cloudflare state and repositories were isolated under ${temporary} and have been removed.`);
 } catch (error) {
   await Promise.allSettled([api?.stop(), git?.stop()].filter(Boolean) as Promise<void>[]);
-  const diagnostics = await Promise.all([api?.output.then((value) => ['API', value] as const), git?.output.then((value) => ['Git', value] as const)].filter(Boolean) as Array<Promise<readonly [string, string]>>);
+  const diagnostics = await Promise.all(
+    [api?.output.then((value) => ['API', value] as const), git?.output.then((value) => ['Git', value] as const)].filter(
+      Boolean
+    ) as Array<Promise<readonly [string, string]>>
+  );
   for (const [name, output] of diagnostics) {
     if (output.trim()) console.error(`\n${name} service output:\n${output.trim()}`);
   }
@@ -424,7 +568,38 @@ try {
 }
 
 function startApi() {
-  return new ManagedService(['bunx', 'wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(apiPort), '--inspector-port', String(inspectorPort), '--persist-to', persistence, '--var', 'ENVIRONMENT:development', '--var', `GIT_GATEWAY_URL:${gitUrl}`, '--var', `GIT_PUBLIC_URL:${gitUrl}`, '--var', `GIT_SSH_PUBLIC_URL:${sshUrl}`, '--var', `GIT_GATEWAY_TOKEN:${gatewayToken}`, '--var', `PUBLIC_URL:${apiUrl}`, '--var', 'SECRET_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', '--var', 'EMAIL_FROM:noreply@marl.sh'], { cwd: apiRoot });
+  return new ManagedService(
+    [
+      'bunx',
+      'wrangler',
+      'dev',
+      '--ip',
+      '127.0.0.1',
+      '--port',
+      String(apiPort),
+      '--inspector-port',
+      String(inspectorPort),
+      '--persist-to',
+      persistence,
+      '--var',
+      'ENVIRONMENT:development',
+      '--var',
+      `GIT_GATEWAY_URL:${gitUrl}`,
+      '--var',
+      `GIT_PUBLIC_URL:${gitUrl}`,
+      '--var',
+      `GIT_SSH_PUBLIC_URL:${sshUrl}`,
+      '--var',
+      `GIT_GATEWAY_TOKEN:${gatewayToken}`,
+      '--var',
+      `PUBLIC_URL:${apiUrl}`,
+      '--var',
+      'SECRET_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      '--var',
+      'EMAIL_FROM:noreply@marl.sh'
+    ],
+    { cwd: apiRoot }
+  );
 }
 
 function startGit() {
@@ -466,11 +641,16 @@ type PullQualificationDetail = {
 
 function assertRevisionHistory(detail: PullQualificationDetail, expected: string[]) {
   const recorded = detail.pullRequest.timeline.revisions.map((revision) => revision.commitId);
-  assert(recorded.length === expected.length && expected.every((commit, index) => recorded[index] === commit), 'Pull request revision history is incomplete.');
+  assert(
+    recorded.length === expected.length && expected.every((commit, index) => recorded[index] === commit),
+    'Pull request revision history is incomplete.'
+  );
 }
 
 function timelineEvents(detail: PullQualificationDetail) {
-  return detail.pullRequest.timeline.items.flatMap((item) => item.kind === 'event' && item.value.kind ? [item.value.kind] : []);
+  return detail.pullRequest.timeline.items.flatMap((item) =>
+    item.kind === 'event' && item.value.kind ? [item.value.kind] : []
+  );
 }
 
 async function cleanupDockerJobs(ids: Set<string>) {

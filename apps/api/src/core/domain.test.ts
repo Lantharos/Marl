@@ -10,7 +10,8 @@ describe('repository input validation', () => {
   });
 
   test('rejects reserved identity slugs and malformed slugs', () => {
-    for (const value of ['api', 'inbox', 'issues', 'pulls', 'robots.txt', 'marl-social.png']) expect(validIdentitySlug(value)).toBe(false);
+    for (const value of ['api', 'inbox', 'issues', 'pulls', 'robots.txt', 'marl-social.png'])
+      expect(validIdentitySlug(value)).toBe(false);
     for (const value of ['-marl', 'marl-', 'a/b', '', '../marl']) expect(validSlug(value)).toBe(false);
   });
 
@@ -27,7 +28,8 @@ describe('Git branch validation', () => {
     expect(validBranchName('release/2026.08')).toBe(true);
   });
   test('rejects unsafe ref names', () => {
-    for (const value of ['../main', 'feature//bad', 'bad.lock', 'bad branch', 'topic~1']) expect(validBranchName(value)).toBe(false);
+    for (const value of ['../main', 'feature//bad', 'bad.lock', 'bad branch', 'topic~1'])
+      expect(validBranchName(value)).toBe(false);
   });
 });
 
@@ -38,6 +40,7 @@ describe('repository path validation', () => {
   });
 
   test('rejects traversal, absolute paths, and empty segments', () => {
-    for (const path of ['../secret', 'apps/../secret', '/etc/passwd', 'C:\\secret', 'apps//web']) expect(safeRepositoryPath(path)).toBe(false);
+    for (const path of ['../secret', 'apps/../secret', '/etc/passwd', 'C:\\secret', 'apps//web'])
+      expect(safeRepositoryPath(path)).toBe(false);
   });
 });

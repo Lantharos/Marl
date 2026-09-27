@@ -9,15 +9,19 @@ export function popoverMotion(node: Element, { upward = false, duration = 150 } 
   return {
     duration: reduced ? 0 : duration,
     easing: cubicOut,
-    css: (visible, hidden) => `opacity:${visible};transform:translateY(${hidden * (upward ? 4 : -4)}px) scale(${1 - hidden * .015})`
+    css: (visible, hidden) =>
+      `opacity:${visible};transform:translateY(${hidden * (upward ? 4 : -4)}px) scale(${1 - hidden * 0.015})`
   };
 }
 
-export function anchoredPopover(anchor: HTMLElement | undefined, width = 300): Attachment<HTMLDivElement> {
+export function anchoredPopover(
+  anchor: HTMLElement | undefined,
+  options: Parameters<typeof positionFloatingPanel>[2] = {}
+): Attachment<HTMLElement> {
   return (panel) => {
     if (!anchor) return;
     let frame = 0;
-    const position = () => positionFloatingPanel(anchor, panel, width);
+    const position = () => positionFloatingPanel(anchor, panel, options);
     const schedule = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(position);

@@ -1,20 +1,25 @@
 <script lang="ts">
   import type { LinkedWorkItem, PullRequestSummary } from '@marl/contracts';
-  import GitMerge from 'lucide-svelte/icons/git-merge';
-  import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
-  import Link from 'lucide-svelte/icons/link';
-  import Search from 'lucide-svelte/icons/search';
+  import Link from '@lucide/svelte/icons/link';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/controls/Button.svelte';
-  import Modal from '$lib/components/controls/Modal.svelte';
+  import SearchField from '$lib/components/controls/SearchField.svelte';
+  import Spinner from '$lib/components/feedback/Spinner.svelte';
+  import Modal from '$lib/components/overlays/Modal.svelte';
+  import WorkItemStateIcon from '$lib/components/discussion/WorkItemStateIcon.svelte';
   import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
 
-  let { items, context, canLink, onLink } = $props<{
+  let {
+    items,
+    context,
+    canLink,
+    onLink
+  }: {
     items: LinkedWorkItem[];
     context: { owner: string; repository: string };
     canLink: boolean;
     onLink: (pullNumber: number) => Promise<boolean>;
-  }>();
+  } = $props();
   let open = $state(false);
   let query = $state('');
   let results = $state.raw<PullRequestSummary[]>([]);
@@ -24,8 +29,12 @@
   let error = $state('');
   let controller: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const available = $derived(results.filter((pull) => !items.some((item: LinkedWorkItem) => item.kind === 'pull' && item.id === pull.id)));
-  const endpoint = $derived(`/repositories/${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repository)}/pulls`);
+  const available = $derived(
+    results.filter((pull) => !items.some((item) => item.kind === 'pull' && item.id === pull.id))
+  );
+  const endpoint = $derived(
+    `/repositories/${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repository)}/pulls`
+  );
 
   async function search(append = false) {
     controller?.abort();
@@ -36,7 +45,10 @@
     try {
       const params = new URLSearchParams({ state: 'all', limit: '20', q: query.trim() });
       if (append && cursor) params.set('cursor', cursor);
-      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(`${endpoint}?${params}`, { signal: request.signal });
+      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(
+        `${endpoint}?${params}`,
+        { signal: request.signal }
+      );
       if (request.signal.aborted) return;
       results = append ? [...results, ...result.pullRequests] : result.pullRequests;
       cursor = result.nextCursor;
@@ -83,46 +95,70 @@
     try {
       if (await onLink(pull.number)) open = false;
       else error = 'The pull could not be linked. Try again.';
-    } finally { linking = null; }
+    } finally {
+      linking = null;
+    }
   }
 </script>
 
 {#if items.length || canLink}<WorkItemLinks {items} {context}>
-  {#snippet actions()}{#if canLink}<Button size="small" variant="ghost" class="link-pull" onclick={openPicker}><Link size={13} />Link a pull</Button>{/if}{/snippet}
-</WorkItemLinks>{/if}
+    {#snippet actions()}{#if canLink}<Button size="small" variant="ghost" onclick={openPicker}
+          ><Link size={14} />Link a pull</Button
+        >{/if}{/snippet}
+  </WorkItemLinks>{/if}
 
-<Modal {open} title="Link a pull" --modal-width="560px" onClose={closePicker}>
-  <div class="pull-search" {@attach () => cancelSearch}>
-    <label><Search size={16} /><input value={query} oninput={(event) => updateQuery(event.currentTarget.value)} disabled={Boolean(linking)} placeholder="Search by title or number" aria-label="Find a pull" /></label>
-    {#if error}<p class="error" role="alert">{error}<Button size="small" variant="ghost" onclick={() => search()}>Retry</Button></p>{/if}
-    <div class="results" aria-busy={loading}>
+<Modal
+  {open}
+  title="Link a pull"
+  description="Linked pulls stay attached even when the report changes."
+  onClose={closePicker}
+>
+  <div class="grid gap-3" {@attach () => cancelSearch}>
+    <SearchField
+      value={query}
+      oninput={(event) => updateQuery(event.currentTarget.value)}
+      disabled={Boolean(linking)}
+      label="Search by title or number"
+      class="h-10"
+    />
+    {#if error}<p
+        class="flex items-center justify-between gap-3 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger"
+        role="alert"
+      >
+        {error}<Button size="small" variant="ghost" onclick={() => search()}>Retry</Button>
+      </p>{/if}
+    <div class="grid max-h-90 gap-0.5 overflow-y-auto" aria-busy={loading}>
       {#each available as pull (pull.id)}
-        <Button variant="ghost" block class="pull-option" disabled={Boolean(linking)} loading={linking === pull.id} onclick={() => link(pull)}>
-          <span class="state {pull.state}">{#if pull.state === 'merged'}<GitMerge size={17} />{:else}<GitPullRequest size={17} />{/if}</span>
-          <span><strong>{pull.title}</strong><small>!{pull.number}<span>{pull.sourceBranch}</span></small></span>
-        </Button>
+        <button
+          type="button"
+          class="grid min-h-13 w-full grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:not-disabled:bg-surface-hover disabled:opacity-60"
+          disabled={Boolean(linking)}
+          onclick={() => link(pull)}
+        >
+          <WorkItemStateIcon kind="pull" state={pull.state} size={17} />
+          <span class="min-w-0">
+            <strong class="block truncate text-sm font-semibold text-ink-strong">{pull.title}</strong>
+            <span class="mt-0.5 flex gap-2 truncate text-xs text-ink-muted"
+              >!{pull.number}<span class="truncate font-mono">{pull.sourceBranch}</span></span
+            >
+          </span>
+          {#if linking === pull.id}<Spinner />{/if}
+        </button>
       {/each}
-      {#if loading && !results.length}<p class="empty">Finding pulls…</p>{:else if !available.length && !error}<p class="empty">{query.trim() ? 'No matching pulls.' : 'No pulls to link.'}</p>{/if}
-      {#if cursor}<Button size="small" variant="ghost" block loading={loading} disabled={Boolean(linking)} onclick={() => search(true)}>Load more</Button>{/if}
+      {#if loading && !results.length}<p class="flex items-center justify-center gap-2 py-8 text-sm text-ink-muted">
+          <Spinner />Finding pulls
+        </p>{:else if !available.length && !error}<p class="py-8 text-center text-sm text-ink-muted">
+          {query.trim() ? 'No matching pulls' : 'No pulls to link'}
+        </p>{/if}
+      {#if cursor}<Button
+          size="small"
+          variant="ghost"
+          block
+          {loading}
+          disabled={Boolean(linking)}
+          onclick={() => search(true)}>Load more</Button
+        >{/if}
     </div>
   </div>
   {#snippet actions()}<Button size="small" disabled={Boolean(linking)} onclick={closePicker}>Cancel</Button>{/snippet}
 </Modal>
-
-<style>
-  :global(.link-pull.button){gap:5px;margin-right:-8px;padding-inline:7px;font-size:11px}
-  .pull-search>label{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:9px;background:var(--surface);box-shadow:var(--shadow-surface);color:var(--text-faint)}
-  input{width:100%;min-width:0;border:0;background:transparent;color:var(--text-strong);outline:0;font-size:13px}
-  .pull-search>label:focus-within{outline:2px solid var(--brand);outline-offset:2px}
-  .results{display:grid;gap:3px;max-height:340px;min-height:120px;margin:14px -4px -8px;overflow-y:auto;align-content:start;scrollbar-gutter:stable}
-  :global(.pull-option.button){height:auto;min-height:60px;justify-content:flex-start;align-items:flex-start;gap:10px;padding:10px;border-radius:9px;text-align:left;white-space:normal}
-  :global(.pull-option.button>span:last-child){min-width:0}
-  .state{display:flex;align-items:center;height:21px;color:var(--success)}
-  .state.draft,.state.closed{color:var(--text-faint)}
-  .state.merged{color:var(--merged,#9670d1)}
-  strong{display:-webkit-box;overflow:hidden;line-clamp:2;-webkit-line-clamp:2;-webkit-box-orient:vertical;color:var(--text-strong);font-size:13px;font-weight:600;line-height:1.5}
-  small{display:flex;gap:10px;margin-top:4px;color:var(--text-faint);font-size:11px;line-height:1.5}
-  small>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .empty{margin:0;padding:34px 12px;text-align:center;color:var(--text-muted);font-size:13px}
-  .error{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--danger);font-size:12px}
-</style>

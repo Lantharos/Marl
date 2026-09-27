@@ -75,11 +75,14 @@ to build and validate the container image as well.
 Before considering a milestone complete:
 
 ```sh
+bun run format:check
 bun check
 bun run build
 bun run test
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+`bun run format` applies the shared Prettier style, including Tailwind class ordering.
 
 Run the isolated dogfood qualification after Docker Engine is available:
 

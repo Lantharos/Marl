@@ -1,11 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right';
-  import RefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Button from '$lib/components/controls/Button.svelte';
   import LinkButton from '$lib/components/controls/LinkButton.svelte';
   import ErrorPage from '$lib/errors/ErrorPage.svelte';
-  import '$lib/errors/error-page.css';
 
   const status = $derived(page.status);
   const copy = $derived.by(() => {
@@ -24,7 +23,9 @@
   const canRetry = $derived(status === 408 || status >= 500);
 </script>
 
-<svelte:head><title>{copy.title.replace('\n', ' ')} · Marl</title><meta name="robots" content="noindex, nofollow" /></svelte:head>
+<svelte:head
+  ><title>{copy.title.replace('\n', ' ')} · Marl</title><meta name="robots" content="noindex, nofollow" /></svelte:head
+>
 
 <ErrorPage {status} title={copy.title} scene={copy.scene}>
   {#if status === 401}
@@ -32,5 +33,7 @@
   {:else if canRetry}
     <Button variant="primary" onclick={() => location.reload()}><RefreshCw size={15} />Try again</Button>
   {/if}
-  <LinkButton variant={status === 401 || canRetry ? 'ghost' : 'primary'} href="/">Back to Marl<ArrowUpRight size={15} /></LinkButton>
+  <LinkButton variant={status === 401 || canRetry ? 'ghost' : 'primary'} href="/"
+    >Back to Marl<ArrowUpRight size={15} /></LinkButton
+  >
 </ErrorPage>

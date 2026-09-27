@@ -3,7 +3,7 @@ import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch, params }) => {
+export const load = (async ({ fetch, params }) => {
   return routeLoad(
     apiWith<{
       releases: ReleaseSummary[];
@@ -11,4 +11,4 @@ export const load: PageLoad = async ({ fetch, params }) => {
       canCreate: boolean;
     }>(fetch, `/repositories/${params.owner}/${params.repo}/releases?limit=30`)
   );
-};
+}) satisfies PageLoad;

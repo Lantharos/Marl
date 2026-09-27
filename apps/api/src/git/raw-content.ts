@@ -1,16 +1,43 @@
-const textExtensions = new Set(['md', 'txt', 'rs', 'ts', 'tsx', 'js', 'jsx', 'svelte', 'toml', 'yaml', 'yml', 'css', 'html', 'json']);
+const textExtensions = new Set([
+  'md',
+  'txt',
+  'rs',
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'svelte',
+  'toml',
+  'yaml',
+  'yml',
+  'css',
+  'html',
+  'json'
+]);
 
-export function rawBlobHeaders(path: string, visibility: 'public' | 'private', contentLength: string | null, immutableRevision: boolean) {
+export function rawBlobHeaders(
+  path: string,
+  visibility: 'public' | 'private',
+  contentLength: string | null,
+  immutableRevision: boolean
+) {
   const headers = new Headers({
     'content-type': rawContentType(path),
-    'cache-control': visibility === 'public'
-      ? immutableRevision ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate'
-      : 'private, no-store',
-    'content-security-policy': extension(path) === 'svg' ? "default-src 'none'; style-src 'unsafe-inline'; sandbox" : "default-src 'none'; sandbox",
+    'cache-control':
+      visibility === 'public'
+        ? immutableRevision
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=0, must-revalidate'
+        : 'private, no-store',
+    'content-security-policy':
+      extension(path) === 'svg'
+        ? "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+        : "default-src 'none'; sandbox",
     'x-content-type-options': 'nosniff'
   });
   if (contentLength && /^\d+$/.test(contentLength)) headers.set('content-length', contentLength);
-  if (extension(path) === 'svg') headers.set('content-disposition', `attachment; filename*=UTF-8''${encodedFileName(path)}`);
+  if (extension(path) === 'svg')
+    headers.set('content-disposition', `attachment; filename*=UTF-8''${encodedFileName(path)}`);
   return headers;
 }
 
@@ -33,5 +60,8 @@ function extension(path: string) {
 
 function encodedFileName(path: string) {
   const fileName = path.split('/').at(-1) ?? 'file';
-  return encodeURIComponent(fileName).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return encodeURIComponent(fileName).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  );
 }

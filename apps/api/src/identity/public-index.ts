@@ -8,7 +8,11 @@ const urlsPerRepository = 5;
 const maximumRepositoryCandidates = Math.floor((maximumSitemapUrls - homepageUrls) / urlsPerRepository);
 
 export async function getPublicIndex(env: Env) {
-  const candidates = await env.DB.prepare(`SELECT organizations.slug AS owner,repositories.name,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.visibility='public' AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC LIMIT ?`).bind(maximumRepositoryCandidates).all<PublicIndex['repositories'][number]>();
+  const candidates = await env.DB.prepare(
+    `SELECT organizations.slug AS owner,repositories.name,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.visibility='public' AND repositories.deletion_scheduled_at IS NULL ORDER BY repositories.updated_at DESC LIMIT ?`
+  )
+    .bind(maximumRepositoryCandidates)
+    .all<PublicIndex['repositories'][number]>();
   const repositories: PublicIndex['repositories'] = [];
   const handles = new Set<string>();
   for (const repository of candidates.results) {

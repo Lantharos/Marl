@@ -1,32 +1,93 @@
 <script lang="ts">
   import type { RunnerSummary } from '@marl/contracts';
-  import CircleAlert from 'lucide-svelte/icons/circle-alert';
-  import Cpu from 'lucide-svelte/icons/cpu';
-  import FilterBar from '$lib/components/controls/FilterBar.svelte';
+  import CircleAlert from '@lucide/svelte/icons/circle-alert';
+  import Cpu from '@lucide/svelte/icons/cpu';
+  import FilterBar from '$lib/components/page/FilterBar.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
+  import Page from '$lib/components/page/Page.svelte';
   import PageHeader from '$lib/components/page/PageHeader.svelte';
+  import RunnerStatus from '$lib/runs/RunnerStatus.svelte';
   import type { PageData } from './$types';
-  let { data } = $props<{ data: PageData }>();
-  const runners = $derived(data.runners as RunnerSummary[]);
+  let { data }: { data: PageData } = $props();
+  const runners = $derived<RunnerSummary[]>(data.runners);
   let query = $state('');
   let activeFilter = $state('All');
   const active = $derived(runners.reduce((sum, runner) => sum + runner.activeJobs, 0));
   const offline = $derived(runners.filter((runner) => runner.state === 'offline').length);
-  const filteredRunners = $derived(runners.filter((runner) => (activeFilter === 'All' || runner.state === activeFilter.toLowerCase()) && `${runner.name} ${runner.platform} ${runner.architecture} ${runner.labels.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())));
-
+  const filteredRunners = $derived(
+    runners.filter(
+      (runner) =>
+        (activeFilter === 'All' || runner.state === activeFilter.toLowerCase()) &&
+        `${runner.name} ${runner.platform} ${runner.architecture} ${runner.labels.join(' ')}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase())
+    )
+  );
 </script>
 
 <svelte:head><title>Runners · Marl</title></svelte:head>
-<main class="page">
+<Page>
   <PageHeader title="Runners" actionHref="/runners/new" actionLabel="Connect runner" />
-  <div class="summary"><span><strong>{runners.length}</strong> connected</span><span><strong>{active}</strong> active {active === 1 ? 'job' : 'jobs'}</span>{#if offline}<span class="warn"><CircleAlert size={12} /><strong>{offline}</strong> offline</span>{/if}</div>
-  <FilterBar placeholder="Find a runner" tabs={['All', 'Idle', 'Busy', 'Offline']} bind:active={activeFilter} bind:query />
-  <section class="list">
+  <div class="-mt-3 mb-5 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-muted">
+    <span><strong class="font-semibold text-ink-strong tabular-nums">{runners.length}</strong> connected</span>
+    <span
+      ><strong class="font-semibold text-ink-strong tabular-nums">{active}</strong> active {active === 1
+        ? 'job'
+        : 'jobs'}</span
+    >
+    {#if offline}<span class="inline-flex items-center gap-1 text-warning"
+        ><CircleAlert size={14} /><strong class="font-semibold tabular-nums">{offline}</strong> offline</span
+      >{/if}
+  </div>
+  <FilterBar
+    placeholder="Find a runner"
+    tabs={['All', 'Idle', 'Busy', 'Offline']}
+    bind:active={activeFilter}
+    bind:query
+  />
+  <section class="surface p-1.5">
     {#each filteredRunners as runner (runner.id)}
-      <a class="row" href="/runners/{runner.id}"><span class="machine"><Cpu size={17} /></span><span class="identity"><strong>{runner.name}</strong><small>{runner.platform} {runner.architecture} · v{runner.version}</small></span><span class="labels">{#each runner.labels as label (label)}<code>{label}</code>{/each}</span><span class="capacity"><b>{runner.activeJobs}/{runner.concurrency}</b><i><span style:width={`${runner.activeJobs / runner.concurrency * 100}%`}></span></i></span><span class="status {runner.state}"><i></i>{runner.state}</span></a>
-    {:else}<div class="empty"><Cpu size={24} /><strong>{runners.length ? 'No matching runners' : 'Connect your first runner'}</strong><p>{runners.length ? 'Try another status, name, or label.' : 'Install Marl Runner on a machine with Git and Docker, then enroll it here.'}</p>{#if !runners.length}<a href="/runners/new">Connect a runner</a>{/if}</div>{/each}
+      <a
+        class="group grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover sm:grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_96px_80px]"
+        href="/runners/{runner.id}"
+      >
+        <span class="grid size-8 place-items-center rounded-lg bg-surface-muted text-ink-muted"><Cpu size={17} /></span>
+        <span class="min-w-0">
+          <strong class="block truncate text-base font-semibold text-ink-strong group-hover:text-brand"
+            >{runner.name}</strong
+          >
+          <span class="block truncate text-xs text-ink-muted"
+            >{runner.platform} {runner.architecture} · v{runner.version}</span
+          >
+        </span>
+        <span class="hidden min-w-0 flex-wrap gap-1 sm:flex">
+          {#each runner.labels as label (label)}<code
+              class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-2xs text-ink-muted">{label}</code
+            >{/each}
+        </span>
+        <span class="hidden gap-1 sm:grid">
+          <span class="text-xs text-ink tabular-nums">{runner.activeJobs}/{runner.concurrency} jobs</span>
+          <span class="block h-1 overflow-hidden rounded-full bg-surface-muted"
+            ><span
+              class="block h-full rounded-full bg-brand"
+              style:width={`${(runner.activeJobs / runner.concurrency) * 100}%`}
+            ></span></span
+          >
+        </span>
+        <span class="justify-self-end"><RunnerStatus state={runner.state} /></span>
+      </a>
+    {:else}
+      <EmptyState
+        icon={Cpu}
+        title={runners.length ? 'No matching runners' : 'Connect your first runner'}
+        description={runners.length
+          ? 'Try another status, name, or label.'
+          : 'Install Marl Runner on a machine with Git and Docker, then enroll it here.'}
+      >
+        {#if !runners.length}<LinkButton size="small" variant="primary" href="/runners/new">Connect a runner</LinkButton
+          >{/if}
+      </EmptyState>
+    {/each}
   </section>
-</main>
-
-<style>
-  .page{width:min(920px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}.summary{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:22px;color:var(--text-muted);font-size:11px}.summary span{display:inline-flex;align-items:center;gap:5px}.summary strong{color:var(--text)}.summary .warn{color:var(--danger)}.list{display:grid;gap:4px;padding:6px;border-radius:12px;background:var(--surface)}.row{display:grid;grid-template-columns:38px minmax(160px,1fr) minmax(100px,auto) 90px 68px;align-items:center;gap:12px;min-height:78px;padding:10px 12px;border-radius:8px;color:inherit;text-decoration:none;transition:background-color 120ms ease}.row:hover{background:var(--surface-hover)}.machine{display:grid;width:34px;height:34px;place-items:center;border-radius:8px;background:var(--surface-muted);color:var(--text)}.identity strong,.identity small{display:block}.identity strong{color:var(--text-strong);font-size:13px}.identity small{margin-top:4px;color:var(--text-muted);font-size:11px}.labels{display:flex;flex-wrap:wrap;gap:5px}.labels code{padding:3px 6px;border-radius:5px;background:var(--surface-muted);color:var(--text);font-size:11px}.capacity{display:grid;grid-template-columns:32px 1fr;align-items:center;gap:7px;color:var(--text-muted);font-size:11px}.capacity b{font-weight:500}.capacity>i{overflow:hidden;height:4px;border-radius:999px;background:var(--surface-muted)}.capacity>i span{display:block;height:100%;background:var(--brand)}.status{display:flex;align-items:center;gap:6px;color:var(--text);font-size:11px;text-transform:capitalize}.status>i{width:7px;height:7px;border-radius:50%;background:var(--success)}.status.busy>i{background:var(--brand)}.status.offline{color:var(--danger)}.status.offline>i{background:var(--danger)}.empty{padding:70px 4px;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:10px;color:var(--text-strong);font-size:15px}.empty p{margin:7px 0 0;font-size:12px}.empty a{display:inline-flex;margin-top:16px;color:var(--brand-strong);font-size:12px;text-decoration:none}@media(max-width:760px){.page{width:calc(100% - 28px);padding-top:32px}.row{grid-template-columns:38px minmax(0,1fr) 70px;padding-inline:6px}.labels,.capacity{display:none}}
-</style>
+</Page>

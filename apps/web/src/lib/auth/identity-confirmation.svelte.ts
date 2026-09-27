@@ -15,8 +15,9 @@ export class IdentityConfirmation {
     this.description = description;
     try {
       const response = await fetch('/api/auth/step-up/method', { headers: { accept: 'application/json' } });
-      const result = await response.json().catch(() => null) as { method?: Method; message?: string } | null;
-      if (!response.ok || !result?.method) throw new Error(result?.message || 'Identity confirmation is not available.');
+      const result = (await response.json().catch(() => null)) as { method?: Method; message?: string } | null;
+      if (!response.ok || !result?.method)
+        throw new Error(result?.message || 'Identity confirmation is not available.');
       this.method = result.method;
       this.open = true;
       return await new Promise<boolean>((resolve) => (this.finish = resolve));

@@ -2,7 +2,7 @@ import { dev } from '$app/environment';
 import { error } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = ({ url }) => {
+export const load = (({ url }) => {
   if (!dev) error(404, 'Not found');
 
   const status = Number(url.searchParams.get('status') ?? 404);
@@ -11,4 +11,4 @@ export const load: PageLoad = ({ url }) => {
   }
 
   error(status, 'Error preview');
-};
+}) satisfies PageLoad;

@@ -3,7 +3,15 @@ import { apiWith } from '$lib/api';
 import { routeLoad } from '$lib/load';
 import type { PageLoad } from './$types';
 
-export type BranchRule = { pattern: string; requiredApprovals: number; requiredChecks: string[]; requireConversations: boolean; carryApprovalsForward: boolean; allowAuthorMerge: boolean; allowedMergeMethods: MergeMethod[] };
+export type BranchRule = {
+  pattern: string;
+  requiredApprovals: number;
+  requiredChecks: string[];
+  requireConversations: boolean;
+  carryApprovalsForward: boolean;
+  allowAuthorMerge: boolean;
+  allowedMergeMethods: MergeMethod[];
+};
 
 export const load = (async ({ fetch, params }) => {
   const base = `/repositories/${params.owner}/${params.repo}`;

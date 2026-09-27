@@ -3,14 +3,16 @@ import { json } from '../http/http';
 import { inboxPreview } from './inbox';
 import type { Env } from '../core/platform';
 import { runSelect, summarizeRun } from '../ci/runs/runs';
-import { repositoryListFilter } from '../repositories/access';
+import { repositoryListFilter } from '../repositories/access/access';
 import { shellData } from './shell';
 
 async function dashboardData(env: Env, principal: Principal) {
   const access = repositoryListFilter(principal);
   const [inbox, runRows] = await Promise.all([
     inboxPreview(env, principal),
-    env.DB.prepare(runSelect(`WHERE ${access.sql} ORDER BY runs.created_at DESC,runs.id DESC LIMIT 5`)).bind(...access.values).all<Record<string, unknown>>()
+    env.DB.prepare(runSelect(`WHERE ${access.sql} ORDER BY runs.created_at DESC,runs.id DESC LIMIT 5`))
+      .bind(...access.values)
+      .all<Record<string, unknown>>()
   ]);
   return { inbox, runs: runRows.results.map(summarizeRun) };
 }

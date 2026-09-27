@@ -5,18 +5,33 @@ import type { GitEdgeEnv } from './env';
 import { expectContainer, hydrateRepository, internalRequest, type ContainerStub } from './storage/hydration';
 import { scheduleRepositoryIndex } from './indexing';
 import { finalizeUploadedPush } from './push/publication';
-import { organizationQuota, repositoryState, uploadSession, type RepositorySnapshotResponse, type UploadSnapshotResponse } from './state/state-client';
+import {
+  organizationQuota,
+  repositoryState,
+  uploadSession,
+  type RepositorySnapshotResponse,
+  type UploadSnapshotResponse
+} from './state/state-client';
 import { STORAGE_LIMITS, changesMarlManagedRefs } from './storage/storage-model';
 
 type Capture = { refs: Record<string, string>; packBytes: number; hasPack: boolean };
 const maximumReceiveRequestBytes = STORAGE_LIMITS.pushBytes + 1024 * 1024;
 const maximumCompatibilityResponseBytes = 16 * 1024 * 1024;
 
-export async function handleCompatibilityPush(request: Request, container: ContainerStub, env: GitEdgeEnv, authorization: GitAuthorization, owner: string, name: string, actorId?: string) {
+export async function handleCompatibilityPush(
+  request: Request,
+  container: ContainerStub,
+  env: GitEdgeEnv,
+  authorization: GitAuthorization,
+  owner: string,
+  name: string,
+  actorId?: string
+) {
   const gatewayTrusted = request.headers.get('x-marl-gateway-token') === env.MARL_GIT_GATEWAY_TOKEN;
   const receivesPack = request.method === 'POST' && new URL(request.url).pathname.endsWith('/git-receive-pack');
   const declaredSize = Number(request.headers.get('content-length') ?? 0);
-  if (receivesPack && Number.isFinite(declaredSize) && declaredSize > maximumReceiveRequestBytes) return new Response('Push request exceeds the 256 MiB pack limit.\n', { status: 413 });
+  if (receivesPack && Number.isFinite(declaredSize) && declaredSize > maximumReceiveRequestBytes)
+    return new Response('Push request exceeds the 256 MiB pack limit.\n', { status: 413 });
   const internalActorId = gatewayTrusted ? actorId : undefined;
   const repository = authorization.storageKey;
   const repo = repositoryState(env, repository);
@@ -30,8 +45,22 @@ export async function handleCompatibilityPush(request: Request, container: Conta
   let publicationStarted = false;
   try {
     await quota.request('/reserve', { id: pushId, repository, maximumBytes, expiresAt });
-    await repo.request('/begin', { pushId, reservationId: pushId, expiresAt, expectedRefs: {}, proposedRefs: current.state.refs });
-    await uploads.request('/initialize', { pushId, repository, organizationId: authorization.organizationId, expiresAt, expectedGeneration: current.state.generation, refs: current.state.refs, packs: [] });
+    await repo.request('/begin', {
+      pushId,
+      reservationId: pushId,
+      expiresAt,
+      expectedRefs: {},
+      proposedRefs: current.state.refs
+    });
+    await uploads.request('/initialize', {
+      pushId,
+      repository,
+      organizationId: authorization.organizationId,
+      expiresAt,
+      expectedGeneration: current.state.generation,
+      refs: current.state.refs,
+      packs: []
+    });
     await hydrateRepository(container, env, owner, name, repository);
     const response = await container.fetch(request);
     const body = await readBoundedBody(response.body, maximumCompatibilityResponseBytes);
@@ -44,11 +73,15 @@ export async function handleCompatibilityPush(request: Request, container: Conta
       return new Response(body, response);
     }
     const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
-    const captureResponse = await expectContainer(container.fetch(internalRequest(base, env, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ knownRefs: current.state.refs })
-    })));
+    const captureResponse = await expectContainer(
+      container.fetch(
+        internalRequest(base, env, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ knownRefs: current.state.refs })
+        })
+      )
+    );
     const captured = await readBoundedJson<Capture>(captureResponse, maximumCompatibilityResponseBytes);
     if (!captured) throw new Error('Compatibility capture returned invalid metadata.');
     captureCreated = true;
@@ -61,21 +94,47 @@ export async function handleCompatibilityPush(request: Request, container: Conta
       return new Response('The refs/marl namespace is managed by Marl.\n', { status: 403 });
     }
     await repo.request('/propose', { pushId, refs: captured.refs });
-    const plans = captured.hasPack ? [{ bytes: captured.packBytes, parts: Math.ceil(captured.packBytes / STORAGE_LIMITS.partBytes), key: `quarantine/${repository}/${pushId}/0.pack` }] : [];
+    const plans = captured.hasPack
+      ? [
+          {
+            bytes: captured.packBytes,
+            parts: Math.ceil(captured.packBytes / STORAGE_LIMITS.partBytes),
+            key: `quarantine/${repository}/${pushId}/0.pack`
+          }
+        ]
+      : [];
     await uploads.request('/prepare-server', { refs: captured.refs, packs: plans });
     if (captured.hasPack) {
       if (captured.packBytes > maximumBytes) throw new Error('Compatibility push exceeded its reserved upload size.');
       const pack = await expectContainer(container.fetch(internalRequest(`${base}/pack`, env)));
       if (!pack.body) throw new Error('Compatibility capture returned an empty pack body.');
-      await env.REPOSITORIES.put(plans[0].key, pack.body, { httpMetadata: { contentType: 'application/x-git-packed-objects' } });
+      await env.REPOSITORIES.put(plans[0].key, pack.body, {
+        httpMetadata: { contentType: 'application/x-git-packed-objects' }
+      });
     }
     await uploads.request('/server-uploaded', {});
     const session = await uploads.request<UploadSnapshotResponse>('/snapshot');
     publicationStarted = true;
     const published = await finalizeUploadedPush(env, repository, authorization.organizationId, session.session);
-    await scheduleRepositoryIndex(env, owner, name, authorization.repositoryId, published.generation, authorization.actorId ?? internalActorId).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
+    await scheduleRepositoryIndex(
+      env,
+      owner,
+      name,
+      authorization.repositoryId,
+      published.generation,
+      authorization.actorId ?? internalActorId
+    ).catch((error) => console.error('repository metadata indexing scheduling deferred', error));
     const forceCompaction = session.session.packs.length === 0 && published.storedBytes > 0;
-    if (published.packs.length >= 12 || forceCompaction) await scheduleCompaction(env, owner, name, authorization.repositoryId, authorization.organizationId, published.generation, forceCompaction).catch((error) => console.error('repository compaction scheduling deferred', error));
+    if (published.packs.length >= 12 || forceCompaction)
+      await scheduleCompaction(
+        env,
+        owner,
+        name,
+        authorization.repositoryId,
+        authorization.organizationId,
+        published.generation,
+        forceCompaction
+      ).catch((error) => console.error('repository compaction scheduling deferred', error));
     return new Response(body, response);
   } catch (error) {
     if (!publicationStarted) await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
@@ -94,8 +153,15 @@ function refsEqual(left: Record<string, string>, right: Record<string, string>) 
 }
 
 async function abortCompatibilityPush(env: GitEdgeEnv, repository: string, organizationId: string, pushId: string) {
-  const session = await uploadSession(env, pushId).request<UploadSnapshotResponse>('/snapshot').catch(() => null);
-  if (session) await Promise.allSettled([...session.session.packs.map((pack) => pack.key), ...session.session.cleanupKeys].map((key) => env.REPOSITORIES.delete(key)));
+  const session = await uploadSession(env, pushId)
+    .request<UploadSnapshotResponse>('/snapshot')
+    .catch(() => null);
+  if (session)
+    await Promise.allSettled(
+      [...session.session.packs.map((pack) => pack.key), ...session.session.cleanupKeys].map((key) =>
+        env.REPOSITORIES.delete(key)
+      )
+    );
   await Promise.allSettled([
     repositoryState(env, repository).request('/abort', { pushId }),
     organizationQuota(env, organizationId).request('/release', { id: pushId }),

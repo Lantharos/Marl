@@ -1,16 +1,23 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLAnchorAttributes } from 'svelte/elements';
+  import { buttonClass, type ButtonSize, type ButtonVariant } from './button-styles';
 
-  type Variant = 'primary' | 'secondary' | 'danger-soft' | 'ghost';
-  type Size = 'small' | 'medium' | 'large';
-
-  let { variant = 'secondary', size = 'medium', block = false, class: className = '', children, ...attributes } = $props<HTMLAnchorAttributes & {
-    variant?: Variant;
-    size?: Size;
+  let {
+    variant = 'secondary',
+    size = 'medium',
+    icon = false,
+    block = false,
+    class: className = '',
+    children,
+    ...attributes
+  }: HTMLAnchorAttributes & {
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    icon?: boolean;
     block?: boolean;
     children: Snippet;
-  }>();
+  } = $props();
 </script>
 
-<a {...attributes} class="control link-button {variant} {size} {block ? 'block' : ''} {className}">{@render children()}</a>
+<a {...attributes} class={[buttonClass(variant, size, icon, block), className]}>{@render children()}</a>

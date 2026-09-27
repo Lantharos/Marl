@@ -1,20 +1,21 @@
 <script lang="ts">
   import type { PullRequestDiff, ReviewThread as ReviewThreadType } from '@marl/contracts';
-  import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import ChevronUp from 'lucide-svelte/icons/chevron-up';
-  import FileWarning from 'lucide-svelte/icons/file-warning';
-  import Files from 'lucide-svelte/icons/files';
-  import MessageSquarePlus from 'lucide-svelte/icons/message-square-plus';
-  import Search from 'lucide-svelte/icons/search';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronUp from '@lucide/svelte/icons/chevron-up';
+  import FileWarning from '@lucide/svelte/icons/file-exclamation-point';
+  import Files from '@lucide/svelte/icons/files';
+  import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
   import { dismissable } from '$lib/actions/dismissable';
   import { popoverMotion } from '$lib/ui/popover';
   import { parsePatchLines, type PatchLine } from '$lib/code/diff';
   import Button from '../components/controls/Button.svelte';
+  import SearchField from '../components/controls/SearchField.svelte';
+  import DiffStat from './DiffStat.svelte';
   import Tokens from '$lib/code/Tokens.svelte';
   import { comparisonTokens, type CodeComparison, type ComparisonTokens } from '$lib/code/comparison';
   import CommentComposer from '../components/markdown/CommentComposer.svelte';
   import ReviewThread from '../pulls/review/ReviewThread.svelte';
-  import type { MarkdownContext } from '$lib/markdown';
+  import type { MarkdownContext } from '$lib/markdown/context';
 
   type Draft = { path: string; side: 'old' | 'new'; startLine: number; line: number };
   type DiffFile = PullRequestDiff['files'][number];
@@ -23,24 +24,57 @@
   const LARGE_DIFF_LINES = 1_000;
   const LARGE_DIFF_BYTES = 200_000;
 
-  let { files, comparison, threads = [], busy = false, reviewable = true, canResolve = false, canModerate = false, viewerId, context, onLoadPatch = async (file: DiffFile) => file.patch, onCreate = async () => {}, onReply = async () => {}, onResolve = async () => {}, onEdit = async () => {}, onDelete = async () => {} } = $props<{
-    files: PullRequestDiff['files']; threads?: ReviewThreadType[]; busy?: boolean; reviewable?: boolean; canResolve?: boolean; canModerate?: boolean; viewerId?: string;
-    context?: MarkdownContext; comparison?: CodeComparison;
+  let {
+    files,
+    comparison,
+    threads = [],
+    busy = false,
+    reviewable = true,
+    canResolve = false,
+    canModerate = false,
+    viewerId,
+    context,
+    onLoadPatch = async (file: DiffFile) => file.patch,
+    onCreate = async () => {},
+    onReply = async () => {},
+    onResolve = async () => {},
+    onEdit = async () => {},
+    onDelete = async () => {}
+  }: {
+    files: PullRequestDiff['files'];
+    threads?: ReviewThreadType[];
+    busy?: boolean;
+    reviewable?: boolean;
+    canResolve?: boolean;
+    canModerate?: boolean;
+    viewerId?: string;
+    context?: MarkdownContext;
+    comparison?: CodeComparison;
     onLoadPatch?: (file: DiffFile) => Promise<string>;
-    onCreate?: (draft: Draft, body: string) => Promise<void>; onReply?: (threadId: string, body: string) => Promise<void>;
-    onResolve?: (threadId: string, resolved: boolean) => Promise<void>; onEdit?: (commentId: string, body: string) => Promise<void>; onDelete?: (commentId: string) => Promise<void>;
-  }>();
+    onCreate?: (draft: Draft, body: string) => Promise<void>;
+    onReply?: (threadId: string, body: string) => Promise<void>;
+    onResolve?: (threadId: string, resolved: boolean) => Promise<void>;
+    onEdit?: (commentId: string, body: string) => Promise<void>;
+    onDelete?: (commentId: string) => Promise<void>;
+  } = $props();
 
   let highlighted = $state.raw<Record<string, ComparisonTokens>>({});
   const highlighting = new Map<string, AbortController>();
   $effect(() => {
-    files; comparison;
-    highlighted = {}; expandedFiles = {}; loadedPatches = {};
-    return () => { for (const abort of highlighting.values()) abort.abort(); highlighting.clear(); };
+    files;
+    comparison;
+    highlighted = {};
+    expandedFiles = {};
+    loadedPatches = {};
+    return () => {
+      for (const abort of highlighting.values()) abort.abort();
+      highlighting.clear();
+    };
   });
   async function colorFile(file: DiffFile) {
     if (!comparison || highlighted[file.path] || highlighting.has(file.path)) return;
-    const abort = new AbortController(); highlighting.set(file.path, abort);
+    const abort = new AbortController();
+    highlighting.set(file.path, abort);
     const result = await comparisonTokens(comparison, file.path, file.oldPath ?? file.path, abort.signal);
     if (!abort.signal.aborted) highlighted = { ...highlighted, [file.path]: result };
     if (highlighting.get(file.path) === abort) highlighting.delete(file.path);
@@ -62,15 +96,27 @@
     return null;
   }
 
-  const parsedFiles = $derived(files.map((file: DiffFile) => {
-    const reason = collapseReason(file);
-    const expanded = !reason || expandedFiles[file.path] === true;
-    const patch = loadedPatches[file.path] ?? file.patch;
-    return { ...file, patch, reason, expanded, loading: loadingFiles[file.path] === true, failed: failedFiles[file.path] === true, lines: expanded ? parsePatchLines(patch) : [] };
-  }));
+  const parsedFiles = $derived(
+    files.map((file: DiffFile) => {
+      const reason = collapseReason(file);
+      const expanded = !reason || expandedFiles[file.path] === true;
+      const patch = loadedPatches[file.path] ?? file.patch;
+      return {
+        ...file,
+        patch,
+        reason,
+        expanded,
+        loading: loadingFiles[file.path] === true,
+        failed: failedFiles[file.path] === true,
+        lines: expanded ? parsePatchLines(patch) : []
+      };
+    })
+  );
   const additions = $derived(files.reduce((total: number, file: DiffFile) => total + file.additions, 0));
   const deletions = $derived(files.reduce((total: number, file: DiffFile) => total + file.deletions, 0));
-  const matchingFiles = $derived(parsedFiles.filter((file: DiffFile) => file.path.toLowerCase().includes(fileQuery.trim().toLowerCase())));
+  const matchingFiles = $derived(
+    parsedFiles.filter((file: DiffFile) => file.path.toLowerCase().includes(fileQuery.trim().toLowerCase()))
+  );
   const threadIndex = $derived.by(() => {
     const index: Record<string, ReviewThreadType[]> = {};
     for (const thread of threads) {
@@ -83,52 +129,96 @@
 
   function beginRange(event: PointerEvent, path: string, line: PatchLine) {
     if (!line.side || line.line === null) return;
-    event.preventDefault(); drag = { path, side: line.side, anchor: line.line, current: line.line }; draft = null; body = '';
+    event.preventDefault();
+    drag = { path, side: line.side, anchor: line.line, current: line.line };
+    draft = null;
+    body = '';
   }
   function openSingle(path: string, line: PatchLine) {
     if (!line.side || line.line === null) return;
-    draft = { path, side: line.side, startLine: line.line, line: line.line }; drag = null; body = '';
+    draft = { path, side: line.side, startLine: line.line, line: line.line };
+    drag = null;
+    body = '';
   }
   function extendRange(path: string, line: PatchLine) {
     if (drag && drag.path === path && drag.side === line.side && line.line !== null) drag.current = line.line;
   }
   function finishRange() {
     if (!drag) return;
-    draft = { path: drag.path, side: drag.side, startLine: Math.min(drag.anchor, drag.current), line: Math.max(drag.anchor, drag.current) }; drag = null;
+    draft = {
+      path: drag.path,
+      side: drag.side,
+      startLine: Math.min(drag.anchor, drag.current),
+      line: Math.max(drag.anchor, drag.current)
+    };
+    drag = null;
   }
   function selected(path: string, line: PatchLine) {
-    const range = drag?.path === path && drag.side === line.side ? { startLine: Math.min(drag.anchor, drag.current), line: Math.max(drag.anchor, drag.current), side: drag.side } : draft?.path === path ? draft : null;
-    return Boolean(range && line.side === range.side && line.line !== null && line.line >= range.startLine && line.line <= range.line);
+    const range =
+      drag?.path === path && drag.side === line.side
+        ? { startLine: Math.min(drag.anchor, drag.current), line: Math.max(drag.anchor, drag.current), side: drag.side }
+        : draft?.path === path
+          ? draft
+          : null;
+    return Boolean(
+      range && line.side === range.side && line.line !== null && line.line >= range.startLine && line.line <= range.line
+    );
   }
-  function threadsAt(path: string, line: PatchLine) { return threadIndex[`${path}:${line.side}:${line.line}`] ?? []; }
-  function draftAt(path: string, line: PatchLine) { return draft?.path === path && draft.side === line.side && draft.line === line.line ? draft : null; }
-  function fileAnchor(index: number) { return `changed-file-${index + 1}`; }
+  function threadsAt(path: string, line: PatchLine) {
+    return threadIndex[`${path}:${line.side}:${line.line}`] ?? [];
+  }
+  function draftAt(path: string, line: PatchLine) {
+    return draft?.path === path && draft.side === line.side && draft.line === line.line ? draft : null;
+  }
+  function fileAnchor(index: number) {
+    return `changed-file-${index + 1}`;
+  }
   function visible(node: HTMLElement, load: () => void) {
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect(); load();
-    }, { rootMargin: '800px 0px' });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        load();
+      },
+      { rootMargin: '800px 0px' }
+    );
     observer.observe(node);
     return { destroy: () => observer.disconnect() };
   }
   function highlightVisible(node: HTMLElement, file: (typeof parsedFiles)[number]) {
     let current = file;
     let near = false;
-    const observer = new IntersectionObserver(entries => {
-      near = entries.some(entry => entry.isIntersecting);
-      if (near && current.expanded) void colorFile(current);
-      else if (!near) {
-        highlighting.get(current.path)?.abort();
-        highlighting.delete(current.path);
-        const next = { ...highlighted }; delete next[current.path]; highlighted = next;
-      }
-    }, { rootMargin: '300px 0px' });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        near = entries.some((entry) => entry.isIntersecting);
+        if (near && current.expanded) void colorFile(current);
+        else if (!near) {
+          highlighting.get(current.path)?.abort();
+          highlighting.delete(current.path);
+          const next = { ...highlighted };
+          delete next[current.path];
+          highlighted = next;
+        }
+      },
+      { rootMargin: '300px 0px' }
+    );
     observer.observe(node);
-    return { update(file: (typeof parsedFiles)[number]) { current = file; if (near && file.expanded) void colorFile(file); }, destroy() { observer.disconnect(); highlighting.get(current.path)?.abort(); } };
+    return {
+      update(file: (typeof parsedFiles)[number]) {
+        current = file;
+        if (near && file.expanded) void colorFile(file);
+      },
+      destroy() {
+        observer.disconnect();
+        highlighting.get(current.path)?.abort();
+      }
+    };
   }
   function goToFile(file: (typeof parsedFiles)[number]) {
     const index = parsedFiles.indexOf(file);
-    document.getElementById(fileAnchor(index))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); navigatorOpen = false; fileQuery = '';
+    document.getElementById(fileAnchor(index))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    navigatorOpen = false;
+    fileQuery = '';
   }
   async function expandFile(file: (typeof parsedFiles)[number]) {
     if (file.patchOmitted && loadedPatches[file.path] === undefined) {
@@ -148,40 +238,192 @@
   }
   async function submit() {
     if (!draft || !body.trim()) return;
-    await onCreate(draft, body); draft = null; body = '';
+    await onCreate(draft, body);
+    draft = null;
+    body = '';
   }
 </script>
 
 <svelte:window onpointerup={finishRange} />
 
-<div class="diff-viewer">
-  <div class="diff-toolbar">
-    <div class="summary"><Files size={15} /><strong>{files.length} changed {files.length === 1 ? 'file' : 'files'}</strong><span><b>+{additions}</b><i>−{deletions}</i></span></div>
-    {#if files.length > 1}<div class="navigator" use:dismissable={() => (navigatorOpen = false)}><Button class="navigator-trigger" size="small" aria-expanded={navigatorOpen} onclick={() => (navigatorOpen = !navigatorOpen)}>Jump to file <ChevronDown size={13} /></Button>{#if navigatorOpen}<div class="navigator-menu" transition:popoverMotion><label><Search size={13} /><input bind:value={fileQuery} placeholder="Find a changed file" /></label><div class="navigator-list">{#each matchingFiles as file (file.path)}<Button class="file-choice" variant="ghost" block onclick={() => goToFile(file)}><span>{file.path}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small></Button>{:else}<p>No matching files</p>{/each}</div></div>{/if}</div>{/if}
+<div class="min-w-0">
+  <div class="sticky top-13 z-8 mb-3 flex min-h-12 items-center justify-between gap-3 bg-canvas px-0.5">
+    <div class="flex items-center gap-2 text-sm text-ink-muted">
+      <Files size={16} /><strong class="font-semibold text-ink-strong"
+        >{files.length} changed {files.length === 1 ? 'file' : 'files'}</strong
+      ><DiffStat {additions} {deletions} class="ml-1 max-sm:hidden" />
+    </div>
+    {#if files.length > 1}
+      <div class="relative" use:dismissable={() => (navigatorOpen = false)}>
+        <Button size="small" aria-expanded={navigatorOpen} onclick={() => (navigatorOpen = !navigatorOpen)}
+          >Jump to file <ChevronDown size={14} /></Button
+        >
+        {#if navigatorOpen}
+          <div
+            class="absolute top-[calc(100%+6px)] right-0 z-80 w-[min(440px,calc(100vw-32px))] origin-top-right overflow-hidden popover p-1.5"
+            transition:popoverMotion
+          >
+            <SearchField
+              bind:value={fileQuery}
+              label="Find a changed file"
+              class="mb-1.5 border-transparent font-mono"
+            />
+            <div class="grid max-h-80 gap-0.5 overflow-auto">
+              {#each matchingFiles as file (file.path)}
+                <button
+                  type="button"
+                  class="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
+                  onclick={() => goToFile(file)}
+                  ><span class="truncate font-mono text-xs text-ink">{file.path}</span><DiffStat
+                    additions={file.additions}
+                    deletions={file.deletions}
+                  /></button
+                >
+              {:else}<p class="px-2 py-5 text-center text-sm text-ink-muted">No matching files</p>{/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
-  <main class="diffs">
+  <div class="grid min-w-0 gap-4">
     {#each parsedFiles as file, index (file.path)}
-      <section class="diff" id={fileAnchor(index)} use:highlightVisible={file} use:visible={() => { if (file.reason === 'lazy') void expandFile(file);  }}>
-        <header><strong>{file.path}</strong><span>{file.status}</span><small><b>+{file.additions}</b><i>−{file.deletions}</i></small>{#if file.reason && file.expanded}<Button class="collapse-file" icon size="small" variant="ghost" aria-label="Collapse {file.path}" title="Collapse file" onclick={() => (expandedFiles[file.path] = false)}><ChevronUp size={14} /></Button>{/if}</header>
-        <div class="patch">
+      <section
+        class="scroll-mt-30 overflow-hidden rounded-xl bg-surface shadow-surface [contain-intrinsic-size:auto_520px] [content-visibility:auto]"
+        id={fileAnchor(index)}
+        use:highlightVisible={file}
+        use:visible={() => {
+          if (file.reason === 'lazy') void expandFile(file);
+        }}
+      >
+        <header class="flex min-h-11 items-center gap-2.5 bg-surface-muted px-3">
+          <strong class="truncate font-mono text-xs font-semibold text-ink-strong">{file.path}</strong>
+          <span class="rounded bg-canvas px-1.5 py-0.5 text-2xs text-ink-muted capitalize max-sm:hidden"
+            >{file.status}</span
+          >
+          <DiffStat additions={file.additions} deletions={file.deletions} class="ml-auto" />
+          {#if file.reason && file.expanded}<Button
+              icon
+              size="small"
+              variant="ghost"
+              aria-label="Collapse {file.path}"
+              title="Collapse file"
+              onclick={() => (expandedFiles[file.path] = false)}><ChevronUp size={15} /></Button
+            >{/if}
+        </header>
+        <div class="overflow-auto border-t border-line-subtle">
           {#if !file.expanded}
-            <div class="collapsed-patch"><FileWarning size={18} /><div><strong>{file.reason === 'deleted' ? 'Deleted file hidden' : file.reason === 'large' ? 'Large diff hidden' : 'Loading diff'}</strong><p>{file.failed ? 'The file diff could not be loaded. Try again.' : file.reason === 'deleted' ? 'Expand this file to inspect its previous contents.' : file.reason === 'large' ? `This diff changes ${(file.additions + file.deletions).toLocaleString()} lines and is collapsed to keep the page responsive.` : 'The patch loads when this file approaches the viewport.'}</p></div><Button size="small" loading={file.loading} onclick={() => expandFile(file)}>{file.failed ? 'Try again' : file.reason === 'deleted' ? 'Show deleted file' : 'Load diff'}</Button></div>
+            <div class="flex min-h-19 items-center gap-3 px-4 py-3 text-ink-muted max-sm:items-start">
+              <FileWarning size={18} class="shrink-0" />
+              <div class="min-w-0">
+                <strong class="block text-sm font-semibold text-ink"
+                  >{file.reason === 'deleted'
+                    ? 'Deleted file hidden'
+                    : file.reason === 'large'
+                      ? 'Large diff hidden'
+                      : 'Loading diff'}</strong
+                >
+                <p class="mt-0.5 text-xs">
+                  {file.failed
+                    ? 'The file diff could not be loaded. Try again.'
+                    : file.reason === 'deleted'
+                      ? 'Expand this file to inspect its previous contents.'
+                      : file.reason === 'large'
+                        ? `This diff changes ${(file.additions + file.deletions).toLocaleString()} lines and is collapsed to keep the page responsive.`
+                        : 'The patch loads when this file approaches the viewport.'}
+                </p>
+              </div>
+              <Button size="small" class="ml-auto" loading={file.loading} onclick={() => expandFile(file)}
+                >{file.failed ? 'Try again' : file.reason === 'deleted' ? 'Show deleted file' : 'Load diff'}</Button
+              >
+            </div>
           {:else}
-            {#if file.lines.length === 0}<div class="empty-patch">No textual diff is available for this file.</div>{/if}
+            {#if file.lines.length === 0}<div class="px-4 py-7 text-center text-sm text-ink-muted">
+                No textual diff is available for this file.
+              </div>{/if}
             {#each file.lines as line (`${file.path}:${line.key}`)}
-              <div class="line {line.kind}" class:selected={selected(file.path, line)} role="group" onpointerenter={() => extendRange(file.path, line)}><div class="gutter">{#if line.line !== null}<span>{line.line}</span>{#if reviewable}<Button class="line-comment" icon size="small" variant="primary" aria-label="Comment on line {line.line}; drag to select a range" onpointerdown={(event) => beginRange(event, file.path, line)} onclick={(event) => { if (event.detail === 0) openSingle(file.path, line); }}><MessageSquarePlus size={14} /></Button>{/if}{/if}</div><pre>{#if line.side && line.line !== null}{line.text.slice(0, 1)}<Tokens tokens={highlighted[file.path]?.[line.side as 'old' | 'new']?.[line.line - 1]} text={line.text.slice(1) || ' '} />{:else}{line.text || ' '}{/if}</pre></div>
-              {#each threadsAt(file.path, line) as thread (thread.id)}<ReviewThread {thread} {busy} {context} {canResolve} {canModerate} {viewerId} inline interactive={reviewable} onReply={onReply} onResolve={onResolve} onEdit={onEdit} onDelete={onDelete} />{/each}
+              {@const isSelected = selected(file.path, line)}
+              <div
+                class={[
+                  'group grid min-h-6 grid-cols-[56px_minmax(max-content,1fr)]',
+                  line.kind === 'added' && 'bg-success-soft text-success',
+                  line.kind === 'removed' && 'bg-danger-soft text-danger',
+                  line.kind === 'hunk' && 'bg-brand-soft text-brand',
+                  line.kind === 'context' && 'text-ink',
+                  isSelected && 'bg-brand-soft!'
+                ]}
+                role="group"
+                onpointerenter={() => extendRange(file.path, line)}
+              >
+                <div
+                  class={[
+                    'relative flex items-center justify-end pr-2.5 font-mono text-2xs text-ink-faint select-none',
+                    line.kind === 'context' && 'bg-surface-muted',
+                    isSelected && 'shadow-[inset_3px_0_var(--color-brand)]'
+                  ]}
+                >
+                  {#if line.line !== null}<span>{line.line}</span>{#if reviewable}<Button
+                        class="absolute left-1 size-6! min-h-0 cursor-crosshair p-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                        icon
+                        size="small"
+                        variant="primary"
+                        aria-label="Comment on line {line.line}; drag to select a range"
+                        onpointerdown={(event) => beginRange(event, file.path, line)}
+                        onclick={(event) => {
+                          if (event.detail === 0) openSingle(file.path, line);
+                        }}><MessageSquarePlus size={14} /></Button
+                      >{/if}{/if}
+                </div>
+                <pre
+                  class="m-0 px-2.5 font-mono text-xs leading-6 whitespace-pre">{#if line.side && line.line !== null}{line.text.slice(
+                      0,
+                      1
+                    )}<Tokens
+                      tokens={highlighted[file.path]?.[line.side as 'old' | 'new']?.[line.line - 1]}
+                      text={line.text.slice(1) || ' '}
+                    />{:else}{line.text || ' '}{/if}</pre>
+              </div>
+              {#each threadsAt(file.path, line) as thread (thread.id)}<ReviewThread
+                  {thread}
+                  {busy}
+                  {context}
+                  {canResolve}
+                  {canModerate}
+                  {viewerId}
+                  inline
+                  interactive={reviewable}
+                  {onReply}
+                  {onResolve}
+                  {onEdit}
+                  {onDelete}
+                />{/each}
               {@const activeDraft = draftAt(file.path, line)}
-              {#if activeDraft}<div class="draft"><div class="range-label">Commenting on {activeDraft.startLine === activeDraft.line ? `line ${activeDraft.line}` : `lines ${activeDraft.startLine}–${activeDraft.line}`}</div><CommentComposer bind:value={body} {context} placeholder="Leave a review comment" submitLabel="Add review comment" minHeight={92} {busy} onSubmit={submit} onCancel={() => { draft = null; body = ''; }} /></div>{/if}
+              {#if activeDraft}
+                <div class="border-y border-line bg-surface-raised py-3 pr-3 pl-3 sm:pl-17">
+                  <div class="mb-2 text-xs text-ink-muted">
+                    Commenting on {activeDraft.startLine === activeDraft.line
+                      ? `line ${activeDraft.line}`
+                      : `lines ${activeDraft.startLine}–${activeDraft.line}`}
+                  </div>
+                  <CommentComposer
+                    bind:value={body}
+                    {context}
+                    placeholder="Leave a review comment"
+                    submitLabel="Add review comment"
+                    minHeight={92}
+                    {busy}
+                    onSubmit={submit}
+                    onCancel={() => {
+                      draft = null;
+                      body = '';
+                    }}
+                  />
+                </div>
+              {/if}
             {/each}
           {/if}
         </div>
       </section>
     {/each}
-  </main>
+  </div>
 </div>
-
-<style>
-  .diff-viewer{min-width:0}.diff-toolbar{position:sticky;top:52px;z-index:8;display:flex;align-items:center;justify-content:space-between;min-height:44px;margin-bottom:12px;padding:0 2px;background:var(--canvas)}.summary,.summary span{display:flex;align-items:center;gap:7px}.summary{color:var(--text-muted);font-size:11px}.summary strong{color:var(--text-strong)}.summary span{margin-left:4px;font-size:11px}.summary b,.navigator-list b{color:var(--success)}.summary i,.navigator-list i{color:var(--danger);font-style:normal}.navigator{position:relative}.navigator :global(.navigator-trigger.button){font-size:11px}.navigator-menu{position:absolute;top:calc(100% + 6px);right:0;width:min(420px,calc(100vw - 32px));overflow:hidden;padding:7px;border:0;border-radius:15px;background:var(--surface-raised);box-shadow:var(--shadow-popover);transform-origin:top right}.navigator-menu label{display:flex;align-items:center;gap:7px;margin:0 0 6px;padding:0 9px;border:1px solid transparent;border-radius:9px;background:var(--surface);color:var(--text-faint)}.navigator-menu input{width:100%;height:32px;border:0;outline:0;background:transparent;color:var(--text);font:12px var(--font-mono)}.navigator-list{display:grid;gap:2px;max-height:320px;overflow:auto}.navigator-list :global(.file-choice.button){min-height:38px;height:auto;justify-content:space-between;padding:8px 9px;border:0;border-radius:9px;font-size:11px;text-align:left}.navigator-list :global(.file-choice span){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.navigator-list small{display:flex;flex:0 0 auto;gap:5px;font-size:11px}.navigator-list p{margin:18px;color:var(--text-faint);font-size:11px;text-align:center}.diffs{display:grid;min-width:0;gap:16px}.diff{scroll-margin-top:118px;overflow:hidden;border:1px solid var(--border);border-radius:9px;background:var(--surface);content-visibility:auto;contain-intrinsic-size:auto 520px}.diff>header{display:flex;min-height:43px;align-items:center;gap:8px;padding:0 12px;background:var(--surface-muted)}.diff>header strong{overflow:hidden;color:var(--text-strong);font:600 12px var(--font-mono);text-overflow:ellipsis;white-space:nowrap}.diff>header>span{padding:3px 6px;border-radius:4px;background:var(--canvas);color:var(--text-faint);font-size:11px;text-transform:capitalize}.diff>header small{display:flex;gap:6px;margin-left:auto;font-size:11px}.diff>header b{color:var(--success)}.diff>header i{color:var(--danger);font-style:normal}.collapsed-patch{display:flex;min-height:76px;align-items:center;gap:11px;padding:13px 15px;color:var(--text-faint)}.collapsed-patch>div{min-width:0}.collapsed-patch strong{display:block;color:var(--text);font-size:11px}.collapsed-patch p{margin:4px 0 0;font-size:11px}.collapsed-patch :global(.button){margin-left:auto}.empty-patch{padding:28px 14px;color:var(--text-faint);font-size:11px;text-align:center}.patch{overflow:auto;border-top:1px solid var(--border-subtle)}.line{display:grid;grid-template-columns:54px minmax(max-content,1fr);min-height:24px}.gutter{position:relative;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;background:var(--surface-muted);color:var(--text-faint);font:11px var(--font-mono);user-select:none}.gutter :global(.line-comment.button){position:absolute;left:4px;display:flex;opacity:0;width:24px;min-height:24px;height:24px;padding:0;cursor:crosshair}.line:hover .gutter :global(.line-comment.button),.line:focus-within .gutter :global(.line-comment.button),.gutter :global(.line-comment.button:focus-visible){opacity:1}.line pre{margin:0;padding:0 10px;color:var(--text);font:12px/24px var(--font-mono);white-space:pre}.line.added .gutter,.line.added pre{background:var(--success-soft)}.line.added pre{color:var(--success)}.line.removed .gutter,.line.removed pre{background:var(--danger-soft)}.line.removed pre{color:var(--danger)}.line.hunk .gutter,.line.hunk pre{background:var(--brand-soft);color:var(--brand)}.line.selected .gutter{box-shadow:inset 3px 0 var(--brand)}.line.selected pre{background:color-mix(in srgb,var(--brand-soft) 68%,var(--surface))}.draft{padding:11px 12px 12px 66px;border-block:1px solid var(--border);background:var(--surface-raised)}.range-label{margin-bottom:7px;color:var(--text-faint);font-size:11px}@media(pointer:coarse){.gutter :global(.line-comment.button){opacity:1}}
-  @media(max-width:600px){.diff-toolbar{top:52px}.summary>span{display:none}.diff>header>span{display:none}.collapsed-patch{align-items:flex-start}.collapsed-patch :global(.button){margin-top:1px}}
-</style>

@@ -16,7 +16,10 @@ export function uploadSession(env: GitEdgeEnv, pushId: string) {
 }
 
 export class StateClient {
-  constructor(private stub: DurableObjectStub, private env: GitEdgeEnv) {}
+  constructor(
+    private stub: DurableObjectStub,
+    private env: GitEdgeEnv
+  ) {}
 
   async request<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
     const response = await this.stub.fetch(`http://state${path}`, {
@@ -24,14 +27,25 @@ export class StateClient {
       headers: { 'content-type': 'application/json', 'x-marl-storage-token': this.env.MARL_GIT_GATEWAY_TOKEN },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
-    const value = await readBoundedJson<Record<string, unknown>>(response, 16 * 1024 * 1024) ?? {};
-    if (!response.ok) throw new StateRequestError(response.status, String(value.error ?? 'state_request_failed'), String(value.detail ?? 'Repository state request failed.'));
+    const value = (await readBoundedJson<Record<string, unknown>>(response, 16 * 1024 * 1024)) ?? {};
+    if (!response.ok)
+      throw new StateRequestError(
+        response.status,
+        String(value.error ?? 'state_request_failed'),
+        String(value.detail ?? 'Repository state request failed.')
+      );
     return value as T;
   }
 }
 
 export class StateRequestError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message); }
+  constructor(
+    public status: number,
+    public code: string,
+    message: string
+  ) {
+    super(message);
+  }
 }
 
 export type RepositorySnapshotResponse = { state: RepositoryState };

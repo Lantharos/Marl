@@ -10,7 +10,13 @@ export type GitAuthorization = {
   write: boolean;
 };
 
-export async function authorizeGit(request: Request, env: GitEdgeEnv, owner: string, repository: string, service: 'git-upload-pack' | 'git-receive-pack') {
+export async function authorizeGit(
+  request: Request,
+  env: GitEdgeEnv,
+  owner: string,
+  repository: string,
+  service: 'git-upload-pack' | 'git-receive-pack'
+) {
   const headers = new Headers();
   const authorization = request.headers.get('authorization');
   if (authorization) headers.set('authorization', authorization);

@@ -15,7 +15,9 @@ describe('bounded request bodies', () => {
         controller.enqueue(new Uint8Array([1, 2, 3]));
         controller.enqueue(new Uint8Array([4, 5]));
       },
-      cancel() { canceled = true; }
+      cancel() {
+        canceled = true;
+      }
     });
     const request = new Request('https://marl.test/upload', { method: 'POST', body });
     expect(await readBody(request, 4)).toBeNull();

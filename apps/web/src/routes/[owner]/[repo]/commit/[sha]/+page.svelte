@@ -1,13 +1,17 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ArrowRight from 'lucide-svelte/icons/arrow-right';
+  import { onDestroy } from 'svelte';
+  import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import CommitSignature from '$lib/code/CommitSignature.svelte';
-  import Check from 'lucide-svelte/icons/check';
-  import Copy from 'lucide-svelte/icons/copy';
-  import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
+  import Check from '@lucide/svelte/icons/check';
+  import Copy from '@lucide/svelte/icons/copy';
+  import FolderTree from '@lucide/svelte/icons/folder-tree';
+  import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
   import { api } from '$lib/api';
   import DiffViewer from '$lib/code/DiffViewer.svelte';
   import Button from '$lib/components/controls/Button.svelte';
+  import LinkButton from '$lib/components/controls/LinkButton.svelte';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
   import Time from '$lib/components/page/Time.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
@@ -16,38 +20,97 @@
   import type { CommitDetail } from './+page';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner ?? '');
   const repo = $derived(page.params.repo ?? '');
   const base = $derived(`/${owner}/${repo}`);
-  const commit = $derived(data.commit as CommitDetail);
+  const commit = $derived(data.commit);
+  const renames = $derived(commit.files.filter((file) => file.oldPath));
   let copied = $state(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   async function copy() {
     await navigator.clipboard.writeText(commit.id);
     copied = true;
-    setTimeout(() => (copied = false), 1200);
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied = false), 1200);
   }
+  onDestroy(() => clearTimeout(copiedTimer));
   async function loadPatch(file: CommitDetail['files'][number]) {
-    const result = await api<{ patch: string }>(`/repositories/${owner}/${repo}/commits/${commit.id}/patch?path=${encodeURIComponent(file.path)}`);
+    const result = await api<{ patch: string }>(
+      `/repositories/${owner}/${repo}/commits/${commit.id}/patch?path=${encodeURIComponent(file.path)}`
+    );
     return result.patch;
   }
 </script>
 
-<Seo title={`${commit.id.slice(0, 7)} · ${owner}/${repo} · Marl`} description={seoExcerpt(commit.body || commit.title, `View commit ${commit.id.slice(0, 7)} in ${owner}/${repo} on Marl.`)} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
+<Seo
+  title={`${commit.id.slice(0, 7)} · ${owner}/${repo} · Marl`}
+  description={seoExcerpt(
+    commit.body || commit.title,
+    `View commit ${commit.id.slice(0, 7)} in ${owner}/${repo} on Marl.`
+  )}
+  path={page.url.pathname}
+  robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
+/>
 
-<header class="commit-head">
-  <div class="heading"><GitCommitHorizontal size={20} /><div><h1>{commit.title}</h1>{#if commit.body}<p>{commit.body}</p>{/if}</div></div>
-  <div class="meta"><UserProfileLink handle={commit.authorHandle} displayName={commit.authorDisplayName || commit.author} avatarUrl={commit.authorAvatarUrl} size={24} /><span>&lt;{commit.authorEmail}&gt;</span><Time value={commit.authoredAt} /><CommitSignature status={commit.signatureStatus} /></div>
-  <div class="identity"><code>{commit.id}</code><Button icon size="small" aria-label="Copy commit hash" onclick={copy}>{#if copied}<Check size={13} />{:else}<Copy size={13} />{/if}</Button></div>
-  <div class="parents">{#each commit.parents as parent (parent)}<a href="{base}/commit/{parent}">Parent {parent.slice(0, 7)}</a>{/each}<a href="{base}/tree/{encodeRevision(commit.id)}">Browse files</a></div>
+<header class="mb-7 grid gap-4">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0 flex-[1_1_320px]">
+      <h1 class="text-xl font-semibold tracking-tight wrap-anywhere text-ink-strong sm:text-2xl">{commit.title}</h1>
+      {#if commit.body}<p class="mt-3 max-w-[80ch] text-sm leading-relaxed whitespace-pre-wrap text-ink">
+          {commit.body}
+        </p>{/if}
+    </div>
+    <LinkButton size="small" href="{base}/tree/{encodeRevision(commit.id)}"
+      ><FolderTree size={14} />Browse files</LinkButton
+    >
+  </div>
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
+    <span class="inline-flex min-w-0 items-center gap-1.5"
+      ><UserProfileLink
+        handle={commit.authorHandle}
+        displayName={commit.authorDisplayName || commit.author}
+        avatarUrl={commit.authorAvatarUrl}
+        size={22}
+      />
+      committed <Time value={commit.authoredAt} class="text-ink-muted" /></span
+    >
+    <CommitSignature status={commit.signatureStatus} />
+    <span class="inline-flex items-center gap-1 rounded-lg bg-surface-muted py-0.5 pr-0.5 pl-2.5">
+      <code class="font-mono text-xs text-ink">{commit.id.slice(0, 12)}</code>
+      <Button icon size="small" variant="ghost" class="size-7" aria-label="Copy commit hash" onclick={copy}
+        >{#if copied}<Check size={13} class="text-success" />{:else}<Copy size={13} />{/if}</Button
+      >
+    </span>
+    {#each commit.parents as parent (parent)}<a
+        class="inline-flex items-center gap-1 font-mono text-xs hover:text-brand"
+        href="{base}/commit/{parent}"><GitCommitHorizontal size={13} />{parent.slice(0, 7)}</a
+      >{/each}
+  </div>
 </header>
 
-{#if commit.files.some((file) => file.oldPath)}
-  <div class="renames">{#each commit.files.filter((file) => file.oldPath) as file (file.path)}<span><code>{file.oldPath}</code><ArrowRight size={12} /><code>{file.path}</code></span>{/each}</div>
+{#if renames.length}
+  <div class="mb-4 grid gap-1 text-xs text-ink-muted">
+    {#each renames as file (file.path)}<span class="flex min-w-0 items-center gap-1.5"
+        ><code class="truncate font-mono">{file.oldPath}</code><ArrowRight size={12} class="shrink-0" /><code
+          class="truncate font-mono text-ink">{file.path}</code
+        ></span
+      >{/each}
+  </div>
 {/if}
-{#if commit.files.length}<DiffViewer files={commit.files} comparison={{ old: commit.parents[0] ? { owner: page.params.owner!, repository: page.params.repo!, revision: commit.parents[0] } : undefined, new: { owner: page.params.owner!, repository: page.params.repo!, revision: commit.id } }} reviewable={false} onLoadPatch={loadPatch} />{:else}<div class="empty"><strong>No file changes</strong><p>This commit does not change the tree relative to its first parent.</p></div>{/if}
-
-<style>
-  .commit-head{position:relative;padding:5px 0 22px;border-bottom:1px solid var(--border)}.heading{display:flex;align-items:flex-start;gap:9px;color:var(--brand)}.heading h1{max-width:790px;margin:0;color:var(--text-strong);font-size:20px;font-weight:660;letter-spacing:-.025em}.heading p{max-width:760px;margin:8px 0 0;color:var(--text-muted);font-size:11px;line-height:1.55;white-space:pre-wrap}.meta{display:flex;align-items:center;gap:6px;margin-top:14px;color:var(--text-faint);font-size:11px}.meta :global(.user-profile-link){font-size:11px}.identity{position:absolute;top:0;right:0;display:flex;max-width:310px;border:1px solid var(--border);border-radius:6px}.identity code{overflow:hidden;padding:8px;color:var(--text-muted);font-size:11px;text-overflow:ellipsis}.parents{display:flex;gap:12px;margin-top:13px}.parents a{color:var(--brand);font-size:11px;text-decoration:none}.parents a:last-child{margin-left:auto}.renames{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.renames span{display:flex;align-items:center;gap:6px;color:var(--text-faint);font-size:11px}.renames code{color:var(--text-muted)}.empty{padding:50px 0;border-top:1px solid var(--border-subtle);color:var(--text-faint);text-align:center}.empty strong{color:var(--text-strong);font-size:12px}.empty p{font-size:11px}@media(max-width:760px){.identity{position:static;width:100%;max-width:none;margin-top:14px}.meta{flex-wrap:wrap}.parents a:last-child{margin-left:0}}
-</style>
+{#if commit.files.length}<DiffViewer
+    files={commit.files}
+    comparison={{
+      old: commit.parents[0] ? { owner, repository: repo, revision: commit.parents[0] } : undefined,
+      new: { owner, repository: repo, revision: commit.id }
+    }}
+    reviewable={false}
+    onLoadPatch={loadPatch}
+  />{:else}<div class="surface">
+    <EmptyState
+      icon={GitCommitHorizontal}
+      title="No file changes"
+      description="This commit does not change the tree relative to its first parent."
+    />
+  </div>{/if}

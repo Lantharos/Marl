@@ -5,7 +5,11 @@ import { changesShell, clearShellCache } from '$lib/shell-cache';
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export class MarlApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string
+  ) {
     super(message);
   }
 }
@@ -25,15 +29,23 @@ async function apiRequest<T>(fetcher: Fetcher, path: string, init: RequestInit, 
   const response = await fetcher(`/api/v1${path}`, { ...init, headers });
   if (!response.ok) {
     if (response.status === 401) clearShellCache();
-    const value = await response.json().catch(() => null) as ApiError | null;
+    const value = (await response.json().catch(() => null)) as ApiError | null;
     if (allowElevation && response.status === 403 && value?.error.code === 'identity_confirmation_required') {
       const confirmed = await requestElevation(value.error.message);
       if (!confirmed) throw new MarlApiError(0, 'request_cancelled', '');
       return apiRequest(fetcher, path, init, false);
     }
-    throw new MarlApiError(response.status, value?.error.code ?? 'request_failed', value?.error.message ?? `Marl API request failed (${response.status}).`);
+    throw new MarlApiError(
+      response.status,
+      value?.error.code ?? 'request_failed',
+      value?.error.message ?? `Marl API request failed (${response.status}).`
+    );
   }
-  if (typeof window !== 'undefined' && !['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase()) && changesShell(path)) {
+  if (
+    typeof window !== 'undefined' &&
+    !['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase()) &&
+    changesShell(path)
+  ) {
     clearShellCache(true);
     void import('$app/navigation').then(({ invalidate }) => invalidate('marl:shell'));
   }
@@ -43,31 +55,30 @@ async function apiRequest<T>(fetcher: Fetcher, path: string, init: RequestInit, 
   return JSON.parse(body) as T;
 }
 
-export async function apiText(path: string): Promise<string> {
-  return apiTextWith(fetch, path);
-}
-
-export async function apiTextWith(fetcher: Fetcher, path: string): Promise<string> {
-  const response = await fetcher(`/api/v1${path}`, { headers: { accept: 'text/plain, application/octet-stream' } });
-  if (!response.ok) throw new MarlApiError(response.status, 'request_failed', `Marl API request failed (${response.status}).`);
-  return response.text();
-}
-
-export async function apiTextCursor(path: string, after = -1): Promise<{ text: string; cursor: number; more: boolean }> {
-  return apiTextCursorWith(fetch, path, after);
-}
-
 export async function apiTextCursorAll(path: string, after = -1): Promise<{ text: string; cursor: number }> {
   return apiTextCursorAllWith(fetch, path, after);
 }
 
-export async function apiTextCursorWith(fetcher: Fetcher, path: string, after = -1): Promise<{ text: string; cursor: number; more: boolean }> {
+export async function apiTextCursorWith(
+  fetcher: Fetcher,
+  path: string,
+  after = -1
+): Promise<{ text: string; cursor: number; more: boolean }> {
   const response = await fetcher(`/api/v1${path}?after=${after}`, { headers: { accept: 'text/plain' } });
-  if (!response.ok) throw new MarlApiError(response.status, 'request_failed', `Marl API request failed (${response.status}).`);
-  return { text: await response.text(), cursor: Number(response.headers.get('x-marl-log-cursor') ?? after), more: response.headers.get('x-marl-log-more') === 'true' };
+  if (!response.ok)
+    throw new MarlApiError(response.status, 'request_failed', `Marl API request failed (${response.status}).`);
+  return {
+    text: await response.text(),
+    cursor: Number(response.headers.get('x-marl-log-cursor') ?? after),
+    more: response.headers.get('x-marl-log-more') === 'true'
+  };
 }
 
-export async function apiTextCursorAllWith(fetcher: Fetcher, path: string, after = -1): Promise<{ text: string; cursor: number }> {
+export async function apiTextCursorAllWith(
+  fetcher: Fetcher,
+  path: string,
+  after = -1
+): Promise<{ text: string; cursor: number }> {
   const parts: string[] = [];
   let cursor = after;
   while (true) {

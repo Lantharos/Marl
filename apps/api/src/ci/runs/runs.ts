@@ -1,22 +1,27 @@
 import type { Principal } from '../../auth/principal';
 import { queueRun } from './queue';
-export { queueRun } from './queue';
-import { validTagName } from '../../core/domain';
 import { pageResult, pageSize, readCursor } from '../../http/cursor';
 import { json, problem } from '../../http/http';
 import { readListQuery } from '../../http/list-query';
 import type { Env } from '../../core/platform';
-import { notifyPullsForCommit } from '../../pulls/realtime';
-import { authorizeRepository, authorizeRepositoryId, repositoryListFilter, type RepositoryCapability } from '../../repositories/access';
+import { notifyPullsForCommit } from '../../pulls/realtime/updates';
+import {
+  authorizeRepository,
+  authorizeRepositoryId,
+  repositoryListFilter,
+  type RepositoryCapability
+} from '../../repositories/access/access';
+import { parseRunJobs } from './jobs';
 
 type Repository = { id: string; organizationId: string; owner: string; name: string };
-export type RunStep = { name: string; run: string; shell?: string; environment?: Record<string, string>; workingDirectory?: string; timeoutMinutes?: number; continueOnError?: boolean };
-export type RunService = { name: string; image: string; environment: Record<string, string> };
-export type RunRelease = { tag: string; name: string; body: string; draft: boolean; prerelease: boolean; makeLatest: boolean; files: string[] };
-export type RunJob = { key: string; name: string; labels: string[]; needs: string[]; steps: RunStep[]; environment: Record<string, string>; artifacts: string[]; release?: RunRelease; runtime: { image: string; timeoutMinutes: number; services: RunService[] } };
-export type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
-async function repository(env: Env, principal: Principal | null, owner: string, name: string, capability: RepositoryCapability = 'repository.read'): Promise<Repository | null> {
+async function repository(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  name: string,
+  capability: RepositoryCapability = 'repository.read'
+): Promise<Repository | null> {
   const access = await authorizeRepository(env, principal, owner, name, capability);
   return access && (capability !== 'repository.read' || access.role) ? access : null;
 }
@@ -26,7 +31,24 @@ export function runSelect(where: string) {
 }
 
 export function summarizeRun(row: Record<string, unknown>) {
-  return { id: row.id, number: Number(row.number), repository: { owner: row.owner, name: row.repository }, name: row.name, trigger: row.trigger, ...(row.workflowId ? { workflowId: row.workflowId, workflowPath: row.workflowPath } : {}), actor: row.actor, branch: row.branch, commit: row.commitId, state: row.state, approvalRequired: Boolean(row.approvalRequired), ...(row.cancellationReason ? { cancellationReason: row.cancellationReason } : {}), jobs: Number(row.jobs), queuedAt: row.queuedAt, startedAt: row.startedAt, completedAt: row.completedAt };
+  return {
+    id: row.id,
+    number: Number(row.number),
+    repository: { owner: row.owner, name: row.repository },
+    name: row.name,
+    trigger: row.trigger,
+    ...(row.workflowId ? { workflowId: row.workflowId, workflowPath: row.workflowPath } : {}),
+    actor: row.actor,
+    branch: row.branch,
+    commit: row.commitId,
+    state: row.state,
+    approvalRequired: Boolean(row.approvalRequired),
+    ...(row.cancellationReason ? { cancellationReason: row.cancellationReason } : {}),
+    jobs: Number(row.jobs),
+    queuedAt: row.queuedAt,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt
+  };
 }
 
 export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
@@ -36,192 +58,302 @@ export async function listRuns(env: Env, principal: Principal, url: URL): Promis
   const cursor = readCursor(url);
   const access = repositoryListFilter(principal);
   const state = url.searchParams.get('state') ?? 'all';
-  if (!['all', 'active', 'success', 'failure', 'canceled'].includes(state)) return problem(422, 'invalid_run_state', 'Run state is invalid.');
-  const stateSql = state === 'active' ? "AND runs.state IN ('queued','running')" : state === 'all' ? '' : 'AND runs.state=?';
-  const querySql = search.query ? `AND (runs.name LIKE ? ESCAPE '\\' OR runs.branch LIKE ? ESCAPE '\\' OR runs.commit_id LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')` : '';
+  if (!['all', 'active', 'success', 'failure', 'canceled'].includes(state))
+    return problem(422, 'invalid_run_state', 'Run state is invalid.');
+  const stateSql =
+    state === 'active' ? "AND runs.state IN ('queued','running')" : state === 'all' ? '' : 'AND runs.state=?';
+  const querySql = search.query
+    ? `AND (runs.name LIKE ? ESCAPE '\\' OR runs.branch LIKE ? ESCAPE '\\' OR runs.commit_id LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')`
+    : '';
   const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
-  const filters = [...access.values, ...(state !== 'all' && state !== 'active' ? [state] : []), ...(search.query ? [search.like, search.like, search.like, search.like] : [])];
+  const filters = [
+    ...access.values,
+    ...(state !== 'all' && state !== 'active' ? [state] : []),
+    ...(search.query ? [search.like, search.like, search.like, search.like] : [])
+  ];
   const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
-  const rows = await env.DB.prepare(runSelect(`WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const rows = await env.DB.prepare(
+    runSelect(`WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)
+  )
+    .bind(...values)
+    .all<Record<string, unknown>>();
   const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
   return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
 }
 
-export async function listRepositoryRuns(env: Env, principal: Principal | null, owner: string, name: string, url: URL): Promise<Response> {
+export async function listRepositoryRuns(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  name: string,
+  url: URL
+): Promise<Response> {
   const repo = await repository(env, principal, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const limit = pageSize(url);
   const cursor = readCursor(url);
   const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
   const values = cursor ? [repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [repo.id, limit + 1];
-  const rows = await env.DB.prepare(runSelect(`WHERE runs.repository_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)).bind(...values).all<Record<string, unknown>>();
+  const rows = await env.DB.prepare(
+    runSelect(`WHERE runs.repository_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)
+  )
+    .bind(...values)
+    .all<Record<string, unknown>>();
   const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
   return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
 }
 
-function environment(value: unknown): Record<string, string> | null {
-  if (value === undefined) return {};
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const entries = Object.entries(value);
-  if (entries.length > 128 || entries.some(([key, item]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof item !== 'string' || item.length > 32_000)) return null;
-  return Object.fromEntries(entries) as Record<string, string>;
-}
-
-function artifactPath(value: string): boolean {
-  const normalized = value.replaceAll('\\', '/');
-  return normalized.length > 0 && normalized.length <= 260 && !normalized.startsWith('/') && !normalized.includes(':') && normalized.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
-}
-
-function image(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim();
-  return normalized.length > 0 && normalized.length <= 240 && /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]+$/.test(normalized) ? normalized : null;
-}
-
-export function parseRunJobs(value: unknown): JobParseResult {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 32) return { error: { code: 'invalid_jobs', detail: 'One to 32 jobs are required.' } };
-  const jobs: RunJob[] = [];
-  for (const raw of value) {
-    if (!raw || typeof raw !== 'object') return { error: { code: 'invalid_job', detail: 'Every job must be an object.' } };
-    const job = raw as Record<string, unknown>;
-    const labels = Array.isArray(job.labels) ? [...new Set(job.labels.map(String).map((label) => label.trim().toLowerCase()))] : [];
-    const steps = Array.isArray(job.steps) ? job.steps : [];
-    const jobEnvironment = environment(job.environment);
-    const runtimeValue = job.runtime && typeof job.runtime === 'object' ? job.runtime as Record<string, unknown> : {};
-    const runtimeImage = image(runtimeValue.image ?? job.container ?? 'ubuntu:24.04');
-    const timeoutMinutes = Number(runtimeValue.timeoutMinutes ?? job.timeoutMinutes ?? 360);
-    const needs = Array.isArray(job.needs) ? [...new Set(job.needs.map(String))] : typeof job.needs === 'string' ? [job.needs] : [];
-    const servicesValue = Array.isArray(runtimeValue.services) ? runtimeValue.services : [];
-    const services: RunService[] = [];
-    for (const value of servicesValue) {
-      const service = value && typeof value === 'object' ? value as Record<string, unknown> : null;
-      const serviceEnvironment = environment(service?.environment);
-      const serviceImage = image(service?.image);
-      if (!service || typeof service.name !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(service.name) || !serviceImage || !serviceEnvironment) return { error: { code: 'invalid_service', detail: 'Services need a valid name, container image, and environment.' } };
-      services.push({ name: service.name, image: serviceImage, environment: serviceEnvironment });
-    }
-    if (typeof job.key !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(job.key) || typeof job.name !== 'string' || !job.name.trim() || job.name.length > 160 || labels.length > 32 || labels.some((label) => !/^[a-z0-9][a-z0-9._-]{0,39}$/.test(label)) || needs.length > 31 || needs.some((need) => !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(need)) || steps.length < 1 || steps.length > 64 || !jobEnvironment || !runtimeImage || !Number.isInteger(timeoutMinutes) || timeoutMinutes < 1 || timeoutMinutes > 1440 || services.length > 8) return { error: { code: 'invalid_job', detail: 'Job keys, names, labels, dependencies, environment, runtime, and steps are invalid.' } };
-    const parsedSteps: RunJob['steps'] = [];
-    for (const rawStep of steps) {
-      const step = rawStep as Record<string, unknown>;
-      const stepEnvironment = environment(step?.environment);
-      const stepTimeout = step.timeoutMinutes === undefined ? undefined : Number(step.timeoutMinutes);
-      const workingDirectory = step.workingDirectory === undefined ? undefined : String(step.workingDirectory);
-      if (!step || typeof step.name !== 'string' || !step.name.trim() || step.name.length > 160 || typeof step.run !== 'string' || !step.run.trim() || step.run.length > 50_000 || (step.shell !== undefined && (typeof step.shell !== 'string' || !['powershell', 'pwsh', 'cmd', 'sh', 'bash'].includes(step.shell))) || !stepEnvironment || (stepTimeout !== undefined && (!Number.isInteger(stepTimeout) || stepTimeout < 1 || stepTimeout > 1440)) || (workingDirectory !== undefined && !artifactPath(workingDirectory))) return { error: { code: 'invalid_step', detail: 'Every step needs a valid name, command, shell, environment, working directory, and timeout.' } };
-      parsedSteps.push({ name: step.name, run: step.run, ...(typeof step.shell === 'string' ? { shell: step.shell } : {}), ...(Object.keys(stepEnvironment).length ? { environment: stepEnvironment } : {}), ...(workingDirectory ? { workingDirectory } : {}), ...(stepTimeout ? { timeoutMinutes: stepTimeout } : {}), ...(step.continueOnError === true ? { continueOnError: true } : {}) });
-    }
-    const artifacts = Array.isArray(job.artifacts) ? job.artifacts.map(String) : [];
-    if (artifacts.length > 32 || artifacts.some((path) => !artifactPath(path))) return { error: { code: 'invalid_artifacts', detail: 'Artifact paths must stay inside the job workspace.' } };
-    const release = parseRelease(job.release);
-    if (release === null) return { error: { code: 'invalid_release', detail: 'Job releases need a valid tag, optional notes, and workspace-relative files.' } };
-    const artifactPaths = [...new Set([...artifacts, ...(release?.files ?? [])])];
-    if (artifactPaths.length > 32) return { error: { code: 'invalid_artifacts', detail: 'A job can upload at most 32 artifact paths.' } };
-    jobs.push({ key: job.key, name: job.name, labels, needs, steps: parsedSteps, environment: jobEnvironment, artifacts: artifactPaths, ...(release ? { release } : {}), runtime: { image: runtimeImage, timeoutMinutes, services } });
-  }
-  if (new Set(jobs.map((job) => job.key)).size !== jobs.length) return { error: { code: 'duplicate_job', detail: 'Job keys must be unique.' } };
-  if (jobs.some((job) => job.needs.includes(job.key) || job.needs.some((need) => !jobs.some((candidate) => candidate.key === need)))) return { error: { code: 'invalid_dependency', detail: 'Every job dependency must refer to another job in this run.' } };
-  const resolved = new Set<string>();
-  while (resolved.size < jobs.length) {
-    const ready = jobs.filter((job) => !resolved.has(job.key) && job.needs.every((need) => resolved.has(need)));
-    if (!ready.length) return { error: { code: 'dependency_cycle', detail: 'Job dependencies cannot contain a cycle.' } };
-    for (const job of ready) resolved.add(job.key);
-  }
-  return { jobs };
-}
-
-function parseRelease(value: unknown): RunRelease | undefined | null {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const release = value as Record<string, unknown>;
-  const files = release.files === undefined ? [] : Array.isArray(release.files) ? release.files.map(String) : [String(release.files)];
-  const tag = typeof release.tag === 'string' ? release.tag.trim() : '';
-  const name = typeof release.name === 'string' ? release.name.trim() : '';
-  const body = typeof release.body === 'string' ? release.body : '';
-  if (!validTagName(tag) || name.length > 240 || body.length > 100_000 || files.length > 32 || files.some((path) => !artifactPath(path))) return null;
-  const draft = release.draft === true;
-  const prerelease = release.prerelease === true;
-  return { tag, name, body, draft, prerelease, makeLatest: !draft && !prerelease && release.makeLatest !== false, files };
-}
-
-export async function getRun(env: Env, principal: Principal | null, owner: string, name: string, number: number): Promise<Response> {
+export async function getRun(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  name: string,
+  number: number
+): Promise<Response> {
   const repo = await repository(env, principal, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const run = await env.DB.prepare(runSelect('WHERE runs.repository_id=? AND runs.number=?')).bind(repo.id, number).first<Record<string, unknown>>();
+  const run = await env.DB.prepare(runSelect('WHERE runs.repository_id=? AND runs.number=?'))
+    .bind(repo.id, number)
+    .first<Record<string, unknown>>();
   if (!run) return problem(404, 'run_not_found', 'Run not found.');
   const [jobs, artifacts] = await Promise.all([
-    env.DB.prepare(`SELECT jobs.id,jobs.job_key AS key,jobs.name,jobs.state,jobs.required_labels_json AS labelsJson,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`).bind(run.id).all<{ id: string; key: string; name: string; state: string; labelsJson: string; attempt: number; exitCode?: number; startedAt?: string; completedAt?: string; runnerId?: string; runnerName?: string; logBytes: number }>(),
-    env.DB.prepare(`SELECT artifacts.id,artifacts.job_id AS jobId,artifacts.name,artifacts.byte_size AS byteSize,artifacts.content_type AS contentType FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id WHERE jobs.run_id=? ORDER BY artifacts.created_at`).bind(run.id).all<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }>()
+    env.DB.prepare(
+      `SELECT jobs.id,jobs.job_key AS key,jobs.name,jobs.state,jobs.required_labels_json AS labelsJson,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`
+    )
+      .bind(run.id)
+      .all<{
+        id: string;
+        key: string;
+        name: string;
+        state: string;
+        labelsJson: string;
+        attempt: number;
+        exitCode?: number;
+        startedAt?: string;
+        completedAt?: string;
+        runnerId?: string;
+        runnerName?: string;
+        logBytes: number;
+      }>(),
+    env.DB.prepare(
+      `SELECT artifacts.id,artifacts.job_id AS jobId,artifacts.name,artifacts.byte_size AS byteSize,artifacts.content_type AS contentType FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id WHERE jobs.run_id=? ORDER BY artifacts.created_at`
+    )
+      .bind(run.id)
+      .all<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }>()
   ]);
-  return json({ run: { ...summarizeRun(run), canApproveChecks: Boolean(await authorizeRepositoryId(env, principal, repo.id, 'repository.push')), jobsDetail: jobs.results.map(({ labelsJson, runnerId, runnerName, ...job }) => ({ ...job, requiredLabels: JSON.parse(labelsJson), ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}), artifacts: artifacts.results.filter((artifact) => artifact.jobId === job.id).map(({ jobId: _, ...artifact }) => artifact) })) } });
+  return json({
+    run: {
+      ...summarizeRun(run),
+      canApproveChecks: Boolean(await authorizeRepositoryId(env, principal, repo.id, 'repository.push')),
+      jobsDetail: jobs.results.map(({ labelsJson, runnerId, runnerName, ...job }) => ({
+        ...job,
+        requiredLabels: JSON.parse(labelsJson),
+        ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}),
+        artifacts: artifacts.results
+          .filter((artifact) => artifact.jobId === job.id)
+          .map(({ jobId: _, ...artifact }) => artifact)
+      }))
+    }
+  });
 }
 
-export async function getRunState(env: Env, principal: Principal | null, owner: string, name: string, number: number): Promise<Response> {
+export async function getRunState(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  name: string,
+  number: number
+): Promise<Response> {
   const repo = await repository(env, principal, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const run = await env.DB.prepare(runSelect('WHERE runs.repository_id=? AND runs.number=?')).bind(repo.id, number).first<Record<string, unknown>>();
+  const run = await env.DB.prepare(runSelect('WHERE runs.repository_id=? AND runs.number=?'))
+    .bind(repo.id, number)
+    .first<Record<string, unknown>>();
   if (!run) return problem(404, 'run_not_found', 'Run not found.');
   const runSummary = summarizeRun(run);
-  const jobs = await env.DB.prepare(`SELECT jobs.id,jobs.state,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`).bind(run.id).all<{ id: string; state: string; runnerId?: string; runnerName?: string }>();
+  const jobs = await env.DB.prepare(
+    `SELECT jobs.id,jobs.state,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`
+  )
+    .bind(run.id)
+    .all<{ id: string; state: string; runnerId?: string; runnerName?: string }>();
   const artifacts = ['queued', 'running'].includes(String(runSummary.state))
     ? { results: [] as Array<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }> }
-    : await env.DB.prepare(`SELECT artifacts.id,artifacts.job_id AS jobId,artifacts.name,artifacts.byte_size AS byteSize,artifacts.content_type AS contentType FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id WHERE jobs.run_id=? ORDER BY artifacts.created_at`).bind(run.id).all<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }>();
-  return json({ run: runSummary, jobs: jobs.results.map(({ runnerId, runnerName, ...job }) => ({ ...job, ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}), ...(!['queued', 'running'].includes(String(runSummary.state)) ? { artifacts: artifacts.results.filter((artifact) => artifact.jobId === job.id).map(({ jobId: _, ...artifact }) => artifact) } : {}) })) });
+    : await env.DB.prepare(
+        `SELECT artifacts.id,artifacts.job_id AS jobId,artifacts.name,artifacts.byte_size AS byteSize,artifacts.content_type AS contentType FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id WHERE jobs.run_id=? ORDER BY artifacts.created_at`
+      )
+        .bind(run.id)
+        .all<{ id: string; jobId: string; name: string; byteSize: number; contentType: string }>();
+  return json({
+    run: runSummary,
+    jobs: jobs.results.map(({ runnerId, runnerName, ...job }) => ({
+      ...job,
+      ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}),
+      ...(!['queued', 'running'].includes(String(runSummary.state))
+        ? {
+            artifacts: artifacts.results
+              .filter((artifact) => artifact.jobId === job.id)
+              .map(({ jobId: _, ...artifact }) => artifact)
+          }
+        : {})
+    }))
+  });
 }
 
-export async function cancelRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
+export async function cancelRun(
+  env: Env,
+  principal: Principal,
+  owner: string,
+  name: string,
+  number: number
+): Promise<Response> {
   const repo = await repository(env, principal, owner, name, 'repository.push');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const run = await env.DB.prepare(`SELECT id,state,commit_id AS commitId FROM runs WHERE repository_id=? AND number=?`).bind(repo.id, number).first<{ id: string; state: string; commitId: string }>();
-  if (!run || !['queued', 'running'].includes(run.state)) return problem(409, 'run_not_active', 'Only queued or running runs can be canceled.');
+  const run = await env.DB.prepare(`SELECT id,state,commit_id AS commitId FROM runs WHERE repository_id=? AND number=?`)
+    .bind(repo.id, number)
+    .first<{ id: string; state: string; commitId: string }>();
+  if (!run || !['queued', 'running'].includes(run.state))
+    return problem(409, 'run_not_active', 'Only queued or running runs can be canceled.');
   await env.DB.batch([
-    env.DB.prepare(`UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE run_id=? AND state='queued'`).bind(run.id),
+    env.DB.prepare(
+      `UPDATE jobs SET state='canceled',completed_at=CURRENT_TIMESTAMP WHERE run_id=? AND state='queued'`
+    ).bind(run.id),
     env.DB.prepare(`UPDATE jobs SET cancel_requested=1 WHERE run_id=? AND state='running'`).bind(run.id),
-    env.DB.prepare(`UPDATE checks SET state='canceled',summary='Canceled by a developer.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id IN (SELECT job_checks.id FROM checks AS job_checks JOIN runs ON runs.id=? JOIN jobs ON jobs.run_id=runs.id WHERE job_checks.repository_id=COALESCE(runs.checkout_repository_id,runs.repository_id) AND job_checks.commit_id=runs.commit_id AND job_checks.producer_repository_id=runs.repository_id AND job_checks.producer_workflow_id=runs.workflow_id AND job_checks.producer_job_key=jobs.job_key)`).bind(run.id),
-    env.DB.prepare(`UPDATE runs SET state='canceled',cancellation_reason='developer',completed_at=CURRENT_TIMESTAMP WHERE id=?`).bind(run.id)
+    env.DB.prepare(
+      `UPDATE checks SET state='canceled',summary='Canceled by a developer.',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id IN (SELECT job_checks.id FROM checks AS job_checks JOIN runs ON runs.id=? JOIN jobs ON jobs.run_id=runs.id WHERE job_checks.repository_id=COALESCE(runs.checkout_repository_id,runs.repository_id) AND job_checks.commit_id=runs.commit_id AND job_checks.producer_repository_id=runs.repository_id AND job_checks.producer_workflow_id=runs.workflow_id AND job_checks.producer_job_key=jobs.job_key)`
+    ).bind(run.id),
+    env.DB.prepare(
+      `UPDATE runs SET state='canceled',cancellation_reason='developer',completed_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(run.id)
   ]);
   await notifyPullsForCommit(env, repo.id, run.commitId);
   return json({ canceled: true, state: 'canceled' });
 }
 
-export async function retryRun(env: Env, principal: Principal, owner: string, name: string, number: number): Promise<Response> {
+export async function retryRun(
+  env: Env,
+  principal: Principal,
+  owner: string,
+  name: string,
+  number: number
+): Promise<Response> {
   const repo = await repository(env, principal, owner, name, 'repository.push');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const previous = await env.DB.prepare(`SELECT id,workflow_id AS workflowId,name,branch,commit_id AS commitId,pull_request_id AS pullId,COALESCE(checkout_repository_id,repository_id) AS checkoutRepositoryId,untrusted FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`).bind(repo.id, number).first<{ id: string; workflowId: string; name: string; branch: string; commitId: string; pullId: string | null; checkoutRepositoryId: string; untrusted: number }>();
+  const previous = await env.DB.prepare(
+    `SELECT id,workflow_id AS workflowId,name,branch,commit_id AS commitId,pull_request_id AS pullId,COALESCE(checkout_repository_id,repository_id) AS checkoutRepositoryId,untrusted FROM runs WHERE repository_id=? AND number=? AND state IN ('success','failure','canceled')`
+  )
+    .bind(repo.id, number)
+    .first<{
+      id: string;
+      workflowId: string;
+      name: string;
+      branch: string;
+      commitId: string;
+      pullId: string | null;
+      checkoutRepositoryId: string;
+      untrusted: number;
+    }>();
   if (!previous) return problem(409, 'run_not_retryable', 'This run cannot be retried yet.');
-  const jobs = await env.DB.prepare(`SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson,release_json AS releaseJson,runtime_json AS runtimeJson,needs_json AS needsJson FROM jobs WHERE run_id=? ORDER BY created_at`).bind(previous.id).all<{ jobKey: string; name: string; checkName: string; labelsJson: string; stepsJson: string; environmentJson: string; artifactPathsJson: string; releaseJson: string | null; runtimeJson: string; needsJson: string }>();
-  const parsed = parseRunJobs(jobs.results.map((job) => ({
-    key: job.jobKey, name: job.name, labels: JSON.parse(job.labelsJson), steps: JSON.parse(job.stepsJson),
-    environment: JSON.parse(job.environmentJson), artifacts: JSON.parse(job.artifactPathsJson),
-    ...(job.releaseJson ? { release: JSON.parse(job.releaseJson) } : {}),
-    runtime: JSON.parse(job.runtimeJson), needs: JSON.parse(job.needsJson)
-  })));
+  const jobs = await env.DB.prepare(
+    `SELECT job_key AS jobKey,name,check_name AS checkName,required_labels_json AS labelsJson,steps_json AS stepsJson,environment_json AS environmentJson,artifact_paths_json AS artifactPathsJson,release_json AS releaseJson,runtime_json AS runtimeJson,needs_json AS needsJson FROM jobs WHERE run_id=? ORDER BY created_at`
+  )
+    .bind(previous.id)
+    .all<{
+      jobKey: string;
+      name: string;
+      checkName: string;
+      labelsJson: string;
+      stepsJson: string;
+      environmentJson: string;
+      artifactPathsJson: string;
+      releaseJson: string | null;
+      runtimeJson: string;
+      needsJson: string;
+    }>();
+  const parsed = parseRunJobs(
+    jobs.results.map((job) => ({
+      key: job.jobKey,
+      name: job.name,
+      labels: JSON.parse(job.labelsJson),
+      steps: JSON.parse(job.stepsJson),
+      environment: JSON.parse(job.environmentJson),
+      artifacts: JSON.parse(job.artifactPathsJson),
+      ...(job.releaseJson ? { release: JSON.parse(job.releaseJson) } : {}),
+      runtime: JSON.parse(job.runtimeJson),
+      needs: JSON.parse(job.needsJson)
+    }))
+  );
   if (parsed.error) return problem(409, parsed.error.code, parsed.error.detail);
-  const created = await queueRun(env, { repositoryId: repo.id, checkoutRepositoryId: previous.checkoutRepositoryId, pullId: previous.pullId, workflowId: previous.workflowId, name: previous.name, branch: previous.branch, commitId: previous.commitId, trigger: 'retry', actorId: principal.id, untrusted: Boolean(previous.untrusted), jobs: parsed.jobs });
+  const created = await queueRun(env, {
+    repositoryId: repo.id,
+    checkoutRepositoryId: previous.checkoutRepositoryId,
+    pullId: previous.pullId,
+    workflowId: previous.workflowId,
+    name: previous.name,
+    branch: previous.branch,
+    commitId: previous.commitId,
+    trigger: 'retry',
+    actorId: principal.id,
+    untrusted: Boolean(previous.untrusted),
+    jobs: parsed.jobs
+  });
   return json({ run: created ? summarizeRun(created) : null }, { status: 201 });
 }
 
 export async function readJobLogs(env: Env, principal: Principal | null, jobId: string, url: URL): Promise<Response> {
-  const job = await env.DB.prepare(`SELECT jobs.id,runs.repository_id AS repositoryId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=?`).bind(jobId).first<{ id: string; repositoryId: string }>();
+  const job = await env.DB.prepare(
+    `SELECT jobs.id,runs.repository_id AS repositoryId FROM jobs JOIN runs ON runs.id=jobs.run_id WHERE jobs.id=?`
+  )
+    .bind(jobId)
+    .first<{ id: string; repositoryId: string }>();
   const repository = job ? await authorizeRepositoryId(env, principal, job.repositoryId, 'repository.read') : null;
   if (!job || !repository?.role) return problem(404, 'job_not_found', 'Job not found.');
   const after = Number(url.searchParams.get('after') ?? -1);
   if (!Number.isSafeInteger(after) || after < -1) return problem(422, 'invalid_log_cursor', 'Log cursor is invalid.');
-  const chunks = await env.DB.prepare('SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT 5').bind(jobId, after).all<{ sequence: number; objectKey: string }>();
+  const chunks = await env.DB.prepare(
+    'SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT 5'
+  )
+    .bind(jobId, after)
+    .all<{ sequence: number; objectKey: string }>();
   const visible = chunks.results.slice(0, 4);
-  const streams = await Promise.all(visible.map(async (chunk) => {
-    const object = await env.OBJECTS.get(chunk.objectKey);
-    return object ? new Response(object.body).text() : null;
-  }));
-  if (streams.some((stream) => stream === null)) return problem(502, 'log_chunk_missing', 'One or more persisted log chunks are unavailable.');
+  const streams = await Promise.all(
+    visible.map(async (chunk) => {
+      const object = await env.OBJECTS.get(chunk.objectKey);
+      return object ? new Response(object.body).text() : null;
+    })
+  );
+  if (streams.some((stream) => stream === null))
+    return problem(502, 'log_chunk_missing', 'One or more persisted log chunks are unavailable.');
   const cursor = visible.at(-1)?.sequence ?? after;
-  return new Response(streams.join(''), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'x-marl-log-cursor': String(cursor), 'x-marl-log-more': String(chunks.results.length > visible.length) } });
+  return new Response(streams.join(''), {
+    headers: {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'x-marl-log-cursor': String(cursor),
+      'x-marl-log-more': String(chunks.results.length > visible.length)
+    }
+  });
 }
 
 export async function downloadArtifact(env: Env, principal: Principal | null, artifactId: string): Promise<Response> {
-  const artifact = await env.DB.prepare(`SELECT artifacts.name,artifacts.object_key AS objectKey,artifacts.content_type AS contentType,runs.repository_id AS repositoryId FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id JOIN runs ON runs.id=jobs.run_id WHERE artifacts.id=?`).bind(artifactId).first<{ name: string; objectKey: string; contentType: string; repositoryId: string }>();
-  const repository = artifact ? await authorizeRepositoryId(env, principal, artifact.repositoryId, 'repository.read') : null;
+  const artifact = await env.DB.prepare(
+    `SELECT artifacts.name,artifacts.object_key AS objectKey,artifacts.content_type AS contentType,runs.repository_id AS repositoryId FROM artifacts JOIN jobs ON jobs.id=artifacts.job_id JOIN runs ON runs.id=jobs.run_id WHERE artifacts.id=?`
+  )
+    .bind(artifactId)
+    .first<{ name: string; objectKey: string; contentType: string; repositoryId: string }>();
+  const repository = artifact
+    ? await authorizeRepositoryId(env, principal, artifact.repositoryId, 'repository.read')
+    : null;
   if (!artifact || !repository?.role) return problem(404, 'artifact_not_found', 'Artifact not found.');
   const object = await env.OBJECTS.get(artifact.objectKey);
   if (!object) return problem(502, 'artifact_missing', 'Artifact bytes are missing.');
-  return new Response(object.body, { headers: { 'content-type': artifact.contentType, 'content-disposition': `attachment; filename="${artifact.name.replaceAll('"', '')}"`, 'content-length': String(object.size), 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } });
+  return new Response(object.body, {
+    headers: {
+      'content-type': artifact.contentType,
+      'content-disposition': `attachment; filename="${artifact.name.replaceAll('"', '')}"`,
+      'content-length': String(object.size),
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff'
+    }
+  });
 }

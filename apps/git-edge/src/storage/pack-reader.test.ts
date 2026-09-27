@@ -11,21 +11,49 @@ describe('R2 Git pack reader', () => {
     const delta = concat(new Uint8Array([(7 << 4) | deltaData.length]), hex(baseId), deltaBody);
     const pack = concat(new Uint8Array(12), base, delta);
     const locators = new Map([
-      [baseId, { id: baseId, packId: 'aa'.repeat(20), packKey: 'pack', kind: 'blob', size: 5, packedBytes: base.length, offset: 12 }],
-      [deltaId, { id: deltaId, packId: 'aa'.repeat(20), packKey: 'pack', kind: 'blob', size: 6, packedBytes: delta.length, offset: 12 + base.length }]
+      [
+        baseId,
+        {
+          id: baseId,
+          packId: 'aa'.repeat(20),
+          packKey: 'pack',
+          kind: 'blob',
+          size: 5,
+          packedBytes: base.length,
+          offset: 12
+        }
+      ],
+      [
+        deltaId,
+        {
+          id: deltaId,
+          packId: 'aa'.repeat(20),
+          packKey: 'pack',
+          kind: 'blob',
+          size: 6,
+          packedBytes: delta.length,
+          offset: 12 + base.length
+        }
+      ]
     ]);
-    const state = { fetch: async (request: RequestInfo | URL) => {
-      const match = new URL(typeof request === 'string' ? request : request instanceof URL ? request.href : request.url).pathname.match(/^\/objects\/([0-9a-f]+)$/);
-      const locator = match ? locators.get(match[1]) : null;
-      return locator ? Response.json({ locator }) : new Response(null, { status: 404 });
-    } };
+    const state = {
+      fetch: async (request: RequestInfo | URL) => {
+        const match = new URL(
+          typeof request === 'string' ? request : request instanceof URL ? request.href : request.url
+        ).pathname.match(/^\/objects\/([0-9a-f]+)$/);
+        const locator = match ? locators.get(match[1]) : null;
+        return locator ? Response.json({ locator }) : new Response(null, { status: 404 });
+      }
+    };
     const env = {
       MARL_GIT_GATEWAY_TOKEN: 'test',
       REPOSITORY_STATE: { idFromName: () => 'repo', get: () => state },
-      REPOSITORIES: { get: async (_key: string, options: { range: { offset: number; length: number } }) => {
-        const bytes = pack.slice(options.range.offset, options.range.offset + options.range.length);
-        return { body: new Blob([bytes]).stream() };
-      } }
+      REPOSITORIES: {
+        get: async (_key: string, options: { range: { offset: number; length: number } }) => {
+          const bytes = pack.slice(options.range.offset, options.range.offset + options.range.length);
+          return { body: new Blob([bytes]).stream() };
+        }
+      }
     };
     const object = await readPackedObject(env as never, 'repo_test', deltaId);
     expect(object.kind).toBe('blob');
@@ -49,6 +77,9 @@ function hex(value: string) {
 function concat(...values: Uint8Array[]) {
   const output = new Uint8Array(values.reduce((size, value) => size + value.length, 0));
   let offset = 0;
-  for (const value of values) { output.set(value, offset); offset += value.length; }
+  for (const value of values) {
+    output.set(value, offset);
+    offset += value.length;
+  }
   return output;
 }

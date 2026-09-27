@@ -1,16 +1,24 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { IssueComment, IssueConclusion } from '@marl/contracts';
-  import Pencil from 'lucide-svelte/icons/pencil';
-  import Plus from 'lucide-svelte/icons/plus';
+  import Pencil from '@lucide/svelte/icons/pencil';
+  import Plus from '@lucide/svelte/icons/plus';
   import Button from '$lib/components/controls/Button.svelte';
   import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
   import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import Modal from '$lib/components/controls/Modal.svelte';
+  import Modal from '$lib/components/overlays/Modal.svelte';
   import Time from '$lib/components/page/Time.svelte';
-  import type { MarkdownContext } from '$lib/markdown';
+  import type { MarkdownContext } from '$lib/markdown/context';
 
-  let { conclusion, canEdit, busy, context, draftKey, onSave, onSource } = $props<{
+  let {
+    conclusion,
+    canEdit,
+    busy,
+    context,
+    draftKey,
+    onSave,
+    onSource
+  }: {
     conclusion: IssueConclusion | null;
     canEdit: boolean;
     busy: boolean;
@@ -18,7 +26,7 @@
     draftKey?: string;
     onSave: (body: string, commentId: string | null) => Promise<boolean>;
     onSource: (commentId: string) => Promise<void>;
-  }>();
+  } = $props();
   let editing = $state(false);
   let body = $state('');
   let commentId = $state<string | null>(null);
@@ -45,7 +53,9 @@
     editing = false;
   }
   function measureBody(node: HTMLElement) {
-    const measure = () => { if (!expanded) overflow = node.scrollHeight > node.clientHeight + 1; };
+    const measure = () => {
+      if (!expanded) overflow = node.scrollHeight > node.clientHeight + 1;
+    };
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     const markdown = node.querySelector('.markdown');
@@ -55,34 +65,69 @@
 </script>
 
 {#if conclusion}
-  <section class="conclusion">
-    <header><h2>Conclusion</h2>{#if canEdit}<Button size="small" icon variant="ghost" aria-label="Edit conclusion" onclick={edit}><Pencil size={13} /></Button>{/if}</header>
-    <div class="conclusion-body" class:expanded {@attach measureBody}><MarkdownBody source={conclusion.body} {context} --markdown-font-size="13px" /></div>
-    {#if overflow}<Button class="expand" size="small" variant="ghost" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>{expanded ? 'Show less' : 'Read conclusion'}</Button>{/if}
-    <footer>{#if conclusion.commentId}<Button class="source" size="small" variant="ghost" onclick={() => onSource(conclusion.commentId!)}>From the discussion</Button>{/if}<span>{conclusion.authorDisplayName} · <Time value={conclusion.updatedAt} /></span></footer>
+  <section class="surface p-4">
+    <header class="mb-2.5 flex min-h-7 items-center justify-between gap-2">
+      <h3 class="text-sm font-semibold text-ink-strong">Conclusion</h3>
+      {#if canEdit}<Button size="small" icon variant="ghost" aria-label="Edit conclusion" onclick={edit}
+          ><Pencil size={14} /></Button
+        >{/if}
+    </header>
+    <div class={expanded ? 'block' : 'line-clamp-9 overflow-hidden'} {@attach measureBody}>
+      <MarkdownBody html={conclusion.bodyHtml} />
+    </div>
+    {#if overflow}<button
+        type="button"
+        class="mt-1.5 text-xs font-semibold text-brand hover:underline"
+        aria-expanded={expanded}
+        onclick={() => (expanded = !expanded)}>{expanded ? 'Show less' : 'Read conclusion'}</button
+      >{/if}
+    <footer class="mt-3 grid gap-1.5 text-xs text-ink-muted">
+      {#if conclusion.commentId}<button
+          type="button"
+          class="justify-self-start font-semibold text-brand hover:underline"
+          onclick={() => onSource(conclusion.commentId!)}>From the discussion</button
+        >{/if}
+      <span>{conclusion.authorDisplayName} · <Time value={conclusion.updatedAt} class="text-ink-muted" /></span>
+    </footer>
   </section>
 {:else if canEdit}
-  <Button class="add-conclusion" variant="ghost" size="small" onclick={edit}><Plus size={14} />Add a conclusion</Button>
+  <Button class="-ml-2 justify-start" variant="ghost" size="small" onclick={edit}
+    ><Plus size={15} />Add a conclusion</Button
+  >
 {/if}
 
-<Modal open={editing} title={conclusion ? 'Edit conclusion' : 'Add a conclusion'} --modal-width="720px" onClose={() => { if (!uploading) editing = false; }}>
-  {#snippet children()}<MarkdownComposer bind:value={body} bind:uploading {context} disabled={busy} draftKey={draftKey ? `${draftKey}:conclusion:${commentId ?? 'written'}` : undefined} placeholder="What did we agree on?" minHeight={160} />{/snippet}
+<Modal
+  open={editing}
+  title={conclusion ? 'Edit conclusion' : 'Add a conclusion'}
+  description="Summarize what was decided. The original report stays as written."
+  size="large"
+  onClose={() => {
+    if (!uploading) editing = false;
+  }}
+>
+  <MarkdownComposer
+    bind:value={body}
+    bind:uploading
+    {context}
+    disabled={busy}
+    draftKey={draftKey ? `${draftKey}:conclusion:${commentId ?? 'written'}` : undefined}
+    placeholder="What did we agree on?"
+    minHeight={160}
+    onsubmit={save}
+  />
   {#snippet actions()}
-    {#if conclusion}<Button size="small" variant="ghost" disabled={busy || uploading} onclick={async () => { if (await onSave('', null)) await closeSaved(); }}>Remove</Button>{/if}
+    {#if conclusion}<Button
+        size="small"
+        variant="ghost"
+        class="mr-auto"
+        disabled={busy || uploading}
+        onclick={async () => {
+          if (await onSave('', null)) await closeSaved();
+        }}>Remove</Button
+      >{/if}
     <Button size="small" disabled={uploading} onclick={() => (editing = false)}>Cancel</Button>
-    <Button size="small" variant="primary" disabled={busy || uploading || !body.trim()} onclick={save}>Save conclusion</Button>
+    <Button size="small" variant="primary" loading={busy} disabled={uploading || !body.trim()} onclick={save}
+      >Save conclusion</Button
+    >
   {/snippet}
 </Modal>
-
-<style>
-  .conclusion{padding:16px;border-radius:11px;background:var(--surface);box-shadow:var(--shadow-surface)}
-  header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:26px;margin-bottom:12px}
-  h2{margin:0;color:var(--text-strong);font-size:13px;font-weight:650}
-  .conclusion-body{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:9;line-clamp:9;overflow:hidden}
-  .conclusion-body.expanded{display:block;overflow:visible}
-  footer{display:grid;gap:7px;margin-top:13px}
-  footer>span{color:var(--text-faint);font-size:11px;line-height:1.5}
-  :global(.source.button),:global(.expand.button){justify-self:start;height:auto;min-height:26px;padding:0;color:var(--brand);font-size:11px}
-  :global(.expand.button){margin-top:6px}
-  :global(.add-conclusion.button){justify-content:flex-start;margin-left:-8px;color:var(--text-muted)}
-</style>

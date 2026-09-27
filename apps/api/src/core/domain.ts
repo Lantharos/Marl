@@ -1,5 +1,29 @@
 const slugPattern = /^[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$/;
-const reservedIdentitySlugs = new Set(['api', 'assets', 'forgot-password', 'health', 'inbox', 'invitations', 'issues', 'marl-social.png', 'new', 'offline', 'organizations', 'pulls', 'repositories', 'reset-password', 'robots.txt', 'runners', 'runs', 'service-worker.js', 'settings', 'sign-in', 'sign-up', 'sitemap.xml', 'two-factor']);
+const reservedIdentitySlugs = new Set([
+  'api',
+  'assets',
+  'forgot-password',
+  'health',
+  'inbox',
+  'invitations',
+  'issues',
+  'marl-social.png',
+  'new',
+  'offline',
+  'organizations',
+  'pulls',
+  'repositories',
+  'reset-password',
+  'robots.txt',
+  'runners',
+  'runs',
+  'service-worker.js',
+  'settings',
+  'sign-in',
+  'sign-up',
+  'sitemap.xml',
+  'two-factor'
+]);
 
 export function validSlug(value: unknown): value is string {
   return typeof value === 'string' && slugPattern.test(value);
@@ -26,8 +50,23 @@ export function safeRepositoryPath(value: string): boolean {
 }
 
 export function validBranchName(value: unknown): value is string {
-  if (typeof value !== 'string' || !value || value.length > 255 || value === '@' || value.startsWith('/') || value.endsWith('/') || value.endsWith('.') || value.includes('..') || value.includes('@{') || value.includes('//')) return false;
-  return !/[\u0000-\u0020\u007f~^:?*\[\\]/.test(value) && value.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'));
+  if (
+    typeof value !== 'string' ||
+    !value ||
+    value.length > 255 ||
+    value === '@' ||
+    value.startsWith('/') ||
+    value.endsWith('/') ||
+    value.endsWith('.') ||
+    value.includes('..') ||
+    value.includes('@{') ||
+    value.includes('//')
+  )
+    return false;
+  return (
+    !/[\u0000-\u0020\u007f~^:?*\[\\]/.test(value) &&
+    value.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'))
+  );
 }
 
 export function validTagName(value: unknown): value is string {

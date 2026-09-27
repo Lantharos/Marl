@@ -3,15 +3,15 @@
   import { page } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
-  import FilterBar from '$lib/components/controls/FilterBar.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
+  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
+  import FilterBar from '$lib/components/page/FilterBar.svelte';
   import PageHeader from '$lib/components/page/PageHeader.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
   import PullQueue from '$lib/pulls/PullQueue.svelte';
   import { api, MarlApiError } from '$lib/api';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner);
   const repo = $derived(page.params.repo);
   let items = $state.raw<PullRequestSummary[]>(untrack(() => data.pullRequests));
@@ -41,7 +41,11 @@
     if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase());
     if (value.trim()) params.set('q', value.trim());
     for (const label of labels) params.append('label', label);
-    void goto(`/${owner}/${repo}/pulls${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(`/${owner}/${repo}/pulls${params.size ? `?${params}` : ''}`, {
+      keepFocus: true,
+      noScroll: true,
+      replaceState: true
+    });
   }
 
   function changeQuery(value: string) {
@@ -60,13 +64,16 @@
       const params = new URLSearchParams({ limit: '30', state: activeFilter.toLowerCase(), cursor });
       if (query.trim()) params.set('q', query.trim());
       for (const label of selectedLabels) params.append('label', label);
-      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(`/repositories/${route.owner}/${route.repo}/pulls?${params}`);
+      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(
+        `/repositories/${route.owner}/${route.repo}/pulls?${params}`
+      );
       if (generation !== listGeneration || owner !== route.owner || repo !== route.repo) return;
       const ids = new Set(items.map((pull) => pull.id));
       items = [...items, ...result.pullRequests.filter((pull) => !ids.has(pull.id))];
       nextCursor = result.nextCursor;
     } catch (cause) {
-      if (generation === listGeneration) loadError = cause instanceof MarlApiError ? cause.message : 'More pulls could not be loaded.';
+      if (generation === listGeneration)
+        loadError = cause instanceof MarlApiError ? cause.message : 'More pulls could not be loaded.';
     } finally {
       if (generation === listGeneration) loadingMore = false;
     }
@@ -74,15 +81,38 @@
   onDestroy(() => clearTimeout(queryTimer));
 </script>
 
-<Seo title={`Pulls · ${owner}/${repo} · Marl`} description={`Review proposed changes, discussion, and merge state for ${owner}/${repo} on Marl.`} path={page.url.pathname} robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'} />
-<div class="page">
-<PageHeader title="Pulls" actionHref={data.shellUser ? data.repository?.upstream ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}` : `/pulls/new?repository=${owner}/${repo}` : undefined} actionLabel={data.shellUser ? data.repository?.upstream ? 'Contribute upstream' : 'New pull' : undefined} />
-<FilterBar placeholder="Search this repository" tabs={['Open', 'Merged', 'Closed']} labelOptions={data.availableLabels} bind:active={activeFilter} bind:query bind:selectedLabels onActiveChange={() => navigate()} onQueryChange={changeQuery} onLabelsChange={(labels) => navigate(activeFilter, query, labels)} />
-<PullQueue pulls={items} grouped={activeFilter === 'Open'} emptyTitle={query || selectedLabels.length ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`} emptyDescription={query || selectedLabels.length ? 'Try another search or remove a label filter.' : 'Changes proposed to this repository will appear here.'} />
-{#if loadError}<p class="load-error" role="alert">{loadError}</p>{/if}
-{#if nextCursor}<Button class="load-more" loading={loadingMore} onclick={loadMore}>Load more</Button>{/if}
-</div>
-
-<style>
-  .page{width:min(1040px,100%);margin:0 auto}.load-error{margin:16px 0 0;color:var(--danger);font-size:10px;text-align:center}.page :global(.load-more.button){display:flex;margin:20px auto 0}
-</style>
+<Seo
+  title={`Pulls · ${owner}/${repo} · Marl`}
+  description={`Review proposed changes, discussion, and merge state for ${owner}/${repo} on Marl.`}
+  path={page.url.pathname}
+  robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
+/>
+<PageHeader
+  title="Pulls"
+  actionHref={data.shellUser
+    ? data.repository?.upstream
+      ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}`
+      : `/pulls/new?repository=${owner}/${repo}`
+    : undefined}
+  actionLabel={data.shellUser ? (data.repository?.upstream ? 'Contribute upstream' : 'New pull') : undefined}
+/>
+<FilterBar
+  placeholder="Search this repository"
+  tabs={['Open', 'Merged', 'Closed']}
+  labelOptions={data.availableLabels}
+  bind:active={activeFilter}
+  bind:query
+  bind:selectedLabels
+  onActiveChange={() => navigate()}
+  onQueryChange={changeQuery}
+  onLabelsChange={(labels) => navigate(activeFilter, query, labels)}
+/>
+<PullQueue
+  pulls={items}
+  grouped={activeFilter === 'Open'}
+  emptyTitle={query || selectedLabels.length ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
+  emptyDescription={query || selectedLabels.length
+    ? 'Try another search or remove a label filter.'
+    : 'Changes proposed to this repository will appear here.'}
+/>
+<InfiniteScroll cursor={nextCursor} loading={loadingMore} error={loadError} onload={loadMore} />

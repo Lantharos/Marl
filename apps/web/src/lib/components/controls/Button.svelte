@@ -1,9 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
-
-  type Variant = 'primary' | 'secondary' | 'danger' | 'danger-soft' | 'ghost';
-  type Size = 'small' | 'medium' | 'large';
+  import { buttonClass, type ButtonSize, type ButtonVariant } from './button-styles';
+  import Spinner from '../feedback/Spinner.svelte';
 
   let {
     variant = 'secondary',
@@ -16,17 +15,23 @@
     children,
     type = 'button',
     ...attributes
-  } = $props<HTMLButtonAttributes & {
-    variant?: Variant;
-    size?: Size;
+  }: HTMLButtonAttributes & {
+    variant?: ButtonVariant;
+    size?: ButtonSize;
     icon?: boolean;
     block?: boolean;
     loading?: boolean;
     children: Snippet;
-  }>();
+  } = $props();
 </script>
 
-<button {...attributes} {type} class="control button {variant} {size} {icon ? 'icon' : ''} {block ? 'block' : ''} {className}" disabled={disabled || loading} aria-busy={loading || undefined}>
-  {#if loading}<span class="spinner" aria-hidden="true"></span>{/if}
+<button
+  {...attributes}
+  {type}
+  class={[buttonClass(variant, size, icon, block), className]}
+  disabled={disabled || loading}
+  aria-busy={loading || undefined}
+>
+  {#if loading}<Spinner />{/if}
   {@render children()}
 </button>

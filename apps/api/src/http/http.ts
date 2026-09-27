@@ -20,11 +20,14 @@ export function problem(status: number, code: string, message: string, details?:
   return json({ error: { code, message, ...(details ? { details } : {}) } } satisfies ApiError, { status });
 }
 
-export async function readJson<TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>>(request: Request, schema: TSchema): Promise<InferOutput<TSchema> | null> {
+export async function readJson<TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>>(
+  request: Request,
+  schema: TSchema
+): Promise<InferOutput<TSchema> | null> {
   if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) return null;
   const value = await readJsonValue(request, jsonBodyBytes);
   const result = safeParse(schema, value);
-  return result.success ? result.output as InferOutput<TSchema> : null;
+  return result.success ? (result.output as InferOutput<TSchema>) : null;
 }
 
 export async function readJsonValue<T = unknown>(message: BodyMessage, maxBytes: number): Promise<T | null> {
@@ -38,7 +41,8 @@ export async function readJsonValue<T = unknown>(message: BodyMessage, maxBytes:
 }
 
 export async function readBody(message: BodyMessage, maxBytes: number): Promise<Uint8Array | null> {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new RangeError('Body limit must be a non-negative safe integer.');
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
+    throw new RangeError('Body limit must be a non-negative safe integer.');
   const declared = message.headers.get('content-length');
   if (declared !== null) {
     if (!/^\d+$/.test(declared)) return null;

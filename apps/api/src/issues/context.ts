@@ -1,4 +1,4 @@
-import type { IssueLabel, IssuePerson, IssueSummary } from '@marl/contracts';
+import type { WorkItemLabel, WorkItemPerson, IssueSummary } from '@marl/contracts';
 import type { Principal } from '../auth/principal';
 import { identifier } from '../core/domain';
 import type { Env } from '../core/platform';
@@ -24,11 +24,19 @@ export type IssueRow = {
 
 export const issueSelect = `SELECT issues.id,issues.repository_id AS repositoryId,issues.number,issues.title,issues.body,issues.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,issues.state,issues.locked_at AS lockedAt,issues.created_at AS createdAt,issues.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,(SELECT COUNT(*) FROM issue_comments WHERE issue_comments.issue_id=issues.id AND issue_comments.deleted_at IS NULL) AS commentCount FROM issues JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=issues.author_id`;
 
-export function createIssueEvent(env: Env, issueId: string, actor: Pick<Principal, 'id' | 'handle' | 'displayName'>, kind: string, details: Record<string, string> = {}) {
+export function createIssueEvent(
+  env: Env,
+  issueId: string,
+  actor: Pick<Principal, 'id' | 'handle' | 'displayName'>,
+  kind: string,
+  details: Record<string, string> = {}
+) {
   const id = identifier('event');
   const createdAt = new Date().toISOString();
   return {
-    statement: env.DB.prepare('INSERT INTO issue_events (id,issue_id,actor_id,kind,details,created_at) VALUES (?,?,?,?,?,?)').bind(id, issueId, actor.id, kind, JSON.stringify(details), createdAt),
+    statement: env.DB.prepare(
+      'INSERT INTO issue_events (id,issue_id,actor_id,kind,details,created_at) VALUES (?,?,?,?,?,?)'
+    ).bind(id, issueId, actor.id, kind, JSON.stringify(details), createdAt),
     value: { id, actor: actor.handle, actorDisplayName: actor.displayName, kind, details, createdAt }
   };
 }
@@ -36,7 +44,11 @@ export function createIssueEvent(env: Env, issueId: string, actor: Pick<Principa
 export async function savedIssueEvents(env: Env, events: ReturnType<typeof createIssueEvent>[]) {
   if (!events.length) return [];
   const ids = events.map((event) => event.value.id);
-  const rows = await env.DB.prepare(`SELECT sequence,entity_id AS id FROM issue_timeline WHERE kind='event' AND entity_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<{ id: string; sequence: number }>();
+  const rows = await env.DB.prepare(
+    `SELECT sequence,entity_id AS id FROM issue_timeline WHERE kind='event' AND entity_id IN (${ids.map(() => '?').join(',')})`
+  )
+    .bind(...ids)
+    .all<{ id: string; sequence: number }>();
   const sequences = new Map(rows.results.map((row) => [row.id, row.sequence]));
   return events.map(({ value }) => {
     const sequence = sequences.get(value.id);
@@ -45,15 +57,39 @@ export async function savedIssueEvents(env: Env, events: ReturnType<typeof creat
   });
 }
 
-export async function summarizeIssueRows(env: Env, rows: IssueRow[], principal?: Principal | null): Promise<IssueSummary[]> {
+export async function summarizeIssueRows(
+  env: Env,
+  rows: IssueRow[],
+  principal?: Principal | null
+): Promise<IssueSummary[]> {
   if (!rows.length) return [];
-  if (rows.length > 80) return (await Promise.all([summarizeIssueRows(env, rows.slice(0, 80), principal), summarizeIssueRows(env, rows.slice(80), principal)])).flat();
+  if (rows.length > 80)
+    return (
+      await Promise.all([
+        summarizeIssueRows(env, rows.slice(0, 80), principal),
+        summarizeIssueRows(env, rows.slice(80), principal)
+      ])
+    ).flat();
   const placeholders = rows.map(() => '?').join(',');
   const ids = rows.map((row) => row.id);
   const [labelRows, assigneeRows, participationRows] = await Promise.all([
-    env.DB.prepare(`SELECT issue_labels.issue_id AS issueId,repository_labels.id,repository_labels.name,repository_labels.color,repository_labels.description FROM issue_labels JOIN repository_labels ON repository_labels.id=issue_labels.label_id WHERE issue_labels.issue_id IN (${placeholders}) ORDER BY repository_labels.name`).bind(...ids).all<IssueLabel & { issueId: string }>(),
-    env.DB.prepare(`SELECT issue_assignees.issue_id AS issueId,users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM issue_assignees JOIN users ON users.id=issue_assignees.user_id WHERE issue_assignees.issue_id IN (${placeholders}) ORDER BY users.handle`).bind(...ids).all<IssuePerson & { issueId: string }>(),
-    principal ? env.DB.prepare(`SELECT issues.id,COALESCE(p.following,0) AS following,EXISTS(SELECT 1 FROM issue_timeline t JOIN issue_comments c ON c.id=t.entity_id AND t.kind='comment' WHERE t.issue_id=issues.id AND t.sequence>COALESCE(p.last_read_sequence,0) AND c.deleted_at IS NULL AND c.author_id!=?) AS unread FROM issues LEFT JOIN issue_participants p ON p.issue_id=issues.id AND p.user_id=? WHERE issues.id IN (${placeholders})`).bind(principal.id, principal.id, ...ids).all<{ id: string; following: number; unread: number }>() : Promise.resolve({ results: [] })
+    env.DB.prepare(
+      `SELECT issue_labels.issue_id AS issueId,repository_labels.id,repository_labels.name,repository_labels.color,repository_labels.description FROM issue_labels JOIN repository_labels ON repository_labels.id=issue_labels.label_id WHERE issue_labels.issue_id IN (${placeholders}) ORDER BY repository_labels.name`
+    )
+      .bind(...ids)
+      .all<WorkItemLabel & { issueId: string }>(),
+    env.DB.prepare(
+      `SELECT issue_assignees.issue_id AS issueId,users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl FROM issue_assignees JOIN users ON users.id=issue_assignees.user_id WHERE issue_assignees.issue_id IN (${placeholders}) ORDER BY users.handle`
+    )
+      .bind(...ids)
+      .all<WorkItemPerson & { issueId: string }>(),
+    principal
+      ? env.DB.prepare(
+          `SELECT issues.id,COALESCE(p.following,0) AS following,EXISTS(SELECT 1 FROM issue_timeline t JOIN issue_comments c ON c.id=t.entity_id AND t.kind='comment' WHERE t.issue_id=issues.id AND t.sequence>COALESCE(p.last_read_sequence,0) AND c.deleted_at IS NULL AND c.author_id!=?) AS unread FROM issues LEFT JOIN issue_participants p ON p.issue_id=issues.id AND p.user_id=? WHERE issues.id IN (${placeholders})`
+        )
+          .bind(principal.id, principal.id, ...ids)
+          .all<{ id: string; following: number; unread: number }>()
+      : Promise.resolve({ results: [] })
   ]);
   const labels = groupByIssue(labelRows.results);
   const assignees = groupByIssue(assigneeRows.results);

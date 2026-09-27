@@ -1,15 +1,20 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import KeyRound from 'lucide-svelte/icons/key-round';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
+  import type { SshKey } from '@marl/contracts';
+  import KeyRound from '@lucide/svelte/icons/key-round';
+  import Trash2 from '@lucide/svelte/icons/trash';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/controls/Button.svelte';
-  import Modal from '$lib/components/controls/Modal.svelte';
+  import Modal from '$lib/components/overlays/Modal.svelte';
+  import Field from '$lib/components/controls/Field.svelte';
+  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
+  import Notice from '$lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
+  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
   import Time from '$lib/components/page/Time.svelte';
   import type { PageData } from './$types';
 
-  type SshKey = { id: string; name: string; fingerprint: string; lastUsedAt: string | null; createdAt: string };
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   let sshKeys = $state<SshKey[]>(untrack(() => data.sshKeys));
   let name = $state('');
   let publicKey = $state('');
@@ -23,7 +28,10 @@
     busy = true;
     error = '';
     try {
-      const result = await api<{ sshKey: SshKey }>('/ssh-keys', { method: 'POST', body: JSON.stringify({ name: name.trim(), publicKey: publicKey.trim() }) });
+      const result = await api<{ sshKey: SshKey }>('/ssh-keys', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), publicKey: publicKey.trim() })
+      });
       sshKeys = [result.sshKey, ...sshKeys];
       name = '';
       publicKey = '';
@@ -49,34 +57,96 @@
       busy = false;
     }
   }
-
 </script>
 
 <svelte:head><title>SSH keys · Marl</title></svelte:head>
-<header class="page-head"><h2>SSH keys</h2><Button size="small" onclick={() => { error = ''; open = true; }}>Add SSH key</Button></header>
-<Modal {open} title="Add SSH key" onClose={() => { if (!busy) open = false; }} --modal-width="540px">
-<form id="ssh-key-form" onsubmit={(event) => { event.preventDefault(); void addKey(); }}>
-  <label><span>Name</span><input bind:value={name} placeholder="Work laptop" autocomplete="off" data-1p-ignore /></label>
-  <label><span>Public key</span><textarea bind:value={publicKey} placeholder="ssh-ed25519 AAAA…" rows="3" data-1p-ignore></textarea></label>
-</form>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
-{#snippet actions()}<Button size="small" disabled={busy} onclick={() => open = false}>Cancel</Button><Button size="small" type="submit" form="ssh-key-form" variant="primary" loading={busy} disabled={!name.trim() || !publicKey.trim()}>Add key</Button>{/snippet}
-</Modal>
-{#if error && !open && !removing}<p class="error" role="alert">{error}</p>{/if}
-<div class="key-list">
+<SettingsHeader title="SSH keys" description="Push and pull over SSH, and sign commits with a key Marl can verify.">
+  {#snippet action()}<Button
+      size="small"
+      onclick={() => {
+        error = '';
+        open = true;
+      }}>Add SSH key</Button
+    >{/snippet}
+</SettingsHeader>
+{#if error && !open && !removing}<Notice class="mb-4">{error}</Notice>{/if}
+<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
   {#each sshKeys as key (key.id)}
-    <article><span class="key-icon"><KeyRound size={17} /></span><div><strong>{key.name}</strong><code>{key.fingerprint}</code><small>Added <Time value={key.createdAt} />{#if key.lastUsedAt} · last used <Time value={key.lastUsedAt} />{:else} · never used{/if}</small></div><Button variant="danger-soft" icon aria-label={`Remove ${key.name}`} onclick={() => { error = ''; removing = key; }}><Trash2 size={15} /></Button></article>
-  {:else}<div class="empty"><KeyRound size={24} /><strong>No SSH keys</strong><p>Add a public key to use the SSH clone URL shown on repositories.</p></div>{/each}
+    <article class="grid min-h-20 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
+      <KeyRound size={18} class="text-ink-muted" />
+      <div class="min-w-0">
+        <strong class="block truncate text-base font-semibold text-ink-strong">{key.name}</strong>
+        <code class="mt-0.5 block truncate font-mono text-xs text-ink-muted">{key.fingerprint}</code>
+        <span class="mt-0.5 block text-xs text-ink-faint"
+          >Added <Time value={key.createdAt} class="text-ink-faint" />{#if key.lastUsedAt}
+            · last used <Time value={key.lastUsedAt} class="text-ink-faint" />{:else}
+            · never used{/if}</span
+        >
+      </div>
+      <Button
+        variant="ghost"
+        size="small"
+        icon
+        aria-label={`Remove ${key.name}`}
+        onclick={() => {
+          error = '';
+          removing = key;
+        }}><Trash2 size={15} /></Button
+      >
+    </article>
+  {:else}
+    <EmptyState
+      compact
+      icon={KeyRound}
+      title="No SSH keys"
+      description="Add a public key to use the SSH clone URL shown on repositories."
+    />
+  {/each}
 </div>
 
-<Modal open={removing !== null} title="Remove SSH key?" onClose={() => { if (!busy) removing = null; }} --modal-width="540px">
-  <p class="remove-note">Machines using <strong>{removing?.name}</strong> will no longer be able to push or pull over SSH.</p>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#snippet actions()}<Button size="small" disabled={busy} onclick={() => (removing = null)}>Cancel</Button><Button size="small" variant="danger" loading={busy} onclick={() => { if (removing) void removeKey(removing); }}>Remove key</Button>{/snippet}
+<Modal {open} title="Add SSH key" onClose={() => !busy && (open = false)}>
+  <form
+    id="ssh-key-form"
+    class="grid gap-5"
+    onsubmit={(event) => {
+      event.preventDefault();
+      void addKey();
+    }}
+  >
+    <Field label="Name"
+      ><input class="field" bind:value={name} placeholder="Work laptop" autocomplete="off" data-1p-ignore /></Field
+    >
+    <Field label="Public key" hint="Paste the contents of a .pub file, such as ~/.ssh/id_ed25519.pub.">
+      <textarea
+        class="field min-h-24 resize-y py-3 font-mono text-xs leading-relaxed"
+        bind:value={publicKey}
+        placeholder="ssh-ed25519 AAAA…"
+        rows="3"
+        data-1p-ignore></textarea>
+    </Field>
+  </form>
+  {#if error}<Notice class="mt-4">{error}</Notice>{/if}
+  {#snippet actions()}
+    <Button size="small" disabled={busy} onclick={() => (open = false)}>Cancel</Button>
+    <Button
+      size="small"
+      type="submit"
+      form="ssh-key-form"
+      variant="primary"
+      loading={busy}
+      disabled={!name.trim() || !publicKey.trim()}>Add key</Button
+    >
+  {/snippet}
 </Modal>
 
-<style>
-  .page-head{display:flex;align-items:center;justify-content:space-between;gap:16px}.key-list{padding:6px 20px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-surface)}
-  .page-head{padding-bottom:24px;}h2{margin:0;color:var(--text-strong);font-size:25px;letter-spacing:-.03em}form{display:grid;gap:18px;}label{display:grid;gap:7px}label span{color:var(--text-strong);font-size:12px;font-weight:630}input,textarea{box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;outline:0;background:var(--surface);color:var(--text-strong);font:inherit;font-size:13px}input{height:38px}textarea{min-height:78px;resize:vertical;font-family:var(--font-mono)}input:focus,textarea:focus{border-color:var(--brand)}.error{padding:10px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:12px}.key-list article{display:grid;grid-template-columns:38px minmax(0,1fr) 38px;align-items:center;gap:11px;min-height:78px;}.key-icon{display:grid;width:34px;height:34px;color:var(--text-muted);place-items:center}.key-list strong,.key-list code,.key-list small{display:block}.key-list strong{color:var(--text-strong);font-size:13px}.key-list code{overflow:hidden;margin-top:4px;color:var(--text);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.key-list small{margin-top:4px;color:var(--text-muted);font-size:11px}.empty{padding:52px 0;color:var(--text-muted);text-align:center}.empty strong{display:block;margin-top:8px;color:var(--text-strong);font-size:14px}.empty p{font-size:12px}
-.remove-note{margin:0;color:var(--text-muted);font-size:13px;line-height:1.6}.remove-note strong{color:var(--text-strong);overflow-wrap:anywhere}
-</style>
+<ConfirmDialog
+  open={removing !== null}
+  title="Remove SSH key?"
+  confirmLabel="Remove key"
+  {busy}
+  {error}
+  onConfirm={() => removing && void removeKey(removing)}
+  onClose={() => (removing = null)}
+>
+  Machines using <strong>{removing?.name}</strong> will no longer be able to push or pull over SSH.
+</ConfirmDialog>

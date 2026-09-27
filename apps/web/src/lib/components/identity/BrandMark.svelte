@@ -2,10 +2,12 @@
   let { compact = false }: { compact?: boolean } = $props();
 </script>
 
-<span class:compact class="brand" aria-label="Marl">
-  <span class="word">marl</span><span class="cursor" aria-hidden="true"></span>
+<span
+  class={[
+    'inline-flex items-end gap-1 font-mono leading-none font-bold tracking-[-0.08em] text-ink-strong',
+    compact ? 'text-base' : 'text-lg'
+  ]}
+  aria-label="Marl"
+>
+  <span>marl</span><span class="mb-px size-1.25 rounded-[1px] bg-brand" aria-hidden="true"></span>
 </span>
-
-<style>
-  .brand{display:inline-flex;align-items:flex-end;gap:4px;color:var(--text-strong);font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:18px;font-weight:760;letter-spacing:-.08em;line-height:1}.cursor{width:5px;height:5px;margin-bottom:1px;border-radius:1px;background:var(--brand)}.compact{font-size:16px}
-</style>

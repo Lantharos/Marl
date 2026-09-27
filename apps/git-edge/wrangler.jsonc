@@ -63,7 +63,10 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GitContainer"] },
     { "tag": "v2", "new_sqlite_classes": ["RepositoryStateObject", "OrganizationQuotaObject", "UploadSessionObject"] },
-    { "tag": "v3", "new_sqlite_classes": ["ValidatorContainer", "MaintenanceContainer", "CompactionObject", "RepositoryIndexObject"] }
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["ValidatorContainer", "MaintenanceContainer", "CompactionObject", "RepositoryIndexObject"]
+    }
   ],
   "r2_buckets": [{ "binding": "REPOSITORIES", "bucket_name": "marl-git-repositories" }]
 }

@@ -3,7 +3,7 @@
   import LandingPage from '$lib/landing/LandingPage.svelte';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 </script>
 
 {#if data.view === 'landing'}

@@ -12,7 +12,7 @@
     socialTitle,
     socialDescription,
     jsonLd
-  } = $props<{
+  }: {
     title: string;
     description: string;
     path: string;
@@ -23,7 +23,7 @@
     socialTitle?: string;
     socialDescription?: string;
     jsonLd?: StructuredData;
-  }>();
+  } = $props();
 
   const canonical = $derived(new URL(path, 'https://marl.sh').href);
   const socialImage = $derived(new URL(image, 'https://marl.sh').href);
@@ -52,5 +52,5 @@
   <meta name="twitter:description" content={openGraphDescription} />
   <meta name="twitter:image" content={socialImage} />
   <meta name="twitter:image:alt" content={imageAlt} />
-  {#if structuredData}<svelte:element this={'script'} type="application/ld+json">{structuredData}</svelte:element>{/if}
+  {#if structuredData}<svelte:element this={"script"} type="application/ld+json">{structuredData}</svelte:element>{/if}
 </svelte:head>

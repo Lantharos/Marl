@@ -10,9 +10,10 @@ Disallow: /api/
 Sitemap: https://marl.sh/sitemap.xml
 `;
 
-export const GET: RequestHandler = () => new Response(robots, {
-  headers: {
-    'cache-control': 'public, max-age=86400',
-    'content-type': 'text/plain; charset=utf-8'
-  }
-});
+export const GET: RequestHandler = () =>
+  new Response(robots, {
+    headers: {
+      'cache-control': 'public, max-age=86400',
+      'content-type': 'text/plain; charset=utf-8'
+    }
+  });

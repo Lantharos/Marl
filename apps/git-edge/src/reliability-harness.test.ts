@@ -28,7 +28,14 @@ const pack: PackDescriptor = {
   largestBlobBytes: 200
 };
 
-type Checkpoint = 'canonical-pack' | 'canonical-index' | 'canonical-object-index' | 'manifest' | 'published' | 'settled' | 'acknowledged';
+type Checkpoint =
+  | 'canonical-pack'
+  | 'canonical-index'
+  | 'canonical-object-index'
+  | 'manifest'
+  | 'published'
+  | 'settled'
+  | 'acknowledged';
 
 class Crash extends Error {}
 
@@ -44,8 +51,17 @@ class PublicationHarness {
   async run() {
     const pushId = 'push_fault_test';
     const refs = { 'refs/heads/main': next };
-    this.quota = reserveStorage(this.quota, { id: pushId, repository: 'repo', maximumBytes: 1_024, expiresAt: now + 60_000, state: 'reserved' }, now);
-    this.repository = beginPush(this.repository, { id: pushId, reservationId: pushId, expiresAt: now + 60_000, proposedRefs: refs }, { 'refs/heads/main': main }, now);
+    this.quota = reserveStorage(
+      this.quota,
+      { id: pushId, repository: 'repo', maximumBytes: 1_024, expiresAt: now + 60_000, state: 'reserved' },
+      now
+    );
+    this.repository = beginPush(
+      this.repository,
+      { id: pushId, reservationId: pushId, expiresAt: now + 60_000, proposedRefs: refs },
+      { 'refs/heads/main': main },
+      now
+    );
     this.store(pack.packKey, 'canonical-pack');
     this.store(pack.indexKey, 'canonical-index');
     this.store(pack.objectIndexKey, 'canonical-object-index');
@@ -54,8 +70,19 @@ class PublicationHarness {
 
     const resolution = await publishWithReconciliation({
       publish: async () => {
-        this.repository = publish(this.repository, { pushId, expectedGeneration: 0, refs, manifestKey, manifestHash: 'd'.repeat(64), packs: [pack] }, now);
-        this.committed = { generation: 1, actualBytes: 700, accountingDelta: 700, manifestKey, manifestHash: 'd'.repeat(64), committedAt: now };
+        this.repository = publish(
+          this.repository,
+          { pushId, expectedGeneration: 0, refs, manifestKey, manifestHash: 'd'.repeat(64), packs: [pack] },
+          now
+        );
+        this.committed = {
+          generation: 1,
+          actualBytes: 700,
+          accountingDelta: 700,
+          manifestKey,
+          manifestHash: 'd'.repeat(64),
+          committedAt: now
+        };
         this.fail('published');
         return this.repository;
       },
@@ -99,7 +126,12 @@ class PublicationHarness {
 
 describe('publication failure harness', () => {
   test('every crash before publication remains safely discardable', async () => {
-    for (const checkpoint of ['canonical-pack', 'canonical-index', 'canonical-object-index', 'manifest'] satisfies Checkpoint[]) {
+    for (const checkpoint of [
+      'canonical-pack',
+      'canonical-index',
+      'canonical-object-index',
+      'manifest'
+    ] satisfies Checkpoint[]) {
       const harness = new PublicationHarness(checkpoint);
       await expect(harness.run()).rejects.toBeInstanceOf(Crash);
       harness.reconcile();
@@ -117,7 +149,9 @@ describe('publication failure harness', () => {
     expect(harness.repository.refs['refs/heads/main']).toBe(next);
     expect(harness.quota.usedBytes).toBe(700);
     expect(harness.acknowledged).toBeTrue();
-    expect(harness.objects).toEqual(new Set([pack.packKey, pack.indexKey, pack.objectIndexKey, 'repositories/repo/manifests/1.json']));
+    expect(harness.objects).toEqual(
+      new Set([pack.packKey, pack.indexKey, pack.objectIndexKey, 'repositories/repo/manifests/1.json'])
+    );
   });
 
   test('settlement and acknowledgement crashes converge idempotently', async () => {
@@ -133,10 +167,42 @@ describe('publication failure harness', () => {
   });
 
   test('compaction replacement accounts only for its storage delta', () => {
-    const compacted = { ...pack, id: 'e'.repeat(40), packKey: 'repositories/repo/packs/e.pack', indexKey: 'repositories/repo/packs/e.idx', objectIndexKey: 'repositories/repo/packs/e.objects.json', compressedBytes: 500 };
-    let repository = { ...emptyRepositoryState(), generation: 1, refsVersion: 1, refs: { 'refs/heads/main': next }, manifestKey: 'manifest-1', manifestHash: 'f'.repeat(64), packs: [pack], storedBytes: 700 };
-    repository = beginPush(repository, { id: 'compact_1', reservationId: 'compact_1', expiresAt: now + 60_000, proposedRefs: repository.refs }, {}, now);
-    repository = publish(repository, { pushId: 'compact_1', expectedGeneration: 1, refs: repository.refs, manifestKey: 'manifest-2', manifestHash: '1'.repeat(64), packs: [compacted] }, now);
+    const compacted = {
+      ...pack,
+      id: 'e'.repeat(40),
+      packKey: 'repositories/repo/packs/e.pack',
+      indexKey: 'repositories/repo/packs/e.idx',
+      objectIndexKey: 'repositories/repo/packs/e.objects.json',
+      compressedBytes: 500
+    };
+    let repository = {
+      ...emptyRepositoryState(),
+      generation: 1,
+      refsVersion: 1,
+      refs: { 'refs/heads/main': next },
+      manifestKey: 'manifest-1',
+      manifestHash: 'f'.repeat(64),
+      packs: [pack],
+      storedBytes: 700
+    };
+    repository = beginPush(
+      repository,
+      { id: 'compact_1', reservationId: 'compact_1', expiresAt: now + 60_000, proposedRefs: repository.refs },
+      {},
+      now
+    );
+    repository = publish(
+      repository,
+      {
+        pushId: 'compact_1',
+        expectedGeneration: 1,
+        refs: repository.refs,
+        manifestKey: 'manifest-2',
+        manifestHash: '1'.repeat(64),
+        packs: [compacted]
+      },
+      now
+    );
     let quota = { ...emptyOrganizationQuota(), usedBytes: 700 };
     quota = adjustStorage(quota, 'compact_1', repository.storedBytes - 700);
     quota = adjustStorage(quota, 'compact_1', repository.storedBytes - 700);

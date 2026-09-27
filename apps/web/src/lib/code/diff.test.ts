@@ -3,17 +3,19 @@ import { parsePatchLines, reviewThreadContext } from './diff';
 
 describe('unified diff parsing', () => {
   test('ignores file headers and parses hunk content by its diff prefix', () => {
-    const lines = parsePatchLines([
-      'diff --git a/example b/example',
-      'index 1111111..2222222 100644',
-      '--- a/example',
-      '+++ b/example',
-      '@@ -4,2 +4,2 @@ heading',
-      '--- removed content',
-      '+++ added content',
-      ' context',
-      '\\ No newline at end of file'
-    ].join('\n'));
+    const lines = parsePatchLines(
+      [
+        'diff --git a/example b/example',
+        'index 1111111..2222222 100644',
+        '--- a/example',
+        '+++ b/example',
+        '@@ -4,2 +4,2 @@ heading',
+        '--- removed content',
+        '+++ added content',
+        ' context',
+        '\\ No newline at end of file'
+      ].join('\n')
+    );
 
     expect(lines.map((line) => line.kind)).toEqual(['hunk', 'removed', 'added', 'context', 'hunk']);
     expect(lines[1]).toMatchObject({ oldLine: 4, newLine: null, line: 4 });
@@ -51,11 +53,13 @@ describe('review thread code context', () => {
 
   test('caps long ranges and reports the hidden lines', () => {
     const lines = reviewThreadContext(patch, 'new', 2, 7, 3);
-    expect(lines.slice(1, 4).map((line) => line.kind === 'omitted' ? null : line.line)).toEqual([2, 3, 4]);
+    expect(lines.slice(1, 4).map((line) => (line.kind === 'omitted' ? null : line.line))).toEqual([2, 3, 4]);
     expect(lines.at(-1)).toEqual({ key: 5.5, kind: 'omitted', count: 3 });
   });
 
   test('uses old line numbers for removed-side conversations', () => {
-    expect(reviewThreadContext(patch, 'old', 2, 2).find((line) => line.kind !== 'omitted' && line.selected)).toMatchObject({ kind: 'removed', line: 2, text: 'old two' });
+    expect(
+      reviewThreadContext(patch, 'old', 2, 2).find((line) => line.kind !== 'omitted' && line.selected)
+    ).toMatchObject({ kind: 'removed', line: 2, text: 'old two' });
   });
 });

@@ -14,9 +14,19 @@ export type CommitDetail = {
   authorAvatarUrl?: string | null;
   authoredAt: string;
   signatureStatus: string;
-  files: Array<{ path: string; oldPath?: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; patch: string; patchOmitted?: 'deleted' | 'large' | 'lazy' }>;
+  files: Array<{
+    path: string;
+    oldPath?: string;
+    status: 'added' | 'modified' | 'deleted' | 'renamed';
+    additions: number;
+    deletions: number;
+    patch: string;
+    patchOmitted?: 'deleted' | 'large' | 'lazy';
+  }>;
 };
 
-export const load: PageLoad = async ({ fetch, params }) => ({
-  commit: await routeLoad(apiWith<CommitDetail>(fetch, `/repositories/${params.owner}/${params.repo}/commits/${params.sha}`))
-});
+export const load = (async ({ fetch, params }) => ({
+  commit: await routeLoad(
+    apiWith<CommitDetail>(fetch, `/repositories/${params.owner}/${params.repo}/commits/${params.sha}`)
+  )
+})) satisfies PageLoad;

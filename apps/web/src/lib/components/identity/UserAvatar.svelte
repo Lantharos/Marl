@@ -1,12 +1,24 @@
 <script lang="ts">
-  let { name, src = null, size = 28, label = '' } = $props<{ name: string; src?: string | null; size?: number; label?: string }>();
-  const initials = $derived(name.trim().split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || '?');
+  import { avatarTone, initials } from './initials';
+
+  let {
+    name,
+    src = null,
+    size = 28,
+    label = ''
+  }: { name: string; src?: string | null; size?: number; label?: string } = $props();
+  const [background, color] = $derived(avatarTone(name));
 </script>
 
-<span class="user-avatar" style:width={`${size}px`} style:height={`${size}px`} style:font-size={`${Math.max(7, Math.round(size * .31))}px`} aria-label={label || undefined}>
-  {#if src}<img {src} alt="" />{:else}{initials}{/if}
+<span
+  class="inline-grid shrink-0 place-items-center overflow-hidden rounded-full leading-none font-bold"
+  style:width={`${size}px`}
+  style:height={`${size}px`}
+  style:font-size={`${Math.max(8, Math.round(size * 0.34))}px`}
+  style:background={src ? undefined : background}
+  style:color
+  role={label ? 'img' : undefined}
+  aria-label={label || undefined}
+>
+  {#if src}<img {src} alt="" class="size-full object-cover" />{:else}{initials(name)}{/if}
 </span>
-
-<style>
-  .user-avatar{display:inline-grid;flex:0 0 auto;overflow:hidden;place-items:center;border-radius:50%;background:#d5b496;color:#3d2518;font-weight:750;line-height:1}.user-avatar img{width:100%;height:100%;object-fit:cover}
-</style>

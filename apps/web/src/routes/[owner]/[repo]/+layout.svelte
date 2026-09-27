@@ -1,238 +1,196 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
-  import { resolve } from '$app/paths';
+  import type { Snippet } from 'svelte';
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
-  import { onDestroy, tick, untrack } from 'svelte';
-  import Check from 'lucide-svelte/icons/check';
-  import BookOpen from 'lucide-svelte/icons/book-open';
-  import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import Code2 from 'lucide-svelte/icons/code-2';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import Copy from 'lucide-svelte/icons/copy';
-  import GitPullRequest from 'lucide-svelte/icons/git-pull-request';
-  import GitFork from 'lucide-svelte/icons/git-fork';
-  import Lock from 'lucide-svelte/icons/lock';
-  import CirclePlay from 'lucide-svelte/icons/circle-play';
-  import Settings from 'lucide-svelte/icons/settings';
-  import Star from 'lucide-svelte/icons/star';
-  import Tag from 'lucide-svelte/icons/tag';
-  import { api, MarlApiError } from '$lib/api';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
+  import { untrack } from 'svelte';
+  import BookOpen from '@lucide/svelte/icons/book-open';
+  import CircleDot from '@lucide/svelte/icons/circle-dot';
+  import CirclePlay from '@lucide/svelte/icons/circle-play';
+  import Code2 from '@lucide/svelte/icons/code-xml';
+  import GitFork from '@lucide/svelte/icons/git-fork';
+  import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
+  import Lock from '@lucide/svelte/icons/lock';
+  import Settings from '@lucide/svelte/icons/settings';
+  import Star from '@lucide/svelte/icons/star';
+  import Tag from '@lucide/svelte/icons/tag';
+  import { api } from '$lib/api';
   import Button from '$lib/components/controls/Button.svelte';
-  import Modal from '$lib/components/controls/Modal.svelte';
-  import { popoverMotion } from '$lib/ui/popover';
-  import Select from '$lib/components/controls/Select.svelte';
   import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
   import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { interfaceScale } from '$lib/ui/floating';
-
+  import CloneMenu from '$lib/repositories/CloneMenu.svelte';
+  import ForkDialog from '$lib/repositories/ForkDialog.svelte';
+  import RepositoryTabs from '$lib/repositories/RepositoryTabs.svelte';
   import type { LayoutData } from './$types';
 
-  let { children, data } = $props<{ children: import('svelte').Snippet; data: LayoutData }>();
+  let { children, data }: { children: Snippet; data: LayoutData } = $props();
   const owner = $derived(page.params.owner ?? '');
   const repo = $derived(page.params.repo ?? '');
   const base = $derived(`/${owner}/${repo}`);
   const path = $derived(page.url.pathname);
   const repository = $derived(data.repository);
-  const canManageSettings = $derived(Boolean(repository?.permissions.maintain));
-  let repositoryNav = $state<HTMLElement>();
-  let islandX = $state(0);
-  let islandWidth = $state(0);
-  let islandStrokeWidth = $state(1);
-  let islandReady = $state(false);
-  let islandAnimation = 0;
-  let islandTargetX = 0;
-  let islandTargetWidth = 0;
-  let cloneOpen = $state(false);
-  let copied = $state(false);
-  let cloneProtocol = $state<'https' | 'ssh'>('https');
   let starred = $state(untrack(() => Boolean(data.repository?.starred)));
   let starCount = $state(untrack(() => data.repository?.starCount ?? 0));
   let starring = $state(false);
   let forkOpen = $state(false);
-  let forking = $state(false);
-  let forkOwner = $state(untrack(() => data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? ''));
-  let forkName = $state(page.params.repo ?? '');
-  let forkError = $state('');
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-  const submittedForkName = $derived(completeRepositoryName(forkName));
-  const forkNameValid = $derived(validRepositoryName(submittedForkName));
-  const cloneUrl = $derived(cloneProtocol === 'ssh' ? repository?.sshCloneUrl ?? '' : repository?.cloneUrl ?? '');
-  const organizationOptions = $derived((data.shellOrganizations ?? [])
-    .filter((organization: { role: string }) => organization.role !== 'member')
-    .toSorted((left: { kind: string; name: string }, right: { kind: string; name: string }) => Number(right.kind === 'personal') - Number(left.kind === 'personal') || left.name.localeCompare(right.name))
-    .map((organization: { slug: string; name: string; kind: string }) => ({ value: organization.slug, label: organization.kind === 'personal' ? data.shellUser?.displayName ?? organization.name : organization.name, description: organization.kind === 'personal' ? `@${organization.slug} · Personal account` : `@${organization.slug} · Organization` })));
+  const forkOptions = $derived(
+    (data.shellOrganizations ?? [])
+      .filter((organization) => organization.role !== 'member')
+      .toSorted(
+        (left, right) =>
+          Number(right.kind === 'personal') - Number(left.kind === 'personal') || left.name.localeCompare(right.name)
+      )
+      .map((organization) => ({
+        value: organization.slug,
+        label:
+          organization.kind === 'personal' ? (data.shellUser?.displayName ?? organization.name) : organization.name,
+        description:
+          organization.kind === 'personal'
+            ? `@${organization.slug} · Personal account`
+            : `@${organization.slug} · Organization`
+      }))
+  );
+  const codeActive = $derived(
+    path === `${base}/code` ||
+      ['tree', 'blob', 'commit', 'branches'].some((segment) => path.startsWith(`${base}/${segment}`))
+  );
+  const tabs = $derived([
+    { key: 'overview', href: `${base}?overview=1`, label: 'Overview', icon: BookOpen, active: path === base },
+    { key: 'code', href: `${base}/code`, label: 'Code', icon: Code2, active: codeActive },
+    {
+      key: 'releases',
+      href: `${base}/releases`,
+      label: 'Releases',
+      icon: Tag,
+      active: path.startsWith(`${base}/releases`)
+    },
+    {
+      key: 'issues',
+      href: `${base}/issues`,
+      label: 'Issues',
+      icon: CircleDot,
+      active: path.startsWith(`${base}/issues`)
+    },
+    {
+      key: 'pulls',
+      href: `${base}/pulls`,
+      label: 'Pulls',
+      icon: GitPullRequest,
+      active: path.startsWith(`${base}/pulls`)
+    },
+    ...(repository?.permissions.member
+      ? [
+          {
+            key: 'runs',
+            href: `${base}/runs`,
+            label: 'Runs',
+            icon: CirclePlay,
+            active: path.startsWith(`${base}/runs`)
+          }
+        ]
+      : []),
+    ...(repository?.permissions.maintain
+      ? [
+          {
+            key: 'settings',
+            href: `${base}/settings`,
+            label: 'Settings',
+            icon: Settings,
+            active: path.startsWith(`${base}/settings`)
+          }
+        ]
+      : [])
+  ]);
 
-  const islandBoundary = $derived(buildIslandBoundary(islandWidth, islandStrokeWidth));
-  const islandFill = $derived(buildIslandFill(islandWidth, islandStrokeWidth));
-
-  async function copyCloneUrl() { if (!cloneUrl) return; await navigator.clipboard.writeText(cloneUrl); copied = true; clearTimeout(copiedTimer); copiedTimer = setTimeout(() => (copied = false), 1600); }
-  async function toggleStar() {
-    if (starring) return;
-    starring = true;
-    const route = { owner, repo, base };
-    try { const result = await api<{ starred: boolean; starCount: number }>(`/repositories/${route.owner}/${route.repo}/star`, { method: starred ? 'DELETE' : 'PUT' }); if (base === route.base) { starred = result.starred; starCount = result.starCount; } }
-    finally { if (base === route.base) starring = false; }
-  }
-  async function createFork() {
-    if (forking || !forkOwner || !forkNameValid) return;
-    forking = true; forkError = '';
-    try { const result = await api<{ repository: { owner: string; name: string } }>(`/repositories/${owner}/${repo}/forks`, { method: 'POST', body: JSON.stringify({ owner: forkOwner, name: submittedForkName }) }); await goto(`/${result.repository.owner}/${result.repository.name}`); }
-    catch (cause) { forkError = cause instanceof MarlApiError ? cause.message : 'Repository could not be forked.'; forking = false; }
-  }
-  function tabActive(tab: string) {
-    if (tab === 'overview') return path === base;
-    if (tab === 'code') return path === `${base}/code` || path.startsWith(`${base}/tree`) || path.startsWith(`${base}/blob`) || path.startsWith(`${base}/commit`) || path.startsWith(`${base}/branches`);
-    return path.startsWith(`${base}/${tab}`);
-  }
-  function buildIslandBoundary(width: number, strokeWidth: number) {
-    const top = strokeWidth / 2;
-    const rightCurve = Math.max(13, width - 13);
-    const rightControl = Math.max(13, width - 5.8);
-    return `M -8192 ${top} H -12 C -5.4 ${top} 0 5.4 0 12 V 29 C 0 36.2 5.8 42 13 42 H ${rightCurve} C ${rightControl} 42 ${width} 36.2 ${width} 29 V 12 C ${width} 5.4 ${width + 5.4} ${top} ${width + 12} ${top} H 8192`;
-  }
-  function buildIslandFill(width: number, strokeWidth: number) {
-    const top = strokeWidth / 2;
-    const rightCurve = Math.max(13, width - 13);
-    const rightControl = Math.max(13, width - 5.8);
-    return `M -12 ${top} C -5.4 ${top} 0 5.4 0 12 V 29 C 0 36.2 5.8 42 13 42 H ${rightCurve} C ${rightControl} 42 ${width} 36.2 ${width} 29 V 12 C ${width} 5.4 ${width + 5.4} ${top} ${width + 12} ${top} V -2 H -12 Z`;
-  }
-  function moveIsland(left: number, width: number, animate: boolean) {
-    if (islandReady && animate && Math.abs(left - islandTargetX) < 0.01 && Math.abs(width - islandTargetWidth) < 0.01) return;
-    islandTargetX = left;
-    islandTargetWidth = width;
-    cancelAnimationFrame(islandAnimation);
-    if (!islandReady || !animate) {
-      islandX = left;
-      islandWidth = width;
-      islandReady = true;
-      return;
-    }
-    const fromX = islandX;
-    const fromWidth = islandWidth;
-    const started = performance.now();
-    const step = (now: number) => {
-      const progress = Math.min(1, (now - started) / 280);
-      const eased = 1 - Math.pow(1 - progress, 4);
-      islandX = fromX + (islandTargetX - fromX) * eased;
-      islandWidth = fromWidth + (islandTargetWidth - fromWidth) * eased;
-      if (progress < 1) islandAnimation = requestAnimationFrame(step);
-    };
-    islandAnimation = requestAnimationFrame(step);
-  }
-  function updateIsland(node: HTMLElement, animate = true) {
-    const active = node.querySelector<HTMLElement>('a.active');
-    if (!active) return;
-    const scale = interfaceScale();
-    const navBounds = node.getBoundingClientRect();
-    const activeBounds = active.getBoundingClientRect();
-    islandStrokeWidth = 1 / ((window.devicePixelRatio || 1) * scale);
-    moveIsland((activeBounds.left - navBounds.left) / scale + node.scrollLeft, activeBounds.width / scale, animate);
-  }
-  function revealActiveTab(node: HTMLElement, smooth = false) {
-    const active = node.querySelector<HTMLElement>('a.active');
-    if (!active || node.scrollWidth <= node.clientWidth) return;
-    const left = Math.max(0, active.offsetLeft - (node.clientWidth - active.offsetWidth) / 2);
-    node.scrollTo({ left, behavior: smooth && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' });
-  }
-  function trackRepositoryNav(node: HTMLElement) {
-    repositoryNav = node;
-    let layoutFrame = 0;
-    const schedule = () => {
-      cancelAnimationFrame(layoutFrame);
-      layoutFrame = requestAnimationFrame(() => {
-        revealActiveTab(node);
-        updateIsland(node, false);
-      });
-    };
-    const scaleQuery = window.matchMedia('(min-width: 1200px) and (max-resolution: 1.05dppx)');
-    const timer = window.setTimeout(schedule);
-    const observer = new ResizeObserver(schedule);
-    observer.observe(node);
-    window.addEventListener('resize', schedule);
-    scaleQuery.addEventListener('change', schedule);
-    schedule();
-    return {
-      destroy() {
-        cancelAnimationFrame(layoutFrame);
-        cancelAnimationFrame(islandAnimation);
-        window.clearTimeout(timer);
-        observer.disconnect();
-        window.removeEventListener('resize', schedule);
-        scaleQuery.removeEventListener('change', schedule);
-        if (repositoryNav === node) repositoryNav = undefined;
-      }
-    };
-  }
   $effect(() => {
-    path;
-    let frame = 0;
-    tick().then(() => {
-      const node = repositoryNav;
-      if (node) frame = requestAnimationFrame(() => {
-        revealActiveTab(node, true);
-        updateIsland(node);
-      });
-    });
-    return () => {
-      if (browser) cancelAnimationFrame(frame);
-    };
-  });
-  $effect(() => {
-    const currentRepository = base;
+    void base;
     untrack(() => {
-      clearTimeout(copiedTimer);
-      cloneOpen = false;
-      copied = false;
-      cloneProtocol = 'https';
       starred = Boolean(data.repository?.starred);
       starCount = data.repository?.starCount ?? 0;
       starring = false;
       forkOpen = false;
-      forking = false;
-      forkOwner = data.shellOrganizations?.find((organization: { kind: string }) => organization.kind === 'personal')?.slug ?? '';
-      forkName = repositoryName(currentRepository.split('/').at(-1) ?? '');
-      forkError = '';
     });
   });
-  onDestroy(() => {
-    clearTimeout(copiedTimer);
-    if (browser) cancelAnimationFrame(islandAnimation);
-  });
+
+  async function toggleStar() {
+    if (starring) return;
+    starring = true;
+    const route = base;
+    try {
+      const result = await api<{ starred: boolean; starCount: number }>(`/repositories/${owner}/${repo}/star`, {
+        method: starred ? 'DELETE' : 'PUT'
+      });
+      if (base === route) {
+        starred = result.starred;
+        starCount = result.starCount;
+      }
+    } finally {
+      if (base === route) starring = false;
+    }
+  }
 </script>
 
 <PublicProfileNav visible={!data.shellUser} />
 
-<section class="repo-bar">
-  <div class="repo-line">
-    <div class="repo-identity"><RepositoryIcon name={repo} src={repository?.iconUrl} size={34} /><div class="identity"><div class="crumb"><a href="/{owner}">{owner}</a><span>/</span><a href={base}>{repo}</a>{#if repository?.visibility === 'private'}<span class="private"><Lock size={11} />Private</span>{/if}</div>{#if repository?.upstream}<p class="upstream"><GitFork size={11} />Forked from <a href="/{repository.upstream.owner}/{repository.upstream.name}">{repository.upstream.owner}/{repository.upstream.name}</a></p>{:else if repository?.description}<p>{repository.description}</p>{/if}</div></div>
-    <div class="repo-actions">{#if data.shellUser}<Button size="small" loading={starring} aria-label={starred ? 'Unstar repository' : 'Star repository'} onclick={toggleStar}><Star size={14} fill={starred ? 'currentColor' : 'none'} /><span>Star</span>{#if starCount}<span class="count">{starCount}</span>{/if}</Button><Button size="small" aria-label="Fork repository" disabled={!organizationOptions.length} onclick={() => { forkOwner = organizationOptions[0]?.value ?? ''; forkName = repositoryName(repo); forkError = ''; forkOpen = true; }}><GitFork size={14} /><span>Fork</span>{#if repository?.forkCount}<span class="count">{repository.forkCount}</span>{/if}</Button>{/if}<div class="clone-anchor" use:dismissable={() => (cloneOpen = false)}><Button size="small" aria-label="Clone repository" aria-expanded={cloneOpen} onclick={() => (cloneOpen = !cloneOpen)}><Code2 size={14} /><span>Clone</span><ChevronDown size={12} /></Button>{#if cloneOpen}<div class="clone-menu" transition:popoverMotion><strong>Clone this repository</strong>{#if repository?.sshCloneUrl}<div class="protocols"><button class:active={cloneProtocol === 'https'} onclick={() => { cloneProtocol = 'https'; copied = false; }}>HTTPS</button><button class:active={cloneProtocol === 'ssh'} onclick={() => { cloneProtocol = 'ssh'; copied = false; }}>SSH</button></div>{/if}<p>{#if !data.shellUser && cloneProtocol === 'https'}No account needed for a public repository.{:else}{cloneProtocol === 'ssh' ? 'Uses a public key registered to your Marl account.' : 'Use your Marl username and a developer token as the password.'} <a href={resolve(cloneProtocol === 'ssh' ? '/settings/account/ssh-keys' : '/settings/account/tokens')}>{cloneProtocol === 'ssh' ? 'Manage SSH keys' : 'Developer access'}</a>{/if}</p><div class="clone-value"><code>{cloneUrl}</code><button aria-label="Copy clone URL" onclick={copyCloneUrl}>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button></div></div>{/if}</div></div>
+<section class="relative bg-[linear-gradient(to_bottom,var(--color-surface)_0_64px,var(--color-canvas)_64px)]">
+  <div
+    class="mx-auto flex min-h-16 w-[min(1240px,calc(100%-32px))] items-center justify-between gap-4 py-2.5 sm:w-[min(1240px,calc(100%-48px))] sm:gap-5"
+  >
+    <div class="flex min-w-0 items-center gap-3">
+      <RepositoryIcon name={repo} src={repository?.iconUrl} size={36} />
+      <div class="min-w-0">
+        <div class="flex min-w-0 items-center gap-1.5 text-base">
+          <a class="truncate font-medium text-ink-muted hover:text-brand" href="/{owner}">{owner}</a><span
+            class="text-ink-faint">/</span
+          ><a class="truncate font-semibold text-ink-strong hover:text-brand" href={base}>{repo}</a>
+          {#if repository?.visibility === 'private'}<span
+              class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-2xs font-medium text-ink-muted"
+              ><Lock size={11} />Private</span
+            >{/if}
+        </div>
+        {#if repository?.upstream}<p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-muted">
+            <GitFork size={12} />Forked from
+            <a class="hover:text-brand" href="/{repository.upstream.owner}/{repository.upstream.name}"
+              >{repository.upstream.owner}/{repository.upstream.name}</a
+            >
+          </p>{:else if repository?.description}<p class="mt-0.5 truncate text-sm text-ink-muted">
+            {repository.description}
+          </p>{/if}
+      </div>
+    </div>
+    <div class="flex shrink-0 items-center gap-1.5">
+      {#if data.shellUser}
+        <Button
+          size="small"
+          loading={starring}
+          aria-label={starred ? 'Unstar repository' : 'Star repository'}
+          aria-pressed={starred}
+          onclick={toggleStar}
+          ><Star size={15} fill={starred ? 'currentColor' : 'none'} class={starred ? 'text-warning' : ''} /><span
+            class="max-sm:hidden">Star</span
+          >{#if starCount}<span class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{starCount}</span
+            >{/if}</Button
+        >
+        <Button
+          size="small"
+          aria-label="Fork repository"
+          disabled={!forkOptions.length}
+          onclick={() => (forkOpen = true)}
+          ><GitFork size={15} /><span class="max-sm:hidden">Fork</span>{#if repository?.forkCount}<span
+              class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{repository.forkCount}</span
+            >{/if}</Button
+        >
+      {/if}
+      {#if repository}<CloneMenu
+          cloneUrl={repository.cloneUrl}
+          sshCloneUrl={repository.sshCloneUrl}
+          signedIn={Boolean(data.shellUser)}
+        />{/if}
+    </div>
   </div>
-  <nav use:trackRepositoryNav aria-label="Repository" onscroll={() => repositoryNav && updateIsland(repositoryNav, false)}>
-    <span class="active-island" style={`--island-x:${islandX}px`} aria-hidden="true"><svg viewBox="0 0 1 43" preserveAspectRatio="none"><path class="island-fill" d={islandFill}></path><path class="island-outline" d={islandBoundary} stroke-width={islandStrokeWidth}></path></svg></span>
-    <a class:active={tabActive('overview')} href="{base}?overview=1"><BookOpen size={14} />Overview</a>
-    <a class:active={tabActive('code')} href="{base}/code"><Code2 size={14} />Code</a>
-    <a class:active={tabActive('releases')} href="{base}/releases"><Tag size={14} />Releases</a>
-    <a class:active={tabActive('issues')} href="{base}/issues"><CircleDot size={14} />Issues</a>
-    <a class:active={tabActive('pulls')} href="{base}/pulls"><GitPullRequest size={14} />Pulls</a>
-    {#if repository?.permissions.member}<a class:active={tabActive('runs')} href="{base}/runs"><CirclePlay size={14} />Runs</a>{/if}
-    {#if canManageSettings}<a class:active={tabActive('settings')} href="{base}/settings"><Settings size={14} />Settings</a>{/if}
-  </nav>
+  <RepositoryTabs {tabs} />
 </section>
 
-<div class="repository-content">{@render children()}</div>
+<div class="mx-auto w-[min(1240px,calc(100%-32px))] pt-7 pb-18 sm:w-[min(1240px,calc(100%-48px))]">
+  {@render children()}
+</div>
 
-<Modal open={forkOpen} title="Fork repository" description="Create an independent working copy connected to this repository's fork network." onClose={() => (forkOpen = false)}>
-  {#snippet children()}<div class="fork-fields"><label><span>Owner</span><Select bind:value={forkOwner} options={organizationOptions} ariaLabel="Fork owner" /></label><label><span>Repository name</span><input bind:value={forkName} oninput={() => (forkName = repositoryName(forkName))} onblur={() => (forkName = submittedForkName)} maxlength="100" /></label>{#if forkError}<p class="fork-error" role="alert">{forkError}</p>{/if}</div>{/snippet}
-  {#snippet actions()}<Button size="small" onclick={() => (forkOpen = false)}>Cancel</Button><Button size="small" variant="primary" loading={forking} disabled={!forkOwner || !forkNameValid} onclick={createFork}>Create fork</Button>{/snippet}
-</Modal>
-
-<style>
-  .repo-bar{border-bottom:1px solid var(--border-subtle);background:var(--surface)}.repo-line{display:flex;width:min(1240px,calc(100% - 48px));min-height:64px;margin:0 auto;align-items:center;justify-content:space-between;gap:20px}.identity{min-width:0}.crumb{display:flex;align-items:center;gap:6px}.crumb>a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-strong);font-size:15px;font-weight:640;text-decoration:none}.crumb>a:first-child{color:var(--text-muted);font-weight:520}.crumb>span:not(.private){color:var(--text-faint)}.private{display:inline-flex;align-items:center;gap:4px;margin-left:5px;color:var(--text-faint);font-size:11px}.identity p{overflow:hidden;margin:5px 0 0;color:var(--text-muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.clone-anchor{position:relative}.clone-menu{position:absolute;top:40px;right:0;z-index:30;width:min(360px,calc(100vw - 28px));padding:16px;border:0;border-radius:16px;background:var(--surface-raised);box-shadow:var(--shadow-popover);transform-origin:top right}.clone-menu>strong{color:var(--text-strong);font-size:13px}.clone-menu>p{margin:8px 0 11px;color:var(--text-muted);font-size:11px;line-height:1.45}.clone-menu>p a{color:var(--brand);font-weight:620;text-decoration:none}.clone-menu>p a:hover{text-decoration:underline}.protocols{display:flex!important;grid-template-columns:none!important;gap:2px;margin-top:10px;border:0!important;background:transparent!important}.protocols button{width:auto!important;height:28px;padding:0 9px;border:0!important;border-radius:999px;background:transparent!important;color:var(--text-muted);font-size:11px;font-weight:620;cursor:pointer}.protocols button.active{background:var(--brand-soft)!important;color:var(--text-strong)}.clone-value{display:grid;grid-template-columns:minmax(0,1fr) 34px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.clone-menu code{overflow:hidden;padding:9px;color:var(--text);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.clone-value button{display:grid;width:34px;border:0;border-left:1px solid var(--border);background:transparent;color:var(--text-muted);place-items:center;cursor:pointer}.repo-bar nav{position:relative;display:flex;width:min(1240px,calc(100% - 48px));height:40px;margin:0 auto;gap:5px}.repo-bar nav a{position:relative;z-index:1;display:inline-flex;height:40px;align-items:center;gap:6px;padding:0 11px;color:var(--text-muted);font-size:12px;font-weight:580;text-decoration:none;transition:color 140ms ease,background-color 180ms ease,transform 220ms cubic-bezier(.2,.8,.2,1)}.repo-bar nav a:hover,.repo-bar nav a.active{color:var(--text-strong)}.repo-bar nav a.active{z-index:2;height:47px;margin-bottom:-7px;padding-bottom:7px;border-radius:0 0 15px 15px;background:var(--surface-raised);box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--border-strong) 75%,transparent);transform:translateY(1px)}.repo-bar nav a.active::before,.repo-bar nav a.active::after{position:absolute;bottom:0;width:10px;height:10px;content:'';pointer-events:none}.repo-bar nav a.active::before{left:-10px;border-bottom-right-radius:10px;box-shadow:4px 4px 0 4px var(--surface-raised)}.repo-bar nav a.active::after{right:-10px;border-bottom-left-radius:10px;box-shadow:-4px 4px 0 4px var(--surface-raised)}.repo-bar nav a.active{background-image:linear-gradient(var(--brand),var(--brand));background-position:center calc(100% - 5px);background-repeat:no-repeat;background-size:calc(100% - 22px) 2px}.repository-content{width:min(1240px,calc(100% - 48px));margin:0 auto;padding:31px 0 72px}
-  .repo-bar{--repo-head-height:64px;position:relative;border-bottom:0;background:linear-gradient(to bottom,var(--surface) 0 var(--repo-head-height),var(--canvas) var(--repo-head-height))}.repo-bar nav{z-index:1}.repo-bar nav a{z-index:2}.repo-bar nav a.active{height:40px;margin:0;padding-bottom:0;border-radius:0;background:transparent;background-image:none;box-shadow:none;transform:none}.repo-bar nav a.active::before,.repo-bar nav a.active::after{display:none}.active-island{position:absolute;z-index:1;top:0;left:0;width:1px;height:43px;transform:translate3d(var(--island-x),0,0);pointer-events:none;will-change:transform}.active-island svg{position:absolute;inset:0;width:1px;height:43px;overflow:visible}.island-fill{fill:var(--surface);stroke:none}.island-outline{fill:none;stroke:var(--border-subtle);stroke-linecap:butt;stroke-linejoin:round;vector-effect:non-scaling-stroke}.repository-content{padding-top:27px}
-  .repo-actions{display:flex;align-items:center;gap:7px}.count{padding-left:6px;border-left:1px solid var(--border);color:var(--text-faint)}.upstream{display:flex;align-items:center;gap:5px}.upstream a{color:var(--text-muted);text-decoration:none}.upstream a:hover{color:var(--brand)}.fork-fields{display:grid;gap:14px}.fork-fields label{display:grid;gap:7px}.fork-fields label>span{color:var(--text-muted);font-size:11px;font-weight:620}.fork-fields input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:6px;outline:0;background:var(--surface);color:var(--text-strong);font-size:12px}.fork-fields input:focus{border-color:var(--brand)}.fork-error{margin:0;color:var(--danger);font-size:11px}
-  .repo-identity{display:flex;min-width:0;align-items:center;gap:10px}
-  @media(max-width:680px){.repo-bar{--repo-head-height:57px}.repo-line,.repo-bar nav,.repository-content{width:calc(100% - 28px)}.repo-line{min-height:57px;gap:10px}.crumb>a{font-size:14px}.identity p,.repo-actions :global(.button span){display:none}.repo-actions{gap:4px}.repo-bar nav{overflow-x:auto}.repo-bar nav a{flex:0 0 auto}.repository-content{padding-top:18px}}
-</style>
+<ForkDialog bind:open={forkOpen} {owner} repository={repo} options={forkOptions} />

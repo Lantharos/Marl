@@ -10,7 +10,9 @@ export const GET: RequestHandler = async ({ fetch }) => {
     ...index.identities.map((identity) => sitemapEntry(`https://marl.sh/${encodeURIComponent(identity.handle)}`)),
     ...index.repositories.flatMap((repository) => {
       const root = `https://marl.sh/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}`;
-      return ['', '/code', '/releases', '/issues', '/pulls'].map((section) => sitemapEntry(`${root}${section}`, repository.updatedAt));
+      return ['', '/code', '/releases', '/issues', '/pulls'].map((section) =>
+        sitemapEntry(`${root}${section}`, repository.updatedAt)
+      );
     })
   ];
   const document = `<?xml version="1.0" encoding="UTF-8"?>
@@ -32,5 +34,10 @@ function sitemapEntry(location: string, updatedAt?: string) {
 }
 
 function xml(value: string) {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }

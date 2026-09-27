@@ -14,6 +14,8 @@
     "dev:git": "bun scripts/dev.ts git",
     "qualify": "bun scripts/qualify.ts",
     "check": "bun run --filter '*' check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test && cargo test --workspace"
   },
@@ -22,5 +24,10 @@
     "lodash-es": "^4.18.1",
     "esbuild": "^0.28.2",
     "cookie": "^1.1.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9",
+    "prettier-plugin-svelte": "^4.1.1",
+    "prettier-plugin-tailwindcss": "^0.8.1"
   }
 }

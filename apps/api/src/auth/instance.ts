@@ -27,7 +27,8 @@ export function createAuth(env: Env, request: Request) {
     trustedOrigins,
     hooks: {
       before: createAuthMiddleware(async (context) => {
-        if (context.path === '/update-user' && context.body?.username !== undefined) throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
+        if (context.path === '/update-user' && context.body?.username !== undefined)
+          throw new APIError('BAD_REQUEST', { message: 'Username changes are not available yet.' });
         if (context.path !== '/sign-up/email') return;
         const candidate = typeof context.body?.username === 'string' ? context.body.username.toLowerCase() : '';
         if (!validIdentitySlug(candidate)) throw new APIError('BAD_REQUEST', { message: 'Choose a valid username.' });
@@ -47,8 +48,16 @@ export function createAuth(env: Env, request: Request) {
           maxAge: 60 * 60 * 24 * 365
         });
         await env.DB.batch([
-          env.DB.prepare('DELETE FROM auth_session WHERE user_id=? AND device_id=? AND id<>?').bind(newSession.user.id, deviceId, newSession.session.id),
-          env.DB.prepare('UPDATE auth_session SET device_id=? WHERE id=? AND user_id=?').bind(deviceId, newSession.session.id, newSession.user.id)
+          env.DB.prepare('DELETE FROM auth_session WHERE user_id=? AND device_id=? AND id<>?').bind(
+            newSession.user.id,
+            deviceId,
+            newSession.session.id
+          ),
+          env.DB.prepare('UPDATE auth_session SET device_id=? WHERE id=? AND user_id=?').bind(
+            deviceId,
+            newSession.session.id,
+            newSession.user.id
+          )
         ]);
       })
     },
@@ -118,7 +127,8 @@ function developmentOrigins(env: Env, configuredUrl: URL, requestOrigin: string 
   }
   if (requestOrigin && URL.canParse(requestOrigin)) {
     const requested = new URL(requestOrigin);
-    if (requested.protocol === 'http:' && (isLoopbackHost(requested.hostname) || requested.hostname === 'marl.sh')) origins.add(requested.origin);
+    if (requested.protocol === 'http:' && (isLoopbackHost(requested.hostname) || requested.hostname === 'marl.sh'))
+      origins.add(requested.origin);
   }
   return [...origins];
 }
@@ -130,7 +140,9 @@ function isLoopbackHost(hostname: string) {
 async function usernameUnavailable(env: Env, candidate: string) {
   const [organization, user] = await Promise.all([
     env.DB.prepare('SELECT 1 AS found FROM organizations WHERE slug=? COLLATE NOCASE LIMIT 1').bind(candidate).first(),
-    env.DB.prepare('SELECT email,auth_user_id AS authUserId FROM users WHERE handle=? COLLATE NOCASE LIMIT 1').bind(candidate).first<{ email: string | null; authUserId: string | null }>()
+    env.DB.prepare('SELECT email,auth_user_id AS authUserId FROM users WHERE handle=? COLLATE NOCASE LIMIT 1')
+      .bind(candidate)
+      .first<{ email: string | null; authUserId: string | null }>()
   ]);
   if (organization) return true;
   if (!user) return false;
@@ -142,7 +154,9 @@ async function sendAuthEmail(env: Env, recipient: string, subject: string, actio
     recipient,
     subject,
     heading: subject,
-    body: subject.startsWith('Reset') ? 'Use the button below to choose a new password. This link expires automatically.' : 'Verify this email address to finish creating your Marl account.',
+    body: subject.startsWith('Reset')
+      ? 'Use the button below to choose a new password. This link expires automatically.'
+      : 'Verify this email address to finish creating your Marl account.',
     actionLabel: subject.startsWith('Reset') ? 'Reset password' : 'Verify email',
     actionUrl
   });

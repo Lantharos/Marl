@@ -4,22 +4,24 @@
   import { untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import type { RunDetail, RunJob } from '@marl/contracts';
-  import Archive from 'lucide-svelte/icons/archive';
-  import CircleAlert from 'lucide-svelte/icons/circle-alert';
-  import CircleCheck from 'lucide-svelte/icons/circle-check';
-  import CircleDot from 'lucide-svelte/icons/circle-dot';
-  import GitBranch from 'lucide-svelte/icons/git-branch';
-  import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
-  import ShieldCheck from 'lucide-svelte/icons/shield-check';
-  import Square from 'lucide-svelte/icons/square';
-  import Terminal from 'lucide-svelte/icons/terminal';
+  import Archive from '@lucide/svelte/icons/archive';
+  import GitBranch from '@lucide/svelte/icons/git-branch';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import Square from '@lucide/svelte/icons/square';
   import { api, apiTextCursorAll, MarlApiError } from '$lib/api';
-  import Time from '$lib/components/page/Time.svelte';
+  import { formatBytes } from '$lib/bytes';
   import Button from '$lib/components/controls/Button.svelte';
+  import Notice from '$lib/components/feedback/Notice.svelte';
+  import BackLink from '$lib/components/page/BackLink.svelte';
+  import Time from '$lib/components/page/Time.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
+  import RunLog from '$lib/runs/RunLog.svelte';
+  import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
+  import { runOrigin } from '$lib/runs/workflow-triggers';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner);
   const repo = $derived(page.params.repo);
   const number = $derived(Number(page.params.number));
@@ -222,89 +224,128 @@
   });
 </script>
 
-<svelte:head><title>{run.name} · {owner}/{repo} · Marl</title></svelte:head>
+<svelte:head><title>{run.name} #{run.number} · {owner}/{repo} · Marl</title></svelte:head>
 
-<header class="run-head">
-  <div class="title">
-    <span class="run-icon {run.state}">
-      {#if awaitingApproval}<ShieldCheck size={18} />
-      {:else if run.state === 'success'}<CircleCheck size={18} />
-      {:else if run.state === 'failure'}<CircleAlert size={18} />
-      {:else}<CircleDot size={18} />{/if}
-    </span>
-    <div><h1>{run.name}</h1><p>Run #{run.number} · {run.trigger}{run.actor ? ` by ${run.actor}` : ''}</p></div>
+<BackLink
+  href={run.workflowId ? `/${owner}/${repo}/runs/workflows/${run.workflowId}` : `/${owner}/${repo}/runs`}
+  label={run.name}
+/>
+<header class="mt-5 mb-6 flex flex-wrap items-start justify-between gap-5">
+  <div class="flex min-w-0 gap-3.5">
+    <span class="grid size-10.5 shrink-0 place-items-center rounded-xl bg-surface-muted"
+      ><RunStateIcon state={run.state} {awaitingApproval} label={runStateLabel(run)} size={20} /></span
+    >
+    <div class="min-w-0">
+      <h1 class="text-2xl font-semibold tracking-tight wrap-anywhere text-ink-strong">
+        {run.name} <span class="font-normal text-ink-muted">#{run.number}</span>
+      </h1>
+      <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+        <span class="font-semibold text-ink capitalize">{runStateLabel(run)}</span>
+        <span aria-hidden="true">·</span>{runOrigin(run)}
+        <span aria-hidden="true">·</span><Time value={run.queuedAt} class="text-ink-muted" />
+        <span class="inline-flex items-center gap-1 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink"
+          ><GitBranch size={12} />{run.branch}<a
+            class="text-ink-muted hover:text-brand"
+            href="/{owner}/{repo}/commit/{run.commit}">{run.commit.slice(0, 7)}</a
+          ></span
+        >
+      </p>
+    </div>
   </div>
   {#if data.repository.permissions.push}
-    {#if run.state === 'queued' || run.state === 'running'}
-      <Button loading={actionBusy === 'cancel'} disabled={Boolean(actionBusy)} onclick={() => action('cancel')}><Square size={14} />Cancel</Button>
+    {#if activeRun}
+      <Button loading={actionBusy === 'cancel'} disabled={Boolean(actionBusy)} onclick={() => action('cancel')}
+        ><Square size={14} />Cancel run</Button
+      >
     {:else}
-      <Button loading={actionBusy === 'retry'} disabled={Boolean(actionBusy)} onclick={() => action('retry')}><RotateCcw size={14} />Run again</Button>
+      <Button loading={actionBusy === 'retry'} disabled={Boolean(actionBusy)} onclick={() => action('retry')}
+        ><RotateCcw size={14} />Run again</Button
+      >
     {/if}
   {/if}
 </header>
 
-<div class="run-meta">
-  <span><GitBranch size={13} />{run.branch}</span>
-  <code>{run.commit.slice(0, 7)}</code>
-  <span>{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</span>
-  <Time value={run.queuedAt} />
-  <span class="state-text {run.state}">{runStateLabel(run)}</span>
-</div>
+{#if error}<Notice class="mb-5">{error}</Notice>{/if}
 
-{#if error}<p class="notice" role="alert">{error}</p>{/if}
-
-<div class="run-layout">
-  <aside>
-    <h2>Jobs</h2>
+<div class="grid items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+  <nav class="grid gap-0.5 lg:sticky lg:top-20" aria-label="Jobs">
+    <h2 class="mb-1.5 px-3 text-sm font-semibold text-ink-strong">
+      Jobs <span class="font-normal text-ink-muted tabular-nums">{run.jobsDetail.length}</span>
+    </h2>
     {#each run.jobsDetail as item (item.id)}
-      <button class:active={item.id === job?.id} onclick={() => choose(item.id)}>
-        <span class="job-icon {item.state}">
-          {#if awaitingApproval}<ShieldCheck size={16} />
-          {:else if item.state === 'success'}<CircleCheck size={16} />
-          {:else if item.state === 'failure'}<CircleAlert size={16} />
-          {:else}<CircleDot size={16} />{/if}
-        </span>
-        <span>
-          <strong>{item.name}</strong>
-          <small>{awaitingApproval ? 'Awaiting approval' : item.runner?.name ?? (item.state === 'queued' ? `Waiting for ${item.requiredLabels.join(', ')}` : 'No runner')}</small>
+      <button
+        type="button"
+        aria-current={item.id === job?.id}
+        class={[
+          'grid grid-cols-[18px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors',
+          item.id === job?.id ? 'bg-surface-muted' : 'hover:bg-surface-hover'
+        ]}
+        onclick={() => choose(item.id)}
+      >
+        <RunStateIcon state={item.state} {awaitingApproval} />
+        <span class="min-w-0">
+          <strong class="block truncate text-sm font-semibold text-ink-strong">{item.name}</strong>
+          <span class="block truncate text-xs text-ink-muted"
+            >{awaitingApproval
+              ? 'Awaiting approval'
+              : (item.runner?.name ??
+                (item.state === 'queued' ? `Waiting for ${item.requiredLabels.join(', ')}` : 'No runner'))}</span
+          >
         </span>
       </button>
     {/each}
-  </aside>
-  <main>
+  </nav>
+
+  <div class="grid min-w-0 gap-5">
     {#if awaitingApproval}
-      <section class="approval-wait">
-        <ShieldCheck size={24} strokeWidth={1.6} />
-        <h2>Checks need approval</h2>
-        <p>A maintainer needs to approve this contribution before its checks can use a runner.</p>
-        {#if run.canApproveChecks}<Button variant="primary" loading={actionBusy === 'approve'} disabled={Boolean(actionBusy)} onclick={approveChecks}>Approve checks</Button>{/if}
+      <section class="grid justify-items-center gap-2 surface px-6 py-14 text-center">
+        <span class="mb-1 grid size-11 place-items-center rounded-full bg-warning-soft text-warning"
+          ><ShieldCheck size={20} /></span
+        >
+        <h2 class="text-base font-semibold text-ink-strong">Checks need approval</h2>
+        <p class="max-w-[46ch] text-sm text-ink-muted">
+          A maintainer needs to approve this contribution before its checks can use a runner.
+        </p>
+        {#if run.canApproveChecks}<Button
+            class="mt-2"
+            variant="primary"
+            loading={actionBusy === 'approve'}
+            disabled={Boolean(actionBusy)}
+            onclick={approveChecks}>Approve checks</Button
+          >{/if}
       </section>
     {:else if job}
-      <header class="job-head">
-        <div><h2>{job.name}</h2><p>{job.runner ? `Ran on ${job.runner.name}` : `Requires ${job.requiredLabels.join(', ')}`}</p></div>
-        <span>{job.state}</span>
+      <header class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="truncate text-lg font-semibold text-ink-strong">{job.name}</h2>
+          <p class="mt-0.5 text-sm text-ink-muted">
+            {job.runner ? `Ran on ${job.runner.name}` : `Requires ${job.requiredLabels.join(', ')}`}
+          </p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 text-sm font-semibold text-ink capitalize"
+          ><RunStateIcon state={job.state} size={15} />{job.state}</span
+        >
       </header>
-      <section class="terminal">
-        <header><Terminal size={14} /><span>Log</span><small>{job.logBytes} bytes</small></header>
-        {#if logUnavailable}
-          <p class="log-error"><CircleAlert size={15} />Stored log output is unavailable. Run metadata and artifacts are unaffected.</p>
-        {:else}
-          <pre>{logs || (job.state === 'queued' ? 'Waiting for a matching runner…' : 'No log output.')}</pre>
-        {/if}
-      </section>
+      <RunLog text={logs} bytes={job.logBytes} unavailable={logUnavailable} waiting={job.state === 'queued'} />
       {#if job.artifacts.length}
-        <section class="artifacts">
-          <h3>Artifacts</h3>
-          {#each job.artifacts as artifact (artifact.id)}
-            <a href="/api/v1/artifacts/{artifact.id}"><Archive size={15} /><span><strong>{artifact.name}</strong><small>{artifact.byteSize} bytes</small></span></a>
-          {/each}
+        <section>
+          <h3 class="mb-2 text-sm font-semibold text-ink-strong">Artifacts</h3>
+          <div class="surface p-1.5">
+            {#each job.artifacts as artifact (artifact.id)}
+              <a
+                class="group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
+                href="/api/v1/artifacts/{artifact.id}"
+              >
+                <Archive size={15} class="text-ink-muted" />
+                <strong class="truncate text-sm font-semibold text-ink-strong group-hover:text-brand"
+                  >{artifact.name}</strong
+                >
+                <span class="text-xs text-ink-muted tabular-nums">{formatBytes(artifact.byteSize)}</span>
+              </a>
+            {/each}
+          </div>
         </section>
       {/if}
     {/if}
-  </main>
+  </div>
 </div>
-
-<style>
-  .approval-wait{display:grid;justify-items:start;align-content:center;gap:16px;min-height:240px;padding:28px;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-surface)}.approval-wait>:global(svg){color:var(--brand)}.approval-wait h2{margin:0;color:var(--text-strong);font-size:18px;letter-spacing:-.025em}.approval-wait p{max-width:440px;margin:-8px 0 0;color:var(--text-muted);font-size:13px;line-height:1.6}
-  .run-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:20px}.title{display:flex;align-items:center;gap:12px}.run-icon{display:grid;width:40px;height:40px;place-items:center;border-radius:9px;background:var(--surface-muted);color:var(--text-muted)}.run-icon.success{background:var(--success-soft);color:var(--success)}.run-icon.failure{background:var(--danger-soft);color:var(--danger)}.run-icon.running,.run-icon.queued{background:var(--brand-soft);color:var(--brand)}h1{margin:0;color:var(--text-strong);font-size:23px;letter-spacing:-.03em}.title p{margin:5px 0 0;color:var(--text-muted);font-size:12px}.action{display:inline-flex;height:36px;align-items:center;gap:7px;padding:0 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px}.run-meta{display:flex;align-items:center;gap:13px;flex-wrap:wrap;min-height:48px;padding:12px 16px;border-radius:10px;background:var(--surface);color:var(--text-muted);font-size:12px}.run-meta span{display:inline-flex;align-items:center;gap:5px}.run-meta code{color:var(--text)}.run-meta :global(time){font-size:12px}.state-text{margin-left:auto;text-transform:capitalize}.state-text.success{color:var(--success)}.state-text.failure{color:var(--danger)}.state-text.running,.state-text.queued{color:var(--brand)}.notice{color:var(--danger);font-size:12px}.run-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:28px;padding-top:28px}.run-layout>aside{align-self:start;padding:8px;border-radius:12px;background:var(--surface)}.run-layout aside h2{margin:0 0 9px 7px;color:var(--text-muted);font-size:12px;font-weight:650}.run-layout aside button{display:grid;width:100%;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:8px;padding:10px 8px;border:0;border-radius:6px;background:transparent;color:var(--text);cursor:pointer;text-align:left}.run-layout aside button:hover,.run-layout aside button.active{background:var(--surface-muted)}.job-icon{display:grid;place-items:center;color:var(--text-muted)}.job-icon.success{color:var(--success)}.job-icon.failure{color:var(--danger)}.job-icon.running,.job-icon.queued{color:var(--brand)}.run-layout aside strong,.run-layout aside small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.run-layout aside strong{color:var(--text-strong);font-size:13px}.run-layout aside small{margin-top:3px;color:var(--text-muted);font-size:11px}.run-layout>main{min-width:0}.job-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:15px}.job-head h2{margin:0;color:var(--text-strong);font-size:17px}.job-head p{margin:5px 0 0;color:var(--text-muted);font-size:12px}.job-head>span{color:var(--text);font-size:12px;text-transform:capitalize}.terminal{overflow:hidden;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-surface)}.terminal>header{display:flex;align-items:center;gap:7px;min-height:39px;padding:0 12px;background:var(--surface-muted);color:var(--text-muted);font-size:12px}.terminal header small{margin-left:auto;color:var(--text-faint)}.terminal pre{min-height:300px;max-height:560px;overflow:auto;margin:0;padding:15px;color:var(--text);font-family:var(--font-mono);font-size:12px;line-height:1.65;white-space:pre-wrap}.log-error{display:flex;min-height:220px;align-items:center;justify-content:center;gap:8px;margin:0;padding:20px;color:var(--danger);font-size:12px}.artifacts{margin-top:26px}.artifacts h3{margin:0 0 9px;color:var(--text-strong);font-size:14px}.artifacts a{display:grid;grid-template-columns:24px 1fr;align-items:center;gap:8px;padding:11px 4px;border-top:1px solid var(--border-subtle);color:var(--text-muted);text-decoration:none}.artifacts strong,.artifacts small{display:block}.artifacts strong{color:var(--text-strong);font-size:12px}.artifacts small{margin-top:3px;color:var(--text-muted);font-size:11px}@media(max-width:700px){.run-layout{grid-template-columns:1fr}.run-layout>aside{display:flex;overflow-x:auto;padding:8px}.run-layout aside h2{display:none}.run-layout aside button{min-width:200px}.run-head{align-items:flex-start;flex-wrap:wrap}.title h1{font-size:20px}.terminal pre{min-height:240px}}
-</style>

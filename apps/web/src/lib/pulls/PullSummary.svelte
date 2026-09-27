@@ -1,18 +1,27 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { PullRequestDetail } from '@marl/contracts';
-  import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import ArrowRight from 'lucide-svelte/icons/arrow-right';
-  import Pencil from 'lucide-svelte/icons/pencil';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ArrowRight from '@lucide/svelte/icons/arrow-right';
+  import Pencil from '@lucide/svelte/icons/pencil';
   import Button from '$lib/components/controls/Button.svelte';
   import PullBrief from './PullBrief.svelte';
-  import PullMetadata from '$lib/pulls/PullMetadata.svelte';
+  import WorkItemMetadata from '$lib/components/discussion/WorkItemMetadata.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
-  import type { MarkdownContext } from '$lib/markdown';
+  import type { MarkdownContext } from '$lib/markdown/context';
   import { pullDetailSignal } from './pull-signal';
 
-  let { pull, conflicted = false, busy, context, onEdit, onUpdate, onCreateLabel, actions } = $props<{
+  let {
+    pull,
+    conflicted = false,
+    busy,
+    context,
+    onEdit,
+    onUpdate,
+    onCreateLabel,
+    actions
+  }: {
     pull: PullRequestDetail;
     conflicted?: boolean;
     busy: boolean;
@@ -21,27 +30,66 @@
     onUpdate: (body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) => Promise<void>;
     onCreateLabel: (name: string) => Promise<void>;
     actions: Snippet;
-  }>();
+  } = $props();
   let metadataOpen = $state(false);
   const signal = $derived(pullDetailSignal(pull, conflicted));
+  const tones = {
+    working: 'bg-brand',
+    attention: 'bg-danger',
+    ready: 'bg-success',
+    complete: 'bg-merged',
+    quiet: 'bg-ink-muted'
+  };
 </script>
 
-<aside class="summary" aria-label="Pull summary">
-  <section class="details">
-    <header><span class="number">!{pull.number}</span>{#if pull.canManage}<Button icon size="small" variant="ghost" aria-label="Edit pull" disabled={busy} onclick={onEdit}><Pencil size={14} /></Button>{/if}</header>
-    <h1>{pull.title}</h1>
-    <div class="status {signal.tone}"><i></i>{signal.label}</div>
-    <div class="author"><UserProfileLink handle={pull.author} displayName={pull.authorDisplayName} avatarUrl={pull.authorAvatarUrl} size={22} /></div>
-    <div class="branches"><code title={pull.sourceBranch}>{pull.sourceBranch}</code><ArrowRight size={13} /><code title={pull.targetBranch}>{pull.targetBranch}</code></div>
-    {#if pull.body}<div class="brief"><PullBrief body={pull.body} title={pull.title} {context} /></div>{/if}
+<aside class="grid min-w-0 content-start gap-3 lg:gap-5" aria-label="Pull summary">
+  <section class="min-w-0 surface rounded-2xl p-4 sm:p-5">
+    <header class="mb-2 flex min-h-7 items-center justify-between">
+      <span class="text-sm text-ink-muted tabular-nums">!{pull.number}</span>
+      {#if pull.canManage}<Button
+          icon
+          size="small"
+          variant="ghost"
+          aria-label="Edit pull"
+          disabled={busy}
+          onclick={onEdit}><Pencil size={15} /></Button
+        >{/if}
+    </header>
+    <h1
+      class="text-[clamp(23px,2vw,29px)] leading-[1.18] font-semibold tracking-[-0.035em] text-pretty break-words text-ink-strong"
+    >
+      {pull.title}
+    </h1>
+    <div class="mt-4.5 mb-5.5 flex items-center gap-2 text-sm font-semibold text-ink-strong">
+      <span class={['size-2 rounded-full', tones[signal.tone]]} aria-hidden="true"></span>{signal.label}
+    </div>
+    <UserProfileLink
+      handle={pull.author}
+      displayName={pull.authorDisplayName}
+      avatarUrl={pull.authorAvatarUrl}
+      size={22}
+    />
+    <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-ink-muted">
+      <code
+        class="max-w-full truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs"
+        title={pull.sourceBranch}>{pull.sourceBranch}</code
+      ><ArrowRight size={14} /><code
+        class="max-w-full truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs"
+        title={pull.targetBranch}>{pull.targetBranch}</code
+      >
+    </div>
+    {#if pull.bodyText}<div class="my-5.5 break-words">
+        <PullBrief html={pull.bodyHtml} text={pull.bodyText} title={pull.title} />
+      </div>{:else}<div class="h-5.5"></div>{/if}
     {@render actions()}
   </section>
-  <div class="metadata-toggle"><Button variant="ghost" size="small" aria-expanded={metadataOpen} onclick={() => (metadataOpen = !metadataOpen)}>Assignees and labels<ChevronDown size={14} /></Button></div>
-  <div class="metadata" class:expanded={metadataOpen}><WorkItemLinks items={pull.linkedItems} {context} /><PullMetadata {pull} {busy} {onUpdate} {onCreateLabel} /></div>
+  <Button
+    class="w-full justify-between lg:hidden"
+    aria-expanded={metadataOpen}
+    onclick={() => (metadataOpen = !metadataOpen)}>Assignees and labels<ChevronDown size={15} /></Button
+  >
+  <div class={['gap-6 px-1 lg:grid lg:px-3.5', metadataOpen ? 'grid' : 'hidden']}>
+    <WorkItemLinks items={pull.linkedItems} {context} />
+    <WorkItemMetadata item={pull} {busy} {onUpdate} {onCreateLabel} />
+  </div>
 </aside>
-
-<style>
-  .metadata-toggle{display:none}
-  .metadata{display:grid;gap:24px}
-  .summary{min-width:0;display:grid;gap:20px;align-content:start}.details{min-width:0;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-surface)}header{display:flex;min-height:28px;align-items:center;justify-content:space-between;margin-bottom:8px}.number{color:var(--text-muted);font-size:13px;font-variant-numeric:tabular-nums}h1{margin:0;color:var(--text-strong);font-size:clamp(23px,2vw,29px);font-weight:680;line-height:1.18;letter-spacing:-.035em;overflow-wrap:anywhere;text-wrap:pretty}.status{display:flex;align-items:center;gap:8px;margin:18px 0 22px;color:var(--text-strong);font-size:13px;font-weight:650}.status i{width:7px;height:7px;border-radius:50%;background:var(--brand)}.status.attention i{background:var(--danger)}.status.ready i,.status.complete i{background:var(--success)}.status.quiet i{background:var(--text-muted)}.author{margin-bottom:10px;font-size:12px}.branches{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--text-muted)}.branches code{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 7px;border-radius:6px;background:var(--surface-muted);font-size:11px}.brief{margin:24px 0;--markdown-font-size:13px;overflow-wrap:anywhere}.branches+.brief{margin-top:22px}.branches:has(+ :global(.actions)){margin-bottom:22px}.metadata{padding:0 14px}.metadata :global(.metadata){margin-top:0}@media(max-width:1000px){.summary{gap:12px}.metadata-toggle{display:block}.metadata:not(.expanded){display:none}}@media(max-width:600px){.details{padding:16px}.metadata{padding:0 8px}}
-</style>

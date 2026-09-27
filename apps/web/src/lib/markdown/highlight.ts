@@ -1,4 +1,4 @@
-import { highlight } from '$lib/code/highlight';
+import { highlight } from '$lib/code/highlight/highlight';
 
 export async function highlightCode(code: HTMLElement, language: string, signal: AbortSignal) {
   const lines = await highlight(code.textContent ?? '', language, signal);

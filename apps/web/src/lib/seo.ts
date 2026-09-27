@@ -9,5 +9,8 @@ export function seoExcerpt(value: string | null | undefined, fallback: string, l
     .trim();
   const description = text || fallback;
   if (description.length <= limit) return description;
-  return `${description.slice(0, limit - 1).replace(/\s+\S*$/, '').trimEnd()}…`;
+  return `${description
+    .slice(0, limit - 1)
+    .replace(/\s+\S*$/, '')
+    .trimEnd()}…`;
 }

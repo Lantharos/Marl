@@ -6,7 +6,7 @@ type Dashboard = {
   runs: RunSummary[];
 };
 
-export const load: PageLoad = async ({ parent }) => {
+export const load = (async ({ parent }) => {
   const layout = await parent();
   if (!layout.shellUser) return { view: 'landing' as const };
   const dashboard = layout.shellDashboard as Dashboard | null;
@@ -18,4 +18,4 @@ export const load: PageLoad = async ({ parent }) => {
     user: layout.shellUser,
     unavailable: layout.shellRepositoriesUnavailable || !dashboard
   };
-};
+}) satisfies PageLoad;

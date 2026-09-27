@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { summarizePullRevisions, type RevisionBoundary, type RevisionReview, type RevisionTimelineRow } from './revisions';
+import {
+  summarizePullRevisions,
+  type RevisionBoundary,
+  type RevisionReview,
+  type RevisionTimelineRow
+} from './revisions';
 
 describe('pull revisions', () => {
   test('keeps each pushed head separate and uses the latest review outcome per person', () => {
@@ -28,7 +33,13 @@ describe('pull revisions', () => {
     const revisions = summarizePullRevisions(rows, boundaries, reviews, 'head-3');
 
     expect(revisions.map((revision) => revision.number)).toEqual([1, 2, 3]);
-    expect(revisions[0]).toMatchObject({ commitId: 'head-1', activityCount: 3, conversationCount: 3, reviewState: 'approved', current: false });
+    expect(revisions[0]).toMatchObject({
+      commitId: 'head-1',
+      activityCount: 3,
+      conversationCount: 3,
+      reviewState: 'approved',
+      current: false
+    });
     expect(revisions[1]).toMatchObject({ commitId: 'head-2', reviewState: 'changes_requested', current: false });
     expect(revisions[2]).toMatchObject({ commitId: 'head-3', forcePushed: true, current: true });
   });

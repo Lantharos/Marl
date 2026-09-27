@@ -16,13 +16,24 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
   api: {
     label: `api       http://127.0.0.1:${ports.api}`,
     command: [
-      'bun', 'run', '--cwd', 'apps/api', 'dev', '--',
-      '--var', 'ENVIRONMENT:development',
-      '--var', `GIT_GATEWAY_URL:http://127.0.0.1:${ports.git}`,
-      '--var', `GIT_PUBLIC_URL:http://127.0.0.1:${ports.git}`,
-      '--var', 'GIT_SSH_PUBLIC_URL:ssh://git@127.0.0.1:42621',
-      '--var', `PUBLIC_URL:http://127.0.0.1:${ports.web}`,
-      '--var', `GIT_GATEWAY_TOKEN:${gatewayToken}`
+      'bun',
+      'run',
+      '--cwd',
+      'apps/api',
+      'dev',
+      '--',
+      '--var',
+      'ENVIRONMENT:development',
+      '--var',
+      `GIT_GATEWAY_URL:http://127.0.0.1:${ports.git}`,
+      '--var',
+      `GIT_PUBLIC_URL:http://127.0.0.1:${ports.git}`,
+      '--var',
+      'GIT_SSH_PUBLIC_URL:ssh://git@127.0.0.1:42621',
+      '--var',
+      `PUBLIC_URL:http://127.0.0.1:${ports.web}`,
+      '--var',
+      `GIT_GATEWAY_TOKEN:${gatewayToken}`
     ]
   },
   git: {
@@ -32,9 +43,12 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
 };
 
 const requested = process.argv[2];
-const selected: ServiceName[] = requested && requested !== 'plan'
-  ? requested === 'api' ? ['git', 'api'] : [requested as ServiceName]
-  : ['git', 'api', 'web'];
+const selected: ServiceName[] =
+  requested && requested !== 'plan'
+    ? requested === 'api'
+      ? ['git', 'api']
+      : [requested as ServiceName]
+    : ['git', 'api', 'web'];
 
 if (selected.some((name) => !(name in services))) {
   console.error(`Unknown service "${requested}". Use web, api, or git.`);
@@ -103,11 +117,24 @@ function cleanupWindowsProcesses() {
     '$roots = @($targets | Where-Object { $targetIds -notcontains $_.ParentProcessId } | Select-Object -ExpandProperty ProcessId -Unique)',
     'foreach ($processId in $roots) { taskkill.exe /PID $processId /T /F *> $null }'
   ].join('; ');
-  Bun.spawnSync(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script, workspace, selectedPorts.join(','), String(process.pid)], {
-    stdout: 'ignore',
-    stderr: 'ignore',
-    windowsHide: true
-  });
+  Bun.spawnSync(
+    [
+      'powershell.exe',
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      script,
+      workspace,
+      selectedPorts.join(','),
+      String(process.pid)
+    ],
+    {
+      stdout: 'ignore',
+      stderr: 'ignore',
+      windowsHide: true
+    }
+  );
 }
 
 function forceStop(exitCode: number) {
@@ -135,9 +162,7 @@ process.on('exit', () => killChildren('SIGKILL'));
 
 if (selected.includes('api')) {
   console.log('  data      preparing local D1');
-  const commands = [
-    ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local']
-  ];
+  const commands = [['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local']];
   for (const command of commands) {
     const preparation = spawn('data', command, { ...process.env, CI: 'true' }, `${workspace}/apps/api`);
     const exitCode = await preparation.exited;
@@ -147,9 +172,10 @@ if (selected.includes('api')) {
 }
 
 function startService(name: ServiceName) {
-  const env = name === 'git'
-    ? { ...process.env, MARL_GIT_GATEWAY_TOKEN: gatewayToken, MARL_GIT_ROOT: repositoryRoot }
-    : process.env;
+  const env =
+    name === 'git'
+      ? { ...process.env, MARL_GIT_GATEWAY_TOKEN: gatewayToken, MARL_GIT_ROOT: repositoryRoot }
+      : process.env;
   const child = spawn(name, services[name].command, env);
   void child.exited.then((exitCode) => {
     if (stopping) return;

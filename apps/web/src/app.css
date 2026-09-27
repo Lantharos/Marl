@@ -1,171 +1,237 @@
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Regular-latin.woff2') format('woff2');
-  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-214F, U+2190-21FF, U+2200-22FF, U+25A0-25FF, U+FB00-FB06, U+FEFF;
+@import 'tailwindcss';
+@import './lib/styles/fonts.css';
+
+@custom-variant light {
+  :root[data-theme='light'] & {
+    @slot;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) & {
+      @slot;
+    }
+  }
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Medium-latin.woff2') format('woff2');
-  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-214F, U+2190-21FF, U+2200-22FF, U+25A0-25FF, U+FB00-FB06, U+FEFF;
+@custom-variant dark {
+  :root[data-theme='dark'] & {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) & {
+      @slot;
+    }
+  }
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Semibold-latin.woff2') format('woff2');
-  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-214F, U+2190-21FF, U+2200-22FF, U+25A0-25FF, U+FB00-FB06, U+FEFF;
+@theme static {
+  --color-*: initial;
+  --color-black: #000;
+  --color-white: #fff;
+  --font-sans: 'Open Runde', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 1.45;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.5;
+  --text-sm: 13px;
+  --text-sm--line-height: 1.5;
+  --text-base: 14px;
+  --text-base--line-height: 1.55;
+  --text-md: 15px;
+  --text-md--line-height: 1.5;
+  --text-lg: 17px;
+  --text-lg--line-height: 1.4;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 1.15;
+  --text-4xl: 38px;
+  --text-4xl--line-height: 1.08;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  --color-canvas: light-dark(#f7f6f3, #0d0d0f);
+  --color-surface: light-dark(#fcfbf9, #111113);
+  --color-surface-raised: light-dark(#ffffff, #171719);
+  --color-surface-muted: light-dark(#efeeea, #1b1b1e);
+  --color-surface-hover: light-dark(#f2f1ed, #19191c);
+  --color-line: light-dark(#d9d7d1, #2a2a2e);
+  --color-line-subtle: light-dark(#e9e7e1, #202023);
+  --color-line-strong: light-dark(#c2c0b9, #3a3a3f);
+  --color-ink-strong: light-dark(#1b1a18, #f1f0ed);
+  --color-ink: light-dark(#3e3c38, #d0cfcb);
+  --color-ink-muted: light-dark(#6e6b65, #aaa9a4);
+  --color-ink-faint: light-dark(#75716a, #95948e);
+  --color-brand: light-dark(#b64f35, #df7557);
+  --color-brand-hover: light-dark(#9f422c, #ec8667);
+  --color-brand-strong: light-dark(#923b28, #f09a7e);
+  --color-brand-soft: light-dark(#f8e7e0, #2c1d19);
+  --color-brand-soft-strong: light-dark(#f0d2c7, #43261f);
+  --color-on-brand: light-dark(#ffffff, #27160f);
+  --color-success: light-dark(#27744c, #68b88c);
+  --color-success-soft: light-dark(#e3f1e8, #16251d);
+  --color-danger: light-dark(#b83f45, #e16f73);
+  --color-danger-soft: light-dark(#f8e5e6, #2b191b);
+  --color-on-danger: light-dark(#ffffff, #281214);
+  --color-warning: light-dark(#91621f, #d3a45f);
+  --color-warning-soft: light-dark(#f7edd9, #2a2115);
+  --color-merged: light-dark(#7449b8, #a887e0);
+  --color-merged-soft: light-dark(#efe8fa, #221b2e);
+  --shadow-subtle: 0 1px 2px light-dark(rgb(24 23 20 / 0.06), rgb(0 0 0 / 0.18));
+  --shadow-surface:
+    0 0 0 1px light-dark(rgb(24 23 20 / 0.07), rgb(255 255 255 / 0.055)),
+    0 2px 8px light-dark(rgb(24 23 20 / 0.05), rgb(0 0 0 / 0.14));
+  --shadow-surface-hover:
+    0 0 0 1px light-dark(rgb(24 23 20 / 0.11), rgb(255 255 255 / 0.085)),
+    0 3px 10px light-dark(rgb(24 23 20 / 0.07), rgb(0 0 0 / 0.18));
+  --shadow-card: 0 16px 48px light-dark(rgb(24 23 20 / 0.13), rgb(0 0 0 / 0.34));
+  --shadow-popover:
+    0 0 0 1px light-dark(rgb(24 23 20 / 0.075), rgb(255 255 255 / 0.075)),
+    0 6px 16px light-dark(rgb(24 23 20 / 0.05), rgb(0 0 0 / 0.2)),
+    0 20px 48px light-dark(rgb(24 23 20 / 0.1), rgb(0 0 0 / 0.24));
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Bold-latin.woff2') format('woff2');
-  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-214F, U+2190-21FF, U+2200-22FF, U+25A0-25FF, U+FB00-FB06, U+FEFF;
+@layer base {
+  :root {
+    color-scheme: light dark;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :root[data-theme='light'] {
+    color-scheme: light;
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  * {
+    scrollbar-width: none;
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+
+  html,
+  body {
+    min-width: 320px;
+    min-height: 100%;
+    background: var(--color-canvas);
+  }
+
+  html:has(dialog:modal) {
+    overflow: hidden;
+  }
+
+  body {
+    color: var(--color-ink);
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  ::selection {
+    background: var(--color-brand-soft-strong);
+    color: var(--color-ink-strong);
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  input:read-write:focus,
+  textarea:read-write:focus {
+    outline: 0;
+  }
+
+  [aria-expanded] > :is(.lucide-chevron-down, .lucide-chevron-right) {
+    flex: none;
+    transition: transform 150ms var(--ease-standard);
+  }
+
+  [aria-expanded='true'] > .lucide-chevron-down {
+    transform: rotate(180deg);
+  }
+
+  [aria-expanded='true'] > .lucide-chevron-right {
+    transform: rotate(90deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      transition-duration: 0ms !important;
+    }
+  }
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Regular-cyrillic-greek.woff2') format('woff2');
-  unicode-range: U+0370-052F;
+@utility surface {
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-surface);
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Medium-cyrillic-greek.woff2') format('woff2');
-  unicode-range: U+0370-052F;
+@utility popover {
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Semibold-cyrillic-greek.woff2') format('woff2');
-  unicode-range: U+0370-052F;
+@utility field {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink-strong);
+  font-size: var(--text-sm);
+  transition: border-color 120ms ease;
+
+  &::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  &:focus-within,
+  &:focus {
+    border-color: var(--color-brand);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
 }
 
-@font-face {
-  font-family: "Open Runde";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/open-runde/OpenRunde-Bold-cyrillic-greek.woff2') format('woff2');
-  unicode-range: U+0370-052F;
+@utility syntax-token {
+  color: light-dark(var(--syntax-light), var(--syntax-dark));
 }
-
-:root {
-  font-family: "Open Runde", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --interface-scale: 1;
-  color-scheme: dark;
-  color: #d8d8d5;
-  background: #0d0d0f;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  --canvas: #0d0d0f;
-  --surface: #111113;
-  --surface-raised: #171719;
-  --surface-muted: #1b1b1e;
-  --surface-hover: #19191c;
-  --border: #2a2a2e;
-  --border-subtle: #202023;
-  --border-strong: #3a3a3f;
-  --text-strong: #f1f0ed;
-  --text: #d0cfcb;
-  --text-muted: #aaa9a4;
-  --text-faint: #95948e;
-  --on-brand: #27160f;
-  --on-danger: #281214;
-  --brand: #df7557;
-  --brand-hover: #ec8667;
-  --brand-strong: #f09a7e;
-  --brand-soft: #2c1d19;
-  --brand-soft-strong: #43261f;
-  --success: #68b88c;
-  --success-soft: #16251d;
-  --danger: #e16f73;
-  --danger-soft: #2b191b;
-  --warning: #d3a45f;
-  --warning-soft: #2a2115;
-  --shadow-subtle: 0 1px 2px rgb(0 0 0 / .18);
-  --shadow-surface: 0 0 0 1px rgb(255 255 255 / .055), 0 2px 8px rgb(0 0 0 / .14);
-  --shadow-surface-hover: 0 0 0 1px rgb(255 255 255 / .085), 0 3px 10px rgb(0 0 0 / .18);
-  --shadow-card: 0 16px 48px rgb(0 0 0 / .34);
-  --shadow-popover: 0 0 0 1px rgb(255 255 255 / .075), 0 6px 16px rgb(0 0 0 / .2), 0 20px 48px rgb(0 0 0 / .24);
-}
-
-:root[data-theme='light'] {
-  color-scheme: light;
-  color: #373633;
-  background: #f7f6f3;
-  --canvas: #f7f6f3;
-  --surface: #fcfbf9;
-  --surface-raised: #ffffff;
-  --surface-muted: #efeeea;
-  --surface-hover: #f2f1ed;
-  --border: #d9d7d1;
-  --border-subtle: #e9e7e1;
-  --border-strong: #c2c0b9;
-  --text-strong: #1b1a18;
-  --text: #3e3c38;
-  --text-muted: #6e6b65;
-  --text-faint: #75716a;
-  --on-brand: #ffffff;
-  --on-danger: #ffffff;
-  --brand: #b64f35;
-  --brand-hover: #9f422c;
-  --brand-strong: #923b28;
-  --brand-soft: #f8e7e0;
-  --brand-soft-strong: #f0d2c7;
-  --success: #27744c;
-  --success-soft: #e3f1e8;
-  --danger: #b83f45;
-  --danger-soft: #f8e5e6;
-  --warning: #91621f;
-  --warning-soft: #f7edd9;
-  --shadow-subtle: 0 1px 2px rgb(24 23 20 / .06);
-  --shadow-surface: 0 0 0 1px rgb(24 23 20 / .07), 0 2px 7px rgb(24 23 20 / .05);
-  --shadow-surface-hover: 0 0 0 1px rgb(24 23 20 / .11), 0 3px 10px rgb(24 23 20 / .07);
-  --shadow-card: 0 18px 50px rgb(24 23 20 / .13);
-  --shadow-popover: 0 0 0 1px rgb(24 23 20 / .075), 0 6px 16px rgb(24 23 20 / .05), 0 20px 48px rgb(24 23 20 / .1);
-}
-
-* { box-sizing: border-box; scrollbar-width: none; }
-html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--canvas); }
-html:has(dialog:modal) { overflow: hidden; }
-body { color: var(--text); font-size: 14px; line-height: 1.5; }
-@media (min-width: 1200px) and (max-resolution: 1.05dppx) {
-  :root { --interface-scale: 1.1; zoom: var(--interface-scale); }
-}
-::selection { background: var(--brand-soft-strong); color: var(--text-strong); }
-button, input, textarea { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-input:read-write:focus, textarea:read-write:focus { border-color: var(--brand); box-shadow: none; outline: 0; }
-:is(label, header, div):has(> :is(input:read-write, textarea:read-write):focus) { border-color: var(--brand); box-shadow: none; }
-button { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease; }
-button:active:not(:disabled) { filter: brightness(.94); }
-button:disabled { cursor: not-allowed; }
-[aria-expanded] > .lucide-chevron-down { flex: none; transition: transform 150ms cubic-bezier(.2, 0, 0, 1); }
-[aria-expanded='true'] > .lucide-chevron-down { transform: rotate(180deg); }
-[aria-expanded] > .lucide-chevron-right { flex: none; transition: transform 150ms cubic-bezier(.2, 0, 0, 1); }
-[aria-expanded='true'] > .lucide-chevron-right { transform: rotate(90deg); }
-@media (prefers-reduced-motion: no-preference) { [data-popover-motion] { will-change: transform; } }
-@media (prefers-reduced-motion: reduce) { button, [aria-expanded] > :is(.lucide-chevron-down, .lucide-chevron-right) { transition: none; } }
