@@ -120,12 +120,12 @@ async function hydrateTimeline(
   const [comments, reviews, threads, threadComments, events, references] = await Promise.all([
     selectIds(
       env,
-      `SELECT pull_request_comments.id,pull_request_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,pull_request_comments.body,pull_request_comments.created_at AS createdAt,pull_request_comments.updated_at AS updatedAt,pull_request_comments.deleted_at AS deletedAt FROM pull_request_comments JOIN users ON users.id=pull_request_comments.author_id WHERE pull_request_comments.id IN`,
+      `SELECT pull_request_comments.id,pull_request_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,pull_request_comments.body,pull_request_comments.created_at AS createdAt,pull_request_comments.updated_at AS updatedAt,pull_request_comments.deleted_at AS deletedAt FROM pull_request_comments JOIN users ON users.id=pull_request_comments.author_id WHERE pull_request_comments.id IN`,
       commentIds
     ),
     selectIds(
       env,
-      `SELECT pull_request_reviews.id,pull_request_reviews.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,pull_request_reviews.state,pull_request_reviews.body,pull_request_reviews.commit_id AS commitId,pull_request_reviews.carried_from_review_id AS carriedFromReviewId,pull_request_reviews.created_at AS createdAt FROM pull_request_reviews JOIN users ON users.id=pull_request_reviews.author_id WHERE pull_request_reviews.id IN`,
+      `SELECT pull_request_reviews.id,pull_request_reviews.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,pull_request_reviews.state,pull_request_reviews.body,pull_request_reviews.commit_id AS commitId,pull_request_reviews.carried_from_review_id AS carriedFromReviewId,pull_request_reviews.created_at AS createdAt FROM pull_request_reviews JOIN users ON users.id=pull_request_reviews.author_id WHERE pull_request_reviews.id IN`,
       reviewIds
     ),
     selectIds(
@@ -135,7 +135,7 @@ async function hydrateTimeline(
     ),
     selectIds(
       env,
-      `SELECT review_comments.id,review_comments.thread_id AS threadId,review_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,review_comments.body,review_comments.created_at AS createdAt,review_comments.updated_at AS updatedAt,review_comments.deleted_at AS deletedAt FROM review_comments JOIN users ON users.id=review_comments.author_id WHERE review_comments.thread_id IN`,
+      `SELECT review_comments.id,review_comments.thread_id AS threadId,review_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,review_comments.body,review_comments.created_at AS createdAt,review_comments.updated_at AS updatedAt,review_comments.deleted_at AS deletedAt FROM review_comments JOIN users ON users.id=review_comments.author_id WHERE review_comments.thread_id IN`,
       threadIds,
       'ORDER BY review_comments.created_at'
     ),

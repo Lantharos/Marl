@@ -70,6 +70,7 @@
   author={comment.author}
   displayName={comment.authorDisplayName}
   avatarUrl={comment.authorAvatarUrl}
+  kind={comment.authorKind}
   createdAt={comment.createdAt}
 >
   {#snippet actions()}{#if menu.length}<ActionMenu

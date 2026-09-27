@@ -70,6 +70,10 @@ export const users = sqliteTable(
       .default(sql`'optional'`),
     onboardingDismissedAt: text('onboarding_dismissed_at'),
     deletedAt: text('deleted_at'),
+    kind: text('kind')
+      .notNull()
+      .default(sql`'person'`),
+    operatorOrganizationId: text('operator_organization_id'),
     staff: integer('staff')
       .notNull()
       .default(sql`0`),
@@ -82,7 +86,11 @@ export const users = sqliteTable(
       .where(sql`auth_user_id IS NOT NULL`),
     uniqueIndex('users_handle_unique').on(sql`${table.handle} COLLATE NOCASE`),
     index('users_by_display_name').on(sql`${table.displayName} COLLATE NOCASE`),
-    check('users_check_0', sql`signing_mode IN ('optional','vigilant','firewall')`)
+    check('users_check_0', sql`signing_mode IN ('optional','vigilant','firewall')`),
+    check('users_kind', sql`kind IN ('person','agent','mannequin')`),
+    index('users_by_operator')
+      .on(table.operatorOrganizationId)
+      .where(sql`operator_organization_id IS NOT NULL`)
   ]
 );
 

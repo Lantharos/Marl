@@ -1,3 +1,4 @@
+import type { IdentityKind } from '@marl/contracts';
 import type { Principal } from '../auth/principal';
 import { branchRulesFor, defaultRule, type MergeMethod } from '../repositories/branch-rules';
 import { identifier } from '../core/domain';
@@ -28,6 +29,7 @@ export type PullRow = {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl: string | null;
+  authorKind: IdentityKind;
   sourceBranch: string;
   targetBranch: string;
   sourceCommitId: string;
@@ -46,7 +48,7 @@ export type PullRow = {
 };
 export type ReviewStatus = 'none' | 'requested' | 'approved' | 'changes_requested';
 
-export const pullSelect = `SELECT pull_requests.id,pull_requests.repository_id AS repositoryId,pull_requests.source_repository_id AS sourceRepositoryId,pull_requests.number,pull_requests.title,pull_requests.body,pull_requests.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,pull_requests.state,pull_requests.merged_commit_id AS mergedCommitId,pull_requests.merge_method AS mergeMethod,pull_requests.locked_at AS lockedAt,pull_requests.realtime_version AS realtimeVersion,pull_requests.created_at AS createdAt,pull_requests.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,COALESCE(source_organizations.slug,organizations.slug) AS sourceOwner,COALESCE(source_repositories.name,repositories.name) AS sourceRepository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=pull_requests.author_id LEFT JOIN repositories AS source_repositories ON source_repositories.id=pull_requests.source_repository_id LEFT JOIN organizations AS source_organizations ON source_organizations.id=source_repositories.organization_id`;
+export const pullSelect = `SELECT pull_requests.id,pull_requests.repository_id AS repositoryId,pull_requests.source_repository_id AS sourceRepositoryId,pull_requests.number,pull_requests.title,pull_requests.body,pull_requests.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,pull_requests.state,pull_requests.merged_commit_id AS mergedCommitId,pull_requests.merge_method AS mergeMethod,pull_requests.locked_at AS lockedAt,pull_requests.realtime_version AS realtimeVersion,pull_requests.created_at AS createdAt,pull_requests.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,COALESCE(source_organizations.slug,organizations.slug) AS sourceOwner,COALESCE(source_repositories.name,repositories.name) AS sourceRepository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=pull_requests.author_id LEFT JOIN repositories AS source_repositories ON source_repositories.id=pull_requests.source_repository_id LEFT JOIN organizations AS source_organizations ON source_organizations.id=source_repositories.organization_id`;
 
 export function createPullEvent(
   env: Env,
@@ -127,6 +129,7 @@ export function pullSummary(
     author: row.author,
     authorDisplayName: row.authorDisplayName,
     authorAvatarUrl: row.authorAvatarUrl,
+    authorKind: row.authorKind,
     sourceRepository: { owner: row.sourceOwner, name: row.sourceRepository },
     sourceBranch: row.sourceBranch,
     targetBranch: row.targetBranch,

@@ -1,3 +1,4 @@
+import type { IdentityKind } from './identity';
 import type { Identifier, IssueState } from './common';
 import type { RepositorySummary } from './repositories';
 import type { LinkedWorkItem, WorkItemLabel, WorkItemPerson, WorkItemReferenceEvent } from './work-items';
@@ -10,6 +11,7 @@ export interface IssueSummary {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
+  authorKind?: IdentityKind;
   state: IssueState;
   labels: WorkItemLabel[];
   assignees: WorkItemPerson[];
@@ -28,6 +30,7 @@ export interface IssueComment {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
+  authorKind?: IdentityKind;
   body: string;
   bodyHtml: string;
   createdAt: string;

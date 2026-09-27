@@ -1,6 +1,6 @@
 {
-  "id": "e013d8fc-8ff0-431f-ba0c-39836d660ed8",
-  "prevId": "190f65d9-d3f5-4d29-b7ff-57b416d57276",
+  "id": "b0c504b9-0835-40e0-98d9-6a9a13ec2727",
+  "prevId": "a8af695f-6fc8-4793-8ae1-aaaab526a92a",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -3327,6 +3327,21 @@
           "notNull": false,
           "autoincrement": false
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'person'"
+        },
+        "operator_organization_id": {
+          "name": "operator_organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "staff": {
           "name": "staff",
           "type": "integer",
@@ -3372,6 +3387,14 @@
             "\"display_name\" COLLATE NOCASE"
           ],
           "isUnique": false
+        },
+        "users_by_operator": {
+          "name": "users_by_operator",
+          "columns": [
+            "operator_organization_id"
+          ],
+          "where": "operator_organization_id IS NOT NULL",
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -3381,6 +3404,10 @@
         "users_check_0": {
           "name": "users_check_0",
           "value": "signing_mode IN ('optional','vigilant','firewall')"
+        },
+        "users_kind": {
+          "name": "users_kind",
+          "value": "kind IN ('person','agent','mannequin')"
         }
       }
     },

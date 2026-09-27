@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
+  import Bot from '@lucide/svelte/icons/bot';
   import DatabaseBackup from '@lucide/svelte/icons/database-backup';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Bell from '@lucide/svelte/icons/bell';
@@ -50,6 +51,12 @@
       label: 'Developer access',
       icon: KeyRound,
       active: path === '/settings/account/tokens'
+    },
+    {
+      href: '/settings/account/agents',
+      label: 'Agents',
+      icon: Bot,
+      active: path === '/settings/account/agents'
     },
     {
       href: '/settings/account/ssh-keys',

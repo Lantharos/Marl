@@ -1,3 +1,4 @@
+import type { IdentityKind } from './identity';
 import type { Identifier, MergeMethod, PullRequestState, RunState } from './common';
 import type { RepositorySummary } from './repositories';
 import type { LinkedWorkItem, WorkItemLabel, WorkItemPerson, WorkItemReferenceEvent } from './work-items';
@@ -10,6 +11,7 @@ export interface PullRequestSummary {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
+  authorKind?: IdentityKind;
   sourceBranch: string;
   sourceRepository?: { owner: string; name: string };
   targetBranch: string;
@@ -167,6 +169,7 @@ export interface PullRequestComment {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
+  authorKind?: IdentityKind;
   body: string;
   bodyHtml: string;
   createdAt: string;
@@ -181,6 +184,7 @@ export interface PullRequestReview {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
+  authorKind?: IdentityKind;
   state: 'commented' | 'approved' | 'changes_requested';
   body: string;
   bodyHtml: string;
@@ -206,6 +210,7 @@ export interface ReviewThread {
     author: string;
     authorDisplayName: string;
     authorAvatarUrl?: string | null;
+    authorKind?: IdentityKind;
     body: string;
     bodyHtml: string;
     createdAt: string;

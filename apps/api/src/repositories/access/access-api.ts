@@ -12,7 +12,7 @@ export async function getRepositoryAccess(env: Env, principal: Principal, owner:
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const [collaborators, teams, availableTeams, security] = await Promise.all([
     env.DB.prepare(
-      `SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,repository_collaborators.role,repository_collaborators.created_at AS addedAt FROM repository_collaborators JOIN users ON users.id=repository_collaborators.user_id WHERE repository_collaborators.repository_id=? ORDER BY users.handle`
+      `SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,users.kind,repository_collaborators.role,repository_collaborators.created_at AS addedAt FROM repository_collaborators JOIN users ON users.id=repository_collaborators.user_id WHERE repository_collaborators.repository_id=? ORDER BY users.handle`
     )
       .bind(repository.id)
       .all(),
@@ -56,15 +56,16 @@ export async function searchCollaboratorCandidates(
     .replace(/[\\%_]/g, '\\$&');
   if (!prefix) return json({ people: [] });
   const people = await env.DB.prepare(
-    `SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl FROM (
+    `SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,kind FROM (
       SELECT * FROM users WHERE handle LIKE ?1 ESCAPE '\\'
       UNION
       SELECT * FROM users WHERE display_name LIKE ?1 ESCAPE '\\'
     ) AS users
-    WHERE id<>?2 AND NOT EXISTS (SELECT 1 FROM repository_collaborators WHERE repository_id=?3 AND user_id=users.id)
+    WHERE id<>?2 AND deleted_at IS NULL AND suspended_at IS NULL AND (kind='person' OR (kind='agent' AND operator_organization_id=?4))
+      AND NOT EXISTS (SELECT 1 FROM repository_collaborators WHERE repository_id=?3 AND user_id=users.id)
     ORDER BY length(handle),handle LIMIT 8`
   )
-    .bind(`${prefix}%`, principal.id, repository.id)
+    .bind(`${prefix}%`, principal.id, repository.id, repository.organizationId)
     .all();
   return json({ people: people.results });
 }

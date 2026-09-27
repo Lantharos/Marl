@@ -1,6 +1,15 @@
 import { readAvatar } from '../account/profile';
 import { route } from '../http/router';
 import {
+  createAgent,
+  createAgentToken,
+  deleteAgent,
+  listAgents,
+  listAgentTokens,
+  revokeAgentToken,
+  updateAgent
+} from './agents';
+import {
   acceptOrganizationInvitation,
   addTeamMember,
   createTeam,
@@ -27,6 +36,27 @@ import { getPublicIdentityProfile } from './public-profiles';
 const organization = '/organizations/:slug';
 
 export const identityRoutes = [
+  route('GET', '/organizations/:slug/agents', 'user', ({ env, principal }, { slug }) =>
+    listAgents(env, principal, slug)
+  ),
+  route('POST', '/organizations/:slug/agents', 'user', ({ request, env, principal }, { slug }) =>
+    createAgent(request, env, principal, slug)
+  ),
+  route('PATCH', '/agents/:id(agent_[a-z0-9]+)', 'user', ({ request, env, principal }, { id }) =>
+    updateAgent(request, env, principal, id)
+  ),
+  route('DELETE', '/agents/:id(agent_[a-z0-9]+)', 'user', ({ request, env, principal }, { id }) =>
+    deleteAgent(request, env, principal, id)
+  ),
+  route('GET', '/agents/:id(agent_[a-z0-9]+)/tokens', 'user', ({ env, principal }, { id }) =>
+    listAgentTokens(env, principal, id)
+  ),
+  route('POST', '/agents/:id(agent_[a-z0-9]+)/tokens', 'user', ({ request, env, principal }, { id }) =>
+    createAgentToken(request, env, principal, id)
+  ),
+  route('DELETE', '/agents/:id(agent_[a-z0-9]+)/tokens/:token(token_[a-z0-9]+)', 'user', ({ env, principal }, p) =>
+    revokeAgentToken(env, principal, p.id, p.token)
+  ),
   route('GET', '/avatars/:user/:file', 'public', ({ env }, { user, file }) => readAvatar(env, user, file)),
   route('GET', '/organization-avatars/:organization/:file', 'public', ({ env }, { organization, file }) =>
     readOrganizationAvatar(env, organization, file)

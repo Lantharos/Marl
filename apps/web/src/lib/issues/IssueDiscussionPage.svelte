@@ -193,6 +193,7 @@
           handle={issue.author}
           displayName={issue.authorDisplayName}
           avatarUrl={issue.authorAvatarUrl}
+          kind={issue.authorKind}
           size={30}
           class="mr-auto"
         />

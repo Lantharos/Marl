@@ -177,6 +177,7 @@
           author={comment.author}
           displayName={comment.authorDisplayName}
           avatarUrl={comment.authorAvatarUrl}
+          kind={comment.authorKind}
           createdAt={comment.createdAt}
           contained={false}
         >

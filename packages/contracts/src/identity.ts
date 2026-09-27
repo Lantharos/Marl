@@ -13,6 +13,8 @@ export interface PublicUserProfile {
     bio: string;
     website: string | null;
     joinedAt: string;
+    kind: 'person' | 'agent';
+    operator: { slug: string; name: string } | null;
   };
   stats: { repositories: number; contributions: number; pullRequests: number };
   contributions: Array<{ date: string; count: number }>;
@@ -180,4 +182,18 @@ export interface OrganizationAccess {
   teams: OrganizationTeam[];
   teamMembers: OrganizationTeamMember[];
   invitations: OrganizationInvitation[];
+}
+
+export type IdentityKind = 'person' | 'agent' | 'mannequin';
+
+export interface Agent {
+  id: Identifier;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+  description: string;
+  createdAt: string;
+  activeTokens: number;
+  lastUsedAt: string | null;
+  repositories: number;
 }

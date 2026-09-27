@@ -64,6 +64,7 @@
         author={review.author}
         displayName={review.authorDisplayName}
         avatarUrl={review.authorAvatarUrl}
+        kind={review.authorKind}
         createdAt={review.createdAt}
         tone={review.state}
         {outcome}

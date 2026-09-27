@@ -137,6 +137,7 @@
             handle={person.handle}
             displayName={person.displayName}
             avatarUrl={person.avatarUrl}
+            kind={person.kind}
             size={30}
             showHandle
           />

@@ -57,6 +57,7 @@ async function pendingItems(env: Env, recipient: Recipient) {
     email: recipient.email,
     avatarUrl: null,
     staff: false,
+    kind: 'person',
     authType: 'session'
   };
   const reasons = new Set(recipient.reasons ? (JSON.parse(recipient.reasons) as InboxReason[]) : allReasons);

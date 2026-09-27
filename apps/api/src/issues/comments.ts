@@ -89,6 +89,7 @@ export async function addIssueComment(
         author: principal.handle,
         authorDisplayName: principal.displayName,
         authorAvatarUrl: principal.avatarUrl,
+        authorKind: principal.kind,
         body: comment,
         bodyHtml: renderBody(comment, { owner, repository: name }, id),
         createdAt,

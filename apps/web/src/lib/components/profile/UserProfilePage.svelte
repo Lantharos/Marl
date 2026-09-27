@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Bot from '@lucide/svelte/icons/bot';
   import Flag from '@lucide/svelte/icons/flag';
   import Button from '$lib/components/controls/Button.svelte';
   import { reporting } from '$lib/moderation/reporting.svelte';
@@ -48,6 +49,14 @@
     <UserAvatar name={userProfile.displayName || userProfile.handle} src={userProfile.avatarUrl} size={116} />
     <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink-strong">{userProfile.displayName}</h1>
     <p class="mt-0.5 text-base text-ink-muted">@{userProfile.handle}</p>
+    {#if userProfile.kind === 'agent'}<p class="mt-3 flex items-center gap-2 text-sm text-ink">
+        <Bot size={15} class="shrink-0 text-ink-muted" /><span
+          >Agent operated by {#if userProfile.operator}<a
+              class="font-semibold hover:text-brand"
+              href="/{userProfile.operator.slug}">{userProfile.operator.name}</a
+            >{/if}</span
+        >
+      </p>{/if}
     {#if userProfile.bio}<p class="mt-4 text-sm leading-relaxed whitespace-pre-wrap text-ink">{userProfile.bio}</p>{/if}
     <div class="mt-4 grid gap-2 text-sm text-ink-muted">
       {@render meta(userProfile.website, 'Joined', userProfile.joinedAt)}

@@ -463,15 +463,19 @@ CREATE TABLE `users` (
 	`signing_mode` text DEFAULT 'optional' NOT NULL,
 	`onboarding_dismissed_at` text,
 	`deleted_at` text,
+	`kind` text DEFAULT 'person' NOT NULL,
+	`operator_organization_id` text,
 	`staff` integer DEFAULT 0 NOT NULL,
 	`suspended_at` text,
 	`suspension_reason` text,
-	CONSTRAINT "users_check_0" CHECK(signing_mode IN ('optional','vigilant','firewall'))
+	CONSTRAINT "users_check_0" CHECK(signing_mode IN ('optional','vigilant','firewall')),
+	CONSTRAINT "users_kind" CHECK(kind IN ('person','agent','mannequin'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `users_by_auth_user` ON `users` (`auth_user_id`) WHERE auth_user_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `users_handle_unique` ON `users` ("handle" COLLATE NOCASE);--> statement-breakpoint
 CREATE INDEX `users_by_display_name` ON `users` ("display_name" COLLATE NOCASE);--> statement-breakpoint
+CREATE INDEX `users_by_operator` ON `users` (`operator_organization_id`) WHERE operator_organization_id IS NOT NULL;--> statement-breakpoint
 CREATE TABLE `content_mentions` (
 	`user_id` text NOT NULL,
 	`actor_id` text NOT NULL,

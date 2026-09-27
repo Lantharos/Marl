@@ -9,6 +9,7 @@ export interface Principal {
   avatarUrl: string | null;
   twoFactorEnabled?: boolean;
   staff: boolean;
+  kind: 'person' | 'agent';
   authType: 'session' | 'token';
   tokenScopes?: string[];
   tokenRepositoryIds?: string[] | null;
@@ -28,7 +29,12 @@ export async function authenticate(request: Request, env: Env): Promise<Principa
   const user = await ensureApplicationUser(env, session.user);
   if (user.suspended) return null;
   const { suspended: _, ...principal } = user;
-  return { ...principal, twoFactorEnabled: Boolean(session.user.twoFactorEnabled), authType: 'session' };
+  return {
+    ...principal,
+    kind: 'person',
+    twoFactorEnabled: Boolean(session.user.twoFactorEnabled),
+    authType: 'session'
+  };
 }
 
 export async function requireFreshSession(request: Request, env: Env, principal: Principal) {
@@ -47,7 +53,7 @@ export function principalHasScope(principal: Principal, scope: string) {
 async function authenticatePersonalToken(env: Env, token: string): Promise<Principal | null> {
   const tokenHash = await sha256(token);
   const row = await env.DB.prepare(
-    `SELECT users.id,users.handle,users.display_name AS displayName,users.email,users.avatar_url AS avatarUrl,users.staff,personal_access_tokens.id AS tokenId,personal_access_tokens.scopes_json AS scopesJson,personal_access_tokens.repository_ids_json AS repositoryIdsJson,personal_access_tokens.last_used_at AS lastUsedAt FROM personal_access_tokens JOIN users ON users.id=personal_access_tokens.user_id WHERE personal_access_tokens.token_hash=? AND personal_access_tokens.revoked_at IS NULL AND personal_access_tokens.expires_at>CURRENT_TIMESTAMP AND users.suspended_at IS NULL`
+    `SELECT users.id,users.handle,users.display_name AS displayName,users.email,users.avatar_url AS avatarUrl,users.staff,users.kind,personal_access_tokens.id AS tokenId,personal_access_tokens.scopes_json AS scopesJson,personal_access_tokens.repository_ids_json AS repositoryIdsJson,personal_access_tokens.last_used_at AS lastUsedAt FROM personal_access_tokens JOIN users ON users.id=personal_access_tokens.user_id WHERE personal_access_tokens.token_hash=? AND personal_access_tokens.revoked_at IS NULL AND personal_access_tokens.expires_at>CURRENT_TIMESTAMP AND users.suspended_at IS NULL`
   )
     .bind(tokenHash)
     .first<{
@@ -57,6 +63,7 @@ async function authenticatePersonalToken(env: Env, token: string): Promise<Princ
       email: string | null;
       avatarUrl: string | null;
       staff: number;
+      kind: 'person' | 'agent';
       tokenId: string;
       scopesJson: string;
       repositoryIdsJson: string | null;
@@ -74,6 +81,7 @@ async function authenticatePersonalToken(env: Env, token: string): Promise<Princ
     email: row.email,
     avatarUrl: row.avatarUrl,
     staff: Boolean(row.staff),
+    kind: row.kind,
     authType: 'token',
     tokenScopes: JSON.parse(row.scopesJson) as string[],
     tokenRepositoryIds: row.repositoryIdsJson ? (JSON.parse(row.repositoryIdsJson) as string[]) : null

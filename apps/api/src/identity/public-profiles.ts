@@ -12,6 +12,9 @@ type UserRow = {
   bio: string;
   website: string | null;
   joinedAt: string;
+  kind: 'person' | 'agent';
+  operatorSlug: string | null;
+  operatorName: string | null;
 };
 
 const publicRepositories = `repositories.visibility='public' AND repositories.deletion_scheduled_at IS NULL`;
@@ -20,7 +23,7 @@ const activePublicRepositories = `${publicRepositories} AND repositories.archive
 export async function getPublicIdentityProfile(env: Env, handle: string) {
   if (!validIdentitySlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
   const user = await env.DB.prepare(
-    'SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE AND deleted_at IS NULL'
+    `SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,users.bio,users.website,users.created_at AS joinedAt,users.kind,operators.slug AS operatorSlug,operators.name AS operatorName FROM users LEFT JOIN organizations AS operators ON operators.id=users.operator_organization_id WHERE users.handle=? COLLATE NOCASE AND users.deleted_at IS NULL AND users.suspended_at IS NULL AND users.kind<>'mannequin'`
   )
     .bind(handle)
     .first<UserRow>();
@@ -32,7 +35,7 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
   const user =
     loadedUser ??
     (await env.DB.prepare(
-      'SELECT id,handle,display_name AS displayName,avatar_url AS avatarUrl,bio,website,created_at AS joinedAt FROM users WHERE handle=? COLLATE NOCASE AND deleted_at IS NULL'
+      `SELECT users.id,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,users.bio,users.website,users.created_at AS joinedAt,users.kind,operators.slug AS operatorSlug,operators.name AS operatorName FROM users LEFT JOIN organizations AS operators ON operators.id=users.operator_organization_id WHERE users.handle=? COLLATE NOCASE AND users.deleted_at IS NULL AND users.suspended_at IS NULL AND users.kind<>'mannequin'`
     )
       .bind(handle)
       .first<UserRow>());
@@ -80,7 +83,9 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       website: user.website,
-      joinedAt: user.joinedAt
+      joinedAt: user.joinedAt,
+      kind: user.kind,
+      operator: user.operatorSlug ? { slug: user.operatorSlug, name: user.operatorName! } : null
     },
     stats: {
       repositories: Number(repositoryCount?.count ?? 0),

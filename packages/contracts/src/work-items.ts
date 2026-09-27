@@ -1,3 +1,4 @@
+import type { IdentityKind } from './identity';
 import type { Identifier } from './common';
 import type { RepositorySummary } from './repositories';
 
@@ -6,6 +7,7 @@ export interface WorkItemPerson {
   handle: string;
   displayName: string;
   avatarUrl?: string | null;
+  kind?: IdentityKind;
 }
 
 export interface WorkItemLabel {

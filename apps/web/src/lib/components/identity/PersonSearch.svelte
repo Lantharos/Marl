@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import type { WorkItemPerson } from '@marl/contracts';
+  import Bot from '@lucide/svelte/icons/bot';
   import Search from '@lucide/svelte/icons/search';
   import { api } from '$lib/api';
   import { popoverMotion } from '$lib/ui/popover';
@@ -115,8 +116,15 @@
         >
           <UserAvatar name={person.displayName} src={person.avatarUrl} size={24} />
           <span class="min-w-0">
-            <strong class="block truncate text-sm font-semibold text-ink-strong">{person.displayName}</strong>
-            <span class="block truncate text-xs text-ink-muted">@{person.handle}</span>
+            <strong class="flex items-center gap-1 truncate text-sm font-semibold text-ink-strong"
+              >{person.displayName}{#if person.kind === 'agent'}<Bot
+                  size={13}
+                  class="shrink-0 text-ink-muted"
+                />{/if}</strong
+            >
+            <span class="block truncate text-xs text-ink-muted"
+              >@{person.handle}{person.kind === 'agent' ? ' · agent' : ''}</span
+            >
           </span>
         </button>
       {:else}

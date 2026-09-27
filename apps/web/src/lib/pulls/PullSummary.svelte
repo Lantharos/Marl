@@ -77,6 +77,7 @@
       handle={pull.author}
       displayName={pull.authorDisplayName}
       avatarUrl={pull.authorAvatarUrl}
+      kind={pull.authorKind}
       size={22}
     />
     <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-ink-muted">

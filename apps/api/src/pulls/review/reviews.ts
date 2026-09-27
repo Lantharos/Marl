@@ -41,6 +41,7 @@ export async function reviewPull(
     author: principal.handle,
     authorDisplayName: principal.displayName,
     authorAvatarUrl: principal.avatarUrl,
+    authorKind: principal.kind,
     state: body.state,
     body: reviewText,
     bodyHtml: renderBody(reviewText, { owner, repository: name }, id),

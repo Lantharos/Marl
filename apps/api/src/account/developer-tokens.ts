@@ -1,3 +1,4 @@
+import type { InferOutput } from 'valibot';
 import type { Principal } from '../auth/principal';
 import { requireFreshSession, sha256 } from '../auth/principal';
 import { identifier } from '../core/domain';
@@ -39,11 +40,20 @@ export async function createPersonalAccessToken(request: Request, env: Env, prin
     return problem(403, 'identity_confirmation_required', 'Confirm your identity before creating a developer token.');
   const body = await readJson(request, personalAccessTokenBody);
   if (!body) return problem(422, 'invalid_token', 'Developer token settings are invalid.');
+  return issueToken(env, principal, principal.id, body);
+}
+
+export async function issueToken(
+  env: Env,
+  issuer: Principal,
+  userId: string,
+  body: InferOutput<typeof personalAccessTokenBody>
+) {
   const scopes = [...new Set(body.scopes)];
   const repositoryIds = body.repositoryIds?.length ? [...new Set(body.repositoryIds)] : null;
   if (repositoryIds) {
     for (const repositoryId of repositoryIds) {
-      const accessible = await authorizeRepositoryId(env, principal, repositoryId, 'repository.read');
+      const accessible = await authorizeRepositoryId(env, issuer, repositoryId, 'repository.read');
       if (!accessible) return problem(422, 'invalid_token_repository', 'A selected repository is unavailable.');
     }
   }
@@ -56,7 +66,7 @@ export async function createPersonalAccessToken(request: Request, env: Env, prin
   )
     .bind(
       id,
-      principal.id,
+      userId,
       body.name,
       await sha256(token),
       token.slice(0, 16),

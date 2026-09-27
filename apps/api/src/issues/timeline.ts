@@ -122,7 +122,7 @@ async function hydrate(
   return hydrated;
 }
 
-const commentSelect = `SELECT issue_comments.id,issue_comments.parent_id AS parentId,issue_comments.reply_to_id AS replyToId,issue_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,issue_comments.body,issue_comments.created_at AS createdAt,issue_comments.updated_at AS updatedAt,issue_comments.deleted_at AS deletedAt FROM issue_comments JOIN users ON users.id=issue_comments.author_id WHERE issue_comments.id IN`;
+const commentSelect = `SELECT issue_comments.id,issue_comments.parent_id AS parentId,issue_comments.reply_to_id AS replyToId,issue_comments.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,issue_comments.body,issue_comments.created_at AS createdAt,issue_comments.updated_at AS updatedAt,issue_comments.deleted_at AS deletedAt FROM issue_comments JOIN users ON users.id=issue_comments.author_id WHERE issue_comments.id IN`;
 
 async function replyContext(
   env: Env,

@@ -40,6 +40,7 @@ export async function addPullComment(
     author: principal.handle,
     authorDisplayName: principal.displayName,
     authorAvatarUrl: principal.avatarUrl,
+    authorKind: principal.kind,
     body: body.body.trim(),
     bodyHtml: renderBody(body.body.trim(), { owner, repository: name }, id),
     createdAt,

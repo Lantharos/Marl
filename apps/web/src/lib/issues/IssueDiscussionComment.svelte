@@ -106,6 +106,7 @@
       handle={comment.author}
       displayName={comment.authorDisplayName}
       avatarUrl={comment.authorAvatarUrl}
+      kind={comment.authorKind}
       size={28}
       class="mr-auto"
     />

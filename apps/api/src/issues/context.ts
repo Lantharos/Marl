@@ -1,3 +1,4 @@
+import type { IdentityKind } from '@marl/contracts';
 import type { WorkItemLabel, WorkItemPerson, IssueSummary } from '@marl/contracts';
 import type { Principal } from '../auth/principal';
 import { identifier } from '../core/domain';
@@ -13,6 +14,7 @@ export type IssueRow = {
   author: string;
   authorDisplayName: string;
   authorAvatarUrl: string | null;
+  authorKind: IdentityKind;
   state: 'open' | 'closed';
   lockedAt: string | null;
   createdAt: string;
@@ -22,7 +24,7 @@ export type IssueRow = {
   commentCount: number;
 };
 
-export const issueSelect = `SELECT issues.id,issues.repository_id AS repositoryId,issues.number,issues.title,issues.body,issues.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,issues.state,issues.locked_at AS lockedAt,issues.created_at AS createdAt,issues.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,(SELECT COUNT(*) FROM issue_comments WHERE issue_comments.issue_id=issues.id AND issue_comments.deleted_at IS NULL) AS commentCount FROM issues JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=issues.author_id`;
+export const issueSelect = `SELECT issues.id,issues.repository_id AS repositoryId,issues.number,issues.title,issues.body,issues.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,issues.state,issues.locked_at AS lockedAt,issues.created_at AS createdAt,issues.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,(SELECT COUNT(*) FROM issue_comments WHERE issue_comments.issue_id=issues.id AND issue_comments.deleted_at IS NULL) AS commentCount FROM issues JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=issues.author_id`;
 
 export function createIssueEvent(
   env: Env,
@@ -102,6 +104,7 @@ export async function summarizeIssueRows(
     author: row.author,
     authorDisplayName: row.authorDisplayName,
     authorAvatarUrl: row.authorAvatarUrl,
+    authorKind: row.authorKind,
     state: row.state,
     labels: labels.get(row.id) ?? [],
     assignees: assignees.get(row.id) ?? [],

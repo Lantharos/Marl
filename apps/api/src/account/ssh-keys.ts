@@ -119,6 +119,7 @@ export async function authorizeSsh(request: Request, env: Env) {
     email: user.email,
     avatarUrl: user.avatarUrl,
     staff: false,
+    kind: 'person',
     authType: 'session'
   };
   const access = await authorizeRepository(

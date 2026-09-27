@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { IdentityKind } from '@marl/contracts';
   import type { Snippet } from 'svelte';
   import Time from '../page/Time.svelte';
   import UserProfileLink from '../identity/UserProfileLink.svelte';
@@ -7,6 +8,7 @@
     author,
     displayName,
     avatarUrl,
+    kind = 'person',
     createdAt,
     outcome,
     tone,
@@ -17,6 +19,7 @@
     author: string;
     displayName: string;
     avatarUrl?: string | null;
+    kind?: IdentityKind;
     createdAt: string;
     outcome?: string;
     tone?: 'approved' | 'changes_requested' | 'commented';
@@ -35,7 +38,7 @@
 >
   <header class="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1.5">
     <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
-      <UserProfileLink handle={author} {displayName} {avatarUrl} size={28} />
+      <UserProfileLink handle={author} {displayName} {avatarUrl} {kind} size={28} />
       {#if outcome}<span
           class={[
             'text-xs',

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import Bot from '@lucide/svelte/icons/bot';
   import Building2 from '@lucide/svelte/icons/building-complex';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Users from '@lucide/svelte/icons/users';
@@ -21,7 +22,7 @@
     name: string;
     slug: string;
     avatarUrl?: string | null;
-    active: 'profile' | 'access' | 'secrets' | 'webhooks';
+    active: 'profile' | 'access' | 'agents' | 'secrets' | 'webhooks';
     showSecrets?: boolean;
     children: Snippet;
   } = $props();
@@ -29,6 +30,7 @@
   const items = $derived([
     { href: `${base}/profile`, label: 'Profile', icon: Building2, active: active === 'profile' },
     { href: `${base}/access`, label: 'People and teams', icon: Users, active: active === 'access' },
+    { href: `${base}/agents`, label: 'Agents', icon: Bot, active: active === 'agents' },
     ...(showSecrets
       ? [{ href: `${base}/secrets`, label: 'CI secrets', icon: KeyRound, active: active === 'secrets' }]
       : [])

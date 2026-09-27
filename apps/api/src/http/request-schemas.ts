@@ -321,3 +321,14 @@ export const webhookUpdateBody = strictObject({
   active: optional(boolean()),
   secret: optional(pipe(webhookSecret, minLength(8)))
 });
+
+export const agentBody = strictObject({
+  handle: pipe(string(), minLength(2), maxLength(39)),
+  displayName: pipe(string(), minLength(1), maxLength(80)),
+  description: pipe(string(), maxLength(280))
+});
+
+export const agentUpdateBody = strictObject({
+  displayName: pipe(string(), minLength(1), maxLength(80)),
+  description: pipe(string(), maxLength(280))
+});
