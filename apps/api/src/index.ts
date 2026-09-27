@@ -13,6 +13,8 @@ import { issueRoutes } from './issues/routes';
 import { moderationRoutes } from './moderation/routes';
 import { sendNotificationEmails } from './notifications/digest';
 import { notificationRoutes } from './notifications/routes';
+import { deliverWebhooks } from './webhooks/delivery';
+import { webhookRoutes } from './webhooks/routes';
 import { pullRoutes } from './pulls/routes';
 import { releaseRoutes } from './releases/routes';
 import { purgeDeletedRepositories } from './repositories/lifecycle';
@@ -32,7 +34,8 @@ const routes = [
   ...releaseRoutes,
   ...ciRoutes,
   ...moderationRoutes,
-  ...notificationRoutes
+  ...notificationRoutes,
+  ...webhookRoutes
 ];
 
 const notificationCron = '*/10 * * * *';
@@ -85,7 +88,8 @@ export default {
     if (controller.cron === notificationCron) await sendNotificationEmails(env);
     else await purgeDeletedRepositories(env);
   },
-  fetch: handle
+  fetch: handle,
+  queue: deliverWebhooks
 };
 
 export { PullRoom } from './pulls/realtime/room';

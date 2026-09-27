@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../webhooks/events';
 import { bodyExcerpt, renderBody } from '../core/markdown';
 import type { Principal } from '../auth/principal';
 import { auditStatement } from '../core/audit';
@@ -157,6 +158,7 @@ export async function createPull(
   );
   if (references.length) await env.DB.batch(references);
   await queuePullWorkflows(env, id);
+  await emitRepositoryEvent(env, repository.id, 'pull', 'opened', { kind: 'pull', id }, principal.handle);
   return json({ pullRequest: created && summary(created) }, { status: 201 });
 }
 

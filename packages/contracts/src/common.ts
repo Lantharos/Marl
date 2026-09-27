@@ -38,3 +38,28 @@ export interface AbuseReport {
   createdAt: string;
   subject: { title: string; excerpt: string; href: string; author: string | null; repository: string | null } | null;
 }
+
+export type WebhookEvent = 'push' | 'pull' | 'review' | 'issue' | 'comment' | 'release' | 'run';
+export type WebhookFormat = 'json' | 'slack' | 'discord';
+
+export interface Webhook {
+  id: Identifier;
+  url: string;
+  format: WebhookFormat;
+  events: WebhookEvent[];
+  active: boolean;
+  createdAt: string;
+  lastDelivery: { status: 'pending' | 'delivered' | 'failed'; responseStatus: number | null; createdAt: string } | null;
+}
+
+export interface WebhookDelivery {
+  id: Identifier;
+  event: WebhookEvent;
+  action: string;
+  status: 'pending' | 'delivered' | 'failed';
+  responseStatus: number | null;
+  responseExcerpt: string | null;
+  attempts: number;
+  durationMs: number | null;
+  createdAt: string;
+}

@@ -1118,4 +1118,44 @@ CREATE TABLE `review_threads` (
 	CONSTRAINT "review_threads_check_1" CHECK(start_side IN ('old', 'new'))
 );
 --> statement-breakpoint
-CREATE INDEX `review_threads_by_pull_commit` ON `review_threads` (`pull_request_id`,`commit_id`,`created_at`);
+CREATE INDEX `review_threads_by_pull_commit` ON `review_threads` (`pull_request_id`,`commit_id`,`created_at`);--> statement-breakpoint
+CREATE TABLE `webhook_deliveries` (
+	`id` text PRIMARY KEY NOT NULL,
+	`webhook_id` text NOT NULL,
+	`event` text NOT NULL,
+	`action` text NOT NULL,
+	`payload` text NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`response_status` integer,
+	`response_excerpt` text,
+	`attempts` integer DEFAULT 0 NOT NULL,
+	`duration_ms` integer,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`completed_at` text,
+	FOREIGN KEY (`webhook_id`) REFERENCES `webhooks`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "webhook_deliveries_status" CHECK(status IN ('pending','delivered','failed'))
+);
+--> statement-breakpoint
+CREATE INDEX `webhook_deliveries_by_webhook` ON `webhook_deliveries` (`webhook_id`,"created_at" COLLATE BINARY DESC);--> statement-breakpoint
+CREATE TABLE `webhooks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`repository_id` text,
+	`url` text NOT NULL,
+	`format` text DEFAULT 'json' NOT NULL,
+	`events_json` text NOT NULL,
+	`secret_ciphertext` text NOT NULL,
+	`secret_nonce` text NOT NULL,
+	`active` integer DEFAULT 1 NOT NULL,
+	`created_by` text,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "webhooks_format" CHECK(format IN ('json','slack','discord')),
+	CONSTRAINT "webhooks_active" CHECK(active IN (0,1))
+);
+--> statement-breakpoint
+CREATE INDEX `webhooks_by_repository` ON `webhooks` (`repository_id`);--> statement-breakpoint
+CREATE INDEX `webhooks_by_organization` ON `webhooks` (`organization_id`,`repository_id`);

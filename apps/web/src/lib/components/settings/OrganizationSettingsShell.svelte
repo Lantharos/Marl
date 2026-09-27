@@ -4,6 +4,7 @@
   import Building2 from '@lucide/svelte/icons/building-complex';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Users from '@lucide/svelte/icons/users';
+  import Webhook from '@lucide/svelte/icons/webhook';
   import OrganizationAvatar from '../identity/OrganizationAvatar.svelte';
   import BackLink from '../page/BackLink.svelte';
   import SettingsLayout from './SettingsLayout.svelte';
@@ -20,7 +21,7 @@
     name: string;
     slug: string;
     avatarUrl?: string | null;
-    active: 'profile' | 'access' | 'secrets';
+    active: 'profile' | 'access' | 'secrets' | 'webhooks';
     showSecrets?: boolean;
     children: Snippet;
   } = $props();

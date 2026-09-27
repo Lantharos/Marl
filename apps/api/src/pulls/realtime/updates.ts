@@ -1,3 +1,4 @@
+import { emitPullUpdate } from '../../webhooks/pull-events';
 import type { PullRealtimeUpdate } from '@marl/contracts';
 import { identifier } from '../../core/domain';
 import type { D1PreparedStatement, Env } from '../../core/platform';
@@ -33,6 +34,7 @@ export async function commitPullUpdate(
       body: JSON.stringify(update)
     });
   } catch {}
+  await emitPullUpdate(env, pullId, kind, payload as Parameters<typeof emitPullUpdate>[3]);
   return update;
 }
 

@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../webhooks/events';
 import { labelColor } from '../core/labels';
 import { renderBody } from '../core/markdown';
 import type { Principal } from '../auth/principal';
@@ -71,6 +72,7 @@ export async function createIssue(
     description
   );
   if (references.length) await env.DB.batch(references);
+  await emitRepositoryEvent(env, repository.id, 'issue', 'opened', { kind: 'issue', id }, principal.handle);
   return json({ issue: (await summarizeIssueRows(env, [row]))[0] }, { status: 201 });
 }
 
@@ -180,6 +182,14 @@ export async function setIssueState(
       subjectId: context.issue.id
     })
   ]);
+  await emitRepositoryEvent(
+    env,
+    context.repository.id,
+    'issue',
+    body.state === 'closed' ? 'closed' : 'reopened',
+    { kind: 'issue', id: context.issue.id },
+    principal.handle
+  );
   return json({ state: body.state, timeline: (await savedIssueEvents(env, [event]))[0] });
 }
 

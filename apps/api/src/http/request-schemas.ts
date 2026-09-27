@@ -299,3 +299,25 @@ export const notificationPreferencesBody = strictObject({
 });
 
 export const repositoryNotificationBody = strictObject({ level: picklist(['all', 'mentions', 'ignore']) });
+
+const webhookEvents = pipe(
+  array(picklist(['push', 'pull', 'review', 'issue', 'comment', 'release', 'run'])),
+  maxLength(7)
+);
+const webhookUrl = pipe(string(), minLength(8), maxLength(2_000));
+const webhookSecret = pipe(string(), maxLength(200));
+
+export const webhookBody = strictObject({
+  url: webhookUrl,
+  format: picklist(['json', 'slack', 'discord']),
+  events: webhookEvents,
+  secret: optional(webhookSecret)
+});
+
+export const webhookUpdateBody = strictObject({
+  url: optional(webhookUrl),
+  format: optional(picklist(['json', 'slack', 'discord'])),
+  events: optional(webhookEvents),
+  active: optional(boolean()),
+  secret: optional(pipe(webhookSecret, minLength(8)))
+});

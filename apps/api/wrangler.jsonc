@@ -40,6 +40,10 @@
       "migrations_dir": "migrations"
     }
   ],
+  "queues": {
+    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "marl-webhooks" }],
+    "consumers": [{ "queue": "marl-webhooks", "max_batch_size": 10, "max_retries": 6 }]
+  },
   "r2_buckets": [
     {
       "binding": "OBJECTS",

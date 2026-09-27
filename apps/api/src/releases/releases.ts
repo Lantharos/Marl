@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../webhooks/events';
 import { bodyExcerpt, renderBody } from '../core/markdown';
 import type { ReleaseDetail, ReleaseSummary, RepositoryTag } from '@marl/contracts';
 import { auditStatement } from '../core/audit';
@@ -202,6 +203,8 @@ export async function createRelease(
       return problem(409, 'release_tag_exists', 'A release already uses this tag.');
     throw error;
   }
+  if (!draft)
+    await emitRepositoryEvent(env, repository.id, 'release', 'published', { kind: 'release', id }, principal.handle);
   return json({ release: { id, tagName: body.tagName, draft } }, { status: 201 });
 }
 
@@ -294,6 +297,15 @@ export async function updateRelease(
       return problem(409, 'release_tag_exists', 'A release already uses this tag.');
     throw error;
   }
+  if (publishing)
+    await emitRepositoryEvent(
+      env,
+      repository.id,
+      'release',
+      'published',
+      { kind: 'release', id: releaseId },
+      principal.handle
+    );
   return json({
     release: { id: releaseId, tagName, draft, prerelease, latest }
   });

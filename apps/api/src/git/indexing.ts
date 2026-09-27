@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../webhooks/events';
 import { auditStatement } from '../core/audit';
 import type { Principal } from '../auth/principal';
 import { safeRepositoryPath, validBranchName } from '../core/domain';
@@ -277,6 +278,23 @@ export async function indexGit(
           }))
         }
       }).run();
+    const sender = actorId
+      ? await env.DB.prepare('SELECT handle FROM users WHERE id=?').bind(actorId).first<{ handle: string }>()
+      : null;
+    for (const branch of changedBranches)
+      await emitRepositoryEvent(
+        env,
+        body.repositoryId,
+        'push',
+        'pushed',
+        {
+          kind: 'push',
+          ref: `refs/heads/${branch.name}`,
+          before: previousHeads.get(branch.name) ?? null,
+          after: branch.commitId
+        },
+        sender?.handle ?? null
+      );
   }
   const branchCommits = await queryInChunks(
     [...new Set(indexedBranches.map((branch) => branch.commitId))],

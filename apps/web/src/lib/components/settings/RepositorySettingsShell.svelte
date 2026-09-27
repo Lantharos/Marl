@@ -5,6 +5,7 @@
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Settings from '@lucide/svelte/icons/settings';
   import Users from '@lucide/svelte/icons/users';
+  import Webhook from '@lucide/svelte/icons/webhook';
   import SettingsLayout from './SettingsLayout.svelte';
   import SettingsNav from './SettingsNav.svelte';
 
@@ -25,7 +26,13 @@
       icon: Users,
       active: path.startsWith(`${settings}/access`)
     },
-    { href: `${settings}/secrets`, label: 'CI secrets', icon: KeyRound, active: path.startsWith(`${settings}/secrets`) }
+    {
+      href: `${settings}/secrets`,
+      label: 'CI secrets',
+      icon: KeyRound,
+      active: path.startsWith(`${settings}/secrets`)
+    },
+    { href: `${settings}/webhooks`, label: 'Webhooks', icon: Webhook, active: path.startsWith(`${settings}/webhooks`) }
   ]);
 </script>
 

@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../webhooks/events';
 import { renderBody } from '../core/markdown';
 import type { Principal } from '../auth/principal';
 import { identifier } from '../core/domain';
@@ -70,6 +71,14 @@ export async function addIssueComment(
   )
     .bind(issue.id, id)
     .first<{ sequence: number }>();
+  await emitRepositoryEvent(
+    env,
+    repository.id,
+    'comment',
+    'created',
+    { kind: 'comment', id, on: 'issue' },
+    principal.handle
+  );
   return json(
     {
       comment: {

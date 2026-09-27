@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../../webhooks/events';
 import type { RunnerJobLease } from '@marl/contracts';
 import { sha256 } from '../../auth/principal';
 import { identifier } from '../../core/domain';
@@ -274,11 +275,13 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
         : states.has('queued')
           ? 'queued'
           : 'success';
-  await env.DB.prepare(
-    `UPDATE runs SET state=?,completed_at=CASE WHEN ? IN ('success','failure','canceled') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=?`
+  const transition = await env.DB.prepare(
+    `UPDATE runs SET state=?,completed_at=CASE WHEN ? IN ('success','failure','canceled') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=? AND state<>?`
   )
-    .bind(runState, runState, job.runId)
+    .bind(runState, runState, job.runId, runState)
     .run();
   await notifyPullsForCommit(env, job.repositoryId, job.commitId);
+  if (transition.meta.changes && ['success', 'failure', 'canceled'].includes(runState))
+    await emitRepositoryEvent(env, job.repositoryId, 'run', 'completed', { kind: 'run', id: job.runId }, null);
   return json({ completed: true, runState });
 }

@@ -9,3 +9,4 @@ export * from './organizations';
 export * from './releases';
 export * from './repositories';
 export * from './reviews';
+export * from './webhooks';

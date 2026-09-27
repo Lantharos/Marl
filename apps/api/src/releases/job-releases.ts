@@ -1,3 +1,4 @@
+import { emitRepositoryEvent } from '../webhooks/events';
 import { auditStatement } from '../core/audit';
 import { identifier, validTagName } from '../core/domain';
 import { problem } from '../http/http';
@@ -165,6 +166,7 @@ export async function publishJobRelease(env: Env, jobId: string): Promise<Respon
       })
     );
     await env.DB.batch(statements);
+    await emitRepositoryEvent(env, job.repositoryId, 'release', 'published', { kind: 'release', id: stored.id }, null);
   }
   return null;
 }
