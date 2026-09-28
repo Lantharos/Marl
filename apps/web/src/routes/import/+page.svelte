@@ -129,17 +129,15 @@
         <Checkbox
           bind:checked={include.pulls}
           label="Pulls"
-          description="Open, closed, and merged, with their conversations."
+          description="Open, closed, and merged, with their reviews and conversations."
         />
         <Checkbox
           bind:checked={include.releases}
           label="Releases"
-          description="Release notes for tags in the repository."
+          description="Release notes and files for tags in the repository."
         />
       </div>
-      <p class="text-xs leading-relaxed text-ink-muted">
-        People who aren’t on Marl appear by their GitHub username. Review comments on specific lines stay on GitHub.
-      </p>
+      <p class="text-xs leading-relaxed text-ink-muted">People who aren’t on Marl appear by their GitHub username.</p>
     </div>
     {#if error}<Notice>{error}</Notice>{/if}
     <div class="flex flex-wrap justify-end gap-2">

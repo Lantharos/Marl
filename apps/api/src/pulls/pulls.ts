@@ -9,6 +9,7 @@ import type { Env } from '../core/platform';
 import {
   canManageRepository as membership,
   createPullEvent,
+  detachedSource,
   preservePullRefs,
   pullCommits,
   pullRepository as repo,
@@ -304,9 +305,11 @@ export async function transitionPull(
   if (pull.state !== 'closed')
     return problem(409, 'pull_request_not_closed', 'Only a closed pull request can be reopened.');
   const [source, target] = await Promise.all([
-    env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?')
-      .bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch)
-      .first<{ name: string; commitId: string }>(),
+    detachedSource(pull.sourceBranch)
+      ? { commitId: pull.sourceCommitId }
+      : env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id=? AND name=?')
+          .bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch)
+          .first<{ commitId: string }>(),
     env.DB.prepare('SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? AND name=?')
       .bind(repository.id, pull.targetBranch)
       .first<{ name: string; commitId: string }>()

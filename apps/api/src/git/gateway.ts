@@ -55,7 +55,6 @@ export interface GitGatewayRequestMap {
     repositoryId: string;
     owner: string;
     repository: string;
-    sourceBranch: string;
     targetBranch: string;
     sourceCommitId: string;
     targetCommitId: string;

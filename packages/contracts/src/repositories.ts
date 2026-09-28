@@ -39,8 +39,20 @@ export interface RepositoryImport {
   id: Identifier;
   source: string;
   status: 'running' | 'completed' | 'failed';
-  step: 'git' | 'labels' | 'pulls' | 'issues' | 'comments' | 'releases' | 'finished';
-  stats: Partial<Record<'labels' | 'pulls' | 'issues' | 'comments' | 'releases', number>>;
+  step:
+    | 'git'
+    | 'labels'
+    | 'pulls'
+    | 'reviews'
+    | 'review_comments'
+    | 'issues'
+    | 'comments'
+    | 'releases'
+    | 'assets'
+    | 'finished';
+  stats: Partial<
+    Record<'labels' | 'pulls' | 'reviews' | 'reviewComments' | 'issues' | 'comments' | 'releases' | 'assets', number>
+  >;
   error: string | null;
   createdAt: string;
   completedAt: string | null;

@@ -90,6 +90,7 @@ END;
 --> statement-breakpoint
 CREATE TRIGGER reviews_match_current_head BEFORE INSERT ON pull_request_reviews
 WHEN NOT EXISTS (SELECT 1 FROM pull_requests WHERE id=NEW.pull_request_id AND source_commit_id=NEW.commit_id AND state IN ('open','draft'))
+  AND NOT EXISTS (SELECT 1 FROM pull_requests JOIN repository_imports ON repository_imports.repository_id=pull_requests.repository_id AND repository_imports.status='running' WHERE pull_requests.id=NEW.pull_request_id)
 BEGIN SELECT RAISE(ABORT,'pull_head_changed'); END;
 --> statement-breakpoint
 CREATE TRIGGER automatic_runs_match_pull_head BEFORE INSERT ON runs

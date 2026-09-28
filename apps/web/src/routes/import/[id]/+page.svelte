@@ -13,16 +13,17 @@
 
   let { data }: { data: PageData } = $props();
   let current = $state<RepositoryImport>(untrack(() => data.import));
-  const steps: Array<{ id: RepositoryImport['step']; label: string; count?: keyof RepositoryImport['stats'] }> = [
-    { id: 'git', label: 'Git history' },
-    { id: 'labels', label: 'Labels', count: 'labels' },
-    { id: 'pulls', label: 'Pulls', count: 'pulls' },
-    { id: 'issues', label: 'Issues', count: 'issues' },
-    { id: 'comments', label: 'Comments', count: 'comments' },
-    { id: 'releases', label: 'Releases', count: 'releases' }
+  const steps: Array<{ ids: RepositoryImport['step'][]; label: string; count?: keyof RepositoryImport['stats'] }> = [
+    { ids: ['git'], label: 'Git history' },
+    { ids: ['labels'], label: 'Labels', count: 'labels' },
+    { ids: ['pulls'], label: 'Pulls', count: 'pulls' },
+    { ids: ['reviews', 'review_comments'], label: 'Reviews', count: 'reviews' },
+    { ids: ['issues'], label: 'Issues', count: 'issues' },
+    { ids: ['comments'], label: 'Comments', count: 'comments' },
+    { ids: ['releases', 'assets'], label: 'Releases', count: 'releases' }
   ];
   const position = $derived(
-    current.step === 'finished' ? steps.length : steps.findIndex((step) => step.id === current.step)
+    current.step === 'finished' ? steps.length : steps.findIndex((step) => step.ids.includes(current.step))
   );
   const path = $derived(`${current.repository.owner}/${current.repository.name}`);
 
@@ -49,7 +50,7 @@
   backLabel="Repositories"
 >
   <ol class="grid gap-1">
-    {#each steps as step, index (step.id)}
+    {#each steps as step, index (step.label)}
       <li class="flex min-h-10 items-center gap-3 rounded-lg px-2">
         <span class="grid size-5.5 place-items-center">
           {#if index < position}<Check

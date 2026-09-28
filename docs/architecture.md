@@ -140,7 +140,12 @@ subscribed webhook and enqueues it; the consumer signs the body with HMAC-SHA256
 response, and retries with exponential backoff. An import runs one bounded step per message: the Git
 step asks the gateway to fetch branches, tags, and pull heads through the same capture and
 publication path as a push, and each later step copies one page from the GitHub API before
-enqueuing the next. GitHub rate limits delay the message until the limit resets.
+enqueuing the next. Review verdicts are read 25 pulls per step, and release files stream straight
+into object storage, up to 512 MiB per step. While an import runs, reviews may target commits that
+are no longer a pull's head. GitHub rate limits delay the message until the limit resets.
+
+The gateway merges a pull's recorded source commit, which pull refs keep inside the target
+repository, so pulls from forks merge without reading the fork's branches.
 
 ## Git and the local core
 

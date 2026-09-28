@@ -229,11 +229,12 @@ history. See [`releases.md`](releases.md) for lifecycle and limits.
 ## Imports
 
 Importing from GitHub copies a repository's branches, tags, and pull heads, then its labels,
-issues, pulls, conversation comments, and releases with their original numbers and dates. People
-who are not on Marl appear under their GitHub username without a profile; work by the person who
-started the import is attributed to their account. Pulls from forks keep their origin and must be
-reopened from a branch in the repository before they can merge. Line-level review comments stay on
-GitHub.
+pulls with their reviews and line comments, issues, conversation comments, and releases with their
+files, keeping original numbers and dates. People who are not on Marl appear under their GitHub
+username without a profile; work by the person who started the import is attributed to their
+account. Pulls from forks keep their origin and the commit they proposed, so they can be reviewed
+and merged as they are; they cannot receive new commits. Line comments on closed and merged pulls
+arrive resolved.
 
 ## Integrations
 

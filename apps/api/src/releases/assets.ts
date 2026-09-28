@@ -8,7 +8,7 @@ import { authorizeRepository, authorizeRepositoryId } from '../repositories/acce
 import { releaseAssetUploadBody } from '../http/request-schemas';
 
 const partBytes = 8 * 1024 * 1024;
-const maximumAssets = 100;
+export const maximumAssets = 100;
 const uploadLifetimeMs = 24 * 60 * 60 * 1000;
 
 type UploadRow = {
@@ -342,7 +342,7 @@ async function findUpload(env: Env, uploadId: string) {
     .first<UploadRow>();
 }
 
-function normalizeAssetName(value: string) {
+export function normalizeAssetName(value: string) {
   const name = value.trim();
   if (
     !name ||
@@ -356,7 +356,7 @@ function normalizeAssetName(value: string) {
   return name;
 }
 
-function normalizeContentType(value?: string) {
+export function normalizeContentType(value?: string) {
   const type = value?.trim().toLowerCase() ?? '';
   return type && !/[\r\n]/.test(type) ? type : 'application/octet-stream';
 }

@@ -5,7 +5,7 @@ import { branchRuleFor, type MergeMethod } from '../../repositories/branch-rules
 import { requestGatewayWrite } from '../../git/writes';
 import { json, problem, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
-import { createPullEvent, pullSelect, type PullRow } from '../context';
+import { createPullEvent, detachedSource, pullSelect, type PullRow } from '../context';
 import { mergeRequirements } from './requirements';
 import { commitPullUpdate } from '../realtime/updates';
 import { queuePullWorkflows } from './checks';
@@ -33,12 +33,6 @@ export async function mergePull(
   if (!permission.allowed) return problem(403, 'merge_not_allowed', 'You do not have permission to merge this pull.');
   if (pull.state === 'merged' && pull.mergedCommitId) return json({ merged: true, commitId: pull.mergedCommitId });
   if (pull.state !== 'open') return problem(409, 'pull_request_not_open', 'Pull request is not open.');
-  if (pull.sourceBranch.includes(':'))
-    return problem(
-      409,
-      'pull_source_unavailable',
-      'This pull was imported from a fork on GitHub. Push its branch here and open a new pull to merge it.'
-    );
   const body = await readJson(request, mergeBody);
   if (!body || body.commitId !== pull.sourceCommitId)
     return problem(409, 'pull_head_changed', 'The pull changed. Check the latest revision before merging.');
@@ -47,9 +41,11 @@ export async function mergePull(
     return problem(422, 'invalid_merge_method', 'Choose merge, squash, or rebase.');
   if (permission.authorMerge) await queuePullWorkflows(env, pull.id);
   const [source, target, checks, reviews, unresolvedThreads] = await Promise.all([
-    env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?')
-      .bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch)
-      .first<{ commitId: string }>(),
+    detachedSource(pull.sourceBranch)
+      ? { commitId: pull.sourceCommitId }
+      : env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?')
+          .bind(pull.sourceRepositoryId ?? repository.id, pull.sourceBranch)
+          .first<{ commitId: string }>(),
     env.DB.prepare('SELECT commit_id AS commitId FROM branches WHERE repository_id = ? AND name = ?')
       .bind(repository.id, pull.targetBranch)
       .first<{ commitId: string }>(),
@@ -118,7 +114,6 @@ export async function mergePull(
     repositoryId: repository.id,
     owner,
     repository: name,
-    sourceBranch: pull.sourceBranch,
     targetBranch: pull.targetBranch,
     sourceCommitId: pull.sourceCommitId,
     targetCommitId: pull.targetCommitId,

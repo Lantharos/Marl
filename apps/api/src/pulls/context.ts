@@ -48,6 +48,10 @@ export type PullRow = {
 };
 export type ReviewStatus = 'none' | 'requested' | 'approved' | 'changes_requested';
 
+export function detachedSource(sourceBranch: string) {
+  return sourceBranch.includes(':');
+}
+
 export const pullSelect = `SELECT pull_requests.id,pull_requests.repository_id AS repositoryId,pull_requests.source_repository_id AS sourceRepositoryId,pull_requests.number,pull_requests.title,pull_requests.body,pull_requests.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,pull_requests.source_branch AS sourceBranch,pull_requests.target_branch AS targetBranch,pull_requests.source_commit_id AS sourceCommitId,pull_requests.target_commit_id AS targetCommitId,pull_requests.state,pull_requests.merged_commit_id AS mergedCommitId,pull_requests.merge_method AS mergeMethod,pull_requests.locked_at AS lockedAt,pull_requests.realtime_version AS realtimeVersion,pull_requests.created_at AS createdAt,pull_requests.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,COALESCE(source_organizations.slug,organizations.slug) AS sourceOwner,COALESCE(source_repositories.name,repositories.name) AS sourceRepository FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=pull_requests.author_id LEFT JOIN repositories AS source_repositories ON source_repositories.id=pull_requests.source_repository_id LEFT JOIN organizations AS source_organizations ON source_organizations.id=source_repositories.organization_id`;
 
 export function createPullEvent(
