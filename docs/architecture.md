@@ -182,6 +182,11 @@ searched without a separate index. It lists the tree once, skips binary files an
 engine. A search stops after 100 matching files or eight seconds and reports that it was cut
 short.
 
+File listings are stored only for the trees that branches currently point to. An index run
+lists the trees of branches that moved since the previous run, and a complete run deletes the
+listings of trees no branch points to anymore. Browsing an older commit or a pull's recorded
+revisions reads the tree from Git instead.
+
 Definitions are indexed for each repository's default branch. After every index run, the gateway
 compares the new head with the commit recorded in `repository_symbol_indexes`, extracts
 definitions from the changed files with per-language patterns, and sends bounded pages that

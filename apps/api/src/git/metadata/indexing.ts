@@ -12,6 +12,8 @@ import { queuePullsForIndexedRepository } from '../../pulls/merge/checks';
 import { authorizeRepository, authorizeRepositoryId, lookupRepository } from '../../repositories/access/access';
 import { placeholders, queryInChunks } from '../../repositories/content/source';
 
+const entryDeleteBatch = 1_000;
+
 export async function authorizeGit(
   env: Env,
   principal: Principal | null,
@@ -246,10 +248,12 @@ export async function indexGit(
     await env.DB.prepare('UPDATE repositories SET default_branch = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(body.defaultBranch, body.repositoryId)
       .run();
-  if (body.complete)
+  if (body.complete) {
     await env.DB.prepare('DELETE FROM branches WHERE repository_id=? AND index_version!=?')
       .bind(body.repositoryId, body.indexId)
       .run();
+    await pruneEntries(env, body.repositoryId);
+  }
   const actorId =
     (gatewayTrusted ? body.actorId : principal?.id) ??
     (
@@ -342,4 +346,21 @@ export async function indexGit(
     },
     workflows: { queued: workflowsQueued, warnings: workflowWarnings }
   });
+}
+
+async function pruneEntries(env: Env, repositoryId: string) {
+  const stale = await env.DB.prepare(
+    'SELECT DISTINCT tree_id AS treeId FROM repository_entries WHERE repository_id=?1 AND tree_id NOT IN (SELECT commits.tree_id FROM branches JOIN commits ON commits.repository_id=branches.repository_id AND commits.id=branches.commit_id WHERE branches.repository_id=?1)'
+  )
+    .bind(repositoryId)
+    .all<{ treeId: string }>();
+  for (const { treeId } of stale.results)
+    for (;;) {
+      const result = await env.DB.prepare(
+        `DELETE FROM repository_entries WHERE rowid IN (SELECT rowid FROM repository_entries WHERE repository_id=? AND tree_id=? LIMIT ${entryDeleteBatch})`
+      )
+        .bind(repositoryId, treeId)
+        .run();
+      if (result.meta.changes < entryDeleteBatch) break;
+    }
 }

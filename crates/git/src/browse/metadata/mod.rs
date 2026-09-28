@@ -240,7 +240,10 @@ async fn index_inner(state: &AppState, request: IndexRequest) -> Result<Vec<Stri
     let changes = index_changes(&repository, &commits, &request.exclude_commits).await?;
     let mut indexed = HashSet::new();
     let mut entries = Vec::new();
-    for branch in &branches {
+    for branch in branches
+        .iter()
+        .filter(|branch| !request.exclude_commits.contains(&branch.commit_id))
+    {
         let tree_id = git_output(
             &repository,
             &["rev-parse", &format!("{}^{{tree}}", branch.commit_id)],
