@@ -197,3 +197,10 @@ export interface Agent {
   lastUsedAt: string | null;
   repositories: number;
 }
+
+export interface SavedReply {
+  id: Identifier;
+  title: string;
+  body: string;
+  updatedAt: string;
+}

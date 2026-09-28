@@ -151,6 +151,14 @@ signature checks. Every attachment read rechecks repository access, including by
 requests; private media is never served from a public cache. Uploaded files belong to the repository,
 and removing their Markdown reference does not delete the stored file.
 
+## Writing
+
+Every comment box offers the person's saved replies, inserted at the cursor from the toolbar or
+with Ctrl . and managed in account settings. A new issue or pull starts from the repository's
+template when the default branch has one: `.marl/issue_template.md` and `.marl/pull_template.md`,
+or the GitHub locations for `issue_template.md` and `pull_request_template.md`. Changing the
+repository swaps the template unless the description was already edited.
+
 ## Pulls
 
 Pulls are Marl's flagship surface. The open queue is organized by the next useful action instead

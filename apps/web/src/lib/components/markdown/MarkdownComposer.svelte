@@ -16,6 +16,8 @@
   import Button from '../controls/Button.svelte';
   import Spinner from '../feedback/Spinner.svelte';
   import MarkdownBody from './MarkdownBody.svelte';
+  import SavedReplyPicker from './SavedReplyPicker.svelte';
+  import { page } from '$app/state';
   import { markdownPreview } from './markdown-preview';
   import type { MarkdownContext } from '$lib/markdown/context';
   import { mediaAccept, mediaFileError, MediaUploadQueue } from '$lib/media/uploads.svelte';
@@ -46,6 +48,7 @@
   let textarea = $state<HTMLTextAreaElement>();
   let picker = $state<HTMLInputElement>();
   let dragOver = $state(false);
+  let repliesOpen = $state(false);
   let attachmentError = $state('');
   const uploads = new MediaUploadQueue(replaceUpload, (pending) => {
     uploading = pending;
@@ -151,7 +154,21 @@
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && onsubmit) {
       event.preventDefault();
       onsubmit();
+    } else if (event.key === '.' && (event.metaKey || event.ctrlKey) && page.data.shellUser) {
+      event.preventDefault();
+      repliesOpen = true;
     }
+  }
+
+  function insert(text: string) {
+    const start = textarea?.selectionStart ?? value.length;
+    const end = textarea?.selectionEnd ?? value.length;
+    value = `${value.slice(0, start)}${text}${value.slice(end)}`;
+    mode = 'write';
+    void tick().then(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + text.length, start + text.length);
+    });
   }
 
   function line(prefix: string) {
@@ -210,6 +227,7 @@
         {@render tool('Link', Link, () => wrap('[', '](https://)', 'label'))}
         {@render tool('Bulleted list', List, () => line('- '))}
         {@render tool('Numbered list', ListOrdered, () => line('1. '))}
+        {#if page.data.shellUser}<SavedReplyPicker bind:open={repliesOpen} text={value} onInsert={insert} />{/if}
       </fieldset>
     {/if}
   </header>

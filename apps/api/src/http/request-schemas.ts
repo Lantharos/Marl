@@ -40,6 +40,11 @@ export const branchRuleBody = strictObject({
   mergeQueue: boolean()
 });
 
+export const savedReplyBody = strictObject({
+  title: pipe(string(), maxLength(100)),
+  body: pipe(string(), maxLength(10_000))
+});
+
 export const symbolStateBody = strictObject({ repositoryId: identifier });
 
 export const symbolPageBody = strictObject({

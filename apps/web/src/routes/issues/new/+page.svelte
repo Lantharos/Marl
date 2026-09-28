@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { repositoryTemplate } from '$lib/repositories/templates';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
@@ -21,6 +22,17 @@
   let creating = $state(false);
   let uploading = $state(false);
   let error = $state('');
+  let appliedTemplate = '';
+
+  $effect(() => {
+    const current = repository;
+    if (!current) return;
+    void repositoryTemplate(current, 'issue').then((template) => {
+      if (current !== repository || (body.trim() && body !== appliedTemplate)) return;
+      body = template ?? '';
+      appliedTemplate = body;
+    });
+  });
   const options = $derived(
     data.repositories.map((item: RepositorySummary) => ({
       value: `${item.owner}/${item.name}`,

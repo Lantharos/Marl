@@ -1,3 +1,4 @@
+import { createSavedReply, deleteSavedReply, listSavedReplies, updateSavedReply } from './saved-replies';
 import { getSigningSettings, updateSigningSettings } from '../git/commit-signing';
 import { json } from '../http/http';
 import { route } from '../http/router';
@@ -45,6 +46,14 @@ export const accountRoutes = [
   route('GET', '/account/export', 'user', ({ env, principal, url }) => downloadExport(env, principal, url)),
   route('GET', '/account/deletion', 'user', ({ env, principal }) => previewAccountDeletion(env, principal)),
   route('DELETE', '/account', 'user', ({ request, env, principal }) => deleteAccount(request, env, principal)),
+  route('GET', '/saved-replies', 'user', ({ env, principal }) => listSavedReplies(env, principal)),
+  route('POST', '/saved-replies', 'user', ({ request, env, principal }) => createSavedReply(request, env, principal)),
+  route('PATCH', '/saved-replies/:id(reply_[a-z0-9]+)', 'user', ({ request, env, principal }, { id }) =>
+    updateSavedReply(request, env, principal, id)
+  ),
+  route('DELETE', '/saved-replies/:id(reply_[a-z0-9]+)', 'user', ({ env, principal }, { id }) =>
+    deleteSavedReply(env, principal, id)
+  ),
   route('GET', '/signing', 'user', ({ env, principal }) => getSigningSettings(env, principal)),
   route('PATCH', '/signing', 'user', ({ request, env, principal }) => updateSigningSettings(request, env, principal))
 ];

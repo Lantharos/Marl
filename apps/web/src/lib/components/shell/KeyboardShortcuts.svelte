@@ -7,7 +7,8 @@
       title: 'Everywhere',
       shortcuts: [
         { keys: ['Ctrl', 'K'], label: 'Search and jump anywhere' },
-        { keys: ['?'], label: 'Show keyboard shortcuts' }
+        { keys: ['?'], label: 'Show keyboard shortcuts' },
+        { keys: ['Ctrl', '.'], label: 'Insert a saved reply while writing' }
       ]
     },
     {

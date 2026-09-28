@@ -86,3 +86,8 @@ export interface CodeSearchResult {
   files: CodeSearchFile[];
   truncated: boolean;
 }
+
+export interface RepositoryTemplates {
+  pull: string | null;
+  issue: string | null;
+}

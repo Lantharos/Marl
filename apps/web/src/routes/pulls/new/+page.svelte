@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { repositoryTemplate } from '$lib/repositories/templates';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import type { PullRequestDiff, RepositorySummary } from '@marl/contracts';
@@ -47,6 +48,17 @@
     repository ? { owner: repository.split('/')[0], repository: repository.split('/')[1] } : undefined
   );
   let error = $state('');
+  let appliedTemplate = '';
+
+  $effect(() => {
+    const current = repository;
+    if (!current) return;
+    void repositoryTemplate(current, 'pull').then((template) => {
+      if (current !== repository || (body.trim() && body !== appliedTemplate)) return;
+      body = template ?? '';
+      appliedTemplate = body;
+    });
+  });
   let branchRequest = 0;
   let comparisonRequest = 0;
   const repositoryOptions = $derived(

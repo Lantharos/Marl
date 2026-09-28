@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2dce46b1-725a-456f-8b92-bb8669ea184f",
+  "id": "bd4fec8f-1fd7-4a33-9c11-ce9e2063b508",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "auth_account": {
@@ -5295,6 +5295,83 @@
         }
       }
     },
+    "saved_replies": {
+      "name": "saved_replies",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "saved_replies_by_user": {
+          "name": "saved_replies_by_user",
+          "columns": [
+            "user_id",
+            "\"title\" COLLATE NOCASE"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "saved_replies_user_id_users_id_fk": {
+          "name": "saved_replies_user_id_users_id_fk",
+          "tableFrom": "saved_replies",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "organization_invitations": {
       "name": "organization_invitations",
       "columns": {
@@ -9135,6 +9212,13 @@
             "isExpression": true
           },
           "\"id\" COLLATE BINARY DESC": {
+            "isExpression": true
+          }
+        }
+      },
+      "saved_replies_by_user": {
+        "columns": {
+          "\"title\" COLLATE NOCASE": {
             "isExpression": true
           }
         }

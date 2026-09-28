@@ -726,6 +726,17 @@ CREATE TABLE `repository_notification_levels` (
 	CONSTRAINT "repository_notification_levels_level" CHECK(level IN ('mentions','ignore'))
 );
 --> statement-breakpoint
+CREATE TABLE `saved_replies` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`title` text NOT NULL,
+	`body` text NOT NULL,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `saved_replies_by_user` ON `saved_replies` (`user_id`,"title" COLLATE NOCASE);--> statement-breakpoint
 CREATE TABLE `organization_invitations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,

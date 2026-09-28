@@ -98,7 +98,10 @@ export async function deleteAccount(request: Request, env: Env, principal: Princ
       'ssh_keys',
       'personal_access_tokens',
       'user_emails',
-      'legal_acceptances'
+      'legal_acceptances',
+      'saved_replies',
+      'notification_settings',
+      'repository_notification_levels'
     ].map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE user_id=?`).bind(principal.id)),
     env.DB.prepare(
       `UPDATE users SET handle=?,display_name='Deleted user',email=NULL,avatar_url=NULL,bio='',website=NULL,auth_user_id=NULL,deleted_at=CURRENT_TIMESTAMP WHERE id=?`

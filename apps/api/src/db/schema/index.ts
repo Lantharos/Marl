@@ -6,6 +6,7 @@ export * from './code/imports';
 export * from './work/issues';
 export * from './people/moderation';
 export * from './people/notifications';
+export * from './people/saved-replies';
 export * from './organizations';
 export * from './code/releases';
 export * from './code/repositories';

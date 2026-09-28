@@ -58,7 +58,9 @@ async function* repositoryContents(env: Env, origin: string, repository: Row) {
 }
 
 async function accountRecord(env: Env, userId: string) {
-  const [profile, emails, sshKeys, tokens, organizations, acceptances] = await env.DB.batch<Record<string, unknown>>([
+  const [profile, emails, sshKeys, tokens, organizations, acceptances, replies] = await env.DB.batch<
+    Record<string, unknown>
+  >([
     env.DB.prepare(
       'SELECT handle,display_name AS displayName,bio,website,avatar_url AS avatarUrl,created_at AS createdAt FROM users WHERE id=?'
     ).bind(userId),
@@ -74,7 +76,8 @@ async function accountRecord(env: Env, userId: string) {
     env.DB.prepare(
       'SELECT organizations.slug,organizations.name,organizations.kind,organization_members.role FROM organization_members JOIN organizations ON organizations.id=organization_members.organization_id WHERE organization_members.user_id=?'
     ).bind(userId),
-    env.DB.prepare('SELECT version,accepted_at AS acceptedAt FROM legal_acceptances WHERE user_id=?').bind(userId)
+    env.DB.prepare('SELECT version,accepted_at AS acceptedAt FROM legal_acceptances WHERE user_id=?').bind(userId),
+    env.DB.prepare('SELECT title,body,created_at AS createdAt FROM saved_replies WHERE user_id=?').bind(userId)
   ]);
   return {
     ...profile.results[0],
@@ -82,7 +85,8 @@ async function accountRecord(env: Env, userId: string) {
     sshKeys: sshKeys.results,
     developerTokens: tokens.results.map((token) => ({ ...token, scopes: JSON.parse(String(token.scopes)) })),
     organizations: organizations.results,
-    legalAcceptances: acceptances.results
+    legalAcceptances: acceptances.results,
+    savedReplies: replies.results
   };
 }
 

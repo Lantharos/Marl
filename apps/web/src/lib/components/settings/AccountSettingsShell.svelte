@@ -6,6 +6,7 @@
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Bell from '@lucide/svelte/icons/bell';
   import Mail from '@lucide/svelte/icons/mail';
+  import MessageSquareText from '@lucide/svelte/icons/message-square-text';
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
   import TerminalSquare from '@lucide/svelte/icons/square-terminal';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
@@ -33,6 +34,12 @@
       label: 'Notifications',
       icon: Bell,
       active: path === '/settings/account/notifications'
+    },
+    {
+      href: '/settings/account/replies',
+      label: 'Saved replies',
+      icon: MessageSquareText,
+      active: path === '/settings/account/replies'
     },
     {
       href: '/settings/account',
