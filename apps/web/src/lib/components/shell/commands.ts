@@ -9,6 +9,8 @@ export type CommandKind =
   | 'user'
   | 'commit'
   | 'file'
+  | 'symbol'
+  | 'search'
   | 'issue'
   | 'pull'
   | 'run'

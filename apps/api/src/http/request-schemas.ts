@@ -39,6 +39,48 @@ export const branchRuleBody = strictObject({
   allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3))
 });
 
+export const symbolStateBody = strictObject({ repositoryId: identifier });
+
+export const symbolPageBody = strictObject({
+  repositoryId: identifier,
+  commitId: pipe(string(), minLength(40), maxLength(64)),
+  reset: boolean(),
+  complete: boolean(),
+  removed: pipe(array(pipe(string(), minLength(1), maxLength(4_096))), maxLength(100_000)),
+  files: pipe(
+    array(
+      strictObject({
+        path: pipe(string(), minLength(1), maxLength(4_096)),
+        symbols: pipe(
+          array(
+            strictObject({
+              name: pipe(string(), minLength(1), maxLength(200)),
+              kind: picklist([
+                'function',
+                'method',
+                'class',
+                'struct',
+                'enum',
+                'interface',
+                'trait',
+                'union',
+                'type',
+                'module',
+                'constant',
+                'variable',
+                'macro'
+              ]),
+              line: pipe(number(), integer(), minValue(1))
+            })
+          ),
+          maxLength(1_000)
+        )
+      })
+    ),
+    maxLength(200)
+  )
+});
+
 export const gitIndexBody = strictObject({
   repositoryId: identifier,
   indexId: identifier,

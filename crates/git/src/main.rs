@@ -140,6 +140,10 @@ async fn main() -> Result<()> {
         )
         .route("/_marl/blob", axum::routing::post(browse::blob::read_blob))
         .route(
+            "/_marl/search",
+            axum::routing::post(browse::search::search_repository),
+        )
+        .route(
             "/_marl/archive",
             axum::routing::post(browse::archive::repository_archive),
         )

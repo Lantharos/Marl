@@ -24,6 +24,16 @@ export interface GitGatewayRequestMap {
     defaultBranch: string;
   };
   '/_marl/blob': { owner: string; repository: string; objectId: string };
+  '/_marl/search': {
+    owner: string;
+    repository: string;
+    commitId: string;
+    pattern: string;
+    regex: boolean;
+    caseSensitive: boolean;
+    paths: string[];
+    extensions: string[];
+  };
   '/_marl/tree': {
     owner: string;
     repository: string;

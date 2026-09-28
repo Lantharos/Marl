@@ -161,6 +161,21 @@ strict path safety and machine-readable output.
 The core exposes a library API consumed by the CLI. It does not know about terminal
 rendering, HTTP sessions, or browser product concepts.
 
+## Code search
+
+The Git gateway answers code searches directly from Git objects, so any branch or commit can be
+searched without a separate index. It lists the tree once, skips binary files and files over
+1 MiB, and streams blobs through parallel `git cat-file --batch` workers into Rust's `regex`
+engine. A search stops after 100 matching files or eight seconds and reports that it was cut
+short.
+
+Definitions are indexed for each repository's default branch. After every index run, the gateway
+compares the new head with the commit recorded in `repository_symbol_indexes`, extracts
+definitions from the changed files with per-language patterns, and sends bounded pages that
+replace those paths in `code_symbols`. A missing previous commit or a very large deletion rebuilds
+the repository's definitions from the full tree. Name lookups use a case-insensitive index, so
+global search and the definitions shown above repository results stay a single indexed query.
+
 ## Hosted repository storage
 
 Git's object model remains canonical, but a long-running bare repository does not. R2 stores

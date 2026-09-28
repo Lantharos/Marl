@@ -29,6 +29,7 @@ export function isPublicRepositoryPath(pathname: string) {
     !section ||
     section === 'code' ||
     section === 'branches' ||
+    section === 'search' ||
     /^(?:tree|blob)\/[^/]+(?:\/.*)?$/.test(section) ||
     /^commits\/[^/]+$/.test(section) ||
     /^commit\/[^/]+$/.test(section) ||
@@ -41,5 +42,5 @@ export function isPublicRepositoryPath(pathname: string) {
 
 export function isIndexableRepositoryPath(pathname: string) {
   const section = repositorySection(pathname);
-  return section !== null && isPublicRepositoryPath(pathname);
+  return section !== null && section !== 'search' && isPublicRepositoryPath(pathname);
 }

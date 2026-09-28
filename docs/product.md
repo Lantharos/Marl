@@ -110,6 +110,12 @@ Code browsing must preserve repository context while moving through branches, di
 files, and commits. The file tree, current branch, latest commit, path, and related pull state
 should remain easy to reach.
 
+Code search looks through every text file on a branch as it is now, with optional case matching
+and regular expressions. `path:`, `lang:`, and `ext:` narrow the files, and a pattern wrapped in
+slashes is treated as a regular expression. When the search is a name defined in the default
+branch, its definitions are listed first. Global search also finds functions, types, and other
+definitions across every repository the person can read.
+
 ## Issues
 
 Issues are repository-scoped work and discussion with numbering independent from pulls.

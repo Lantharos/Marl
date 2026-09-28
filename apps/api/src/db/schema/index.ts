@@ -9,5 +9,6 @@ export * from './people/notifications';
 export * from './organizations';
 export * from './code/releases';
 export * from './code/repositories';
+export * from './code/symbols';
 export * from './work/reviews';
 export * from './work/webhooks';

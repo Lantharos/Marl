@@ -1001,6 +1001,24 @@ CREATE TABLE `repository_team_grants` (
 );
 --> statement-breakpoint
 CREATE INDEX `repository_team_grants_by_team` ON `repository_team_grants` (`team_id`,`repository_id`);--> statement-breakpoint
+CREATE TABLE `code_symbols` (
+	`repository_id` text NOT NULL,
+	`path` text NOT NULL,
+	`line` integer NOT NULL,
+	`name` text NOT NULL,
+	`kind` text NOT NULL,
+	PRIMARY KEY(`repository_id`, `path`, `line`, `name`),
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `code_symbols_by_name` ON `code_symbols` ("name" COLLATE NOCASE);--> statement-breakpoint
+CREATE TABLE `repository_symbol_indexes` (
+	`repository_id` text PRIMARY KEY NOT NULL,
+	`commit_id` text NOT NULL,
+	`indexed_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `pull_realtime_updates` (
 	`id` text PRIMARY KEY NOT NULL,
 	`pull_request_id` text NOT NULL,

@@ -13,6 +13,7 @@
   import BranchPicker from '$lib/repositories/browser/BranchPicker.svelte';
   import FileFinder from '$lib/repositories/browser/FileFinder.svelte';
   import FileList from '$lib/repositories/browser/FileList.svelte';
+  import CodeSearchForm from '$lib/repositories/search/CodeSearchForm.svelte';
   import type { LatestCommit, TreeEntry } from '$lib/repositories/browser/types';
   import EmptyRepository from '$lib/repositories/EmptyRepository.svelte';
   import { encodeRevision } from '$lib/repositories/repository-path';
@@ -75,11 +76,14 @@
         {data.branches.length === 1 ? 'branch' : 'branches'}</a
       >
     </div>
-    <Button size="small" onclick={() => (finderOpen = true)}
-      ><Search size={14} />Go to file<kbd
-        class="ml-1 rounded bg-surface-muted px-1.5 font-sans text-2xs text-ink-muted max-sm:hidden">T</kbd
-      ></Button
-    >
+    <div class="flex w-full items-center gap-2 sm:w-auto">
+      <CodeSearchForm compact class="flex-1" {owner} repository={repo} revision={selectedBranch} />
+      <Button size="small" onclick={() => (finderOpen = true)}
+        ><Search size={14} />Go to file<kbd
+          class="ml-1 rounded bg-surface-muted px-1.5 font-sans text-2xs text-ink-muted max-sm:hidden">T</kbd
+        ></Button
+      >
+    </div>
   </div>
 
   {#if error}<Notice class="mb-4">Files for this branch could not be loaded. Try again in a moment.</Notice>{/if}

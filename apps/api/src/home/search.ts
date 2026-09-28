@@ -4,7 +4,7 @@ import type { Env } from '../core/platform';
 import { repositoryListFilter } from '../repositories/access/access';
 
 type SearchResult = {
-  kind: 'repository' | 'commit' | 'file' | 'issue' | 'pull' | 'run' | 'user' | 'organization';
+  kind: 'repository' | 'commit' | 'file' | 'symbol' | 'issue' | 'pull' | 'run' | 'user' | 'organization';
   label: string;
   detail: string;
   href: string;
@@ -22,7 +22,8 @@ export async function search(env: Env, principal: Principal, url: URL): Promise<
   const access = repositoryListFilter(principal);
   const bind = (...tail: unknown[]) => [...access.values, ...tail];
 
-  const [repositories, commits, files, issues, pulls, runs, users, organizations] = await Promise.all([
+  const prefix = match.slice(1);
+  const [repositories, commits, files, symbols, issues, pulls, runs, users, organizations] = await Promise.all([
     env.DB.prepare(
       `SELECT organizations.slug AS owner,repositories.name,repositories.description FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL AND (repositories.name LIKE ? ESCAPE '\\' OR organizations.slug LIKE ? ESCAPE '\\' OR repositories.description LIKE ? ESCAPE '\\') ORDER BY repositories.updated_at DESC LIMIT 8`
     )
@@ -38,6 +39,19 @@ export async function search(env: Env, principal: Principal, url: URL): Promise<
     )
       .bind(...bind(match))
       .all<{ owner: string; repository: string; branch: string; path: string; kind: string }>(),
+    env.DB.prepare(
+      `SELECT organizations.slug AS owner,repositories.name AS repository,repositories.default_branch AS branch,code_symbols.path,code_symbols.line,code_symbols.name,code_symbols.kind FROM code_symbols JOIN repositories ON repositories.id=code_symbols.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${access.sql} AND repositories.deletion_scheduled_at IS NULL AND code_symbols.name LIKE ? ESCAPE '\\' ORDER BY code_symbols.name COLLATE NOCASE LIMIT 8`
+    )
+      .bind(...bind(prefix))
+      .all<{
+        owner: string;
+        repository: string;
+        branch: string;
+        path: string;
+        line: number;
+        name: string;
+        kind: string;
+      }>(),
     env.DB.prepare(
       `SELECT organizations.slug AS owner,repositories.name AS repository,issues.number,issues.title,users.handle AS author FROM issues JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=issues.author_id WHERE ${access.sql} AND (issues.title LIKE ? ESCAPE '\\' OR users.handle LIKE ? ESCAPE '\\') ORDER BY issues.updated_at DESC LIMIT 8`
     )
@@ -89,6 +103,12 @@ export async function search(env: Env, principal: Principal, url: URL): Promise<
       label: item.path,
       detail: `${item.owner}/${item.repository} · ${item.branch}`,
       href: `/${item.owner}/${item.repository}/${item.kind === 'tree' ? 'tree' : 'blob'}/${encodeURIComponent(item.branch)}/${item.path.split('/').map(encodeURIComponent).join('/')}`
+    })),
+    ...symbols.results.map((item) => ({
+      kind: 'symbol' as const,
+      label: item.name,
+      detail: `${item.owner}/${item.repository} · ${item.kind} in ${item.path}:${item.line}`,
+      href: `/${item.owner}/${item.repository}/blob/${encodeURIComponent(item.branch)}/${item.path.split('/').map(encodeURIComponent).join('/')}#L${item.line}`
     })),
     ...commits.results.map((item) => ({
       kind: 'commit' as const,

@@ -6,3 +6,5 @@ pub(crate) mod compare;
 pub(crate) mod metadata;
 pub(crate) mod refs;
 pub(crate) mod repository_files;
+pub(crate) mod search;
+pub(crate) mod symbols;

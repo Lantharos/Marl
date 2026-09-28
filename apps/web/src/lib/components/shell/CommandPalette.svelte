@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { tick } from 'svelte';
   import Search from '@lucide/svelte/icons/search';
   import { api } from '$lib/api';
@@ -15,7 +16,23 @@
   let remote = $state<Command[]>([]);
   let loading = $state(false);
   let selected = $state(0);
-  const results = $derived(matchCommands(commands, query, remote));
+  const repositoryPath = $derived(
+    page.params.owner && page.params.repo ? `${page.params.owner}/${page.params.repo}` : null
+  );
+  const codeSearch = $derived<Command[]>(
+    repositoryPath && query.trim()
+      ? [
+          {
+            label: `Search code for “${query.trim()}”`,
+            detail: repositoryPath,
+            href: `/${repositoryPath}/search?q=${encodeURIComponent(query.trim())}`,
+            keywords: query,
+            kind: 'search'
+          }
+        ]
+      : []
+  );
+  const results = $derived([...codeSearch, ...matchCommands(commands, query, remote)]);
 
   $effect(() => {
     const value = query.trim();

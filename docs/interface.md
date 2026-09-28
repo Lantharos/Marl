@@ -12,7 +12,7 @@ Page titles name the destination. Descriptions earn their space by explaining a 
 or a choice, not by repeating the title. The icon-based global navigation keeps labels
 available on hover and keyboard focus;
 on small screens the menu names the same destinations. Search remains available from
-the header and with Ctrl K. In a repository's code view, T opens Go to file. Pressing ? lists every
+the header and with Ctrl K. In a repository's code view, T opens Go to file and / focuses code search. Pressing ? lists every
 keyboard shortcut; pull pages add shortcuts for moving through tabs, changed files, and open
 conversations.
 

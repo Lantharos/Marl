@@ -1,3 +1,4 @@
+import { searchRepositoryCode } from './search/code-search';
 import { sourcePreview } from '../git/source-preview';
 import { route } from '../http/router';
 import {
@@ -133,6 +134,9 @@ export const repositoryRoutes = [
   ),
   route('POST', `${repository}/settings/restore`, 'user', ({ request, env, principal }, { owner, repo }) =>
     restoreRepository(request, env, principal, owner, repo)
+  ),
+  route('GET', `${repository}/search/code`, 'optional', ({ env, principal, url }, { owner, repo }) =>
+    searchRepositoryCode(env, principal, owner, repo, url)
   ),
   route('GET', `${repository}/bundle`, 'optional', ({ env, principal }, { owner, repo }) =>
     downloadRepositoryBundle(env, principal, owner, repo)

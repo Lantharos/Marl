@@ -3,6 +3,8 @@ import type { Env } from '../core/platform';
 const batches = [
   ['branches', 'repository_id=?'],
   ['repository_entries', 'repository_id=?'],
+  ['code_symbols', 'repository_id=?'],
+  ['repository_symbol_indexes', 'repository_id=?'],
   ['commit_changes', 'repository_id=?'],
   ['commits', 'repository_id=?'],
   ['issue_comments', 'issue_id IN (SELECT id FROM issues WHERE repository_id=?)'],

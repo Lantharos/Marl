@@ -6,6 +6,7 @@ import { route } from '../http/router';
 import { purgeDeletedRepositories } from '../repositories/lifecycle';
 import { authorizeGit, indexGit, listPendingGitIndexes } from './indexing';
 import { getSigningPolicy } from './commit-signing';
+import { getSymbolIndexState, storeSymbolPage } from './symbols';
 
 const gitServices = ['git-upload-pack', 'git-receive-pack'];
 const gatewayActor = /^[a-z]+_[a-z0-9]{16,128}$/;
@@ -18,6 +19,8 @@ export const gitRoutes = [
   }),
   route('GET', '/git/pending-indexes', 'gateway', ({ env }) => listPendingGitIndexes(env)),
   route('POST', '/git/signing-policy', 'gateway', ({ request, env }) => getSigningPolicy(request, env)),
+  route('POST', '/git/symbols/state', 'gateway', ({ request, env }) => getSymbolIndexState(request, env)),
+  route('POST', '/git/symbols', 'gateway', ({ request, env }) => storeSymbolPage(request, env)),
   route('GET', '/git/ssh/authorize', 'gateway', ({ request, env }) => authorizeSsh(request, env)),
   route('POST', '/git/index', 'optional', ({ request, env, principal, gatewayTrusted }) => {
     if (!principal && !gatewayTrusted) return problem(401, 'authentication_required', 'Authenticate the Git gateway.');

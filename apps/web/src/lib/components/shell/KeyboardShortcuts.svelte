@@ -10,7 +10,13 @@
         { keys: ['?'], label: 'Show keyboard shortcuts' }
       ]
     },
-    { title: 'Code', shortcuts: [{ keys: ['T'], label: 'Go to file' }] },
+    {
+      title: 'Code',
+      shortcuts: [
+        { keys: ['T'], label: 'Go to file' },
+        { keys: ['/'], label: 'Search code' }
+      ]
+    },
     {
       title: 'Pulls',
       shortcuts: [

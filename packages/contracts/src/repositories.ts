@@ -58,3 +58,31 @@ export interface RepositoryImport {
   completedAt: string | null;
   repository: { owner: string; name: string };
 }
+
+export interface CodeSearchMatch {
+  line: number;
+  text: string;
+  ranges: Array<[number, number]>;
+}
+
+export interface CodeSearchFile {
+  path: string;
+  objectId: string;
+  matchCount: number;
+  matches: CodeSearchMatch[];
+}
+
+export interface CodeDefinition {
+  name: string;
+  kind: string;
+  path: string;
+  line: number;
+}
+
+export interface CodeSearchResult {
+  revision: string;
+  commitId: string;
+  definitions: CodeDefinition[];
+  files: CodeSearchFile[];
+  truncated: boolean;
+}

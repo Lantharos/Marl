@@ -114,6 +114,14 @@ async fn handle_git(state: Arc<AppState>, request: Request) -> Result<Response> 
                 .unwrap_or_default(),
         )
         .env(
+            "HTTP_CONTENT_ENCODING",
+            parts
+                .headers
+                .get("content-encoding")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default(),
+        )
+        .env(
             "HTTP_GIT_PROTOCOL",
             parts
                 .headers

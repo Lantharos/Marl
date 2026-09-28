@@ -1,4 +1,5 @@
 import BookOpen from '@lucide/svelte/icons/book-open';
+import Braces from '@lucide/svelte/icons/braces';
 import Building2 from '@lucide/svelte/icons/building-complex';
 import CircleDot from '@lucide/svelte/icons/circle-dot';
 import CirclePlay from '@lucide/svelte/icons/circle-play';
@@ -13,6 +14,7 @@ import Plus from '@lucide/svelte/icons/plus';
 import Server from '@lucide/svelte/icons/server';
 import Settings from '@lucide/svelte/icons/settings';
 import ShieldCheck from '@lucide/svelte/icons/shield-check';
+import TextSearch from '@lucide/svelte/icons/text-search';
 import UserRound from '@lucide/svelte/icons/user-round';
 import type { CommandKind } from './commands';
 
@@ -24,6 +26,8 @@ export const commandIcons = {
   user: UserRound,
   commit: GitCommit,
   file: FileCode,
+  symbol: Braces,
+  search: TextSearch,
   issue: CircleDot,
   pull: GitPullRequest,
   run: CirclePlay,
