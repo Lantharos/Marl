@@ -4,9 +4,9 @@ import { readiness } from '../http/health';
 import { problem } from '../http/http';
 import { route } from '../http/router';
 import { purgeDeletedRepositories } from '../repositories/lifecycle';
-import { authorizeGit, indexGit, listPendingGitIndexes } from './indexing';
+import { authorizeGit, indexGit, listPendingGitIndexes } from './metadata/indexing';
 import { getSigningPolicy } from './commit-signing';
-import { getSymbolIndexState, storeSymbolPage } from './symbols';
+import { getSymbolIndexState, storeSymbolPage } from './metadata/symbols';
 
 const gitServices = ['git-upload-pack', 'git-receive-pack'];
 const gatewayActor = /^[a-z]+_[a-z0-9]{16,128}$/;

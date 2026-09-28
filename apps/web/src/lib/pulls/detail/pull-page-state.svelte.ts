@@ -10,7 +10,7 @@ import type {
 } from '@marl/contracts';
 import { api, MarlApiError } from '$lib/api';
 import { reviewThreadContext, type ThreadCodeLine } from '$lib/code/diff';
-import { PullTimelineState } from '../PullTimelineState.svelte';
+import { PullTimelineState } from '../timeline/PullTimelineState.svelte';
 import type { PullLifecycleAction } from '../PullLifecycleActions.svelte';
 import type { PullComposerAction } from '../review/PullActionComposer.svelte';
 import { applyPullUpdate } from './pull-updates';

@@ -15,7 +15,7 @@
   import Modal from '$lib/components/overlays/Modal.svelte';
   import SettingItem from '$lib/components/settings/SettingItem.svelte';
   import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import OrganizationSettingsShell from '$lib/components/settings/OrganizationSettingsShell.svelte';
+  import OrganizationSettingsShell from '$lib/components/settings/shells/OrganizationSettingsShell.svelte';
   import Select from '$lib/components/controls/Select.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';

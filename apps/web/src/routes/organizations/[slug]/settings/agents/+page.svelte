@@ -1,6 +1,6 @@
 <script lang="ts">
   import AgentSettings from '$lib/components/settings/agents/AgentSettings.svelte';
-  import OrganizationSettingsShell from '$lib/components/settings/OrganizationSettingsShell.svelte';
+  import OrganizationSettingsShell from '$lib/components/settings/shells/OrganizationSettingsShell.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

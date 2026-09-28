@@ -1,5 +1,5 @@
 import type { PullRealtimeUpdate, PullRequestDetail, PullRequestDiff, ReviewThread } from '@marl/contracts';
-import type { PullTimelineState } from '../PullTimelineState.svelte';
+import type { PullTimelineState } from '../timeline/PullTimelineState.svelte';
 
 type Label = PullRequestDetail['labels'][number];
 type Entity = { id: string } & Record<string, unknown>;

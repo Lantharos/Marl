@@ -1,7 +1,7 @@
 <script lang="ts">
   let { scene, class: className = '' }: { scene: 'landscape' | 'courtyard' | 'inlay'; class?: string } = $props();
   const url = (theme: 'dark' | 'light', small: boolean) =>
-    `url('/landing/${scene}-${theme}${small ? '-small' : ''}.webp')`;
+    `url('/landing/${scene}/${theme}${small ? '-small' : ''}.webp')`;
   const responsive = (theme: 'dark' | 'light') => `image-set(${url(theme, true)} 1x, ${url(theme, false)} 2x)`;
 </script>
 

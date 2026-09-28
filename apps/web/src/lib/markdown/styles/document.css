@@ -1,0 +1,133 @@
+.markdown.document {
+  font-size: 15px;
+  line-height: 1.72;
+}
+.markdown.document h1 {
+  font-size: 30px;
+  letter-spacing: -0.035em;
+}
+.markdown.document h2 {
+  margin-top: 32px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+.markdown.document h3 {
+  margin-top: 26px;
+  font-size: 17px;
+}
+.markdown.document h4 {
+  font-size: 15px;
+}
+.markdown.document p,
+.markdown.document ul,
+.markdown.document ol,
+.markdown.document blockquote,
+.markdown.document pre,
+.markdown.document table,
+.markdown.document details {
+  margin-bottom: 16px;
+}
+.markdown pre.plain-text {
+  overflow: visible;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+.markdown .media-image {
+  display: block;
+  max-width: min(100%, var(--media-max-width, 100%));
+  margin: 14px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: zoom-in;
+}
+.markdown .media-image:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 4px;
+}
+.markdown .media-image img {
+  max-height: var(--media-max-height, 520px);
+  margin: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+.markdown .media-video {
+  margin: 14px 0;
+}
+.markdown .media-video video {
+  margin: 0;
+}
+.markdown [id] {
+  scroll-margin-top: 140px;
+}
+.markdown [align='center'] {
+  text-align: center;
+}
+.markdown [align='right'] {
+  text-align: right;
+}
+.markdown [align='left'] {
+  text-align: left;
+}
+.markdown [align='justify'] {
+  text-align: justify;
+}
+.markdown.document img {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+  height: auto;
+}
+.markdown.document p img {
+  margin-block: 0;
+}
+.markdown.document img[role='button'] {
+  cursor: zoom-in;
+}
+.markdown.document img[role='button']:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 4px;
+}
+.markdown li:has(> input[type='checkbox']),
+.markdown li:has(> p > input[type='checkbox']) {
+  list-style: none;
+}
+.markdown.document picture {
+  display: inline;
+}
+.markdown.document img[align='right'] {
+  float: right;
+  margin-left: 16px;
+}
+.markdown.document img[align='left'] {
+  float: left;
+  margin-right: 16px;
+}
+.markdown.document::after {
+  display: block;
+  clear: both;
+  content: '';
+}
+:root[data-theme='dark'] .markdown [data-color-mode='light'],
+:root[data-theme='light'] .markdown [data-color-mode='dark'] {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .markdown [data-color-mode='light'] {
+    display: none;
+  }
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .markdown [data-color-mode='dark'] {
+    display: none;
+  }
+}

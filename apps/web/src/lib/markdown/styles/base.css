@@ -1,0 +1,187 @@
+.markdown:not(.document) {
+  --media-max-width: 560px;
+  --media-max-height: 320px;
+}
+.markdown:not(.document) img {
+  width: min(100%, var(--media-max-width));
+  height: auto;
+  max-height: none;
+}
+.markdown:not(.document) .media-image {
+  width: min(100%, var(--media-max-width));
+}
+.markdown:not(.document) .media-image img {
+  width: 100%;
+  max-height: none;
+}
+.markdown {
+  color: var(--color-ink);
+  font-size: var(--markdown-font-size, 14px);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.markdown.muted {
+  color: var(--color-ink-muted);
+}
+.markdown :first-child {
+  margin-top: 0;
+}
+.markdown :last-child {
+  margin-bottom: 0;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre,
+.markdown table,
+.markdown details {
+  margin: 0 0 12px;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 22px;
+}
+.markdown ul {
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown ul ul {
+  list-style: circle;
+}
+.markdown li + li {
+  margin-top: 3px;
+}
+.markdown a {
+  color: var(--color-brand);
+  text-decoration: none;
+}
+.markdown a:hover {
+  text-decoration: underline;
+}
+.markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 14px 0;
+}
+.markdown code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--color-surface-muted);
+  color: var(--color-ink-strong);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.9em;
+}
+.markdown pre {
+  overflow: auto;
+  padding: 11px 13px;
+  border-radius: 6px;
+  background: var(--color-surface-muted);
+}
+.markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+.markdown blockquote {
+  padding-left: 12px;
+  border-left: 2px solid var(--color-line-strong);
+  color: var(--color-ink-muted);
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 20px 0 10px;
+  color: var(--color-ink-strong);
+  font-weight: 650;
+  line-height: 1.25;
+}
+.markdown h1 {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.markdown h2 {
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+.markdown h3 {
+  font-size: 15px;
+}
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 14px;
+}
+.markdown hr {
+  height: 1px;
+  margin: 16px 0;
+  border: 0;
+  background: var(--color-line);
+}
+.markdown table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+.markdown th,
+.markdown td {
+  padding: 7px 10px;
+  border: 1px solid var(--color-line);
+  text-align: left;
+}
+.markdown th {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-strong);
+  font-weight: 650;
+}
+.markdown tr:nth-child(2n) td {
+  background: color-mix(in srgb, var(--color-surface-muted) 48%, transparent);
+}
+.markdown .task-list-item {
+  list-style: none;
+}
+.markdown .contains-task-list {
+  padding-left: 4px;
+}
+.markdown input[type='checkbox'] {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  margin: 0 6px 0 0;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 3px;
+  appearance: none;
+  background: var(--color-surface);
+  vertical-align: -2px;
+  place-items: center;
+}
+.markdown input[type='checkbox']:checked {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+}
+.markdown input[type='checkbox']:checked::after {
+  width: 7px;
+  height: 4px;
+  border: solid white;
+  border-width: 0 0 2px 2px;
+  content: '';
+  transform: translateY(-1px) rotate(-45deg);
+}
+.markdown details {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--color-surface-muted);
+}
+.markdown summary {
+  color: var(--color-ink-strong);
+  cursor: pointer;
+  font-weight: 630;
+}

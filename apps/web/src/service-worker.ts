@@ -10,7 +10,7 @@ const resources = new Set([
   offlinePath,
   '/favicon.svg',
   ...['Regular', 'Medium', 'Semibold', 'Bold'].map((weight) => `/fonts/open-runde/OpenRunde-${weight}-latin.woff2`),
-  ...['dark', 'light'].flatMap((theme) => [`/errors/gone-${theme}.webp`, `/errors/gone-${theme}-small.webp`])
+  ...['dark', 'light'].flatMap((theme) => [`/errors/gone/${theme}.webp`, `/errors/gone/${theme}-small.webp`])
 ]);
 
 worker.addEventListener('install', (event) => {

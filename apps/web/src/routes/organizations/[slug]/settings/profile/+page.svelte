@@ -4,7 +4,7 @@
   import { api, MarlApiError } from '$lib/api';
   import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
   import OrganizationAvatar from '$lib/components/identity/OrganizationAvatar.svelte';
-  import OrganizationSettingsShell from '$lib/components/settings/OrganizationSettingsShell.svelte';
+  import OrganizationSettingsShell from '$lib/components/settings/shells/OrganizationSettingsShell.svelte';
   import Field from '$lib/components/controls/Field.svelte';
   import Notice from '$lib/components/feedback/Notice.svelte';
   import SettingsAction from '$lib/components/settings/SettingsAction.svelte';

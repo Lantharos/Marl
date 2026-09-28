@@ -320,7 +320,7 @@ SvelteKit's routing and rendering model instead of introducing a second React ru
 routing or server functions.
 
 Production storage protections, recovery checks, and the acknowledgement contract are
-documented in [`repository-reliability.md`](repository-reliability.md).
+documented in [`repository-reliability.md`](operations/repository-reliability.md).
 
 ## Runner
 

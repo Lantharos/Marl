@@ -1,7 +1,7 @@
 <script lang="ts">
   import ReferenceTimelineEvent from '$lib/components/discussion/ReferenceTimelineEvent.svelte';
   import type { MarkdownContext } from '$lib/markdown/context';
-  import PullTimelineEvent from '../PullTimelineEvent.svelte';
+  import PullTimelineEvent from '../timeline/PullTimelineEvent.svelte';
   import type { DiscussionItem } from '../review/group-review-activity';
   import PullActionComposer from '../review/PullActionComposer.svelte';
   import PullRevisionActivity from '../review/PullRevisionActivity.svelte';

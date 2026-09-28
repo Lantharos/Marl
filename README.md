@@ -9,11 +9,11 @@ proposed in [`docs/launch-plans.md`](docs/launch-plans.md).
 Runner registration, repository workflows, service installation, labels, logs, and
 artifacts are documented in [`docs/runners.md`](docs/runners.md).
 The repository acknowledgement and recovery contract is documented in
-[`docs/repository-reliability.md`](docs/repository-reliability.md).
+[`docs/operations/repository-reliability.md`](docs/operations/repository-reliability.md).
 SSH key authentication and the production TCP topology are documented in
-[`docs/ssh.md`](docs/ssh.md).
+[`docs/operations/ssh.md`](docs/operations/ssh.md).
 Production resources, routes, secrets, and deployment order are documented in
-[`docs/deployment.md`](docs/deployment.md).
+[`docs/operations/deployment.md`](docs/operations/deployment.md).
 
 ## Development
 

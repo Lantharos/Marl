@@ -18,10 +18,10 @@
   import Button from '$lib/components/controls/Button.svelte';
   import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
   import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
-  import CloneMenu from '$lib/repositories/CloneMenu.svelte';
-  import RepositoryNotifications from '$lib/repositories/RepositoryNotifications.svelte';
-  import ForkDialog from '$lib/repositories/ForkDialog.svelte';
-  import RepositoryTabs from '$lib/repositories/RepositoryTabs.svelte';
+  import CloneMenu from '$lib/repositories/header/CloneMenu.svelte';
+  import RepositoryNotifications from '$lib/repositories/header/RepositoryNotifications.svelte';
+  import ForkDialog from '$lib/repositories/header/ForkDialog.svelte';
+  import RepositoryTabs from '$lib/repositories/header/RepositoryTabs.svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: Snippet; data: LayoutData } = $props();

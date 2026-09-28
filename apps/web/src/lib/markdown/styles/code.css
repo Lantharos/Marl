@@ -1,0 +1,114 @@
+.markdown pre {
+  position: relative;
+}
+.markdown pre > code {
+  display: block;
+  padding-right: 46px;
+}
+.markdown .code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+}
+.markdown pre:hover .code-copy,
+.markdown pre:focus-within .code-copy {
+  opacity: 1;
+}
+.markdown code.highlighted span {
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+}
+.markdown .markdown-diagram {
+  margin: 16px 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--color-surface-muted);
+  box-shadow: var(--shadow-surface);
+}
+.markdown .diagram-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 6px;
+}
+.markdown .diagram-toolbar button {
+  min-width: 40px;
+  height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.markdown .diagram-toolbar button:hover,
+.markdown .code-copy:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-ink-strong);
+}
+.markdown .diagram-viewport {
+  max-height: 560px;
+  overflow: auto;
+}
+.markdown .diagram-canvas {
+  min-width: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.markdown .diagram-canvas > img,
+.markdown .diagram-canvas > svg {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  margin: 0;
+}
+.markdown .diagram-canvas > img {
+  background: #fff;
+  border-radius: 6px;
+}
+.markdown .diagram-canvas > canvas {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+}
+.markdown .markdown-diagram > details {
+  margin: 0;
+  padding: 12px;
+  background: transparent;
+}
+.markdown .markdown-diagram > details > pre {
+  margin-top: 12px;
+}
+.markdown .preview-error {
+  padding: 12px 18px;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+.markdown .map-grid {
+  fill: none;
+  stroke: var(--color-line-strong);
+  stroke-width: 0.6;
+}
+.markdown .map-features {
+  fill: var(--color-brand-soft);
+  stroke: var(--color-brand);
+  stroke-width: 1.5;
+}
+@media (hover: none) {
+  .markdown .code-copy {
+    opacity: 1;
+  }
+  .markdown .heading-anchor {
+    opacity: 0.6;
+  }
+}

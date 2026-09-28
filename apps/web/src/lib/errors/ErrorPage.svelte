@@ -60,9 +60,9 @@
         : 'sm:h-[min(36vw,54dvh,510px)]'
     ]}
     aria-hidden="true"
-    style:--art-dark={`url('/errors/${scene}-dark.webp')`}
-    style:--art-light={`url('/errors/${scene}-light.webp')`}
-    style:--art-small-dark={`url('/errors/${scene}-dark-small.webp')`}
-    style:--art-small-light={`url('/errors/${scene}-light-small.webp')`}
+    style:--art-dark={`url('/errors/${scene}/dark.webp')`}
+    style:--art-light={`url('/errors/${scene}/light.webp')`}
+    style:--art-small-dark={`url('/errors/${scene}/dark-small.webp')`}
+    style:--art-small-light={`url('/errors/${scene}/light-small.webp')`}
   ></div>
 </section>

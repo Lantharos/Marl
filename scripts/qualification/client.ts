@@ -1,3 +1,4 @@
+import { legalVersion } from '../../packages/contracts/src/people/legal';
 import { run, type CommandResult } from './process';
 
 export class MarlClient {
@@ -13,7 +14,7 @@ export class MarlClient {
     const response = await fetch(`${this.apiUrl}/api/auth/sign-up/email`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(account)
+      body: JSON.stringify({ ...account, termsVersion: legalVersion })
     });
     if (!response.ok) throw new Error(`Qualification sign-up failed (${response.status}): ${await response.text()}`);
     this.cookie = response.headers.get('set-cookie')?.split(';', 1)[0] ?? '';

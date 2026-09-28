@@ -1,0 +1,85 @@
+.markdown .markdown-alert {
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+.markdown .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 650;
+  color: var(--color-brand);
+}
+.markdown .markdown-alert-title::before {
+  content: 'ⓘ';
+  font-size: 17px;
+}
+.markdown .markdown-alert-tip .markdown-alert-title {
+  color: var(--color-success);
+}
+.markdown .markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+.markdown .markdown-alert-caution .markdown-alert-title {
+  color: var(--color-danger);
+}
+.markdown .markdown-alert-warning .markdown-alert-title::before,
+.markdown .markdown-alert-caution .markdown-alert-title::before {
+  content: '⚠';
+}
+.markdown .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+.markdown .footnotes {
+  margin-top: 28px;
+  color: var(--color-ink-muted);
+  font-size: 0.92em;
+}
+.markdown .footnotes h2 {
+  font-size: 14px;
+}
+.markdown .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.markdown .heading-anchor {
+  margin-left: 8px;
+  opacity: 0;
+  color: var(--color-ink-faint);
+  font-weight: 400;
+  text-decoration: none;
+}
+.markdown :is(h1, h2, h3, h4, h5, h6):hover .heading-anchor,
+.markdown .heading-anchor:focus-visible {
+  opacity: 1;
+}
+.markdown .markdown-math[data-math='block'] {
+  overflow-x: auto;
+  margin: 18px 0;
+  text-align: center;
+}
+.markdown .markdown-math[data-math='inline'] {
+  white-space: normal;
+}
+.markdown .color-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 5px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--color-line-strong);
+  vertical-align: -1px;
+}
+.markdown .katex {
+  font-size: 1.1em;
+}
+.markdown .katex .katex-html {
+  user-select: none;
+}

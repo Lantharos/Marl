@@ -8,9 +8,9 @@
   import { dismissable } from '$lib/actions/dismissable';
   import BrandMark from '../identity/BrandMark.svelte';
   import AccountMenu from './AccountMenu.svelte';
-  import CommandPalette from './CommandPalette.svelte';
+  import CommandPalette from './commands/CommandPalette.svelte';
   import type { ShellOrganization, ShellUser } from '$lib/shell-cache';
-  import { shellCommands } from './commands';
+  import { shellCommands } from './commands/commands';
   import CreateMenu from './CreateMenu.svelte';
   import GlobalNav from './GlobalNav.svelte';
   import KeyboardShortcuts from './KeyboardShortcuts.svelte';
