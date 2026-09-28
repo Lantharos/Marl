@@ -1,4 +1,5 @@
 import { emitRepositoryEvent } from '../webhooks/events';
+import { mergeQueuePrefix } from '../pulls/queue/state';
 import { auditStatement } from '../core/audit';
 import type { Principal } from '../auth/principal';
 import { safeRepositoryPath, validBranchName } from '../core/domain';
@@ -281,7 +282,7 @@ export async function indexGit(
     const sender = actorId
       ? await env.DB.prepare('SELECT handle FROM users WHERE id=?').bind(actorId).first<{ handle: string }>()
       : null;
-    for (const branch of changedBranches)
+    for (const branch of changedBranches.filter((changed) => !changed.name.startsWith(mergeQueuePrefix)))
       await emitRepositoryEvent(
         env,
         body.repositoryId,
@@ -311,6 +312,7 @@ export async function indexGit(
   const workflowWarnings = [];
   const changedBranchNames = new Set(changedBranches.map((branch) => branch.name));
   for (const branch of indexedBranches) {
+    if (branch.name.startsWith(mergeQueuePrefix)) continue;
     const treeId = trees.get(branch.commitId);
     if (typeof treeId !== 'string') continue;
     const result = await queuePushWorkflows(

@@ -17,21 +17,28 @@ export type BranchRule = {
   carryApprovalsForward: boolean;
   allowAuthorMerge: boolean;
   allowedMergeMethods: MergeMethod[];
+  mergeQueue: boolean;
 };
 
 type RuleRow = Omit<
   BranchRule,
-  'requiredChecks' | 'requireConversations' | 'carryApprovalsForward' | 'allowAuthorMerge' | 'allowedMergeMethods'
+  | 'requiredChecks'
+  | 'requireConversations'
+  | 'carryApprovalsForward'
+  | 'allowAuthorMerge'
+  | 'allowedMergeMethods'
+  | 'mergeQueue'
 > & {
   requiredChecksJson: string;
   requireConversations: number;
   carryApprovalsForward: number;
   allowAuthorMerge: number;
   allowedMergeMethodsJson: string;
+  mergeQueue: number;
 };
 
 const selectRule =
-  'pattern,required_approvals AS requiredApprovals,required_checks_json AS requiredChecksJson,require_conversations AS requireConversations,carry_approvals_forward AS carryApprovalsForward,allow_author_merge AS allowAuthorMerge,allowed_merge_methods_json AS allowedMergeMethodsJson';
+  'pattern,required_approvals AS requiredApprovals,required_checks_json AS requiredChecksJson,require_conversations AS requireConversations,carry_approvals_forward AS carryApprovalsForward,allow_author_merge AS allowAuthorMerge,allowed_merge_methods_json AS allowedMergeMethodsJson,merge_queue AS mergeQueue';
 
 export function defaultRule(pattern: string): BranchRule {
   return {
@@ -41,7 +48,8 @@ export function defaultRule(pattern: string): BranchRule {
     requireConversations: true,
     carryApprovalsForward: false,
     allowAuthorMerge: false,
-    allowedMergeMethods: ['merge', 'squash', 'rebase']
+    allowedMergeMethods: ['merge', 'squash', 'rebase'],
+    mergeQueue: false
   };
 }
 
@@ -101,7 +109,7 @@ export async function putBranchRule(request: Request, env: Env, principal: Princ
     );
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO branch_rules (repository_id,pattern,required_approvals,required_checks_json,require_conversations,carry_approvals_forward,allow_author_merge,allowed_merge_methods_json,updated_by) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(repository_id,pattern) DO UPDATE SET required_approvals=excluded.required_approvals,required_checks_json=excluded.required_checks_json,require_conversations=excluded.require_conversations,carry_approvals_forward=excluded.carry_approvals_forward,allow_author_merge=excluded.allow_author_merge,allowed_merge_methods_json=excluded.allowed_merge_methods_json,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP`
+      `INSERT INTO branch_rules (repository_id,pattern,required_approvals,required_checks_json,require_conversations,carry_approvals_forward,allow_author_merge,allowed_merge_methods_json,merge_queue,updated_by) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(repository_id,pattern) DO UPDATE SET required_approvals=excluded.required_approvals,required_checks_json=excluded.required_checks_json,require_conversations=excluded.require_conversations,carry_approvals_forward=excluded.carry_approvals_forward,allow_author_merge=excluded.allow_author_merge,allowed_merge_methods_json=excluded.allowed_merge_methods_json,merge_queue=excluded.merge_queue,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP`
     ).bind(
       access.id,
       body.pattern,
@@ -111,6 +119,7 @@ export async function putBranchRule(request: Request, env: Env, principal: Princ
       Number(body.carryApprovalsForward),
       Number(body.allowAuthorMerge),
       JSON.stringify(methods),
+      Number(body.mergeQueue),
       principal.id
     ),
     auditStatement(env, {
@@ -126,7 +135,8 @@ export async function putBranchRule(request: Request, env: Env, principal: Princ
         requireConversations: body.requireConversations,
         carryApprovalsForward: body.carryApprovalsForward,
         allowAuthorMerge: body.allowAuthorMerge,
-        allowedMergeMethods: methods
+        allowedMergeMethods: methods,
+        mergeQueue: body.mergeQueue
       }
     })
   ]);
@@ -152,7 +162,8 @@ function mapRule(row: RuleRow): BranchRule {
     requireConversations: Boolean(row.requireConversations),
     carryApprovalsForward: Boolean(row.carryApprovalsForward),
     allowAuthorMerge: Boolean(row.allowAuthorMerge),
-    allowedMergeMethods: methods.filter((method) => ['merge', 'squash', 'rebase'].includes(method))
+    allowedMergeMethods: methods.filter((method) => ['merge', 'squash', 'rebase'].includes(method)),
+    mergeQueue: Boolean(row.mergeQueue)
   };
 }
 

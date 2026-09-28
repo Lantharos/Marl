@@ -36,7 +36,8 @@ export const branchRuleBody = strictObject({
   requireConversations: boolean(),
   carryApprovalsForward: boolean(),
   allowAuthorMerge: boolean(),
-  allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3))
+  allowedMergeMethods: pipe(array(mergeMethod), minLength(1), maxLength(3)),
+  mergeQueue: boolean()
 });
 
 export const symbolStateBody = strictObject({ repositoryId: identifier });

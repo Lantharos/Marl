@@ -33,6 +33,8 @@ pub(crate) struct MergeRequest {
     pub(crate) operation_id: String,
     #[serde(default)]
     method: MergeMethod,
+    #[serde(default)]
+    pub(crate) queue_branch: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -108,6 +110,9 @@ async fn perform_merge(state: &AppState, request: MergeRequest) -> Result<MergeR
         || !safe_ref(&request.target_branch)
         || !is_object_id(&request.source_commit_id)
         || !is_object_id(&request.target_commit_id)
+        || request.queue_branch.as_deref().is_some_and(|branch| {
+            !branch.starts_with("marl-queue/") || !safe_ref(&format!("refs/heads/{branch}"))
+        })
         || !request.operation_id.starts_with("pr_")
         || !request
             .operation_id
@@ -208,12 +213,16 @@ async fn prepare_repository_merge(repository: &Path, request: &MergeRequest) -> 
         }
         MergeMethod::Rebase => rebase_commits(repository, request, &target, source).await?,
     };
+    let update = match &request.queue_branch {
+        Some(branch) => (format!("refs/heads/{branch}"), "0".repeat(target.len())),
+        None => (target_ref, target),
+    };
     Ok(MergePlan {
         result: MergeResponse {
             target_head_id: commit_id.clone(),
             commit_id,
         },
-        update: Some((target_ref, target)),
+        update: Some(update),
     })
 }
 

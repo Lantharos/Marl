@@ -203,6 +203,7 @@ fn merge_request_for(source: &str, target: &str, operation_id: &str) -> MergeReq
         actor_id: "tester".into(),
         operation_id: operation_id.into(),
         method: MergeMethod::Merge,
+        queue_branch: None,
     }
 }
 

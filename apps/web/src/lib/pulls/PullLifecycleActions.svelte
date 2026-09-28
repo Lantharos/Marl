@@ -2,12 +2,13 @@
   import type { MergeMethod, PullRequestDetail } from '@marl/contracts';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import GitMerge from '@lucide/svelte/icons/git-merge';
+  import ListOrdered from '@lucide/svelte/icons/list-ordered';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import { dismissable } from '$lib/actions/dismissable';
   import Button from '$lib/components/controls/Button.svelte';
   import { popoverMotion } from '$lib/ui/popover';
 
-  export type PullLifecycleAction = 'merge' | 'close' | 'reopen' | 'ready';
+  export type PullLifecycleAction = 'merge' | 'enqueue' | 'dequeue' | 'close' | 'reopen' | 'ready';
   let {
     pull,
     conflicted = false,
@@ -31,9 +32,32 @@
   const selectedMethod = $derived(
     pull.allowedMergeMethods.includes(mergeMethod) ? mergeMethod : pull.allowedMergeMethods[0]
   );
+  const queued = $derived(pull.mergeQueue.entry);
   const mergeLabel = $derived(
-    selectedMethod === 'squash' ? 'Squash and merge' : selectedMethod === 'rebase' ? 'Rebase and merge' : 'Merge pull'
+    pull.mergeQueue.enabled
+      ? 'Add to merge queue'
+      : selectedMethod === 'squash'
+        ? 'Squash and merge'
+        : selectedMethod === 'rebase'
+          ? 'Rebase and merge'
+          : 'Merge pull'
   );
+  const queueStatus = $derived(
+    !queued
+      ? ''
+      : queued.state === 'queued'
+        ? queued.position === 1
+          ? 'Next in the merge queue'
+          : `${ordinal(queued.position)} in the merge queue`
+        : queued.state === 'testing'
+          ? `Testing the merge into ${pull.targetBranch}`
+          : `Merging into ${pull.targetBranch}`
+  );
+
+  function ordinal(value: number) {
+    const suffix = value % 100 >= 11 && value % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[value % 10] ?? 'th');
+    return `${value}${suffix}`;
+  }
 </script>
 
 <div class="flex flex-wrap items-center gap-2">
@@ -42,10 +66,31 @@
       ><ShieldCheck size={15} />Approve checks</Button
     >
   {/if}
-  {#if pull.canMerge && pull.mergeRequirements.ready && !conflicted && selectedMethod}
+  {#if queued}
+    <a
+      class="inline-flex items-center gap-2 text-sm font-medium text-ink-strong hover:text-brand"
+      href="/{pull.repository.owner}/{pull.repository.name}/pulls/queue?branch={encodeURIComponent(pull.targetBranch)}"
+      ><ListOrdered size={15} class="text-merged" />{queueStatus}</a
+    >
+    {#if pull.canMerge && queued.state !== 'merging'}<Button
+        size="small"
+        variant="ghost"
+        disabled={busy}
+        onclick={() => onAction('dequeue')}>Remove from queue</Button
+      >{/if}
+  {:else if pull.canMerge && pull.mergeRequirements.ready && !conflicted && selectedMethod}
     <div class="relative flex gap-1" use:dismissable={() => (choosingMethod = false)}>
-      <Button variant="primary" size="small" disabled={busy} onclick={() => (confirmingMerge = !confirmingMerge)}
-        ><GitMerge size={15} />{mergeLabel}</Button
+      <Button
+        variant="primary"
+        size="small"
+        disabled={busy}
+        onclick={() => {
+          if (!pull.mergeQueue.enabled) confirmingMerge = !confirmingMerge;
+          else if (selectedMethod) {
+            mergeMethod = selectedMethod;
+            void onAction('enqueue');
+          }
+        }}><GitMerge size={15} />{mergeLabel}</Button
       >
       {#if pull.allowedMergeMethods.length > 1}<Button
           icon

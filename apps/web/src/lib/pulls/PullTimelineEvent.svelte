@@ -49,6 +49,12 @@
         return 'uploaded a revision';
       case 'head_updated':
         return 'updated this revision';
+      case 'queued':
+        return `added this pull to the ${event.details.target} merge queue`;
+      case 'dequeued':
+        return event.details.reason
+          ? `queued this pull, but the merge stopped. ${event.details.reason}`
+          : 'removed this pull from the merge queue';
       case 'retargeted':
         return `retargeted this pull from ${event.details.from} to ${event.details.to} after its base merged`;
       case 'force_pushed':
@@ -63,7 +69,7 @@
       'mt-2.25 size-1.5 rounded-full',
       event.kind === 'closed' || event.kind === 'force_pushed'
         ? 'bg-danger'
-        : event.kind === 'merged'
+        : event.kind === 'merged' || event.kind === 'queued'
           ? 'bg-merged'
           : event.kind === 'commits_added'
             ? 'bg-success'

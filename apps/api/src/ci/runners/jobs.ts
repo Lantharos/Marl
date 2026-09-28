@@ -5,7 +5,7 @@ import { identifier } from '../../core/domain';
 import { json, problem, readBody, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
 import { completeJobBody } from '../../http/request-schemas';
-import { notifyPullsForCommit } from '../../pulls/realtime/updates';
+import { checksChanged } from '../runs/check-updates';
 import { publishRunLog } from '../runs/realtime';
 import { auditStatement } from '../../core/audit';
 import { jobSecrets } from '../workflows/secrets';
@@ -99,7 +99,7 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
         ]
       : [])
   ]);
-  await notifyPullsForCommit(env, job.repositoryId, job.commitId);
+  await checksChanged(env, job.repositoryId, job.commitId);
   return json({
     job: {
       id: job.id,
@@ -280,7 +280,7 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
   )
     .bind(runState, runState, job.runId, runState)
     .run();
-  await notifyPullsForCommit(env, job.repositoryId, job.commitId);
+  await checksChanged(env, job.repositoryId, job.commitId);
   if (transition.meta.changes && ['success', 'failure', 'canceled'].includes(runState))
     await emitRepositoryEvent(env, job.repositoryId, 'run', 'completed', { kind: 'run', id: job.runId }, null);
   return json({ completed: true, runState });

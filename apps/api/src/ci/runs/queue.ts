@@ -1,7 +1,7 @@
 import { workflowCheckName } from './check-provenance';
 import { identifier } from '../../core/domain';
 import type { Env } from '../../core/platform';
-import { notifyPullsForCommit } from '../../pulls/realtime/updates';
+import { checksChanged } from './check-updates';
 import { runSelect } from './runs';
 import { type RunJob } from './jobs';
 
@@ -9,7 +9,7 @@ export type QueueRun = {
   repositoryId: string;
   workflowId: string;
   name: string;
-  trigger: 'workflow_dispatch' | 'retry' | 'push' | 'pull_request';
+  trigger: 'workflow_dispatch' | 'retry' | 'push' | 'pull_request' | 'merge_queue';
   branch: string;
   commitId: string;
   actorId: string | null;
@@ -131,9 +131,7 @@ export async function queueRun(env: Env, input: QueueRun): Promise<Record<string
   }
   const superseded = supersede ? (results[supersededIndex]?.results ?? []).map((row) => String(row.commitId)) : [];
   await Promise.all(
-    [...new Set([...superseded, input.commitId])].map((commitId) =>
-      notifyPullsForCommit(env, input.repositoryId, commitId)
-    )
+    [...new Set([...superseded, input.commitId])].map((commitId) => checksChanged(env, input.repositoryId, commitId))
   );
   return env.DB.prepare(runSelect('WHERE runs.id=?')).bind(runId).first<Record<string, unknown>>();
 }

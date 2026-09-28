@@ -1,6 +1,6 @@
 {
-  "id": "e6658419-bd3a-4574-b14f-87956a3e435e",
-  "prevId": "917eecc4-89ef-4a78-ae26-e255ce73b32d",
+  "id": "f06ad46c-149b-49ee-92fb-8901f121b7c0",
+  "prevId": "2dce46b1-725a-456f-8b92-bb8669ea184f",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -2386,6 +2386,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": "0"
+        },
+        "merge_queue": {
+          "name": "merge_queue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "0"
         }
       },
       "indexes": {},
@@ -2443,6 +2451,10 @@
         "branch_rules_check_3": {
           "name": "branch_rules_check_3",
           "value": "allow_author_merge IN (0,1)"
+        },
+        "branch_rules_merge_queue": {
+          "name": "branch_rules_merge_queue",
+          "value": "merge_queue IN (0,1)"
         }
       }
     },
@@ -8776,6 +8788,201 @@
         "webhooks_active": {
           "name": "webhooks_active",
           "value": "active IN (0,1)"
+        }
+      }
+    },
+    "merge_queue_entries": {
+      "name": "merge_queue_entries",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "repository_id": {
+          "name": "repository_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_branch": {
+          "name": "target_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pull_request_id": {
+          "name": "pull_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "head_commit_id": {
+          "name": "head_commit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "enqueued_by": {
+          "name": "enqueued_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'queued'"
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "0"
+        },
+        "queue_branch": {
+          "name": "queue_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "base_commit_id": {
+          "name": "base_commit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "merge_commit_id": {
+          "name": "merge_commit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "enqueued_at": {
+          "name": "enqueued_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "merge_queue_by_target": {
+          "name": "merge_queue_by_target",
+          "columns": [
+            "repository_id",
+            "target_branch",
+            "state",
+            "enqueued_at"
+          ],
+          "isUnique": false
+        },
+        "merge_queue_by_commit": {
+          "name": "merge_queue_by_commit",
+          "columns": [
+            "merge_commit_id"
+          ],
+          "where": "state = 'testing'",
+          "isUnique": false
+        },
+        "merge_queue_active_pull": {
+          "name": "merge_queue_active_pull",
+          "columns": [
+            "pull_request_id"
+          ],
+          "where": "state IN ('queued','testing','merging')",
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "merge_queue_entries_repository_id_repositories_id_fk": {
+          "name": "merge_queue_entries_repository_id_repositories_id_fk",
+          "tableFrom": "merge_queue_entries",
+          "columnsFrom": [
+            "repository_id"
+          ],
+          "tableTo": "repositories",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "merge_queue_entries_pull_request_id_pull_requests_id_fk": {
+          "name": "merge_queue_entries_pull_request_id_pull_requests_id_fk",
+          "tableFrom": "merge_queue_entries",
+          "columnsFrom": [
+            "pull_request_id"
+          ],
+          "tableTo": "pull_requests",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "merge_queue_entries_enqueued_by_users_id_fk": {
+          "name": "merge_queue_entries_enqueued_by_users_id_fk",
+          "tableFrom": "merge_queue_entries",
+          "columnsFrom": [
+            "enqueued_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "merge_queue_state": {
+          "name": "merge_queue_state",
+          "value": "state IN ('queued','testing','merging','merged','failed','removed')"
+        },
+        "merge_queue_method": {
+          "name": "merge_queue_method",
+          "value": "method IN ('merge','squash','rebase')"
         }
       }
     }

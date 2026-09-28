@@ -72,6 +72,7 @@ export interface GitGatewayRequestMap {
     author: string;
     authorEmail: string;
     actorId: string;
+    queueBranch?: string;
   };
   '/_marl/pulls/pin': {
     owner: string;
@@ -82,6 +83,15 @@ export interface GitGatewayRequestMap {
     sourceOwner?: string;
     sourceRepository?: string;
     sourceRepositoryId?: string;
+  };
+  '/_marl/branches/advance': {
+    owner: string;
+    repository: string;
+    repositoryId: string;
+    branch: string;
+    expectedCommitId: string;
+    commitId: string;
+    actorId: string;
   };
   '/_marl/branches/delete': {
     owner: string;

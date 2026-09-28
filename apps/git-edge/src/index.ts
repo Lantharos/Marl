@@ -23,6 +23,7 @@ type RepositoryRoute = {
 
 const INTERNAL_REPOSITORY_ROUTES = new Set([
   '/_marl/mergeability',
+  '/_marl/branches/advance',
   '/_marl/branches/delete',
   '/_marl/archive',
   '/_marl/blob',
@@ -172,6 +173,7 @@ async function repositoryRoute(request: Request): Promise<RepositoryRoute | null
       owner: body.owner,
       repository: body.repository,
       writes:
+        url.pathname === '/_marl/branches/advance' ||
         url.pathname === '/_marl/branches/delete' ||
         url.pathname === '/_marl/import' ||
         url.pathname === '/_marl/merge' ||

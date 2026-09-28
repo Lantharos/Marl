@@ -3,6 +3,7 @@ import { pinPullRefs } from '../../git/writes';
 import type { Env } from '../../core/platform';
 import { revisionUpdateStatements } from '../review/revision-updates';
 import { commitPullUpdate } from '../realtime/updates';
+import { dropQueuedPull } from '../queue/state';
 
 type BranchHead = { name: string; commitId: string };
 type PullHeadRow = {
@@ -94,6 +95,7 @@ export async function synchronizePullsForBranchUpdates(
         ...statements
       ]
     );
+    if (sourceCommitId !== pull.sourceCommitId) await dropQueuedPull(env, pull.id);
   }
   return changed;
 }

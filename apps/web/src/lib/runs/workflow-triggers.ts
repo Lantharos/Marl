@@ -20,5 +20,6 @@ export function runOrigin(run: Pick<RunSummary, 'trigger' | 'actor'>) {
   const by = run.actor ? ` by ${run.actor}` : '';
   if (run.trigger === 'workflow_dispatch') return `Started manually${by}`;
   if (run.trigger === 'retry') return `Retried${by}`;
+  if (run.trigger === 'merge_queue') return 'Testing the merge queue';
   return `Triggered by ${run.trigger.replace('_', ' ')}`;
 }

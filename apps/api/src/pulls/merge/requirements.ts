@@ -9,6 +9,15 @@ export type RequirementPull = {
 };
 export type RequirementReview = { authorId: string; state: string; commitId: string };
 
+export function requiredCheckStates(rule: BranchRule, items: CheckState[]) {
+  const byProducer = new Map<string, string>();
+  for (const check of items) {
+    const key = checkProducerKey(check);
+    if (!byProducer.has(key) || check.state !== 'success') byProducer.set(key, check.state);
+  }
+  return rule.requiredChecks.map((check) => ({ name: check.name, state: byProducer.get(checkProducerKey(check)) }));
+}
+
 export function mergeRequirements(
   pull: RequirementPull,
   rule: BranchRule,
@@ -23,15 +32,7 @@ export function mergeRequirements(
     ([authorId, state]) => authorId !== pull.authorId && state === 'approved'
   ).length;
   const changesRequested = [...latest.values()].includes('changes_requested');
-  const byProducer = new Map<string, string>();
-  for (const check of checks.items ?? []) {
-    const key = checkProducerKey(check);
-    if (!byProducer.has(key) || check.state !== 'success') byProducer.set(key, check.state);
-  }
-  const requiredStates = rule.requiredChecks.map((check) => ({
-    name: check.name,
-    state: byProducer.get(checkProducerKey(check))
-  }));
+  const requiredStates = requiredCheckStates(rule, checks.items ?? []);
   const allChecksPass = checks.total === checks.passed;
   const checksPass = requiredStates.every((check) => check.state === 'success') && (!authorMerge || allChecksPass);
   const reasons: string[] = [];

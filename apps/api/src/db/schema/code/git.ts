@@ -34,6 +34,9 @@ export const branchRules = sqliteTable(
       .default(sql`0`),
     allowAuthorMerge: integer('allow_author_merge')
       .notNull()
+      .default(sql`0`),
+    mergeQueue: integer('merge_queue')
+      .notNull()
       .default(sql`0`)
   },
   (table) => [
@@ -41,7 +44,8 @@ export const branchRules = sqliteTable(
     check('branch_rules_check_0', sql`required_approvals BETWEEN 0 AND 10`),
     check('branch_rules_check_1', sql`require_conversations IN (0, 1)`),
     check('branch_rules_check_2', sql`carry_approvals_forward IN (0,1)`),
-    check('branch_rules_check_3', sql`allow_author_merge IN (0,1)`)
+    check('branch_rules_check_3', sql`allow_author_merge IN (0,1)`),
+    check('branch_rules_merge_queue', sql`merge_queue IN (0,1)`)
   ]
 );
 

@@ -4,7 +4,7 @@ import { pageResult, pageSize, readCursor } from '../../http/cursor';
 import { json, problem } from '../../http/http';
 import { readListQuery } from '../../http/list-query';
 import type { Env } from '../../core/platform';
-import { notifyPullsForCommit } from '../../pulls/realtime/updates';
+import { checksChanged } from './check-updates';
 import {
   authorizeRepository,
   authorizeRepositoryId,
@@ -225,7 +225,7 @@ export async function cancelRun(
       `UPDATE runs SET state='canceled',cancellation_reason='developer',completed_at=CURRENT_TIMESTAMP WHERE id=?`
     ).bind(run.id)
   ]);
-  await notifyPullsForCommit(env, repo.id, run.commitId);
+  await checksChanged(env, repo.id, run.commitId);
   return json({ canceled: true, state: 'canceled' });
 }
 

@@ -2,6 +2,8 @@ import { pullStack } from './stacks';
 import { bodyExcerpt, renderBody } from '../core/markdown';
 import type { Principal } from '../auth/principal';
 import { branchRuleFor } from '../repositories/branch-rules';
+import { commitChecks } from './merge/readiness';
+import { mergeQueueStatus } from './queue/entries';
 import { pullMergePermission } from './permissions';
 import { pullChecksApproval } from './merge/checks';
 import { pageResult, pageSize, readCursor } from '../http/cursor';
@@ -240,6 +242,7 @@ export async function getPull(
   const permission = pullMergePermission(repository, principal, pull.authorId, rule);
   const requirements = mergeRequirements(pull, rule, checkSummary, reviews.results, unresolved, permission.authorMerge);
   const pullSummary = summary(pull, checkSummary, reviewStatus, unresolved);
+  const mergeQueue = await mergeQueueStatus(env, pull.id, rule.mergeQueue);
   const state = pull.state === 'open' ? (requirements.ready ? 'mergeable' : 'blocked') : pullSummary.state;
   const bodyHtml = renderBody(pull.body, { owner, repository: name }, pull.id);
   return json({
@@ -267,6 +270,7 @@ export async function getPull(
       canManage: repositoryCan(repository, principal, 'repository.triage'),
       canMerge: permission.allowed,
       checksApproval,
+      mergeQueue,
       canModerate: repositoryCan(repository, principal, 'repository.maintain'),
       realtimeVersion: Number(pull.realtimeVersion),
       linkedItems,
@@ -343,11 +347,7 @@ export async function getPullState(
     .first<PullRow>();
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const [checks, reviews, unresolvedThreads, rule, commits, linkedItems, checksApproval] = await Promise.all([
-    env.DB.prepare(
-      'SELECT checks.name,checks.state,COALESCE(canonical_workflows.id,checks.producer_workflow_id) AS workflowId,checks.producer_job_key AS jobKey FROM checks JOIN workflows AS producer_workflows ON producer_workflows.id=checks.producer_workflow_id JOIN repositories AS producer_repositories ON producer_repositories.id=checks.producer_repository_id LEFT JOIN workflows AS canonical_workflows ON canonical_workflows.repository_id=checks.producer_repository_id AND canonical_workflows.branch=producer_repositories.default_branch AND canonical_workflows.path=producer_workflows.path AND canonical_workflows.active=1 WHERE checks.repository_id=? AND checks.commit_id=? AND checks.producer_repository_id=?'
-    )
-      .bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, repository.id)
-      .all<{ name: string; state: string; workflowId: string; jobKey: string }>(),
+    commitChecks(env, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, repository.id),
     latestReviews(env, pull.id),
     env.DB.prepare(
       'SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL'
@@ -357,15 +357,7 @@ export async function getPullState(
     branchRuleFor(env, repository.id, pull.targetBranch),
     pullCommits(env, repository.id, pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, pull.targetCommitId),
     linkedWorkItems(env, principal, 'pull', pull.id),
-    pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push')),
-    pullStack(env, { ...pull, repositoryId: repository.id }),
-    principal
-      ? env.DB.prepare(
-          'SELECT commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? AND author_id=? ORDER BY created_at DESC LIMIT 1'
-        )
-          .bind(pull.id, principal.id)
-          .first<{ commitId: string; createdAt: string }>()
-      : Promise.resolve(null)
+    pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push'))
   ]);
   const checkSummary = {
     total: checks.results.length,
@@ -374,6 +366,7 @@ export async function getPullState(
     running: checks.results.filter((item) => item.state === 'running' || item.state === 'queued').length,
     items: checks.results
   };
+  const mergeQueue = await mergeQueueStatus(env, pull.id, rule.mergeQueue);
   const permission = pullMergePermission(repository, principal, pull.authorId, rule);
   const requirements = mergeRequirements(
     pull,
@@ -404,6 +397,7 @@ export async function getPullState(
       canMerge: permission.allowed,
       allowedMergeMethods: rule.allowedMergeMethods,
       checksApproval,
+      mergeQueue,
       linkedItems,
       realtimeVersion: Number(pull.realtimeVersion)
     }

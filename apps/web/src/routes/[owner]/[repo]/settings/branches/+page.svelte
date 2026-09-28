@@ -18,7 +18,7 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  type Field = 'approvals' | 'checks' | 'conversations' | 'carry' | 'author' | 'methods';
+  type Field = 'approvals' | 'checks' | 'conversations' | 'carry' | 'author' | 'queue' | 'methods';
   const defaults: Rule = {
     pattern: '*',
     requiredApprovals: 0,
@@ -26,7 +26,8 @@
     requireConversations: true,
     carryApprovalsForward: false,
     allowAuthorMerge: false,
-    allowedMergeMethods: ['merge', 'squash', 'rebase']
+    allowedMergeMethods: ['merge', 'squash', 'rebase'],
+    mergeQueue: false
   };
   const titles: Record<Field, string> = {
     approvals: 'Required approvals',
@@ -34,6 +35,7 @@
     conversations: 'Review conversations',
     carry: 'Approvals on new revisions',
     author: 'Who can merge',
+    queue: 'Merge queue',
     methods: 'Merge methods'
   };
   const choices = {
@@ -59,6 +61,15 @@
         value: 'yes',
         label: 'Authors can merge too',
         description: 'Authors may merge after the required approvals and all checks pass.'
+      }
+    ],
+    queue: [
+      { value: 'no', label: 'Merge directly', description: 'A pull merges as soon as someone presses Merge.' },
+      {
+        value: 'yes',
+        label: 'Use a merge queue',
+        description:
+          'Ready pulls line up and merge one at a time. With required checks, each merge is tested on top of the latest branch before it lands.'
       }
     ]
   };
@@ -101,7 +112,9 @@
         ? current.requireConversations
         : next === 'carry'
           ? current.carryApprovalsForward
-          : current.allowAuthorMerge
+          : next === 'queue'
+            ? current.mergeQueue
+            : current.allowAuthorMerge
     )
       ? 'yes'
       : 'no';
@@ -136,6 +149,7 @@
     if (field === 'conversations') draft.requireConversations = decision === 'yes';
     if (field === 'carry') draft.carryApprovalsForward = decision === 'yes';
     if (field === 'author') draft.allowAuthorMerge = decision === 'yes';
+    if (field === 'queue') draft.mergeQueue = decision === 'yes';
     saving = true;
     error = '';
     const submitted = {
@@ -203,6 +217,11 @@
         title="Who can merge"
         value={current.allowAuthorMerge ? 'Maintainers and eligible authors' : 'Maintainers only'}
         onclick={() => edit('author')}
+      />
+      <SettingRow
+        title="Merge queue"
+        value={current.mergeQueue ? 'Pulls merge through the queue' : 'Pulls merge directly'}
+        onclick={() => edit('queue')}
       />
       <SettingRow
         title="Merge methods"

@@ -11,6 +11,7 @@ export type BranchRule = {
   carryApprovalsForward: boolean;
   allowAuthorMerge: boolean;
   allowedMergeMethods: MergeMethod[];
+  mergeQueue: boolean;
 };
 
 export const load = (async ({ fetch, params }) => {

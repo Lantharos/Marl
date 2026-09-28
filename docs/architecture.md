@@ -161,6 +161,19 @@ strict path safety and machine-readable output.
 The core exposes a library API consumed by the CLI. It does not know about terminal
 rendering, HTTP sessions, or browser product concepts.
 
+## Merge queue
+
+Queue entries live in `merge_queue_entries`, one active entry per pull. Each state change is a
+conditional update, so concurrent triggers cannot start two entries for the same branch or merge an
+entry twice. Starting an entry re-evaluates the pull's merge requirements. Without required checks
+the gateway merges it directly. Otherwise the gateway writes the merge result to a
+`marl-queue/<branch>/pr-<number>-<attempt>` branch without moving the target, and the API queues
+the default branch's workflows that produce the required checks on that commit. Queue branches
+never trigger push workflows, webhooks, or branch listings. When their checks pass, the gateway
+fast-forwards the target with compare-and-swap and the API records the merge as the person who
+queued it. If the target moved in the meantime, the entry is rebuilt on the new head. The
+ten-minute cron resumes entries whose processing was interrupted.
+
 ## Code search
 
 The Git gateway answers code searches directly from Git objects, so any branch or commit can be

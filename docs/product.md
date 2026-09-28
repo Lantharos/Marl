@@ -171,6 +171,13 @@ horizontally when needed so a narrow screen does not hide part of a reviewed lin
 Pushes before anyone comments or reviews stay in the same revision, with a compact commit update.
 Once discussion begins, the next push starts a revision and preserves that discussion with its head.
 
+A branch rule can send merges through a merge queue. A ready pull is added to the queue instead of
+merging, and queued pulls land one at a time in the order they were added. When the branch has
+required checks, each pull is merged on top of the latest branch in a temporary `marl-queue/`
+branch, the workflows that produce those checks run on that exact result, and the branch moves only
+if they pass. A pull leaves the queue with a reason on its timeline when a check fails, it
+conflicts, or new commits arrive. The queue for a branch is listed under its pulls.
+
 Activity includes replies, editable comments, durable deletion
 tombstones, reversible thread resolution, and an owner-controlled conversation lock. Reviewers
 start line or range conversations directly from the changes view; those conversations also

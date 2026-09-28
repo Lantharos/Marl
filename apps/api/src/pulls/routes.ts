@@ -12,6 +12,7 @@ import {
 import { createPull, transitionPull, updatePullDetails } from './pulls';
 import { createPullLabel, updatePullMetadata } from './metadata';
 import { mergePull } from './merge/merge';
+import { dequeuePull, enqueuePull, listMergeQueue } from './queue/entries';
 import { reviewPull } from './review/reviews';
 import { compareBranches, getPullDiff, getPullPatch } from './comparison';
 import {
@@ -25,7 +26,8 @@ import {
 } from './queries';
 import { deleteReviewBody } from './review/comments';
 
-const pulls = '/repositories/:owner/:repo/pulls';
+const repository = '/repositories/:owner/:repo';
+const pulls = `${repository}/pulls`;
 const pull = `${pulls}/:number(\\d+)`;
 const comment = ':id(comment_[a-z0-9]+)';
 
@@ -72,6 +74,15 @@ export const pullRoutes = [
   ),
   route('POST', `${pull}/merge`, 'user', ({ request, env, principal }, { owner, repo, number }) =>
     mergePull(request, env, principal, owner, repo, Number(number))
+  ),
+  route('PUT', `${pull}/queue`, 'user', ({ request, env, principal }, { owner, repo, number }) =>
+    enqueuePull(request, env, principal, owner, repo, Number(number))
+  ),
+  route('DELETE', `${pull}/queue`, 'user', ({ env, principal }, { owner, repo, number }) =>
+    dequeuePull(env, principal, owner, repo, Number(number))
+  ),
+  route('GET', `${repository}/merge-queue`, 'optional', ({ env, principal, url }, { owner, repo }) =>
+    listMergeQueue(env, principal, owner, repo, url)
   ),
   route('POST', `${pull}/threads`, 'user', ({ request, env, principal }, { owner, repo, number }) =>
     createThread(request, env, principal, owner, repo, Number(number))

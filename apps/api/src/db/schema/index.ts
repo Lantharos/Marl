@@ -12,3 +12,4 @@ export * from './code/repositories';
 export * from './code/symbols';
 export * from './work/reviews';
 export * from './work/webhooks';
+export * from './work/merge-queue';

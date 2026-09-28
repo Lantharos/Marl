@@ -66,6 +66,7 @@ export interface PullRequestDetail extends PullRequestSummary {
   canManage: boolean;
   canMerge: boolean;
   checksApproval: { waiting: number; canApprove: boolean };
+  mergeQueue: MergeQueueStatus;
   canModerate: boolean;
   realtimeVersion: number;
   linkedItems: LinkedWorkItem[];
@@ -155,7 +156,9 @@ export type PullRequestEventKind =
   | 'force_pushed'
   | 'thread_resolved'
   | 'thread_reopened'
-  | 'retargeted';
+  | 'retargeted'
+  | 'queued'
+  | 'dequeued';
 
 export interface PullRequestEvent {
   id: Identifier;
@@ -253,4 +256,21 @@ export interface PullRequestDiff {
 export interface PullStack {
   base: { number: number; title: string; state: string } | null;
   dependents: Array<{ number: number; title: string; state: string }>;
+}
+
+export interface MergeQueueEntry {
+  number: number;
+  title: string;
+  author: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string | null;
+  enqueuedBy: string;
+  enqueuedAt: string;
+  state: 'queued' | 'testing' | 'merging';
+  position: number;
+}
+
+export interface MergeQueueStatus {
+  enabled: boolean;
+  entry: Pick<MergeQueueEntry, 'state' | 'position' | 'enqueuedBy' | 'enqueuedAt'> | null;
 }

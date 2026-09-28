@@ -17,6 +17,7 @@ import { scheduleNotificationEmails, sendNotificationEmails } from './notificati
 import { notificationRoutes } from './notifications/routes';
 import { deliverWebhooks } from './webhooks/delivery';
 import { webhookRoutes } from './webhooks/routes';
+import { resumeMergeQueues } from './pulls/queue/processor';
 import { pullRoutes } from './pulls/routes';
 import { releaseRoutes } from './releases/routes';
 import { purgeDeletedRepositories } from './repositories/lifecycle';
@@ -88,7 +89,8 @@ async function handle(request: Request, env: Env, execution: ExecutionContext): 
 
 export default {
   async scheduled(controller: ScheduledController, env: Env) {
-    if (controller.cron === notificationCron) await scheduleNotificationEmails(env);
+    if (controller.cron === notificationCron)
+      await Promise.all([scheduleNotificationEmails(env), resumeMergeQueues(env)]);
     else await purgeDeletedRepositories(env);
   },
   fetch: handle,

@@ -4,7 +4,7 @@ import { json, problem, readJson } from '../../http/http';
 import { pipe, string, minLength, maxLength, strictObject } from 'valibot';
 import type { Env } from '../../core/platform';
 import { authorizeRepository, authorizeRepositoryId } from '../../repositories/access/access';
-import { notifyPullsForCommit } from '../realtime/updates';
+import { checksChanged } from '../../ci/runs/check-updates';
 import { parseRunJobs } from '../../ci/runs/jobs';
 import { queueRun } from '../../ci/runs/queue';
 import { workflowTriggeredBy } from '../../ci/workflows/triggers';
@@ -104,7 +104,7 @@ export async function approveRunChecks(env: Env, principal: Principal, owner: st
     .first<{ id: string; commitId: string }>();
   if (!run) return problem(409, 'run_not_waiting', 'This run is no longer waiting for approval.');
   await releaseRuns(env, principal, repository, [run.id]);
-  await notifyPullsForCommit(env, repository.id, run.commitId);
+  await checksChanged(env, repository.id, run.commitId);
   return json({ approved: true });
 }
 
@@ -141,7 +141,7 @@ export async function approvePullChecks(
       repository,
       runs.results.map((run) => run.id)
     );
-  await notifyPullsForCommit(env, repository.id, input.commitId);
+  await checksChanged(env, repository.id, input.commitId);
   return json({ approved: true });
 }
 

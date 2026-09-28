@@ -127,6 +127,10 @@ async fn main() -> Result<()> {
             axum::routing::post(browse::branches::delete_branch),
         )
         .route(
+            "/_marl/branches/advance",
+            axum::routing::post(browse::branches::advance_branch),
+        )
+        .route(
             "/_marl/repositories/purge",
             axum::routing::post(storage::delete::delete_repository),
         )

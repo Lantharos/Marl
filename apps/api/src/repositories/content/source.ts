@@ -18,7 +18,7 @@ export async function listBranches(
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
   const result = await env.DB.prepare(
-    `SELECT branches.name, branches.commit_id AS commitId, commits.title, branches.updated_at AS updatedAt, NOT EXISTS (SELECT 1 FROM branch_rules WHERE branch_rules.repository_id=branches.repository_id AND branch_rules.pattern IN (branches.name, '*')) AS unprotected FROM branches JOIN commits ON commits.repository_id = branches.repository_id AND commits.id = branches.commit_id WHERE branches.repository_id = ? ORDER BY branches.name`
+    `SELECT branches.name, branches.commit_id AS commitId, commits.title, branches.updated_at AS updatedAt, NOT EXISTS (SELECT 1 FROM branch_rules WHERE branch_rules.repository_id=branches.repository_id AND branch_rules.pattern IN (branches.name, '*')) AS unprotected FROM branches JOIN commits ON commits.repository_id = branches.repository_id AND commits.id = branches.commit_id WHERE branches.repository_id = ? AND branches.name NOT LIKE 'marl-queue/%' ORDER BY branches.name`
   )
     .bind(repo.id)
     .all();

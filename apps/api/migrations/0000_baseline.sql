@@ -329,13 +329,15 @@ CREATE TABLE `branch_rules` (
 	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`carry_approvals_forward` integer DEFAULT 0 NOT NULL,
 	`allow_author_merge` integer DEFAULT 0 NOT NULL,
+	`merge_queue` integer DEFAULT 0 NOT NULL,
 	PRIMARY KEY(`repository_id`, `pattern`),
 	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "branch_rules_check_0" CHECK(required_approvals BETWEEN 0 AND 10),
 	CONSTRAINT "branch_rules_check_1" CHECK(require_conversations IN (0, 1)),
 	CONSTRAINT "branch_rules_check_2" CHECK(carry_approvals_forward IN (0,1)),
-	CONSTRAINT "branch_rules_check_3" CHECK(allow_author_merge IN (0,1))
+	CONSTRAINT "branch_rules_check_3" CHECK(allow_author_merge IN (0,1)),
+	CONSTRAINT "branch_rules_merge_queue" CHECK(merge_queue IN (0,1))
 );
 --> statement-breakpoint
 CREATE TABLE `branches` (
@@ -1206,4 +1208,30 @@ CREATE TABLE `webhooks` (
 );
 --> statement-breakpoint
 CREATE INDEX `webhooks_by_repository` ON `webhooks` (`repository_id`);--> statement-breakpoint
-CREATE INDEX `webhooks_by_organization` ON `webhooks` (`organization_id`,`repository_id`);
+CREATE INDEX `webhooks_by_organization` ON `webhooks` (`organization_id`,`repository_id`);--> statement-breakpoint
+CREATE TABLE `merge_queue_entries` (
+	`id` text PRIMARY KEY NOT NULL,
+	`repository_id` text NOT NULL,
+	`target_branch` text NOT NULL,
+	`pull_request_id` text NOT NULL,
+	`head_commit_id` text NOT NULL,
+	`method` text NOT NULL,
+	`enqueued_by` text NOT NULL,
+	`state` text DEFAULT 'queued' NOT NULL,
+	`attempt` integer DEFAULT 0 NOT NULL,
+	`queue_branch` text,
+	`base_commit_id` text,
+	`merge_commit_id` text,
+	`reason` text,
+	`enqueued_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`pull_request_id`) REFERENCES `pull_requests`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`enqueued_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "merge_queue_state" CHECK(state IN ('queued','testing','merging','merged','failed','removed')),
+	CONSTRAINT "merge_queue_method" CHECK(method IN ('merge','squash','rebase'))
+);
+--> statement-breakpoint
+CREATE INDEX `merge_queue_by_target` ON `merge_queue_entries` (`repository_id`,`target_branch`,`state`,`enqueued_at`);--> statement-breakpoint
+CREATE INDEX `merge_queue_by_commit` ON `merge_queue_entries` (`merge_commit_id`) WHERE state = 'testing';--> statement-breakpoint
+CREATE UNIQUE INDEX `merge_queue_active_pull` ON `merge_queue_entries` (`pull_request_id`) WHERE state IN ('queued','testing','merging');

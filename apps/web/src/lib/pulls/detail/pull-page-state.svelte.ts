@@ -338,11 +338,16 @@ export class PullPageState {
           body: this.commentBody,
           commitId: this.pull.sourceCommitId
         });
-      if (action === 'merge')
-        return this.#send(`${this.endpoint}/merge`, 'POST', {
-          method: this.mergeMethod,
-          commitId: this.pull.sourceCommitId
-        });
+      if (action === 'merge' || action === 'enqueue')
+        return this.#send(
+          `${this.endpoint}/${action === 'merge' ? 'merge' : 'queue'}`,
+          action === 'merge' ? 'POST' : 'PUT',
+          {
+            method: this.mergeMethod,
+            commitId: this.pull.sourceCommitId
+          }
+        );
+      if (action === 'dequeue') return this.#send(`${this.endpoint}/queue`, 'DELETE');
       return this.#send(`${this.endpoint}/${action}`, 'POST', {});
     });
     if (done && review) {

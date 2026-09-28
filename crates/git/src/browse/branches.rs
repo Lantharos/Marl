@@ -104,3 +104,99 @@ async fn delete_branch_inner(
     }
     Ok(())
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdvanceBranchRequest {
+    owner: String,
+    repository: String,
+    repository_id: String,
+    branch: String,
+    expected_commit_id: String,
+    commit_id: String,
+    actor_id: String,
+}
+
+pub(crate) async fn advance_branch(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<AdvanceBranchRequest>,
+) -> Response {
+    if headers
+        .get("x-marl-gateway-token")
+        .and_then(|value| value.to_str().ok())
+        != Some(state.gateway_token.as_str())
+    {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let reference = format!("refs/heads/{}", request.branch);
+    if !safe_segment(&request.owner)
+        || !safe_segment(&request.repository)
+        || !request.repository_id.starts_with("repo_")
+        || !safe_segment(&request.repository_id)
+        || request.branch.starts_with('-')
+        || !safe_ref(&reference)
+        || !is_object_id(&request.expected_commit_id)
+        || !is_object_id(&request.commit_id)
+    {
+        return StatusCode::UNPROCESSABLE_ENTITY.into_response();
+    }
+    match advance_branch_inner(&state, request, &reference).await {
+        Ok(()) => Json(serde_json::json!({"advanced": true})).into_response(),
+        Err(error) if error.to_string() == "branch changed" => StatusCode::CONFLICT.into_response(),
+        Err(error) => {
+            eprintln!("advance branch failed: {error:#}");
+            StatusCode::BAD_GATEWAY.into_response()
+        }
+    }
+}
+
+async fn advance_branch_inner(
+    state: &AppState,
+    request: AdvanceBranchRequest,
+    reference: &str,
+) -> anyhow::Result<()> {
+    let _guard = state
+        .lock_repository(&request.owner, &request.repository)
+        .await;
+    let repository = repository_path(&state.repositories, &request.owner, &request.repository)?;
+    let descends = Command::new("git")
+        .arg("-C")
+        .arg(&repository)
+        .args([
+            "merge-base",
+            "--is-ancestor",
+            &request.expected_commit_id,
+            &request.commit_id,
+        ])
+        .output()
+        .await?;
+    if !descends.status.success() {
+        anyhow::bail!("branch changed");
+    }
+    let update = Command::new("git")
+        .arg("-C")
+        .arg(&repository)
+        .args([
+            "update-ref",
+            reference,
+            &request.commit_id,
+            &request.expected_commit_id,
+        ])
+        .output()
+        .await?;
+    if !update.status.success() {
+        anyhow::bail!("branch changed");
+    }
+    if state.local_storage {
+        index_local_repository(
+            state,
+            request.repository_id,
+            request.owner,
+            request.repository,
+            Some(request.actor_id),
+        )
+        .await?;
+    }
+    Ok(())
+}
