@@ -68,13 +68,13 @@
 
 <div class="min-h-dvh bg-canvas text-ink">
   <header
-    class="fixed inset-x-0 top-0 z-50 grid h-13 grid-cols-[auto_1fr_auto] items-center gap-2.5 border-b border-line-subtle bg-canvas/90 px-3 backdrop-blur-lg sm:gap-3.5 sm:px-5 lg:grid-cols-[auto_auto_1fr_auto]"
+    class="fixed inset-x-0 top-0 z-50 grid h-13 grid-cols-[auto_1fr_auto] items-center gap-2.5 border-b border-line-subtle bg-canvas/90 px-3 backdrop-blur-lg sm:gap-3.5 sm:px-5 lg:grid-cols-[auto_auto_1fr]"
     use:dismissable={() => (mobileOpen = false)}
   >
     <a class="flex px-1 py-1.5" href="/" aria-label="Home"><BrandMark /></a>
     <GlobalNav open={mobileOpen} onNavigate={() => (mobileOpen = false)} />
     <button
-      class="flex h-8 field min-h-0 w-full max-w-105 cursor-text items-center gap-2 justify-self-center px-2.5 text-ink-faint max-sm:w-8 max-sm:justify-center max-sm:justify-self-end max-sm:border-transparent max-sm:bg-transparent max-sm:p-0 lg:w-[min(420px,calc(100vw-620px))]"
+      class="flex h-8 field min-h-0 w-full max-w-105 cursor-text items-center gap-2 justify-self-center px-2.5 text-ink-faint max-sm:w-8 max-sm:justify-center max-sm:justify-self-end max-sm:border-transparent max-sm:bg-transparent max-sm:p-0 lg:absolute lg:left-1/2 lg:w-[min(420px,calc(100vw-720px))] lg:-translate-x-1/2"
       aria-label="Find anything"
       aria-keyshortcuts="Control+K Meta+K"
       onclick={openSearch}
