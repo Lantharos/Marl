@@ -7,9 +7,6 @@
   import FileText from '@lucide/svelte/icons/file-text';
   import Plus from '@lucide/svelte/icons/plus';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import GitBranch from '@lucide/svelte/icons/git-branch';
-  import GitFork from '@lucide/svelte/icons/git-fork';
-  import Star from '@lucide/svelte/icons/star';
   import { api, MarlApiError } from '$lib/api';
   import Button from '$lib/components/controls/Button.svelte';
   import LinkButton from '$lib/components/controls/LinkButton.svelte';
@@ -19,7 +16,6 @@
   import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
   import Modal from '$lib/components/overlays/Modal.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
-  import Time from '$lib/components/page/Time.svelte';
   import { repositoryDocumentPath } from '$lib/repositories/repository-path';
   import { isoTimestamp } from '$lib/time';
   import type { RepositoryDocument } from './+page';
@@ -126,91 +122,63 @@
   }}
 />
 
-<div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
-  <article class="min-w-0">
-    {#if documents.length || data.canManage}
-      <nav aria-label="Repository documents" class="mb-5 flex flex-wrap items-center gap-1">
-        {#each documents as document (document.path)}
-          <button
-            type="button"
-            aria-pressed={activeDocument?.path === document.path}
-            class={[
-              'inline-flex h-8.5 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors',
-              activeDocument?.path === document.path
-                ? 'bg-surface-muted text-ink-strong'
-                : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong'
-            ]}
-            onclick={() => void selectDocument(document)}><FileText size={14} />{document.label}</button
-          >
-        {/each}
-        {#if data.canManage}<Button
-            icon
-            size="small"
-            variant="ghost"
-            class="rounded-full"
-            aria-label="Manage showcased files"
-            title="Manage showcased files"
-            onclick={openEditor}><Plus size={15} /></Button
+<article class="min-w-0">
+  {#if documents.length || data.canManage}
+    <nav aria-label="Repository documents" class="mb-5 flex flex-wrap items-center gap-1">
+      {#each documents as document (document.path)}
+        <button
+          type="button"
+          aria-pressed={activeDocument?.path === document.path}
+          class={[
+            'inline-flex h-8.5 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors',
+            activeDocument?.path === document.path
+              ? 'bg-surface-muted text-ink-strong'
+              : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong'
+          ]}
+          onclick={() => void selectDocument(document)}><FileText size={14} />{document.label}</button
+        >
+      {/each}
+      {#if data.canManage}<Button
+          icon
+          size="small"
+          variant="ghost"
+          class="rounded-full"
+          aria-label="Manage showcased files"
+          title="Manage showcased files"
+          onclick={openEditor}><Plus size={15} /></Button
+        >{/if}
+    </nav>
+    {#if activeDocument}
+      <div class={['transition-opacity', loading && 'opacity-50']} aria-busy={loading}>
+        {#if error}<Notice>This document could not be loaded.</Notice>{:else if documentHtml}<MarkdownBody
+            html={documentHtml}
+            variant="document"
+          />{:else if loading}<span class="flex items-center gap-2 text-sm text-ink-muted"
+            ><Spinner />Loading document</span
           >{/if}
-      </nav>
-      {#if activeDocument}
-        <div class={['transition-opacity', loading && 'opacity-50']} aria-busy={loading}>
-          {#if error}<Notice>This document could not be loaded.</Notice>{:else if documentHtml}<MarkdownBody
-              html={documentHtml}
-              variant="document"
-            />{:else if loading}<span class="flex items-center gap-2 text-sm text-ink-muted"
-              ><Spinner />Loading document</span
-            >{/if}
-        </div>
-      {:else}
-        <div class="surface">
-          <EmptyState
-            compact
-            icon={BookOpen}
-            title="No showcased files"
-            description="Choose a Markdown or text file from the default branch."
-          />
-        </div>
-      {/if}
+      </div>
     {:else}
       <div class="surface">
         <EmptyState
+          compact
           icon={BookOpen}
-          title="No project overview yet"
-          description="Add a README, license, contributing guide, security policy, or code of conduct to introduce this repository."
-        >
-          {#if data.shellUser}<LinkButton size="small" href="/{owner}/{repo}/code">Browse the code</LinkButton>{/if}
-        </EmptyState>
+          title="No showcased files"
+          description="Choose a Markdown or text file from the default branch."
+        />
       </div>
     {/if}
-  </article>
-
-  <aside class="grid gap-4 text-sm lg:sticky lg:top-20">
-    <h2 class="text-base font-semibold text-ink-strong">About</h2>
-    <p class="leading-relaxed text-ink">{data.repository.description || 'No description provided.'}</p>
-    <dl class="grid gap-2.5 text-ink-muted">
-      <div class="flex items-center gap-2">
-        <dt class="sr-only">Default branch</dt>
-        <GitBranch size={15} />
-        <dd class="font-mono text-xs text-ink">{data.revision}</dd>
-      </div>
-      <div class="flex items-center gap-2">
-        <dt class="sr-only">Stars</dt>
-        <Star size={15} />
-        <dd><span class="font-semibold text-ink-strong tabular-nums">{data.repository.starCount ?? 0}</span> stars</dd>
-      </div>
-      <div class="flex items-center gap-2">
-        <dt class="sr-only">Forks</dt>
-        <GitFork size={15} />
-        <dd><span class="font-semibold text-ink-strong tabular-nums">{data.repository.forkCount ?? 0}</span> forks</dd>
-      </div>
-      <div class="flex items-center gap-2">
-        <dt class="sr-only">Updated</dt>
-        <dd>Updated <Time value={data.repository.updatedAt} class="text-ink-muted" /></dd>
-      </div>
-    </dl>
-  </aside>
-</div>
+  {:else}
+    <div class="surface">
+      <EmptyState
+        icon={BookOpen}
+        title="No project overview yet"
+        description="Add a README, license, contributing guide, security policy, or code of conduct to introduce this repository."
+      >
+        {#if data.shellUser}<LinkButton size="small" href="/{owner}/{repo}/code">Browse the code</LinkButton>{/if}
+      </EmptyState>
+    </div>
+  {/if}
+</article>
 
 <Modal
   open={editorOpen}
