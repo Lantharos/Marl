@@ -189,7 +189,7 @@
 
 <div
   class={[
-    'min-w-0 overflow-hidden rounded-lg bg-surface shadow-surface transition-[outline-color] has-[textarea:focus]:outline has-[textarea:focus]:outline-brand',
+    'min-w-0 overflow-hidden rounded-lg bg-surface shadow-surface has-[textarea:focus]:outline has-[textarea:focus]:outline-brand',
     dragOver && 'outline-2 outline-offset-2 outline-brand'
   ]}
   role="group"
