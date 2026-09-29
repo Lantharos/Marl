@@ -13,19 +13,24 @@ export async function renderDiagram(code: HTMLElement, language: string, signal:
   const toolbar = document.createElement('div');
   toolbar.className = 'diagram-toolbar';
   let zoom = 1;
-  for (const [label, action] of [
-    ['Zoom out', () => (zoom = Math.max(0.5, zoom - 0.25))],
-    ['Reset zoom', () => (zoom = 1)],
-    ['Zoom in', () => (zoom = Math.min(3, zoom + 0.25))]
+  const level = document.createElement('button');
+  const apply = () => {
+    level.textContent = `${Math.round(zoom * 100)}%`;
+    if (language === 'stl') canvas.dispatchEvent(new CustomEvent('diagram-zoom', { detail: zoom }));
+    else canvas.style.width = `${zoom * 100}%`;
+  };
+  for (const [label, text, change] of [
+    ['Zoom out', '−', () => (zoom = Math.max(0.5, zoom - 0.25))],
+    ['Reset zoom', '100%', () => (zoom = 1)],
+    ['Zoom in', '+', () => (zoom = Math.min(3, zoom + 0.25))]
   ] as const) {
-    const button = document.createElement('button');
+    const button = label === 'Reset zoom' ? level : document.createElement('button');
     button.type = 'button';
-    button.textContent = label === 'Zoom in' ? '+' : label === 'Zoom out' ? '−' : 'Reset';
+    button.textContent = text;
     button.setAttribute('aria-label', label);
     button.onclick = () => {
-      action();
-      if (language === 'stl') canvas.dispatchEvent(new CustomEvent('diagram-zoom', { detail: zoom }));
-      else canvas.style.width = `${zoom * 100}%`;
+      change();
+      apply();
     };
     toolbar.append(button);
   }

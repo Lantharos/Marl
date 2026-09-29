@@ -12,13 +12,17 @@ bun run --cwd apps/api db:migrate
 
 Commit the schema, generated SQL, and migration metadata together. Wrangler applies the generated SQL to D1; the application does not run migrations on requests. Inspect SQLite table rebuilds carefully: Drizzle Kit can misquote expression indexes when recreating a table, and a rebuild must recreate that table's triggers. Verify generated SQL against a fresh local database before applying it to stored data.
 
-The baseline replaces the old migrations because Marl has no deployed data. To initialize a clean local database:
+The baseline replaces the old migrations because Marl has no deployed data. To start over with a clean local environment:
 
 ```sh
-bun run --cwd apps/api db:reset
+bun run db:reset
 ```
 
-Stop the local API before resetting. The previous D1 directory is moved into `.wrangler/d1-backup-*`; Git repositories and object storage are not touched. `bun dev` also applies pending migrations.
+Stop `bun dev` before resetting. The local D1 database, object storage, Durable Object state, and Git repositories move together into `.marl-data/backups/<timestamp>`, so the database never points at repositories from an earlier run. `bun dev` also applies pending migrations.
+
+## Demo data
+
+With `bun dev` running on a fresh database, `bun run seed` creates a small team, the Lumen organization with a realistic TypeScript repository, issues, pulls in every state (reviewed, failing checks, draft, stacked, closed, merged, and one opened by an agent), check runs, releases, and saved replies. Activity is spread over the past few weeks. Sign in as `demo` with the password in `scripts/seed/accounts.ts`; the other accounts use the same password.
 
 SQLite triggers enforce immutable audit events, timeline synchronization, current-head review and check approvals, and signing-key invalidation. Drizzle does not model triggers, so those live in the custom `0001_invariants.sql` migration. Change that migration only while resetting an undeployed baseline; once deployed, generate a new custom migration for trigger changes.
 

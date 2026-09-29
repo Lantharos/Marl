@@ -60,6 +60,12 @@ bun dev:git
 
 `bun dev:api` also starts and waits for the Git gateway because repository API routes depend on it.
 
+To explore the interface with realistic data, start `bun dev` on a fresh database and run
+`bun run seed` in another terminal. It creates a small team, an organization with a TypeScript
+repository, issues, pulls in every state, check runs, and releases. Sign in as `demo` with the
+password in `scripts/seed/accounts.ts`. `bun run db:reset` (with `bun dev` stopped) clears all
+local data before reseeding.
+
 Production Git hosting is packaged by `apps/git-edge` and `Dockerfile.git` as a Cloudflare
 Worker backed by immutable Git packs in R2, repository and organization Durable Objects,
 and short-lived Containers for Git compatibility, validation, indexing, and compaction.

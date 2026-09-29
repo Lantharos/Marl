@@ -1,15 +1,20 @@
-import { rename } from 'node:fs/promises';
+import { mkdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const api = join(import.meta.dir, '..', 'apps', 'api');
-const state = join(api, '.wrangler', 'state', 'v3', 'd1');
-const backup = join(api, '.wrangler', `d1-backup-${Date.now()}`);
-try {
-  await rename(state, backup);
-  console.log(`Previous local database moved to ${backup}`);
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-}
+const root = join(import.meta.dir, '..');
+const api = join(root, 'apps', 'api');
+const backup = join(root, '.marl-data', 'backups', String(Date.now()));
+const local = [
+  ['cloudflare', join(api, '.wrangler', 'state', 'v3')],
+  ['repositories', join(root, '.marl-data', 'repositories')]
+] as const;
+
+await mkdir(backup, { recursive: true });
+for (const [name, path] of local)
+  await rename(path, join(backup, name)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+console.log(`Previous local data moved to ${backup}`);
 const process = Bun.spawn(['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'marl', '--local'], {
   cwd: api,
   stdout: 'inherit',

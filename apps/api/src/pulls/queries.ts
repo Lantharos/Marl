@@ -182,10 +182,16 @@ export async function getPull(
   ] = await Promise.all([
     latestReviews(env, pull.id),
     env.DB.prepare(
-      `SELECT checks.id,checks.name,checks.state,checks.summary,checks.details_url AS detailsUrl,checks.updated_at AS updatedAt,COALESCE(canonical_workflows.id,checks.producer_workflow_id) AS producerWorkflowId,checks.producer_job_key AS producerJobKey FROM checks JOIN workflows AS producer_workflows ON producer_workflows.id=checks.producer_workflow_id JOIN repositories AS producer_repositories ON producer_repositories.id=checks.producer_repository_id LEFT JOIN workflows AS canonical_workflows ON canonical_workflows.repository_id=checks.producer_repository_id AND canonical_workflows.branch=producer_repositories.default_branch AND canonical_workflows.path=producer_workflows.path AND canonical_workflows.active=1 WHERE checks.repository_id=? AND checks.commit_id=? AND checks.producer_repository_id=? ORDER BY checks.name`
+      `SELECT checks.id,checks.name,checks.state,checks.summary,checks.details_url AS detailsUrl,checks.updated_at AS updatedAt,COALESCE(canonical_workflows.id,checks.producer_workflow_id) AS producerWorkflowId,checks.producer_job_key AS producerJobKey,(SELECT json_object('number',runs.number,'trigger',runs.trigger_name) FROM runs WHERE runs.repository_id=checks.producer_repository_id AND runs.workflow_id=checks.producer_workflow_id AND runs.commit_id=checks.commit_id ORDER BY runs.created_at DESC LIMIT 1) AS runJson FROM checks JOIN workflows AS producer_workflows ON producer_workflows.id=checks.producer_workflow_id JOIN repositories AS producer_repositories ON producer_repositories.id=checks.producer_repository_id LEFT JOIN workflows AS canonical_workflows ON canonical_workflows.repository_id=checks.producer_repository_id AND canonical_workflows.branch=producer_repositories.default_branch AND canonical_workflows.path=producer_workflows.path AND canonical_workflows.active=1 WHERE checks.repository_id=? AND checks.commit_id=? AND checks.producer_repository_id=? ORDER BY checks.name`
     )
       .bind(pull.sourceRepositoryId ?? repository.id, pull.sourceCommitId, repository.id)
-      .all<{ name: string; state: string; producerWorkflowId: string; producerJobKey: string }>(),
+      .all<{
+        name: string;
+        state: string;
+        producerWorkflowId: string;
+        producerJobKey: string;
+        runJson: string | null;
+      }>(),
     env.DB.prepare(
       'SELECT COUNT(*) AS count FROM review_threads WHERE pull_request_id=? AND commit_id=? AND resolved_at IS NULL'
     )
@@ -261,7 +267,7 @@ export async function getPull(
       mergeRequirements: requirements,
       allowedMergeMethods: rule.allowedMergeMethods,
       commits: commits.results,
-      checks: checks.results,
+      checks: checks.results.map(({ runJson, ...check }) => ({ ...check, run: runJson ? JSON.parse(runJson) : null })),
       labels: labels.results,
       availableLabels: availableLabels.results,
       assignees: assignees.results,

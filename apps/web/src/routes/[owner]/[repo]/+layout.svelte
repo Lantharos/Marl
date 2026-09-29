@@ -133,70 +133,72 @@
 
 <PublicProfileNav visible={!data.shellUser} />
 
-<section class="relative bg-[linear-gradient(to_bottom,var(--color-surface)_0_64px,var(--color-canvas)_64px)]">
-  <div
-    class="mx-auto flex min-h-16 w-[min(1240px,calc(100%-32px))] items-center justify-between gap-4 py-2.5 sm:w-[min(1240px,calc(100%-48px))] sm:gap-5"
-  >
-    <div class="flex min-w-0 items-center gap-3">
-      <RepositoryIcon name={repo} src={repository?.iconUrl} size={36} />
-      <div class="min-w-0">
-        <div class="flex min-w-0 items-center gap-1.5 text-base">
-          <a class="truncate font-medium text-ink-muted hover:text-brand" href="/{owner}">{owner}</a><span
-            class="text-ink-faint">/</span
-          ><a class="truncate font-semibold text-ink-strong hover:text-brand" href={base}>{repo}</a>
-          {#if repository?.visibility === 'private'}<span
-              class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-2xs font-medium text-ink-muted"
-              ><Lock size={11} />Private</span
-            >{/if}
+<section class="relative">
+  <div class="bg-surface">
+    <div
+      class="mx-auto flex min-h-16 w-[min(1240px,calc(100%-32px))] items-center justify-between gap-x-4 gap-y-3 py-2.5 max-sm:flex-wrap max-sm:pb-3 sm:w-[min(1240px,calc(100%-48px))] sm:gap-5"
+    >
+      <div class="flex min-w-0 items-center gap-3 max-sm:basis-full">
+        <RepositoryIcon name={repo} src={repository?.iconUrl} size={36} />
+        <div class="min-w-0">
+          <div class="flex min-w-0 items-center gap-1.5 text-base">
+            <a class="truncate font-medium text-ink-muted hover:text-brand" href="/{owner}">{owner}</a><span
+              class="text-ink-faint">/</span
+            ><a class="truncate font-semibold text-ink-strong hover:text-brand" href={base}>{repo}</a>
+            {#if repository?.visibility === 'private'}<span
+                class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-2xs font-medium text-ink-muted"
+                ><Lock size={11} />Private</span
+              >{/if}
+          </div>
+          {#if repository?.upstream}<p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-muted">
+              <GitFork size={12} />Forked from
+              <a class="hover:text-brand" href="/{repository.upstream.owner}/{repository.upstream.name}"
+                >{repository.upstream.owner}/{repository.upstream.name}</a
+              >
+            </p>{:else if repository?.description}<p class="mt-0.5 truncate text-sm text-ink-muted">
+              {repository.description}
+            </p>{/if}
         </div>
-        {#if repository?.upstream}<p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-muted">
-            <GitFork size={12} />Forked from
-            <a class="hover:text-brand" href="/{repository.upstream.owner}/{repository.upstream.name}"
-              >{repository.upstream.owner}/{repository.upstream.name}</a
-            >
-          </p>{:else if repository?.description}<p class="mt-0.5 truncate text-sm text-ink-muted">
-            {repository.description}
-          </p>{/if}
       </div>
-    </div>
-    <div class="flex shrink-0 items-center gap-1.5">
-      {#if data.shellUser}
-        <Button
-          size="small"
-          loading={starring}
-          aria-label={starred ? 'Unstar repository' : 'Star repository'}
-          aria-pressed={starred}
-          onclick={toggleStar}
-          ><Star size={15} fill={starred ? 'currentColor' : 'none'} class={starred ? 'text-warning' : ''} /><span
-            class="max-sm:hidden">Star</span
-          >{#if starCount}<span class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{starCount}</span
-            >{/if}</Button
-        >
-        <Button
-          size="small"
-          aria-label="Fork repository"
-          disabled={!forkOptions.length}
-          onclick={() => (forkOpen = true)}
-          ><GitFork size={15} /><span class="max-sm:hidden">Fork</span>{#if repository?.forkCount}<span
-              class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{repository.forkCount}</span
-            >{/if}</Button
-        >
-      {/if}
-      {#if data.shellUser}<RepositoryNotifications {owner} repository={repo} />{/if}
-      {#if repository}<CloneMenu
-          cloneUrl={repository.cloneUrl}
-          sshCloneUrl={repository.sshCloneUrl}
-          signedIn={Boolean(data.shellUser)}
-        />{/if}
-      {#if repository && data.shellUser && !repository.permissions.admin}<ActionMenu
-          label="More repository options"
-          actions={[
-            {
-              label: 'Report repository',
-              onSelect: () => reporting.open({ type: 'repository', id: repository.id, label: `${owner}/${repo}` })
-            }
-          ]}
-        />{/if}
+      <div class="flex shrink-0 items-center gap-1.5">
+        {#if data.shellUser}
+          <Button
+            size="small"
+            loading={starring}
+            aria-label={starred ? 'Unstar repository' : 'Star repository'}
+            aria-pressed={starred}
+            onclick={toggleStar}
+            ><Star size={15} fill={starred ? 'currentColor' : 'none'} class={starred ? 'text-warning' : ''} /><span
+              class="max-sm:hidden">Star</span
+            >{#if starCount}<span class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{starCount}</span
+              >{/if}</Button
+          >
+          <Button
+            size="small"
+            aria-label="Fork repository"
+            disabled={!forkOptions.length}
+            onclick={() => (forkOpen = true)}
+            ><GitFork size={15} /><span class="max-sm:hidden">Fork</span>{#if repository?.forkCount}<span
+                class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{repository.forkCount}</span
+              >{/if}</Button
+          >
+        {/if}
+        {#if data.shellUser}<RepositoryNotifications {owner} repository={repo} />{/if}
+        {#if repository}<CloneMenu
+            cloneUrl={repository.cloneUrl}
+            sshCloneUrl={repository.sshCloneUrl}
+            signedIn={Boolean(data.shellUser)}
+          />{/if}
+        {#if repository && data.shellUser && !repository.permissions.admin}<ActionMenu
+            label="More repository options"
+            actions={[
+              {
+                label: 'Report repository',
+                onSelect: () => reporting.open({ type: 'repository', id: repository.id, label: `${owner}/${repo}` })
+              }
+            ]}
+          />{/if}
+      </div>
     </div>
   </div>
   <RepositoryTabs {tabs} />

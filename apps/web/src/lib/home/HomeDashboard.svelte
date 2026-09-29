@@ -12,6 +12,8 @@
   import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
   import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
   import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
+  import { runTriggerLabel } from '$lib/runs/workflow-triggers';
+  import Time from '$lib/components/page/Time.svelte';
 
   type DashboardData = Dashboard & {
     repositories: RepositorySummary[];
@@ -73,12 +75,16 @@
                 label={runStateLabel(run)}
               />
               <span class="min-w-0">
-                <strong class="block truncate text-sm font-semibold text-ink-strong">{run.name}</strong>
+                <strong class="block truncate text-sm font-semibold text-ink-strong"
+                  >{run.name} <span class="font-normal text-ink-muted tabular-nums">#{run.number}</span></strong
+                >
                 <span class="mt-0.5 block truncate text-xs text-ink-muted"
-                  >{run.repository.name} · {run.branch}{awaitingCheckApproval(run) ? ' · Awaiting approval' : ''}</span
+                  >{run.repository.name} · {run.branch} · {runTriggerLabel(run.trigger)}{awaitingCheckApproval(run)
+                    ? ' · Awaiting approval'
+                    : ''}</span
                 >
               </span>
-              <code class="font-mono text-xs text-ink-faint">{run.commit.slice(0, 7)}</code>
+              <Time value={run.queuedAt} class="text-xs whitespace-nowrap text-ink-faint" />
             </a>
           {:else}
             <EmptyState

@@ -350,7 +350,7 @@
                   'group grid min-h-6 grid-cols-[56px_minmax(max-content,1fr)]',
                   line.kind === 'added' && 'bg-success-soft text-success',
                   line.kind === 'removed' && 'bg-danger-soft text-danger',
-                  line.kind === 'hunk' && 'bg-brand-soft text-brand',
+                  line.kind === 'hunk' && 'bg-surface-muted text-ink-muted',
                   line.kind === 'context' && 'text-ink',
                   isSelected && 'bg-brand-soft!'
                 ]}

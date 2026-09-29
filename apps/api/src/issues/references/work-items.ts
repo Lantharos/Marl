@@ -216,7 +216,7 @@ export async function hydrateReferenceEvents(
 ): Promise<ReferenceEvent[]> {
   if (!ids.length) return [];
   const rows = await env.DB.prepare(
-    `SELECT id,source_issue_id AS sourceIssueId,source_pull_id AS sourcePullId,target_issue_id AS targetIssueId,target_pull_id AS targetPullId,closes_target AS closesTarget,created_at AS createdAt FROM work_item_references WHERE id IN (${ids.map(() => '?').join(',')})`
+    `SELECT id,source_issue_id AS sourceIssueId,source_pull_id AS sourcePullId,target_issue_id AS targetIssueId,target_pull_id AS targetPullId,closes_target AS closesTarget,created_at AS createdAt FROM work_item_references AS reference WHERE id IN (${ids.map(() => '?').join(',')}) AND NOT EXISTS (SELECT 1 FROM work_item_references AS earlier WHERE earlier.target_issue_id IS reference.target_issue_id AND earlier.target_pull_id IS reference.target_pull_id AND earlier.source_issue_id IS reference.source_issue_id AND earlier.source_pull_id IS reference.source_pull_id AND (earlier.created_at<reference.created_at OR (earlier.created_at=reference.created_at AND earlier.id<reference.id)))`
   )
     .bind(...ids)
     .all<ReferenceRow>();

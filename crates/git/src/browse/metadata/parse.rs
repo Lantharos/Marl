@@ -16,6 +16,7 @@ pub(super) fn parse_changed_paths(output: &[u8], commits: &[IndexedCommit]) -> V
         .split(|byte| *byte == 0)
         .filter(|token| !token.is_empty());
     while let Some(token) = tokens.next() {
+        let token = token.strip_prefix(b"\n").unwrap_or(token);
         if token.first() == Some(&b'C') {
             current = std::str::from_utf8(&token[1..])
                 .ok()
@@ -136,7 +137,7 @@ mod tests {
     fn changed_paths_include_parent_directories() {
         let first = "1111111111111111111111111111111111111111";
         let second = "2222222222222222222222222222222222222222";
-        let output = format!("C{first}\0\0M\0apps/web/src/app.ts\0C{second}\0\0A\0README.md\0");
+        let output = format!("C{first}\0\0\nM\0apps/web/src/app.ts\0C{second}\0\0\nA\0README.md\0");
         let changes = parse_changed_paths(
             output.as_bytes(),
             &[commit(first, &[second], 2), commit(second, &[], 1)],

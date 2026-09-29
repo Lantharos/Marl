@@ -6,6 +6,7 @@
   import Button from '$lib/components/controls/Button.svelte';
   import EmptyState from '$lib/components/feedback/EmptyState.svelte';
   import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
+  import { runTriggerLabel } from '$lib/runs/workflow-triggers';
 
   let { pull, approving, onApprove }: { pull: PullRequestDetail; approving: boolean; onApprove: () => void } = $props();
   const waiting = $derived(pull.checksApproval.waiting);
@@ -28,17 +29,28 @@
   {#if pull.checks.length}
     <div class="divide-y divide-line-subtle surface">
       {#each pull.checks as check (check.id)}
-        <article class="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+        {@const detail = [check.run && runTriggerLabel(check.run.trigger), check.summary].filter(Boolean).join(' · ')}
+        <svelte:element
+          this={check.run ? 'a' : 'article'}
+          href={check.run ? `/${pull.repository.owner}/${pull.repository.name}/runs/${check.run.number}` : undefined}
+          class={[
+            'group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3',
+            check.run && 'transition-colors hover:bg-surface-hover'
+          ]}
+        >
           <RunStateIcon state={check.state} />
           <div class="min-w-0">
-            <strong class="block truncate text-sm font-semibold text-ink-strong">{check.name}</strong>
-            {#if check.summary}<p class="mt-0.5 truncate text-xs text-ink-muted">{check.summary}</p>{/if}
+            <strong class="block truncate text-sm font-semibold text-ink-strong group-hover:text-brand"
+              >{check.name}</strong
+            >
+            {#if detail}<p class="mt-0.5 truncate text-xs text-ink-muted">{detail}</p>{/if}
           </div>
-          {#if check.detailsUrl}<a
+          {#if check.run}<span class="text-xs text-ink-muted tabular-nums">Run #{check.run.number}</span
+            >{:else if check.detailsUrl}<a
               class="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-brand"
               href={check.detailsUrl}>Details<ExternalLink size={12} /></a
             >{:else}<span class="text-xs text-ink-muted capitalize">{check.state}</span>{/if}
-        </article>
+        </svelte:element>
       {/each}
     </div>
   {:else if !waiting}

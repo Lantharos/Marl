@@ -20,15 +20,18 @@ export const handle: Handle = async ({ event, resolve }) => {
   return response;
 };
 
+function apiRequest(event: Parameters<HandleFetch>[0]['event'], target: string, request: Request) {
+  const forwarded = new Request(target, request);
+  const cookie = event.request.headers.get('cookie');
+  if (cookie) forwarded.headers.set('cookie', cookie);
+  return forwarded;
+}
+
 export const handleFetch: HandleFetch = ({ event, request, fetch }) => {
   const url = new URL(request.url);
-  if (dev && url.pathname.startsWith('/api/')) {
-    return fetch(new Request(`${localApi}${url.pathname}${url.search}`, request));
-  }
-  if (url.pathname.startsWith('/api/')) {
-    const api = event.platform?.env.MARL_API;
-    if (!api) throw new Error('The API service binding is unavailable.');
-    return api.fetch(new Request(`http://marl-api.internal${url.pathname}${url.search}`, request));
-  }
-  return fetch(request);
+  if (url.origin !== event.url.origin || !url.pathname.startsWith('/api/')) return fetch(request);
+  if (dev) return fetch(apiRequest(event, `${localApi}${url.pathname}${url.search}`, request));
+  const api = event.platform?.env.MARL_API;
+  if (!api) throw new Error('The API service binding is unavailable.');
+  return api.fetch(apiRequest(event, `http://marl-api.internal${url.pathname}${url.search}`, request));
 };

@@ -38,7 +38,8 @@ export async function publishMergeCommit(
     targetBranch: pull.targetBranch,
     sourceCommitId: pull.sourceCommitId,
     targetCommitId: input.targetCommitId,
-    title: `${method === 'squash' ? 'Squash' : method === 'rebase' ? 'Rebase' : 'Merge'} pull request !${pull.number}: ${pull.title}`,
+    title:
+      method === 'squash' ? `${pull.title} (!${pull.number})` : `Merge pull request !${pull.number}: ${pull.title}`,
     author: principal.handle,
     authorEmail: await authorEmail(env, principal),
     actorId: principal.id,

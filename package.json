@@ -13,6 +13,8 @@
     "dev:api": "bun scripts/dev.ts api",
     "dev:git": "bun scripts/dev.ts git",
     "qualify": "bun scripts/qualify.ts",
+    "seed": "bun scripts/seed.ts",
+    "db:reset": "bun scripts/reset-database.ts",
     "check": "bun run --filter '*' check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

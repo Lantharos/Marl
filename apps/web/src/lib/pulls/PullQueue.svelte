@@ -81,7 +81,7 @@
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   <a
-                    class="min-w-0 truncate text-base font-semibold text-ink-strong after:absolute after:inset-0"
+                    class="line-clamp-2 min-w-0 text-base leading-snug font-semibold text-pretty text-ink-strong after:absolute after:inset-0"
                     href={href(pull)}
                     title={pull.title}>{pull.title}</a
                   >

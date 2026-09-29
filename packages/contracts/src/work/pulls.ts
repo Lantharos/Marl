@@ -234,6 +234,7 @@ export interface CheckSummary {
   producerWorkflowId: Identifier;
   producerJobKey: string;
   detailsUrl?: string;
+  run: { number: number; trigger: string } | null;
   updatedAt: string;
 }
 

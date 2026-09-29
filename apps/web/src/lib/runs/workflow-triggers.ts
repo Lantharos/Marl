@@ -16,6 +16,19 @@ export function workflowTrigger(trigger: WorkflowTrigger) {
   return triggers[trigger];
 }
 
+const runTriggers: Record<string, string> = {
+  push: 'Push',
+  pull_request: 'Pull',
+  workflow_dispatch: 'Manual',
+  retry: 'Retry',
+  merge_queue: 'Merge queue',
+  schedule: 'Schedule'
+};
+
+export function runTriggerLabel(trigger: string) {
+  return runTriggers[trigger] ?? trigger;
+}
+
 export function runOrigin(run: Pick<RunSummary, 'trigger' | 'actor'>) {
   const by = run.actor ? ` by ${run.actor}` : '';
   if (run.trigger === 'workflow_dispatch') return `Started manually${by}`;

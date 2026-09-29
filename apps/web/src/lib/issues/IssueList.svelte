@@ -27,15 +27,18 @@
     >
       <span class="mt-0.5"><WorkItemStateIcon kind="issue" state={issue.state} size={18} /></span>
       <div class="min-w-0">
-        <div class="flex min-w-0 items-center gap-2">
+        <div class="flex min-w-0 items-start gap-2">
           <a
             class={[
-              'truncate text-base font-semibold after:absolute after:inset-0',
+              'line-clamp-2 text-base leading-snug font-semibold text-pretty after:absolute after:inset-0',
               issue.state === 'closed' ? 'text-ink-muted' : 'text-ink-strong'
             ]}
             href="/{issue.repository.owner}/{issue.repository.name}/issues/{issue.number}">{issue.title}</a
           >
-          {#if issue.unread}<span class="size-1.5 shrink-0 rounded-full bg-brand" role="img" aria-label="Unread replies"
+          {#if issue.unread}<span
+              class="mt-2 size-1.5 shrink-0 rounded-full bg-brand"
+              role="img"
+              aria-label="Unread replies"
             ></span>{/if}
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
