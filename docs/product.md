@@ -125,8 +125,11 @@ can exist without ambiguity. Issues support open and closed states, editable des
 comments, durable deletion tombstones, assignees, repository labels, conversation locking, and a
 complete actor-attributed timeline. Global Issues provides one searchable queue across every
 repository the current user can read; repository Issues preserves label filtering and repository
-context. Lists offer unanswered, following, and unread discussion filters. Unanswered means nobody
-other than the author has replied; assignments and comment counts do not imply workflow states.
+context. Both lists show one compact line per issue, grouped by when it last changed, and can be
+moved through from the keyboard. Lists offer unanswered, following, and unread discussion filters.
+Unanswered means nobody other than the author has replied; assignments and comment counts do not
+imply workflow states. New issues are written in a tall, growing description editor beneath the
+title, with the repository chosen from a searchable picker.
 The opening report and chronological discussion occupy the main column, with one level of grouped
 replies. Long reports expand in place. Labels, assignees, linked pulls, and an optional conclusion
 sit alongside the conversation. Maintainers and owners can write a conclusion or promote a comment,
@@ -139,7 +142,7 @@ can edit and close their own work. References in descriptions, comments, reviews
 conversations create durable links and backlink timeline entries. References may use the current
 repository shorthand or a qualified form such as `lantharos/marl#12` and `lantharos/marl!7`.
 Authored discussion uses restrained surfaces so comment boundaries and reply groups remain easy to
-scan; mechanical changes remain in expandable history. Read position and following are stored per
+scan; mechanical changes appear in place as compact activity, collapsing when several happen together. Read position and following are stored per
 user. Resume returns to unread discussion, while Latest jumps to the end. Following also includes
 the issue in the inbox. Draft replies stay with their conversation in the current browser tab.
 

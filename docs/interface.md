@@ -15,7 +15,7 @@ on small screens the menu names the same destinations. Search remains available 
 the header and with Ctrl K. In a repository's code view, T opens Go to file and / focuses code search. While writing, Ctrl . inserts a saved reply. Pressing ? lists every
 keyboard shortcut; pull pages add shortcuts for moving through tabs, changed files, and open
 conversations, and the Inbox adds J and K to move between items, Enter to open one, and E to
-mark it done.
+mark it done. Issue lists use the same J, K, and Enter to move through issues and open one.
 
 What someone is looking at lives in the address. A pull's Overview, Changes, Commits, and Checks
 sections, the overview document, and the code browser's branch and path each have their own URL,
@@ -162,15 +162,33 @@ Unsent replies and edits stay with their thread when a new submission groups it.
 
 ## Issue discussions
 
+Issue lists favor scanning. Each issue is one line on wide screens: state, number, title, and up to
+three labels on the left; author, assignees, comment count, and last update in aligned columns on the
+right. Phones keep the title on its own line with the number, activity, and labels beneath it. Issues
+are grouped by when they last changed (today, the past week, the past month, and older), which follows
+the list's newest-first order. State, discussion filter, labels, and search share one toolbar that stays
+below the header while the list scrolls. Open and closed counts sit beside their filters when the
+repository provides them.
+
+Opening an issue starts from the writing itself: the repository sits above a large title field, and the
+description fills about half the window and grows with its content while the actions stay pinned below
+it. Ctrl Enter opens the issue from anywhere in the description.
+
 Issues favor reading and conversation: the opening report and discussion form a wide main column,
-with a quiet right sidebar for the conclusion, linked pulls, labels, and people. The report expands
-inline, retaining screenshots and reproduction steps. Keep chronological order within the discussion
-and group replies one level deep. Reply opens a composer beside its conversation; selected text can
-be quoted without nesting another full post. New top-level thoughts use the composer at the end.
-On narrow screens the sidebar is available through a disclosure above the discussion.
+with a quiet right sidebar for the conclusion, linked pulls, labels, and people. Following, closing or
+reopening, and reporting sit with the title. The report expands inline, retaining screenshots and
+reproduction steps. Comment bodies align with their author's name, so the avatar column marks where
+each contribution starts. Keep chronological order within the discussion and group replies one level
+deep inside their conversation's surface. Reply sits beside each comment's time; selected text can be
+quoted without nesting another full post, and each conversation ends with a quiet prompt to continue it.
+New top-level thoughts use the composer at the end. On narrow screens the sidebar is available through
+a disclosure above the report.
 
 Open and Closed describe the issue's actual state. Do not infer urgency or a pending decision from
-assignment or comment counts. Administrative changes belong in expandable history. Optional
+assignment or comment counts. Administrative changes, state changes, and mentions appear in their
+chronological place as compact rows inside one muted container per run of activity. Label changes show
+the label itself. When a run holds more than two administrative changes, they collapse into a single
+summary row that expands in place; closing, reopening, and mentions always stay visible. Optional
 conclusions are human-authored and link back to a source comment when promoted. Resume and Latest
 provide navigation without changing the reading order.
 
