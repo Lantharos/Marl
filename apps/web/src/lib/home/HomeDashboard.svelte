@@ -5,15 +5,15 @@
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import Plus from '@lucide/svelte/icons/plus';
   import FirstSteps from './FirstSteps.svelte';
-  import InboxList from '$lib/inbox/InboxList.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
-  import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
-  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
-  import { runTriggerLabel } from '$lib/runs/workflow-triggers';
-  import Time from '$lib/components/page/Time.svelte';
+  import InboxList from '#lib/inbox/InboxList.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
+  import RunStateIcon from '#lib/runs/RunStateIcon.svelte';
+  import { awaitingCheckApproval, runStateLabel } from '#lib/runs/run-state.js';
+  import { runTriggerLabel } from '#lib/runs/workflow-triggers.js';
+  import Time from '#lib/components/page/Time.svelte';
 
   type DashboardData = Dashboard & {
     repositories: RepositorySummary[];

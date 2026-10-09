@@ -2,12 +2,12 @@
   import { untrack } from 'svelte';
   import type { AccountSession } from '@marl/contracts';
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
-  import { authClient } from '$lib/auth-client';
-  import Button from '$lib/components/controls/Button.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import { formatTimestamp } from '$lib/time';
+  import { authClient } from '#lib/auth-client.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import { formatTimestamp } from '#lib/time.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

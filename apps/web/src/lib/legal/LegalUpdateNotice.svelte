@@ -1,9 +1,9 @@
 <script lang="ts">
   import { invalidate } from '$app/navigation';
   import { legalVersion } from '@marl/contracts';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import { clearShellCache } from '$lib/shell-cache';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import { clearShellCache } from '#lib/shell-cache.js';
 
   let busy = $state(false);
   let error = $state('');

@@ -7,8 +7,8 @@
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import Plus from '@lucide/svelte/icons/plus';
   import Server from '@lucide/svelte/icons/server';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import MenuLink from './MenuLink.svelte';
 
   let { open = $bindable(false) }: { open?: boolean } = $props();

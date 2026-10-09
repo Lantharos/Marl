@@ -3,8 +3,8 @@
   import Check from '@lucide/svelte/icons/check';
   import Copy from '@lucide/svelte/icons/copy';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { api, MarlApiError } from '$lib/api';
-  import { formatDate } from '$lib/time';
+  import { api, MarlApiError } from '#lib/api.js';
+  import { formatDate } from '#lib/time.js';
   import Button from '../../controls/Button.svelte';
   import Checkbox from '../../controls/Checkbox.svelte';
   import Field from '../../controls/Field.svelte';

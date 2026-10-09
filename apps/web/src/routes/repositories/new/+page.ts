@@ -1,6 +1,6 @@
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
-import type { RepositoryOwner } from '$lib/repositories/owner-options';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
+import type { RepositoryOwner } from '#lib/repositories/owner-options.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch }) => {

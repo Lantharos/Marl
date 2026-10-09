@@ -1,6 +1,6 @@
 import type { CodeSearchResult } from '@marl/contracts';
-import { apiWith, MarlApiError } from '$lib/api';
-import { routeLoad } from '$lib/load';
+import { apiWith, MarlApiError } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
 type Branches = { branches: Array<{ name: string; commitId: string; updatedAt: string }> };

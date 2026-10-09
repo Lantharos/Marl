@@ -7,12 +7,12 @@
   import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
   import MessageSquare from '@lucide/svelte/icons/message-square';
   import X from '@lucide/svelte/icons/x';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Chip from '$lib/components/controls/Chip.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import { reporting } from '$lib/reporting/reporting.svelte';
-  import { seoExcerpt } from '$lib/seo';
-  import { plainKey, stepThrough } from '$lib/ui/keyboard';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Chip from '#lib/components/controls/Chip.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import { reporting } from '#lib/reporting/reporting.svelte.js';
+  import { seoExcerpt } from '#lib/seo.js';
+  import { plainKey, stepThrough } from '#lib/ui/keyboard.js';
   import { connectPullLive } from '../pull-live';
   import PullLifecycleActions from '../PullLifecycleActions.svelte';
   import { PullMergeability } from '../PullMergeability.svelte';

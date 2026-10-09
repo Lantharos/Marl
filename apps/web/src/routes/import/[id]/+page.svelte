@@ -4,11 +4,11 @@
   import type { RepositoryImport } from '@marl/contracts';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import Check from '@lucide/svelte/icons/check';
-  import { api } from '$lib/api';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import FormShell from '$lib/components/page/FormShell.svelte';
+  import { api } from '#lib/api.js';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Spinner from '#lib/components/feedback/Spinner.svelte';
+  import FormShell from '#lib/components/page/FormShell.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

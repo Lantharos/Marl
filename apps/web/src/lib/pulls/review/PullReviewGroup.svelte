@@ -1,14 +1,14 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { PullRequestReview } from '@marl/contracts';
-  import type { MarkdownContext } from '$lib/markdown/context';
-  import Button from '$lib/components/controls/Button.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
+  import Button from '#lib/components/controls/Button.svelte';
   import Trash2 from '@lucide/svelte/icons/trash';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
-  import DiscussionEntry from '$lib/components/discussion/DiscussionEntry.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
+  import DiscussionEntry from '#lib/components/discussion/DiscussionEntry.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import type { ThreadItem } from './group-review-activity';
 
   let {

@@ -2,13 +2,13 @@
   import { goto } from '$app/navigation';
   import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
-  import Page from '$lib/components/page/Page.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import PullQueue from '$lib/pulls/PullQueue.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import Page from '#lib/components/page/Page.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import PullQueue from '#lib/pulls/PullQueue.svelte';
   import type { PageData } from './$types';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
 
   let { data }: { data: PageData } = $props();
   let items = $state.raw<PullRequestSummary[]>(untrack(() => data.pullRequests));
@@ -38,7 +38,7 @@
     if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase());
     if (value.trim()) params.set('q', value.trim());
     for (const label of labels) params.append('label', label);
-    void goto(`/pulls${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(`/pulls${params.size ? `?${params}` : ''}`, { reset: false, replace: true });
   }
 
   function changeQuery(value: string) {

@@ -1,6 +1,4 @@
-/// <reference lib="webworker" />
-
-import { version } from '$service-worker';
+import { version } from '$app/env';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
 const cachePrefix = 'marl-offline-';

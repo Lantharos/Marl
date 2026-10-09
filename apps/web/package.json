@@ -7,7 +7,7 @@
     "dev": "vite dev --host 127.0.0.1 --port 42617 --strictPort",
     "types": "wrangler types worker-configuration.d.ts --include-runtime=false --strict-vars=false --env-interface CloudflareBindings",
     "types:check": "bun run types --check",
-    "check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "build": "vite build && bun run types:check && wrangler deploy --dry-run --outdir dist",
     "deploy": "vite build && wrangler deploy",
     "preview": "vite build && wrangler dev",
@@ -16,8 +16,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261009.1",
     "@marl/markdown": "workspace:*",
-    "@sveltejs/adapter-cloudflare": "^7.2.9",
-    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/adapter-cloudflare": "^8.0.0",
+    "@sveltejs/kit": "^3.0.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.4.2",
@@ -27,7 +27,6 @@
     "@types/three": "^0.186.0",
     "@types/topojson-client": "^3.1.5",
     "@types/topojson-specification": "^1.0.5",
-    "@typescript/native": "npm:typescript@^7.0.2",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.6",
     "tailwindcss": "^4.3.3",
@@ -49,5 +48,9 @@
     "shiki": "^4.5.0",
     "three": "^0.186.1",
     "topojson-client": "^3.1.0"
+  },
+  "imports": {
+    "#lib": "./src/lib/index.js",
+    "#lib/*": "./src/lib/*"
   }
 }

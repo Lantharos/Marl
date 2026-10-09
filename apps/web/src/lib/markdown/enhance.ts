@@ -1,4 +1,4 @@
-import { resolvedTheme, watchResolvedTheme } from '$lib/theme';
+import { resolvedTheme, watchResolvedTheme } from '#lib/theme.js';
 
 export function enhanceMarkdown(root: HTMLDivElement) {
   const abort = new AbortController();

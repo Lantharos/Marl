@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { isLegalDocument, legalDocuments } from '$lib/legal/documents';
+import { isLegalDocument, legalDocuments } from '#lib/legal/documents.js';
 import type { EntryGenerator, PageLoad } from './$types';
 
 export const prerender = true;

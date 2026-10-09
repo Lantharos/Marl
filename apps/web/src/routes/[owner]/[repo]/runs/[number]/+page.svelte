@@ -9,16 +9,16 @@
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Square from '@lucide/svelte/icons/square';
-  import { api, apiTextCursorAll, MarlApiError } from '$lib/api';
-  import { formatBytes } from '$lib/bytes';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import BackLink from '$lib/components/page/BackLink.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
-  import RunLog from '$lib/runs/RunLog.svelte';
-  import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
-  import { runOrigin } from '$lib/runs/workflow-triggers';
+  import { api, apiTextCursorAll, MarlApiError } from '#lib/api.js';
+  import { formatBytes } from '#lib/bytes.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import BackLink from '#lib/components/page/BackLink.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import { awaitingCheckApproval, runStateLabel } from '#lib/runs/run-state.js';
+  import RunLog from '#lib/runs/RunLog.svelte';
+  import RunStateIcon from '#lib/runs/RunStateIcon.svelte';
+  import { runOrigin } from '#lib/runs/workflow-triggers.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

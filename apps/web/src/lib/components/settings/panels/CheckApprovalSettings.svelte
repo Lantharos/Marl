@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import Notice from '../../feedback/Notice.svelte';
   import Modal from '../../overlays/Modal.svelte';

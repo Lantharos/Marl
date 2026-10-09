@@ -5,17 +5,17 @@
   import FileWarning from '@lucide/svelte/icons/file-exclamation-point';
   import Files from '@lucide/svelte/icons/files';
   import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { popoverMotion } from '$lib/ui/popover';
-  import { parsePatchLines, type PatchLine } from '$lib/code/diff';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
+  import { parsePatchLines, type PatchLine } from '#lib/code/diff.js';
   import Button from '../components/controls/Button.svelte';
   import SearchField from '../components/controls/SearchField.svelte';
   import DiffStat from './DiffStat.svelte';
-  import Tokens from '$lib/code/Tokens.svelte';
-  import { comparisonTokens, type CodeComparison, type ComparisonTokens } from '$lib/code/comparison';
+  import Tokens from '#lib/code/Tokens.svelte';
+  import { comparisonTokens, type CodeComparison, type ComparisonTokens } from '#lib/code/comparison.js';
   import CommentComposer from '../components/markdown/CommentComposer.svelte';
   import ReviewThread from '../pulls/review/ReviewThread.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
 
   type Draft = { path: string; side: 'old' | 'new'; startLine: number; line: number };
   type DiffFile = PullRequestDiff['files'][number];

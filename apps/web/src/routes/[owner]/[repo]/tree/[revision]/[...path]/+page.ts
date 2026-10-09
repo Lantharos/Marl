@@ -1,6 +1,6 @@
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
-import type { TreeEntry } from '$lib/repositories/browser/types';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
+import type { TreeEntry } from '#lib/repositories/browser/types.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, params }) => {

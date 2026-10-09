@@ -6,7 +6,7 @@ import type {
   IssueTimelineWindow,
   WorkItemLabel
 } from '@marl/contracts';
-import { api, MarlApiError } from '$lib/api';
+import { api, MarlApiError } from '#lib/api.js';
 
 type SavedEvent = { kind: 'event'; value: IssueEvent; sequence: number };
 type MetadataUpdate = { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean };

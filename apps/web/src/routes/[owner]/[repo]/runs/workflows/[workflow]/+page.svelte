@@ -6,14 +6,14 @@
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import Play from '@lucide/svelte/icons/play';
   import Zap from '@lucide/svelte/icons/zap';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import BackLink from '$lib/components/page/BackLink.svelte';
-  import RunRow from '$lib/runs/RunRow.svelte';
-  import { workflowTrigger } from '$lib/runs/workflow-triggers';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import BackLink from '#lib/components/page/BackLink.svelte';
+  import RunRow from '#lib/runs/RunRow.svelte';
+  import { workflowTrigger } from '#lib/runs/workflow-triggers.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

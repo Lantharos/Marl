@@ -3,18 +3,18 @@
   import { onDestroy, untrack } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
   import Lock from '@lucide/svelte/icons/lock';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import Plus from '@lucide/svelte/icons/plus';
   import RotateCcw from '@lucide/svelte/icons/archive-restore';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
-  import BackLink from '$lib/components/page/BackLink.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
+  import BackLink from '#lib/components/page/BackLink.svelte';
   type RepositoryData = {
     repositories: RepositorySummary[];
     nextCursor: string | null;
@@ -53,7 +53,7 @@
     const params = new URLSearchParams();
     if (visibility.toLowerCase() !== 'all') params.set('visibility', visibility.toLowerCase());
     if (value.trim()) params.set('q', value.trim());
-    void goto(`${path}${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(`${path}${params.size ? `?${params}` : ''}`, { reset: false, replace: true });
   }
 
   function changeQuery(value: string) {

@@ -2,9 +2,9 @@
   import type { Snippet } from 'svelte';
   import type { PullRevisionSummary } from '@marl/contracts';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
+  import Spinner from '#lib/components/feedback/Spinner.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
 
   let {
     revision,

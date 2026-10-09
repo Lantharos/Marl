@@ -37,7 +37,7 @@
     error = '';
     try {
       if (method === 'passkey') {
-        const { authClient } = await import('$lib/auth-client');
+        const { authClient } = await import('#lib/auth-client.js');
         const result = await authClient.signIn.passkey();
         if (result.error) throw new Error(result.error.message || 'The passkey could not be verified.');
       } else {

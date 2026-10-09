@@ -1,5 +1,5 @@
 import type { ApiError, ReleaseAsset } from '@marl/contracts';
-import { api, MarlApiError } from '$lib/api';
+import { api, MarlApiError } from '#lib/api.js';
 
 export async function uploadReleaseAsset(
   owner: string,

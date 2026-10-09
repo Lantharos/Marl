@@ -1,7 +1,7 @@
 import type { RepositoryPermissions, RepositorySummary } from '@marl/contracts';
 import { redirect } from '@sveltejs/kit';
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
 import type { LayoutLoad } from './$types';
 
 export const load = (async ({ fetch, params, url }) => {

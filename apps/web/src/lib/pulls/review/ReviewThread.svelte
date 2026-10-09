@@ -5,10 +5,10 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import Reply from '@lucide/svelte/icons/reply';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import type { ThreadCodeLine } from '$lib/code/diff';
-  import type { MarkdownContext } from '$lib/markdown/context';
-  import { reporting } from '$lib/reporting/reporting.svelte';
-  import { ReviewThreadState } from '$lib/pulls/review/ReviewThreadState.svelte';
+  import type { ThreadCodeLine } from '#lib/code/diff.js';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
+  import { reporting } from '#lib/reporting/reporting.svelte.js';
+  import { ReviewThreadState } from '#lib/pulls/review/ReviewThreadState.svelte.js';
   import Button from '../../components/controls/Button.svelte';
   import DiscussionEntry from '../../components/discussion/DiscussionEntry.svelte';
   import MarkdownBody from '../../components/markdown/MarkdownBody.svelte';

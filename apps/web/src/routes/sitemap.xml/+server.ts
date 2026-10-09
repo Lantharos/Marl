@@ -1,6 +1,6 @@
 import type { PublicIndex } from '@marl/contracts';
-import { apiWith } from '$lib/api';
-import { isoTimestamp } from '$lib/time';
+import { apiWith } from '#lib/api.js';
+import { isoTimestamp } from '#lib/time.js';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ fetch }) => {

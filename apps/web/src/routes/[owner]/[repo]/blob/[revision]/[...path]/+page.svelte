@@ -1,18 +1,18 @@
 <script lang="ts">
-  import CodeViewer from '$lib/code/CodeViewer.svelte';
+  import CodeViewer from '#lib/code/CodeViewer.svelte';
   import { page } from '$app/state';
   import { onDestroy } from 'svelte';
   import Copy from '@lucide/svelte/icons/copy';
   import Check from '@lucide/svelte/icons/check';
   import Download from '@lucide/svelte/icons/download';
   import History from '@lucide/svelte/icons/rotate-ccw-clock';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { formatBytes } from '$lib/bytes';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import PathCrumbs from '$lib/repositories/browser/PathCrumbs.svelte';
-  import { encodeRepositoryPath, encodeRevision } from '$lib/repositories/repository-path';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { formatBytes } from '#lib/bytes.js';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import PathCrumbs from '#lib/repositories/browser/PathCrumbs.svelte';
+  import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

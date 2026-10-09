@@ -4,9 +4,9 @@
   import GitMerge from '@lucide/svelte/icons/git-merge';
   import ListOrdered from '@lucide/svelte/icons/list-ordered';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import { dismissable } from '$lib/actions/dismissable';
-  import Button from '$lib/components/controls/Button.svelte';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import { popoverMotion } from '#lib/ui/popover.js';
 
   export type PullLifecycleAction = 'merge' | 'enqueue' | 'dequeue' | 'close' | 'reopen' | 'ready';
   let {

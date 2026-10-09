@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
-import { repositoryDocumentPath } from '$lib/repositories/repository-path';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
+import { repositoryDocumentPath } from '#lib/repositories/repository-path.js';
 import type { PageLoad } from './$types';
 
 export type RepositoryDocument = { path: string; label: string };

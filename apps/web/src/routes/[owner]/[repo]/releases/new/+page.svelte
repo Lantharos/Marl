@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ReleaseForm from '$lib/releases/ReleaseForm.svelte';
+  import ReleaseForm from '#lib/releases/ReleaseForm.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>

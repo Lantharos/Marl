@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AgentSettings from '$lib/components/settings/agents/AgentSettings.svelte';
+  import AgentSettings from '#lib/components/settings/agents/AgentSettings.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

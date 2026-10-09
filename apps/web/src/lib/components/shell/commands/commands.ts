@@ -1,5 +1,5 @@
 import type { RepositorySummary } from '@marl/contracts';
-import type { ShellOrganization, ShellUser } from '$lib/shell-cache';
+import type { ShellOrganization, ShellUser } from '#lib/shell-cache.js';
 
 export type CommandKind =
   | 'home'

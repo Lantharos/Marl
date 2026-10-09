@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
   import { completeRepositoryName, repositoryName } from '../repository-name';
   import { validSlug } from '@marl/contracts';
 

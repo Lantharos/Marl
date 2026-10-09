@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
-  import { api } from '$lib/api';
+  import { refreshAll } from '$app/navigation';
+  import { api } from '#lib/api.js';
   import ArchiveRestore from '@lucide/svelte/icons/archive-restore';
-  import Button from '$lib/components/controls/Button.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import BackLink from '$lib/components/page/BackLink.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import { formatDate } from '$lib/time';
+  import Button from '#lib/components/controls/Button.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import BackLink from '#lib/components/page/BackLink.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import { formatDate } from '#lib/time.js';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   let busy = $state('');
@@ -19,7 +19,7 @@
       await api(`/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/settings/restore`, {
         method: 'POST'
       });
-      await invalidateAll();
+      await refreshAll();
     } catch (reason) {
       error = reason instanceof Error ? reason.message : 'The repository could not be restored.';
     } finally {

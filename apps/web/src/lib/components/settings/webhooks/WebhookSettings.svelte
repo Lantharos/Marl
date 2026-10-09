@@ -4,7 +4,7 @@
   import Check from '@lucide/svelte/icons/check';
   import Copy from '@lucide/svelte/icons/copy';
   import WebhookIcon from '@lucide/svelte/icons/webhook';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import EmptyState from '../../feedback/EmptyState.svelte';
   import Notice from '../../feedback/Notice.svelte';

@@ -3,12 +3,12 @@
   import { page } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
-  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import PullQueue from '$lib/pulls/PullQueue.svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import PullQueue from '#lib/pulls/PullQueue.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -42,9 +42,8 @@
     if (value.trim()) params.set('q', value.trim());
     for (const label of labels) params.append('label', label);
     void goto(`/${owner}/${repo}/pulls${params.size ? `?${params}` : ''}`, {
-      keepFocus: true,
-      noScroll: true,
-      replaceState: true
+      reset: false,
+      replace: true
     });
   }
 

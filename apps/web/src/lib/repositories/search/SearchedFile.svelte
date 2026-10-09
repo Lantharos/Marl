@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CodeSearchFile } from '@marl/contracts';
   import FileCode from '@lucide/svelte/icons/file-code-2';
-  import { encodeRepositoryPath, encodeRevision } from '$lib/repositories/repository-path';
+  import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
   import MatchedLine from './MatchedLine.svelte';
 
   let {

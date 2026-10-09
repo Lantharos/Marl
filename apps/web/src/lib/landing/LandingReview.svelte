@@ -1,6 +1,6 @@
 <script lang="ts">
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import { keyboardScroll } from '$lib/actions/keyboard-scroll';
+  import { keyboardScroll } from '#lib/actions/keyboard-scroll.js';
 
   type ReviewComment = { author: string; initials: string; body: string };
   type ReviewThread = { line: number; lines: string[]; comments: ReviewComment[] };

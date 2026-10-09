@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { IssueEvent } from '@marl/contracts';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import Time from '$lib/components/page/Time.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import { issueEventCopy } from './issue-discussion';
 
   let { event, sequence, createdAt, id }: { event: IssueEvent; sequence: number; createdAt: string; id?: string } =

@@ -3,7 +3,7 @@
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ChevronUp from '@lucide/svelte/icons/chevron-up';
   import Search from '@lucide/svelte/icons/search';
-  import Button from '$lib/components/controls/Button.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
   import Tokens from './Tokens.svelte';
   import { codeLanguage, highlight } from './highlight/highlight';
   import type { CodeLines } from './types';

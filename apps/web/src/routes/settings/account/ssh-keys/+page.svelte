@@ -3,15 +3,15 @@
   import type { SshKey } from '@marl/contracts';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import Time from '$lib/components/page/Time.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
-  import { reporting } from '$lib/reporting/reporting.svelte';
+  import ActionMenu from '#lib/components/overlays/ActionMenu.svelte';
+  import { reporting } from '#lib/reporting/reporting.svelte.js';
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
@@ -14,14 +14,14 @@
   import Settings from '@lucide/svelte/icons/settings';
   import Star from '@lucide/svelte/icons/star';
   import Tag from '@lucide/svelte/icons/tag';
-  import { api } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
-  import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
-  import CloneMenu from '$lib/repositories/header/CloneMenu.svelte';
-  import RepositoryNotifications from '$lib/repositories/header/RepositoryNotifications.svelte';
-  import ForkDialog from '$lib/repositories/header/ForkDialog.svelte';
-  import RepositoryTabs from '$lib/repositories/header/RepositoryTabs.svelte';
+  import { api } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
+  import PublicProfileNav from '#lib/components/profile/PublicProfileNav.svelte';
+  import CloneMenu from '#lib/repositories/header/CloneMenu.svelte';
+  import RepositoryNotifications from '#lib/repositories/header/RepositoryNotifications.svelte';
+  import ForkDialog from '#lib/repositories/header/ForkDialog.svelte';
+  import RepositoryTabs from '#lib/repositories/header/RepositoryTabs.svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: Snippet; data: LayoutData } = $props();

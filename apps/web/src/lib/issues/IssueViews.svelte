@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Chip from '$lib/components/controls/Chip.svelte';
+  import Chip from '#lib/components/controls/Chip.svelte';
 
   let {
     value,

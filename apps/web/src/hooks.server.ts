@@ -1,6 +1,7 @@
-import { dev } from '$app/environment';
-import type { Handle, HandleFetch } from '@sveltejs/kit';
-import { themeCookie } from '$lib/theme';
+import type { Handle, HandleFetch } from '@sveltejs/kit/hooks';
+import { env } from 'cloudflare:workers';
+import { dev } from '$app/env';
+import { themeCookie } from '#lib/theme.js';
 
 const localApi = 'http://127.0.0.1:42618';
 
@@ -31,7 +32,5 @@ export const handleFetch: HandleFetch = ({ event, request, fetch }) => {
   const url = new URL(request.url);
   if (url.origin !== event.url.origin || !url.pathname.startsWith('/api/')) return fetch(request);
   if (dev) return fetch(apiRequest(event, `${localApi}${url.pathname}${url.search}`, request));
-  const api = event.platform?.env.MARL_API;
-  if (!api) throw new Error('The API service binding is unavailable.');
-  return api.fetch(apiRequest(event, `http://marl-api.internal${url.pathname}${url.search}`, request));
+  return env.MARL_API.fetch(apiRequest(event, `http://marl-api.internal${url.pathname}${url.search}`, request));
 };

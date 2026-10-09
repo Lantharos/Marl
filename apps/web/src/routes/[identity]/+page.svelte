@@ -1,9 +1,9 @@
 <script lang="ts">
-  import OrganizationProfilePage from '$lib/components/profile/OrganizationProfilePage.svelte';
-  import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
-  import UserProfilePage from '$lib/components/profile/UserProfilePage.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import { isoTimestamp } from '$lib/time';
+  import OrganizationProfilePage from '#lib/components/profile/OrganizationProfilePage.svelte';
+  import PublicProfileNav from '#lib/components/profile/PublicProfileNav.svelte';
+  import UserProfilePage from '#lib/components/profile/UserProfilePage.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import { isoTimestamp } from '#lib/time.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

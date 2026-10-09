@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { PullRequestComment } from '@marl/contracts';
-  import Button from '$lib/components/controls/Button.svelte';
-  import DiscussionEntry from '$lib/components/discussion/DiscussionEntry.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
-  import { reporting } from '$lib/reporting/reporting.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import DiscussionEntry from '#lib/components/discussion/DiscussionEntry.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import ActionMenu from '#lib/components/overlays/ActionMenu.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
+  import { reporting } from '#lib/reporting/reporting.svelte.js';
 
   let {
     comment,

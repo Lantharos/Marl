@@ -1,6 +1,6 @@
-import type { LatestCommit, TreeEntry } from '$lib/repositories/browser/types';
-import { apiWith, MarlApiError } from '$lib/api';
-import { routeLoad } from '$lib/load';
+import type { LatestCommit, TreeEntry } from '#lib/repositories/browser/types.js';
+import { apiWith, MarlApiError } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
 type Branches = {

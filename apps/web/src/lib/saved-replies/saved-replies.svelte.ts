@@ -1,5 +1,5 @@
 import type { SavedReply } from '@marl/contracts';
-import { api } from '$lib/api';
+import { api } from '#lib/api.js';
 
 function byTitle(left: SavedReply, right: SavedReply) {
   return left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });

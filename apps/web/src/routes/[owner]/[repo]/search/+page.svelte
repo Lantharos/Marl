@@ -3,13 +3,13 @@
   import { navigating, page } from '$app/state';
   import SearchX from '@lucide/svelte/icons/search-x';
   import TextSearch from '@lucide/svelte/icons/text-search';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import BranchPicker from '$lib/repositories/browser/BranchPicker.svelte';
-  import CodeSearchForm from '$lib/repositories/search/CodeSearchForm.svelte';
-  import DefinitionList from '$lib/repositories/search/DefinitionList.svelte';
-  import SearchedFile from '$lib/repositories/search/SearchedFile.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import BranchPicker from '#lib/repositories/browser/BranchPicker.svelte';
+  import CodeSearchForm from '#lib/repositories/search/CodeSearchForm.svelte';
+  import DefinitionList from '#lib/repositories/search/DefinitionList.svelte';
+  import SearchedFile from '#lib/repositories/search/SearchedFile.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -19,9 +19,9 @@
   const lines = $derived(data.result?.files.reduce((total, file) => total + file.matchCount, 0) ?? 0);
 
   function chooseRevision(revision: string) {
-    const search = new URLSearchParams(page.url.searchParams);
+    const search = new URLSearchParams(page.url.search);
     search.set('ref', revision);
-    void goto(`?${search}`, { keepFocus: true, noScroll: true });
+    void goto(`?${search}`, { reset: false });
   }
 </script>
 

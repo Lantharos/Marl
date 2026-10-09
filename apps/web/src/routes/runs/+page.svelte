@@ -3,14 +3,14 @@
   import { onDestroy, untrack } from 'svelte';
   import type { RunSummary } from '@marl/contracts';
   import CirclePlay from '@lucide/svelte/icons/circle-play';
-  import { api, MarlApiError } from '$lib/api';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
-  import Page from '$lib/components/page/Page.svelte';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import RunRow from '$lib/runs/RunRow.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import Page from '#lib/components/page/Page.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import RunRow from '#lib/runs/RunRow.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -38,7 +38,7 @@
     const params = new URLSearchParams();
     if (state.toLowerCase() !== 'all') params.set('state', state.toLowerCase());
     if (value.trim()) params.set('q', value.trim());
-    void goto(`/runs${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(`/runs${params.size ? `?${params}` : ''}`, { reset: false, replace: true });
   }
 
   function changeQuery(value: string) {

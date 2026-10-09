@@ -1,13 +1,13 @@
 <script lang="ts">
   import type { LinkedWorkItem, PullRequestSummary } from '@marl/contracts';
   import Link from '@lucide/svelte/icons/link';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import SearchField from '$lib/components/controls/SearchField.svelte';
-  import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import WorkItemStateIcon from '$lib/components/discussion/WorkItemStateIcon.svelte';
-  import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import SearchField from '#lib/components/controls/SearchField.svelte';
+  import Spinner from '#lib/components/feedback/Spinner.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import WorkItemStateIcon from '#lib/components/discussion/WorkItemStateIcon.svelte';
+  import WorkItemLinks from '#lib/components/discussion/WorkItemLinks.svelte';
 
   let {
     items,

@@ -3,10 +3,10 @@
   import Bell from '@lucide/svelte/icons/bell';
   import BellOff from '@lucide/svelte/icons/bell-off';
   import Check from '@lucide/svelte/icons/check';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { api } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { api } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import { popoverMotion } from '#lib/ui/popover.js';
 
   let { owner, repository }: { owner: string; repository: string } = $props();
   let open = $state(false);

@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import RepositoryIcon from '$lib/components/identity/RepositoryIcon.svelte';
-  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import SettingItem from '$lib/components/settings/SettingItem.svelte';
-  import SettingRow from '$lib/components/settings/SettingRow.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import { completeRepositoryName, repositoryName } from '$lib/repositories/repository-name';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import ImageUploadButton from '#lib/components/controls/ImageUploadButton.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import SettingItem from '#lib/components/settings/SettingItem.svelte';
+  import SettingRow from '#lib/components/settings/SettingRow.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import { completeRepositoryName, repositoryName } from '#lib/repositories/repository-name.js';
   import { validSlug } from '@marl/contracts';
   import type { PageData } from './$types';
 
@@ -107,7 +107,7 @@
       });
       iconUrl = result.iconUrl;
       iconState = 'saved';
-      await invalidateAll();
+      await refreshAll();
       setTimeout(() => (iconState = 'idle'), 1800);
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'Repository icon could not be updated.';
@@ -145,7 +145,7 @@
       method: 'POST',
       body: JSON.stringify(body)
     });
-    await goto(`/${result.repository.owner}/${result.repository.name}/settings`, { replaceState: true });
+    await goto(`/${result.repository.owner}/${result.repository.name}/settings`, { replace: true });
   }
 
   async function confirm() {

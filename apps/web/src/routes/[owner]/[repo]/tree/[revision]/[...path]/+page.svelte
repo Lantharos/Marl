@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import FileList from '$lib/repositories/browser/FileList.svelte';
-  import PathCrumbs from '$lib/repositories/browser/PathCrumbs.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import FileList from '#lib/repositories/browser/FileList.svelte';
+  import PathCrumbs from '#lib/repositories/browser/PathCrumbs.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

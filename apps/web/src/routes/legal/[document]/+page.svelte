@@ -1,10 +1,10 @@
 <script lang="ts">
   import { legalVersion } from '@marl/contracts';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import Page from '$lib/components/page/Page.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import { formatDate } from '$lib/time';
-  import { legalDocuments } from '$lib/legal/documents';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import Page from '#lib/components/page/Page.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import { formatDate } from '#lib/time.js';
+  import { legalDocuments } from '#lib/legal/documents.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

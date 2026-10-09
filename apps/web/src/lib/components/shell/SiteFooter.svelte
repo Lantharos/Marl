@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { legalDocuments } from '$lib/legal/documents';
+  import { legalDocuments } from '#lib/legal/documents.js';
 
   const links = [
     ...Object.entries(legalDocuments).map(([slug, document]) => ({ href: `/legal/${slug}`, label: document.label })),

@@ -1,6 +1,6 @@
-import { apiWith } from '$lib/api';
+import { apiWith } from '#lib/api.js';
 import type { SigningMode } from '@marl/contracts';
-import { routeLoad } from '$lib/load';
+import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch }) => {

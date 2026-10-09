@@ -1,13 +1,13 @@
 <script lang="ts">
-  import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import Spinner from '#lib/components/feedback/Spinner.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
   import ReviewChangesPopover from '../review/ReviewChangesPopover.svelte';
   import type { PullPageState } from './pull-page-state.svelte';
 
   let { pageState, viewerId, context }: { pageState: PullPageState; viewerId?: string; context: MarkdownContext } =
     $props();
   const pull = $derived(pageState.pull);
-  const viewer = import('$lib/code/DiffViewer.svelte');
+  const viewer = import('#lib/code/DiffViewer.svelte');
 </script>
 
 <section class="grid scroll-mt-20 gap-3" aria-label="Changes">

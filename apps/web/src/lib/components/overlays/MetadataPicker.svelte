@@ -12,7 +12,7 @@
 <script lang="ts">
   import Check from '@lucide/svelte/icons/check';
   import Plus from '@lucide/svelte/icons/plus';
-  import { anchoredPopover, popoverMotion } from '$lib/ui/popover';
+  import { anchoredPopover, popoverMotion } from '#lib/ui/popover.js';
   import SearchField from '../controls/SearchField.svelte';
   import Spinner from '../feedback/Spinner.svelte';
   import UserAvatar from '../identity/UserAvatar.svelte';

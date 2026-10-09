@@ -1,3 +1,4 @@
+import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, runnerImport, type Plugin } from 'vite';
@@ -18,7 +19,33 @@ function markdownDocuments(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [markdownDocuments(), tailwindcss(), sveltekit()],
+  plugins: [
+    markdownDocuments(),
+    tailwindcss(),
+    sveltekit({
+      compilerOptions: {
+        runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
+      },
+      adapter: adapter(),
+      csp: {
+        mode: 'auto',
+        directives: {
+          'default-src': ['self'],
+          'base-uri': ['self'],
+          'connect-src': ['self', 'ws:', 'wss:'],
+          'font-src': ['self'],
+          'form-action': ['self'],
+          'frame-ancestors': ['none'],
+          'frame-src': ['none'],
+          'img-src': ['self', 'https:', 'data:', 'blob:'],
+          'object-src': ['none'],
+          'script-src': ['self'],
+          'style-src': ['self'],
+          'style-src-attr': ['unsafe-inline']
+        }
+      }
+    })
+  ],
   worker: { format: 'es' },
   server: {
     proxy: {

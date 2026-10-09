@@ -3,14 +3,14 @@
   import { untrack } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
   import Copy from '@lucide/svelte/icons/copy';
-  import FormShell from '$lib/components/page/FormShell.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { api, MarlApiError } from '$lib/api';
-  import { formatAbsoluteTime } from '$lib/time';
+  import FormShell from '#lib/components/page/FormShell.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import { formatAbsoluteTime } from '#lib/time.js';
   import type { PageData } from './$types';
 
   type Organization = { slug: string; name: string; kind: 'personal' | 'team'; role: 'owner' | 'admin' | 'member' };

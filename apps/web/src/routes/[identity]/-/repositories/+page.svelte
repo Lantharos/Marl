@@ -1,6 +1,6 @@
 <script lang="ts">
-  import PublicProfileNav from '$lib/components/profile/PublicProfileNav.svelte';
-  import RepositoryBrowser from '$lib/repositories/RepositoryBrowser.svelte';
+  import PublicProfileNav from '#lib/components/profile/PublicProfileNav.svelte';
+  import RepositoryBrowser from '#lib/repositories/RepositoryBrowser.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>

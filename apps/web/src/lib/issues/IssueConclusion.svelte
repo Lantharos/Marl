@@ -3,12 +3,12 @@
   import type { IssueComment, IssueConclusion } from '@marl/contracts';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Plus from '@lucide/svelte/icons/plus';
-  import Button from '$lib/components/controls/Button.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import Button from '#lib/components/controls/Button.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
 
   let {
     conclusion,

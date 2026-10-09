@@ -5,16 +5,16 @@
   import Menu from '@lucide/svelte/icons/menu';
   import Search from '@lucide/svelte/icons/search';
   import X from '@lucide/svelte/icons/x';
-  import { dismissable } from '$lib/actions/dismissable';
+  import { dismissable } from '#lib/actions/dismissable.js';
   import BrandMark from '../identity/BrandMark.svelte';
   import AccountMenu from './AccountMenu.svelte';
   import CommandPalette from './commands/CommandPalette.svelte';
-  import type { ShellOrganization, ShellUser } from '$lib/shell-cache';
+  import type { ShellOrganization, ShellUser } from '#lib/shell-cache.js';
   import { shellCommands } from './commands/commands';
   import CreateMenu from './CreateMenu.svelte';
   import GlobalNav from './GlobalNav.svelte';
   import KeyboardShortcuts from './KeyboardShortcuts.svelte';
-  import { plainKey } from '$lib/ui/keyboard';
+  import { plainKey } from '#lib/ui/keyboard.js';
 
   let {
     repositories,

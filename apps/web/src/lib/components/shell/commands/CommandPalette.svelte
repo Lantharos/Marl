@@ -3,8 +3,8 @@
   import { page } from '$app/state';
   import { tick } from 'svelte';
   import Search from '@lucide/svelte/icons/search';
-  import { api } from '$lib/api';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { api } from '#lib/api.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import Spinner from '../../feedback/Spinner.svelte';
   import { commandIcons } from './command-icons';
   import { matchCommands, type Command } from './commands';

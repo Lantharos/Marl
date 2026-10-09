@@ -1,12 +1,12 @@
 import { render } from 'svelte/server';
-import { dev } from '$app/environment';
-import OfflinePage from '$lib/errors/OfflinePage.svelte';
+import { dev } from '$app/env';
+import OfflinePage from '#lib/errors/OfflinePage.svelte';
 import styles from '../../app.css?inline';
-import script from '$lib/errors/offline-client.js?raw';
+import script from '#lib/errors/offline-client.js?raw';
 
 async function sourceHash(source: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-  return `sha256-${new Uint8Array(digest).toBase64()}`;
+  return `sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}`;
 }
 
 export async function offlineDocument() {

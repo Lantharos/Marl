@@ -1,4 +1,4 @@
-import type { ThreadCodeLine } from '$lib/code/diff';
+import type { ThreadCodeLine } from '#lib/code/diff.js';
 
 export class ReviewThreadState {
   replyBody = $state('');

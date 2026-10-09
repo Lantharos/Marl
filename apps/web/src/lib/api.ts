@@ -1,6 +1,6 @@
 import type { ApiError } from '@marl/contracts';
-import { requestElevation } from '$lib/auth/elevation';
-import { changesShell, clearShellCache } from '$lib/shell-cache';
+import { requestElevation } from '#lib/auth/elevation.js';
+import { changesShell, clearShellCache } from '#lib/shell-cache.js';
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

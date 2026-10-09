@@ -1,18 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { invalidateAll } from '$app/navigation';
+  import { refreshAll } from '$app/navigation';
   import '../app.css';
-  import { registerElevationHandler } from '$lib/auth/elevation';
-  import { IdentityConfirmation } from '$lib/auth/identity-confirmation.svelte';
-  import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
-  import AppShell from '$lib/components/shell/AppShell.svelte';
-  import LegalUpdateNotice from '$lib/legal/LegalUpdateNotice.svelte';
-  import ReportDialog from '$lib/reporting/ReportDialog.svelte';
-  import SiteFooter from '$lib/components/shell/SiteFooter.svelte';
-  import NavigationProgress from '$lib/components/shell/NavigationProgress.svelte';
-  import { isIndexableRepositoryPath, privateRoots } from '$lib/repositories/repository-route';
-  import { watchShellChanges } from '$lib/shell-cache';
+  import { registerElevationHandler } from '#lib/auth/elevation.js';
+  import { IdentityConfirmation } from '#lib/auth/identity-confirmation.svelte.js';
+  import IdentityConfirmationModal from '#lib/components/auth/IdentityConfirmationModal.svelte';
+  import AppShell from '#lib/components/shell/AppShell.svelte';
+  import LegalUpdateNotice from '#lib/legal/LegalUpdateNotice.svelte';
+  import ReportDialog from '#lib/reporting/ReportDialog.svelte';
+  import SiteFooter from '#lib/components/shell/SiteFooter.svelte';
+  import NavigationProgress from '#lib/components/shell/NavigationProgress.svelte';
+  import { isIndexableRepositoryPath, privateRoots } from '#lib/repositories/repository-route.js';
+  import { watchShellChanges } from '#lib/shell-cache.js';
   import type { LayoutData } from './$types';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
@@ -30,7 +30,7 @@
 
   onMount(() => {
     const stopElevation = registerElevationHandler(confirmation.confirm);
-    const stopShellUpdates = watchShellChanges(() => void invalidateAll());
+    const stopShellUpdates = watchShellChanges(() => void refreshAll());
     return () => {
       stopElevation();
       stopShellUpdates();

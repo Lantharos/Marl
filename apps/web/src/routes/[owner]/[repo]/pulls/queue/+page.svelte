@@ -1,11 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
   import ListOrdered from '@lucide/svelte/icons/list-ordered';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import Time from '$lib/components/page/Time.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

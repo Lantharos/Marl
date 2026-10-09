@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatAbsoluteTime, formatTimestamp } from '$lib/time';
+  import { formatAbsoluteTime, formatTimestamp } from '#lib/time.js';
 
   let { value, class: className = '' }: { value: string; class?: string } = $props();
 </script>

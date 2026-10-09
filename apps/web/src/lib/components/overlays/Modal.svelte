@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { popoverMotion } from '#lib/ui/popover.js';
 
   let {
     open,

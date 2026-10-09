@@ -3,8 +3,8 @@
   import Check from '@lucide/svelte/icons/check';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import X from '@lucide/svelte/icons/x';
-  import { api } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
+  import { api } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
 
   let { steps }: { steps: OnboardingProgress[] } = $props();
   let dismissed = $state(false);

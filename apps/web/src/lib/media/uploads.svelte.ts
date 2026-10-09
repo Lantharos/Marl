@@ -1,4 +1,4 @@
-import type { MarkdownContext } from '$lib/markdown/context';
+import type { MarkdownContext } from '#lib/markdown/context.js';
 
 export const mediaAccept = 'image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm';
 const acceptedTypes = new Set(mediaAccept.split(','));

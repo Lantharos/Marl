@@ -3,8 +3,8 @@
   import File from '@lucide/svelte/icons/file';
   import Folder from '@lucide/svelte/icons/folder';
   import Search from '@lucide/svelte/icons/search';
-  import { api } from '$lib/api';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { api } from '#lib/api.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import { entryHref } from './entry-path';
   import type { TreeEntry } from './types';
 

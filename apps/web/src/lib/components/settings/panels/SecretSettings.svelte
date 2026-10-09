@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import Field from '../../controls/Field.svelte';
   import EmptyState from '../../feedback/EmptyState.svelte';

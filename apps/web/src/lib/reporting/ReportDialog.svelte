@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { ReportReason } from '@marl/contracts';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
   import { reporting } from './reporting.svelte';
 
   const reasons: Array<{ value: ReportReason; label: string; description: string }> = [

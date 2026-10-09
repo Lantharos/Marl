@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { IconComponent } from '$lib/ui/icon';
+  import type { IconComponent } from '#lib/ui/icon.js';
 
   let {
     label,

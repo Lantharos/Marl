@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import Download from '@lucide/svelte/icons/download';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import SettingItem from '$lib/components/settings/SettingItem.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import { clearShellCache } from '$lib/shell-cache';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import SettingItem from '#lib/components/settings/SettingItem.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import { clearShellCache } from '#lib/shell-cache.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -38,7 +38,7 @@
     try {
       await api('/account', { method: 'DELETE', body: JSON.stringify({ confirmation }) });
       clearShellCache(true);
-      await goto('/', { invalidateAll: true });
+      await goto('/', { refreshAll: true });
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'Your account could not be deleted.';
     } finally {

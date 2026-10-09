@@ -3,7 +3,7 @@
   import CornerLeftUp from '@lucide/svelte/icons/corner-left-up';
   import File from '@lucide/svelte/icons/file';
   import Folder from '@lucide/svelte/icons/folder';
-  import Time from '$lib/components/page/Time.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import { entryHref } from './entry-path';
   import type { TreeEntry } from './types';
 

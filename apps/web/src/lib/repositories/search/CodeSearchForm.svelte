@@ -1,8 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import Chip from '$lib/components/controls/Chip.svelte';
-  import SearchField from '$lib/components/controls/SearchField.svelte';
-  import { plainKey } from '$lib/ui/keyboard';
+  import Chip from '#lib/components/controls/Chip.svelte';
+  import SearchField from '#lib/components/controls/SearchField.svelte';
+  import { plainKey } from '#lib/ui/keyboard.js';
 
   let {
     owner,
@@ -34,7 +34,7 @@
     const search = new URLSearchParams({ q: value.trim(), ref: revision });
     if (useRegex) search.set('regex', '1');
     if (matchCase) search.set('case', '1');
-    void goto(`/${owner}/${repository}/search?${search}`, { keepFocus: true, noScroll: !compact });
+    void goto(`/${owner}/${repository}/search?${search}`, { reset: compact });
   }
 
   function toggle(option: 'regex' | 'case') {

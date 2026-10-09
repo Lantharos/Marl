@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Webhook, WebhookEvent, WebhookFormat } from '@marl/contracts';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import Checkbox from '../../controls/Checkbox.svelte';
   import Field from '../../controls/Field.svelte';

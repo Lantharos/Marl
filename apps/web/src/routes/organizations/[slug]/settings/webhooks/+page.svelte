@@ -1,6 +1,6 @@
 <script lang="ts">
-  import OrganizationSettingsShell from '$lib/components/settings/shells/OrganizationSettingsShell.svelte';
-  import WebhookSettings from '$lib/components/settings/webhooks/WebhookSettings.svelte';
+  import OrganizationSettingsShell from '#lib/components/settings/shells/OrganizationSettingsShell.svelte';
+  import WebhookSettings from '#lib/components/settings/webhooks/WebhookSettings.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

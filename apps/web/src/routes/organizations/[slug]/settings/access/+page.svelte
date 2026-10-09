@@ -8,18 +8,18 @@
     OrganizationTeamMember
   } from '@marl/contracts';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import SettingItem from '$lib/components/settings/SettingItem.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import OrganizationSettingsShell from '$lib/components/settings/shells/OrganizationSettingsShell.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import SettingItem from '#lib/components/settings/SettingItem.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import OrganizationSettingsShell from '#lib/components/settings/shells/OrganizationSettingsShell.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import SettingsAction from '#lib/components/settings/SettingsAction.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
   import type { PageData } from './$types';
 
   type Member = OrganizationMember;

@@ -5,11 +5,11 @@
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import MessageSquare from '@lucide/svelte/icons/message-square';
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import Button from '../../components/controls/Button.svelte';
   import MarkdownComposer from '../../components/markdown/MarkdownComposer.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
 
   export type PullComposerAction = 'approve' | 'request_changes';
   type Selection = {

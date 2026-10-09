@@ -7,17 +7,17 @@
   import FileText from '@lucide/svelte/icons/file-text';
   import Plus from '@lucide/svelte/icons/plus';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Spinner from '$lib/components/feedback/Spinner.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import { repositoryDocumentPath } from '$lib/repositories/repository-path';
-  import { isoTimestamp } from '$lib/time';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Spinner from '#lib/components/feedback/Spinner.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import { repositoryDocumentPath } from '#lib/repositories/repository-path.js';
+  import { isoTimestamp } from '#lib/time.js';
   import type { RepositoryDocument } from './+page';
   import type { PageData } from './$types';
 

@@ -3,10 +3,10 @@
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import Button from '$lib/components/controls/Button.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
-  import { runTriggerLabel } from '$lib/runs/workflow-triggers';
+  import Button from '#lib/components/controls/Button.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import RunStateIcon from '#lib/runs/RunStateIcon.svelte';
+  import { runTriggerLabel } from '#lib/runs/workflow-triggers.js';
 
   let { pull, approving, onApprove }: { pull: PullRequestDetail; approving: boolean; onApprove: () => void } = $props();
   const waiting = $derived(pull.checksApproval.waiting);

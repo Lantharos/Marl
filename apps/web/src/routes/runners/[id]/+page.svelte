@@ -1,9 +1,9 @@
 <script lang="ts">
   import Cpu from '@lucide/svelte/icons/cpu';
-  import BackLink from '$lib/components/page/BackLink.svelte';
-  import Page from '$lib/components/page/Page.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import RunnerStatus from '$lib/runs/RunnerStatus.svelte';
+  import BackLink from '#lib/components/page/BackLink.svelte';
+  import Page from '#lib/components/page/Page.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import RunnerStatus from '#lib/runs/RunnerStatus.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const runner = $derived(data.runner);

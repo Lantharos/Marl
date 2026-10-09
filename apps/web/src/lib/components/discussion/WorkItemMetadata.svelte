@@ -3,7 +3,7 @@
   import Lock from '@lucide/svelte/icons/lock';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Unlock from '@lucide/svelte/icons/lock-open';
-  import { dismissable } from '$lib/actions/dismissable';
+  import { dismissable } from '#lib/actions/dismissable.js';
   import Button from '../controls/Button.svelte';
   import UserProfileLink from '../identity/UserProfileLink.svelte';
   import MetadataPicker from '../overlays/MetadataPicker.svelte';

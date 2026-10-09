@@ -1,19 +1,19 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
+  import { refreshAll } from '$app/navigation';
   import CheckCheck from '@lucide/svelte/icons/check-check';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import TabLinks from '$lib/components/page/TabLinks.svelte';
-  import InboxList from '$lib/inbox/InboxList.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import TabLinks from '#lib/components/page/TabLinks.svelte';
+  import InboxList from '#lib/inbox/InboxList.svelte';
   import type { PageData } from './$types';
-  import { api } from '$lib/api';
+  import { api } from '#lib/api.js';
 
   let { data }: { data: PageData } = $props();
 
   async function markAllRead() {
     await api('/inbox/read', { method: 'POST' });
-    await invalidateAll();
+    await refreshAll();
   }
 </script>
 
@@ -49,7 +49,7 @@
     emptyDescription={data.status === 'done'
       ? 'Items you finish will stay available here.'
       : 'Mentions, assignments, and updates will appear here.'}
-    onChange={invalidateAll}
+    onChange={refreshAll}
   />
   {#if data.nextCursor}<div class="mt-4 flex justify-center">
       <LinkButton href="/inbox?status={data.status}&cursor={encodeURIComponent(data.nextCursor)}"

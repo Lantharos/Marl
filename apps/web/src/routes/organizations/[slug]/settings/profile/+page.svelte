@@ -1,14 +1,14 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { untrack } from 'svelte';
-  import { api, MarlApiError } from '$lib/api';
-  import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
-  import OrganizationAvatar from '$lib/components/identity/OrganizationAvatar.svelte';
-  import OrganizationSettingsShell from '$lib/components/settings/shells/OrganizationSettingsShell.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import ImageUploadButton from '#lib/components/controls/ImageUploadButton.svelte';
+  import OrganizationAvatar from '#lib/components/identity/OrganizationAvatar.svelte';
+  import OrganizationSettingsShell from '#lib/components/settings/shells/OrganizationSettingsShell.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import SettingsAction from '#lib/components/settings/SettingsAction.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

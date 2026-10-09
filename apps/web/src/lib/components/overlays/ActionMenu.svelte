@@ -1,7 +1,7 @@
 <script lang="ts">
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import Button from '../controls/Button.svelte';
 
   type Action = { label: string; onSelect: () => void; danger?: boolean };

@@ -1,5 +1,5 @@
 import type { RepositoryTemplates } from '@marl/contracts';
-import { api } from '$lib/api';
+import { api } from '#lib/api.js';
 
 const cache = new Map<string, Promise<RepositoryTemplates>>();
 

@@ -1,6 +1,6 @@
 import type { ReleaseDetail, RepositoryTag } from '@marl/contracts';
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
 type Branch = { name: string; commitId: string };

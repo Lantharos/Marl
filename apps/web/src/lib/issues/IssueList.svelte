@@ -2,10 +2,10 @@
   import type { IssueSummary } from '@marl/contracts';
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
-  import LabelPill from '$lib/components/discussion/LabelPill.svelte';
-  import WorkItemStateIcon from '$lib/components/discussion/WorkItemStateIcon.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Time from '$lib/components/page/Time.svelte';
+  import LabelPill from '#lib/components/discussion/LabelPill.svelte';
+  import WorkItemStateIcon from '#lib/components/discussion/WorkItemStateIcon.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Time from '#lib/components/page/Time.svelte';
 
   let {
     issues,

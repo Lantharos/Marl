@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, refreshAll } from '$app/navigation';
   import { onMount } from 'svelte';
   import Building2 from '@lucide/svelte/icons/building-complex';
   import LogOut from '@lucide/svelte/icons/log-out';
@@ -8,12 +8,12 @@
   import Settings from '@lucide/svelte/icons/settings';
   import Sun from '@lucide/svelte/icons/sun';
   import UserRound from '@lucide/svelte/icons/user-round';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { clearShellCache } from '$lib/shell-cache';
-  import { setThemePreference, themePreference, type ThemePreference } from '$lib/theme';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { clearShellCache } from '#lib/shell-cache.js';
+  import { setThemePreference, themePreference, type ThemePreference } from '#lib/theme.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import UserAvatar from '../identity/UserAvatar.svelte';
-  import type { ShellUser } from '$lib/shell-cache';
+  import type { ShellUser } from '#lib/shell-cache.js';
   import MenuLink from './MenuLink.svelte';
 
   let { user, open = $bindable(false) }: { user: ShellUser; open?: boolean } = $props();
@@ -34,10 +34,10 @@
   }
 
   async function signOut() {
-    const { authClient } = await import('$lib/auth-client');
+    const { authClient } = await import('#lib/auth-client.js');
     await authClient.signOut();
     clearShellCache(true);
-    await invalidateAll();
+    await refreshAll();
     await goto('/sign-in');
   }
 </script>

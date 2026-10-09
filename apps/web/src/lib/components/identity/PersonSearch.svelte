@@ -3,8 +3,8 @@
   import type { WorkItemPerson } from '@marl/contracts';
   import Bot from '@lucide/svelte/icons/bot';
   import Search from '@lucide/svelte/icons/search';
-  import { api } from '$lib/api';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { api } from '#lib/api.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import Spinner from '../feedback/Spinner.svelte';
   import UserAvatar from './UserAvatar.svelte';
 

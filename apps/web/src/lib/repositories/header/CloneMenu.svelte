@@ -4,9 +4,9 @@
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import Code2 from '@lucide/svelte/icons/code-xml';
   import Copy from '@lucide/svelte/icons/copy';
-  import { dismissable } from '$lib/actions/dismissable';
-  import Button from '$lib/components/controls/Button.svelte';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import { popoverMotion } from '#lib/ui/popover.js';
 
   let { cloneUrl, sshCloneUrl, signedIn }: { cloneUrl: string; sshCloneUrl: string | null; signedIn: boolean } =
     $props();

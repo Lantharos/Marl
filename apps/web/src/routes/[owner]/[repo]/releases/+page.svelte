@@ -4,14 +4,14 @@
   import type { ReleaseSummary } from '@marl/contracts';
   import Download from '@lucide/svelte/icons/download';
   import Tag from '@lucide/svelte/icons/tag';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { api, MarlApiError } from '$lib/api';
-  import { releasePath } from '$lib/releases/release-path';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import { releasePath } from '#lib/releases/release-path.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

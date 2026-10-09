@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { enhanceMedia } from '$lib/media/enhance-media';
-  import ImageViewer from '$lib/media/ImageViewer.svelte';
-  import { enhanceMarkdown } from '$lib/markdown/enhance';
-  import '$lib/markdown/styles/base.css';
-  import '$lib/markdown/styles/document.css';
-  import '$lib/markdown/styles/extensions.css';
-  import '$lib/markdown/styles/code.css';
+  import { enhanceMedia } from '#lib/media/enhance-media.js';
+  import ImageViewer from '#lib/media/ImageViewer.svelte';
+  import { enhanceMarkdown } from '#lib/markdown/enhance.js';
+  import '#lib/markdown/styles/base.css';
+  import '#lib/markdown/styles/document.css';
+  import '#lib/markdown/styles/extensions.css';
+  import '#lib/markdown/styles/code.css';
 
   let {
     html,

@@ -1,4 +1,4 @@
-import { api } from '$lib/api';
+import { api } from '#lib/api.js';
 import { codeLanguage, highlight } from './highlight/highlight';
 import type { CodeLines, SourcePreview } from './types';
 

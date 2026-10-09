@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
-  import AuthShell from '$lib/components/auth/AuthShell.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { authClient } from '$lib/auth-client';
-  import { clearShellCache } from '$lib/shell-cache';
+  import AuthShell from '#lib/components/auth/AuthShell.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { authClient } from '#lib/auth-client.js';
+  import { clearShellCache } from '#lib/shell-cache.js';
 
   let code = $state('');
   let error = $state('');
@@ -25,7 +25,7 @@
         return;
       }
       clearShellCache(true);
-      await invalidateAll();
+      await refreshAll();
       await goto(returnTo);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'That code is not valid.';

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/controls/Button.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
 
   let { html, text, title }: { html: string; text: string; title: string } = $props();
   let open = $state(false);

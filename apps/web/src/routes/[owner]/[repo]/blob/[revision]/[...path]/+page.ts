@@ -1,7 +1,7 @@
-import type { SourcePreview } from '$lib/code/types';
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
-import { encodeRepositoryPath, encodeRevision } from '$lib/repositories/repository-path';
+import type { SourcePreview } from '#lib/code/types.js';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
+import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, params }) => ({

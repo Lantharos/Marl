@@ -5,7 +5,7 @@
   import CircleX from '@lucide/svelte/icons/circle-x';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import Send from '@lucide/svelte/icons/send';
-  import { api } from '$lib/api';
+  import { api } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import Spinner from '../../feedback/Spinner.svelte';
   import Modal from '../../overlays/Modal.svelte';

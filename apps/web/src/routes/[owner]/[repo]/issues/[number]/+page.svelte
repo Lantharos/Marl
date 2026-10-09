@@ -1,5 +1,5 @@
 <script lang="ts">
-  import IssueDiscussionPage from '$lib/issues/IssueDiscussionPage.svelte';
+  import IssueDiscussionPage from '#lib/issues/IssueDiscussionPage.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import WebhookSettings from '$lib/components/settings/webhooks/WebhookSettings.svelte';
+  import WebhookSettings from '#lib/components/settings/webhooks/WebhookSettings.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -2,8 +2,8 @@
   import { tick } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { anchoredPopover, popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { anchoredPopover, popoverMotion } from '#lib/ui/popover.js';
 
   type Option = { value: string; label: string; description?: string };
   let {

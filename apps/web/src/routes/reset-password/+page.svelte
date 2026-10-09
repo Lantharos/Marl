@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import AuthShell from '$lib/components/auth/AuthShell.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { authClient } from '$lib/auth-client';
+  import AuthShell from '#lib/components/auth/AuthShell.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { authClient } from '#lib/auth-client.js';
   let password = $state('');
   let confirm = $state('');
   let busy = $state(false);

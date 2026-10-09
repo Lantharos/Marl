@@ -1,9 +1,9 @@
 <script lang="ts">
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
-  import { keyboardScroll } from '$lib/actions/keyboard-scroll';
-  import BrandMark from '$lib/components/identity/BrandMark.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
+  import { keyboardScroll } from '#lib/actions/keyboard-scroll.js';
+  import BrandMark from '#lib/components/identity/BrandMark.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
   import LandingArtwork from './LandingArtwork.svelte';
   import LandingReview from './LandingReview.svelte';
 

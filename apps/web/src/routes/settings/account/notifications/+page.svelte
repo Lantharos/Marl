@@ -2,12 +2,12 @@
   import { untrack } from 'svelte';
   import type { EmailNotificationMode, InboxReason, NotificationPreferences } from '@marl/contracts';
   import X from '@lucide/svelte/icons/x';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Checkbox from '$lib/components/controls/Checkbox.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Checkbox from '#lib/components/controls/Checkbox.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,8 +1,8 @@
 import type { DashboardData, RepositorySummary } from '@marl/contracts';
 import { error, redirect } from '@sveltejs/kit';
-import { apiWith, MarlApiError } from '$lib/api';
-import { isPublicRepositoryPath, privateRoots } from '$lib/repositories/repository-route';
-import { cachedShell, clearShellCache, rememberShell, type ShellData, type ShellUser } from '$lib/shell-cache';
+import { apiWith, MarlApiError } from '#lib/api.js';
+import { isPublicRepositoryPath, privateRoots } from '#lib/repositories/repository-route.js';
+import { cachedShell, clearShellCache, rememberShell, type ShellData, type ShellUser } from '#lib/shell-cache.js';
 import type { LayoutLoad } from './$types';
 
 export const load = (async ({ fetch, url, depends }) => {

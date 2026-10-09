@@ -1,17 +1,17 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Checkbox from '$lib/components/controls/Checkbox.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import FormShell from '$lib/components/page/FormShell.svelte';
-  import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
-  import { ownerOptions } from '$lib/repositories/owner-options';
-  import { completeRepositoryName, repositoryName } from '$lib/repositories/repository-name';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Checkbox from '#lib/components/controls/Checkbox.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import FormShell from '#lib/components/page/FormShell.svelte';
+  import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
+  import { ownerOptions } from '#lib/repositories/owner-options.js';
+  import { completeRepositoryName, repositoryName } from '#lib/repositories/repository-name.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,6 +1,6 @@
 import type { RunDetail } from '@marl/contracts';
-import { apiTextCursorWith, apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
+import { apiTextCursorWith, apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, params }) => {

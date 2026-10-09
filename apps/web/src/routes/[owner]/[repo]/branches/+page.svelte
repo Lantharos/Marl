@@ -4,15 +4,15 @@
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import GitPullRequestArrow from '@lucide/svelte/icons/git-pull-request-arrow';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import SearchField from '$lib/components/controls/SearchField.svelte';
-  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { encodeRevision } from '$lib/repositories/repository-path';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import SearchField from '#lib/components/controls/SearchField.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import { encodeRevision } from '#lib/repositories/repository-path.js';
   import type { PageData } from './$types';
 
   type Branch = PageData['branches'][number];

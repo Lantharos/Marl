@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { RepositoryTag } from '@marl/contracts';
   import Tag from '@lucide/svelte/icons/tag';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
 
   let {
     value = $bindable(''),

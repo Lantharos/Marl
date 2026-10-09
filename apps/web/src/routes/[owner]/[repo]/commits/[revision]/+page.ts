@@ -1,6 +1,6 @@
-import { apiWith } from '$lib/api';
-import { routeLoad } from '$lib/load';
-import type { CommitSummary } from '$lib/repositories/browser/types';
+import { apiWith } from '#lib/api.js';
+import { routeLoad } from '#lib/load.js';
+import type { CommitSummary } from '#lib/repositories/browser/types.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, params }) => ({

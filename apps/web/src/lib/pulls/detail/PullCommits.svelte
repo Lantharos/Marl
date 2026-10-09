@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { PullRequestDetail } from '@marl/contracts';
   import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
-  import CommitSignature from '$lib/code/CommitSignature.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import Time from '$lib/components/page/Time.svelte';
+  import CommitSignature from '#lib/code/CommitSignature.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import Time from '#lib/components/page/Time.svelte';
 
   let { commits, repository }: { commits: PullRequestDetail['commits']; repository: string } = $props();
 </script>

@@ -8,8 +8,8 @@ import type {
   PullTimelineWindow,
   ReviewThread
 } from '@marl/contracts';
-import { api, MarlApiError } from '$lib/api';
-import { reviewThreadContext, type ThreadCodeLine } from '$lib/code/diff';
+import { api, MarlApiError } from '#lib/api.js';
+import { reviewThreadContext, type ThreadCodeLine } from '#lib/code/diff.js';
 import { PullTimelineState } from '../timeline/PullTimelineState.svelte';
 import type { PullLifecycleAction } from '../PullLifecycleActions.svelte';
 import type { PullComposerAction } from '../review/PullActionComposer.svelte';

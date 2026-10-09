@@ -2,14 +2,14 @@
   import { tick } from 'svelte';
   import type { IssueComment } from '@marl/contracts';
   import Reply from '@lucide/svelte/icons/reply';
-  import Button from '$lib/components/controls/Button.svelte';
-  import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
-  import { reporting } from '$lib/reporting/reporting.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import ActionMenu from '#lib/components/overlays/ActionMenu.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
+  import { reporting } from '#lib/reporting/reporting.svelte.js';
 
   let {
     comment,

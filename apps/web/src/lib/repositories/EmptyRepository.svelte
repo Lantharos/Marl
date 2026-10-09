@@ -4,7 +4,7 @@
   import Check from '@lucide/svelte/icons/check';
   import Copy from '@lucide/svelte/icons/copy';
   import GitBranch from '@lucide/svelte/icons/git-branch';
-  import Button from '$lib/components/controls/Button.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
 
   let {
     name,
@@ -79,19 +79,25 @@
           class="absolute top-2 right-2"
           aria-label="Copy push commands"
           onclick={copyCommands}
-          >{#if copied}<Check size={15} class="text-success" />{:else}<Copy size={15} />{/if}</Button
         >
+          {#if copied}
+            <Check size={15} class="text-success" />
+          {:else}
+            <Copy size={15} />
+          {/if}
+        </Button>
       </div>
       <p
         class="mt-3.5 max-w-155 text-sm leading-relaxed text-pretty text-ink-muted [&_a]:font-medium [&_a]:text-brand [&_a:hover]:underline"
       >
         {#if protocol === 'https'}
-          Git authentication is separate from your browser session. Use your Marl username and a <a
-            href={resolve('/settings/account/tokens')}>developer token</a
-          > as the password. Read access is enough to clone and pull; pushing requires Push code.
+          Git authentication is separate from your browser session. Use your Marl username and a
+          <a href={resolve('settings/account/tokens')}>developer token</a>
+          as the password. Read access is enough to clone and pull; pushing requires Push code.
         {:else}
-          Add the public half of your key under <a href={resolve('/settings/account/ssh-keys')}>SSH keys</a>. Marl
-          matches its fingerprint to your account and checks repository access for every pull and push.
+          Add the public half of your key under
+          <a href={resolve('settings/account/ssh-keys')}>SSH keys</a>
+          . Marl matches its fingerprint to your account and checks repository access for every pull and push.
         {/if}
       </p>
     </div>

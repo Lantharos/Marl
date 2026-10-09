@@ -2,11 +2,11 @@
   import Check from '@lucide/svelte/icons/check';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import GitBranch from '@lucide/svelte/icons/git-branch';
-  import { dismissable } from '$lib/actions/dismissable';
-  import Button from '$lib/components/controls/Button.svelte';
-  import SearchField from '$lib/components/controls/SearchField.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import SearchField from '#lib/components/controls/SearchField.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import { popoverMotion } from '#lib/ui/popover.js';
 
   type Branch = { name: string; commitId: string; updatedAt: string };
 

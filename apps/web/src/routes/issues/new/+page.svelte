@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { repositoryTemplate } from '$lib/repositories/templates';
+  import { repositoryTemplate } from '#lib/repositories/templates.js';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import FormShell from '$lib/components/page/FormShell.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import FormShell from '#lib/components/page/FormShell.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

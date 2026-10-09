@@ -4,13 +4,13 @@
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import FileCode2 from '@lucide/svelte/icons/file-code-corner';
   import Zap from '@lucide/svelte/icons/zap';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { awaitingCheckApproval, runStateLabel } from '$lib/runs/run-state';
-  import RunStateIcon from '$lib/runs/RunStateIcon.svelte';
-  import { workflowTrigger } from '$lib/runs/workflow-triggers';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import { awaitingCheckApproval, runStateLabel } from '#lib/runs/run-state.js';
+  import RunStateIcon from '#lib/runs/RunStateIcon.svelte';
+  import { workflowTrigger } from '#lib/runs/workflow-triggers.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

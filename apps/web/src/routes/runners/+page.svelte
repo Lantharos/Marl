@@ -2,12 +2,12 @@
   import type { RunnerSummary } from '@marl/contracts';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Cpu from '@lucide/svelte/icons/cpu';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Page from '$lib/components/page/Page.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import RunnerStatus from '$lib/runs/RunnerStatus.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Page from '#lib/components/page/Page.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import RunnerStatus from '#lib/runs/RunnerStatus.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const runners = $derived<RunnerSummary[]>(data.runners);

@@ -1,5 +1,5 @@
-import { api } from '$lib/api';
-import type { MarkdownContext } from '$lib/markdown/context';
+import { api } from '#lib/api.js';
+import type { MarkdownContext } from '#lib/markdown/context.js';
 
 const cache = new Map<string, Promise<string>>();
 

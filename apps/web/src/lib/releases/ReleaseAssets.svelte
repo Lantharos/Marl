@@ -4,12 +4,12 @@
   import FileArchive from '@lucide/svelte/icons/file-archive';
   import Trash2 from '@lucide/svelte/icons/trash';
   import Upload from '@lucide/svelte/icons/upload';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import SearchField from '$lib/components/controls/SearchField.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { api, MarlApiError } from '$lib/api';
-  import { formatBytes } from '$lib/bytes';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import SearchField from '#lib/components/controls/SearchField.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import { formatBytes } from '#lib/bytes.js';
   import { uploadReleaseAsset } from './release-upload';
 
   let {

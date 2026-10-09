@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { PullTimelineItem } from '@marl/contracts';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
   import PullReviewGroup from './PullReviewGroup.svelte';
   import { groupReviewActivity, type DiscussionItem } from './group-review-activity';
 

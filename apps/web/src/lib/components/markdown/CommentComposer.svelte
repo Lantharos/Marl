@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '../controls/Button.svelte';
   import MarkdownComposer from './MarkdownComposer.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
 
   let {
     value = $bindable(''),

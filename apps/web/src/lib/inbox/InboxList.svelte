@@ -7,9 +7,9 @@
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import { api } from '$lib/api';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import { api } from '#lib/api.js';
 
   let {
     items,

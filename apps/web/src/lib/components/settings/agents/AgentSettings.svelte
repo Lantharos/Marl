@@ -3,7 +3,7 @@
   import { untrack } from 'svelte';
   import type { Agent } from '@marl/contracts';
   import Bot from '@lucide/svelte/icons/bot';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import Field from '../../controls/Field.svelte';
   import EmptyState from '../../feedback/EmptyState.svelte';

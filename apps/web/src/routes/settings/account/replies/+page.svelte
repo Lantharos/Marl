@@ -4,16 +4,16 @@
   import MessageSquareText from '@lucide/svelte/icons/message-square-text';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import { savedReplies } from '$lib/saved-replies/saved-replies.svelte';
+  import { MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import { savedReplies } from '#lib/saved-replies/saved-replies.svelte.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { slugPattern } from '@marl/contracts';
-  import { invalidateAll } from '$app/navigation';
+  import { refreshAll } from '$app/navigation';
   import { untrack } from 'svelte';
-  import { api, MarlApiError } from '$lib/api';
-  import ImageUploadButton from '$lib/components/controls/ImageUploadButton.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import SettingsAction from '$lib/components/settings/SettingsAction.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import UserAvatar from '$lib/components/identity/UserAvatar.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import ImageUploadButton from '#lib/components/controls/ImageUploadButton.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import SettingsAction from '#lib/components/settings/SettingsAction.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import UserAvatar from '#lib/components/identity/UserAvatar.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -35,7 +35,7 @@
       website = result.profile.website ?? '';
       saveState = 'saved';
       setTimeout(() => (saveState = 'idle'), 1800);
-      await invalidateAll();
+      await refreshAll();
     } catch (cause) {
       saveState = 'idle';
       error = cause instanceof MarlApiError ? cause.message : 'Your profile could not be saved.';
@@ -56,7 +56,7 @@
       avatarUrl = result.avatarUrl;
       avatarState = 'saved';
       setTimeout(() => (avatarState = 'idle'), 1800);
-      await invalidateAll();
+      await refreshAll();
     } catch (cause) {
       avatarState = 'idle';
       error = cause instanceof MarlApiError ? cause.message : 'Your avatar could not be uploaded.';

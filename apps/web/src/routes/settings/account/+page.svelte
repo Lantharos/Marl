@@ -3,14 +3,14 @@
   import QRCode from 'qrcode';
   import Check from '@lucide/svelte/icons/check';
   import KeyRound from '@lucide/svelte/icons/key-round';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import SettingItem from '$lib/components/settings/SettingItem.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import SigningSettings from '$lib/components/settings/panels/SigningSettings.svelte';
-  import { authClient } from '$lib/auth-client';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import SettingItem from '#lib/components/settings/SettingItem.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SigningSettings from '#lib/components/settings/panels/SigningSettings.svelte';
+  import { authClient } from '#lib/auth-client.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import SecretSettings from '$lib/components/settings/panels/SecretSettings.svelte';
+  import SecretSettings from '#lib/components/settings/panels/SecretSettings.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>

@@ -1,4 +1,4 @@
-import { offlineDocument } from '$lib/server/offline-document';
+import { offlineDocument } from '#lib/server/offline-document.js';
 import type { RequestHandler } from './$types';
 
 export const prerender = true;

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
 
   let {
     open,

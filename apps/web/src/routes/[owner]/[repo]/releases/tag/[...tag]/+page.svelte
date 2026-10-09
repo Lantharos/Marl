@@ -4,14 +4,14 @@
   import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Tag from '@lucide/svelte/icons/tag';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import MarkdownBody from '$lib/components/markdown/MarkdownBody.svelte';
-  import BackLink from '$lib/components/page/BackLink.svelte';
-  import Seo from '$lib/components/page/Seo.svelte';
-  import Time from '$lib/components/page/Time.svelte';
-  import ReleaseAssets from '$lib/releases/ReleaseAssets.svelte';
-  import { seoExcerpt } from '$lib/seo';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
+  import BackLink from '#lib/components/page/BackLink.svelte';
+  import Seo from '#lib/components/page/Seo.svelte';
+  import Time from '#lib/components/page/Time.svelte';
+  import ReleaseAssets from '#lib/releases/ReleaseAssets.svelte';
+  import { seoExcerpt } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { RunSummary } from '@marl/contracts';
   import GitBranch from '@lucide/svelte/icons/git-branch';
-  import Time from '$lib/components/page/Time.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import { awaitingCheckApproval, runStateLabel } from './run-state';
   import { runOrigin } from './workflow-triggers';
   import RunStateIcon from './RunStateIcon.svelte';

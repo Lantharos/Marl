@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { page } from '$app/state';
   import { onDestroy, tick } from 'svelte';
-  import type { IconComponent } from '$lib/ui/icon';
+  import type { IconComponent } from '#lib/ui/icon.js';
 
   type Tab = { key: string; href: string; label: string; icon: IconComponent; active: boolean };
   let { tabs }: { tabs: Tab[] } = $props();

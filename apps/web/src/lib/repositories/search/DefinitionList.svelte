@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CodeDefinition } from '@marl/contracts';
   import Braces from '@lucide/svelte/icons/braces';
-  import { encodeRepositoryPath, encodeRevision } from '$lib/repositories/repository-path';
+  import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
 
   let {
     definitions,

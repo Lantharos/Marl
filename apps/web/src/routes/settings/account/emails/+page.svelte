@@ -4,13 +4,13 @@
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Clock3 from '@lucide/svelte/icons/clock-3';
   import Trash2 from '@lucide/svelte/icons/trash';
-  import { api, MarlApiError } from '$lib/api';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import ConfirmDialog from '$lib/components/overlays/ConfirmDialog.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

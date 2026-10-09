@@ -5,13 +5,13 @@
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import Flag from '@lucide/svelte/icons/flag';
   import Pencil from '@lucide/svelte/icons/pencil';
-  import Button from '$lib/components/controls/Button.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
   import PullBrief from './PullBrief.svelte';
   import PullStackLinks from './PullStackLinks.svelte';
-  import WorkItemMetadata from '$lib/components/discussion/WorkItemMetadata.svelte';
-  import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
-  import WorkItemLinks from '$lib/components/discussion/WorkItemLinks.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import WorkItemMetadata from '#lib/components/discussion/WorkItemMetadata.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import WorkItemLinks from '#lib/components/discussion/WorkItemLinks.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
   import { pullDetailSignal } from './pull-signal';
 
   let {

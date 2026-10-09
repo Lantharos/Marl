@@ -4,7 +4,7 @@
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-  import { api, MarlApiError } from '$lib/api';
+  import { api, MarlApiError } from '#lib/api.js';
 
   let verificationState = $state<'verifying' | 'verified' | 'error'>('verifying');
   let detail = $state('Verifying your email address…');

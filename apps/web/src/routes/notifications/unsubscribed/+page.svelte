@@ -1,8 +1,8 @@
 <script lang="ts">
   import BellOff from '@lucide/svelte/icons/bell-off';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Page from '$lib/components/page/Page.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Page from '#lib/components/page/Page.svelte';
 </script>
 
 <svelte:head><title>Unsubscribed · Marl</title></svelte:head>

@@ -6,14 +6,14 @@
   import X from '@lucide/svelte/icons/x';
   import Check from '@lucide/svelte/icons/check';
   import type { MergeMethod } from '@marl/contracts';
-  import { api, MarlApiError } from '$lib/api';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import SettingRow from '$lib/components/settings/SettingRow.svelte';
-  import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import SettingRow from '#lib/components/settings/SettingRow.svelte';
+  import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import type { BranchRule as Rule } from './+page';
   import type { PageData } from './$types';
 

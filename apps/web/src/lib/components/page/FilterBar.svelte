@@ -1,6 +1,6 @@
 <script lang="ts">
   import Plus from '@lucide/svelte/icons/plus';
-  import { dismissable } from '$lib/actions/dismissable';
+  import { dismissable } from '#lib/actions/dismissable.js';
   import Button from '../controls/Button.svelte';
   import Chip from '../controls/Chip.svelte';
   import SearchField from '../controls/SearchField.svelte';

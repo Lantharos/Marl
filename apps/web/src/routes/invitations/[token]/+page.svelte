@@ -1,11 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
   import CheckCircle2 from '@lucide/svelte/icons/circle-check-big';
-  import AuthShell from '$lib/components/auth/AuthShell.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import AuthShell from '#lib/components/auth/AuthShell.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
 
   let busy = $state(false);
   let organization = $state<{ slug: string; name: string } | null>(null);

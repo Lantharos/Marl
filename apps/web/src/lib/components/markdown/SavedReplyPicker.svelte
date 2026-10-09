@@ -2,10 +2,10 @@
   import { tick } from 'svelte';
   import MessageSquareText from '@lucide/svelte/icons/message-square-text';
   import Plus from '@lucide/svelte/icons/plus';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { MarlApiError } from '$lib/api';
-  import { savedReplies } from '$lib/saved-replies/saved-replies.svelte';
-  import { anchoredPopover, popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { MarlApiError } from '#lib/api.js';
+  import { savedReplies } from '#lib/saved-replies/saved-replies.svelte.js';
+  import { anchoredPopover, popoverMotion } from '#lib/ui/popover.js';
   import Button from '../controls/Button.svelte';
   import SearchField from '../controls/SearchField.svelte';
   import Spinner from '../feedback/Spinner.svelte';

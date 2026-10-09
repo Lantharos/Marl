@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import X from '@lucide/svelte/icons/x';
-  import { dismissable } from '$lib/actions/dismissable';
-  import { positionFloatingPanel } from '$lib/ui/floating';
-  import { popoverMotion } from '$lib/ui/popover';
+  import { dismissable } from '#lib/actions/dismissable.js';
+  import { positionFloatingPanel } from '#lib/ui/floating.js';
+  import { popoverMotion } from '#lib/ui/popover.js';
   import Button from '../../components/controls/Button.svelte';
   import MarkdownComposer from '../../components/markdown/MarkdownComposer.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
 
   type ReviewState = 'commented' | 'approved' | 'changes_requested';
 

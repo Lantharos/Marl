@@ -7,10 +7,10 @@
   import GitMerge from '@lucide/svelte/icons/git-merge';
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import GitPullRequestClosed from '@lucide/svelte/icons/git-pull-request-closed';
-  import LinkButton from '$lib/components/controls/LinkButton.svelte';
-  import LabelPill from '$lib/components/discussion/LabelPill.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Time from '$lib/components/page/Time.svelte';
+  import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import LabelPill from '#lib/components/discussion/LabelPill.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import { pullSignal, type PullQueueGroup } from './pull-signal';
 
   let {

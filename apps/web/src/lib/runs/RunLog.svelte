@@ -1,7 +1,7 @@
 <script lang="ts">
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Terminal from '@lucide/svelte/icons/terminal';
-  import { formatBytes } from '$lib/bytes';
+  import { formatBytes } from '#lib/bytes.js';
 
   let { text, bytes, unavailable, waiting }: { text: string; bytes: number; unavailable: boolean; waiting: boolean } =
     $props();

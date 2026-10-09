@@ -3,18 +3,18 @@
   import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Plus from '@lucide/svelte/icons/plus';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Modal from '$lib/components/overlays/Modal.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import OrganizationAvatar from '$lib/components/identity/OrganizationAvatar.svelte';
-  import Select from '$lib/components/controls/Select.svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Modal from '#lib/components/overlays/Modal.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import OrganizationAvatar from '#lib/components/identity/OrganizationAvatar.svelte';
+  import Select from '#lib/components/controls/Select.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
   import type { OrganizationSummary } from '@marl/contracts';
   import Building from '@lucide/svelte/icons/building-complex';
-  import Field from '$lib/components/controls/Field.svelte';
-  import EmptyState from '$lib/components/feedback/EmptyState.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import Page from '$lib/components/page/Page.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import Page from '#lib/components/page/Page.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -53,7 +53,7 @@
     baseRole = 'read';
     slugEdited = false;
     error = '';
-    if (page.url.searchParams.has('new')) void goto('/organizations', { replaceState: true, noScroll: true });
+    if (page.url.searchParams.has('new')) void goto('/organizations', { replace: true, reset: false });
   }
 
   async function create() {

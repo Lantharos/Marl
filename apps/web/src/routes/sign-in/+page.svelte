@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
   import KeyRound from '@lucide/svelte/icons/key-round';
-  import AuthShell from '$lib/components/auth/AuthShell.svelte';
-  import Button from '$lib/components/controls/Button.svelte';
-  import Field from '$lib/components/controls/Field.svelte';
-  import Notice from '$lib/components/feedback/Notice.svelte';
-  import { authClient } from '$lib/auth-client';
-  import { clearShellCache } from '$lib/shell-cache';
+  import AuthShell from '#lib/components/auth/AuthShell.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import Field from '#lib/components/controls/Field.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
+  import { authClient } from '#lib/auth-client.js';
+  import { clearShellCache } from '#lib/shell-cache.js';
 
   let identity = $state('');
   let password = $state('');
@@ -20,7 +20,7 @@
 
   async function finish() {
     clearShellCache(true);
-    await invalidateAll();
+    await refreshAll();
     await goto(returnTo);
   }
 

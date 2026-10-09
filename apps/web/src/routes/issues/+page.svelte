@@ -2,13 +2,13 @@
   import { goto } from '$app/navigation';
   import { onDestroy, untrack } from 'svelte';
   import type { IssueSummary } from '@marl/contracts';
-  import InfiniteScroll from '$lib/components/feedback/InfiniteScroll.svelte';
-  import Page from '$lib/components/page/Page.svelte';
-  import FilterBar from '$lib/components/page/FilterBar.svelte';
-  import PageHeader from '$lib/components/page/PageHeader.svelte';
-  import IssueList from '$lib/issues/IssueList.svelte';
-  import IssueViews from '$lib/issues/IssueViews.svelte';
-  import { api, MarlApiError } from '$lib/api';
+  import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import Page from '#lib/components/page/Page.svelte';
+  import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import IssueList from '#lib/issues/IssueList.svelte';
+  import IssueViews from '#lib/issues/IssueViews.svelte';
+  import { api, MarlApiError } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -34,7 +34,7 @@
     const params = new URLSearchParams({ view });
     if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase());
     if (value.trim()) params.set('q', value.trim());
-    void goto(`/issues${params.size ? `?${params}` : ''}`, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(`/issues${params.size ? `?${params}` : ''}`, { reset: false, replace: true });
   }
   function changeQuery(value: string) {
     clearTimeout(timer);

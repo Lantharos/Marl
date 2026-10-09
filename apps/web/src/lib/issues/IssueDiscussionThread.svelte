@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { IssueComment } from '@marl/contracts';
-  import Button from '$lib/components/controls/Button.svelte';
-  import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
-  import type { MarkdownContext } from '$lib/markdown/context';
+  import Button from '#lib/components/controls/Button.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
   import IssueDiscussionComment from './IssueDiscussionComment.svelte';
   import type { DiscussionThread } from './issue-discussion';
 

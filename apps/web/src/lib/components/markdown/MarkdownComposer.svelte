@@ -12,15 +12,15 @@
   import Film from '@lucide/svelte/icons/film';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
   import X from '@lucide/svelte/icons/x';
-  import type { IconComponent } from '$lib/ui/icon';
+  import type { IconComponent } from '#lib/ui/icon.js';
   import Button from '../controls/Button.svelte';
   import Spinner from '../feedback/Spinner.svelte';
   import MarkdownBody from './MarkdownBody.svelte';
   import SavedReplyPicker from './SavedReplyPicker.svelte';
   import { page } from '$app/state';
   import { markdownPreview } from './markdown-preview';
-  import type { MarkdownContext } from '$lib/markdown/context';
-  import { mediaAccept, mediaFileError, MediaUploadQueue } from '$lib/media/uploads.svelte';
+  import type { MarkdownContext } from '#lib/markdown/context.js';
+  import { mediaAccept, mediaFileError, MediaUploadQueue } from '#lib/media/uploads.svelte.js';
 
   let {
     value = $bindable(''),
