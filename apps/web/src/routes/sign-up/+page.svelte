@@ -56,7 +56,7 @@
 {#snippet footer()}Already have an account? <a class="font-semibold text-brand-strong hover:underline" href="/sign-in"
     >Sign in</a
   >{/snippet}
-<AuthShell title="Create your Marl account" description="Choose your profile and sign-in details." {footer}>
+<AuthShell title="Create your Marl account" {footer}>
   {#if awaitingVerification}
     <div class="grid gap-5">
       <Notice tone="success"
