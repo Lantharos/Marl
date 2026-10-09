@@ -94,7 +94,8 @@ Inbox answers one question: what changed that is relevant to me? It contains dir
 current issue and pull assignments, new activity on work the user authored or joined, and
 failed workflow runs triggered by that user. Read state and done state are personal and durable;
 newer activity moves a finished item back into the Inbox. Home previews the newest active items,
-while the full Inbox separates active, unread, and done work.
+while the full Inbox separates active, unread, and done work, loads older items as the reader
+scrolls, and can be triaged from the keyboard.
 
 Repository membership alone never subscribes someone to every event. Marl only adds an item when
 it can explain the direct relationship between the user and the work.

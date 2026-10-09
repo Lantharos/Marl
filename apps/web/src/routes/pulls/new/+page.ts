@@ -30,6 +30,14 @@ export const load = (async ({ fetch, url, parent }) => {
       linkedIssue: null as IssueDetail | null
     };
   const [owner, name] = repository.split('/');
+  const issueNumber = Number(url.searchParams.get('issue'));
+  const linkedIssue =
+    Number.isInteger(issueNumber) && issueNumber > 0
+      ? apiWith<{ issue: IssueDetail }>(fetch, `/repositories/${owner}/${name}/issues/${issueNumber}`).then(
+          (result) => result.issue,
+          () => null
+        )
+      : null;
   const options = await routeLoad(
     apiWith<{ target: { defaultBranch: string; branches: Branch[] }; sources: PullSource[] }>(
       fetch,
@@ -49,26 +57,13 @@ export const load = (async ({ fetch, url, parent }) => {
       ? requestedCompare!
       : (source?.branches.find((branch) => `${source.owner}/${source.name}` !== repository || branch.name !== base)
           ?.name ?? '');
-  let comparison: PullRequestDiff | null = null;
-  let linkedIssue: IssueDetail | null = null;
-  if (source && base && compare) {
-    try {
-      comparison = await apiWith<PullRequestDiff>(
-        fetch,
-        `/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}&sourceRepository=${encodeURIComponent(`${source.owner}/${source.name}`)}`
-      );
-    } catch {}
-  }
-  const issueNumber = Number(url.searchParams.get('issue'));
-  if (Number.isInteger(issueNumber) && issueNumber > 0) {
-    try {
-      const result = await apiWith<{ issue: IssueDetail }>(
-        fetch,
-        `/repositories/${owner}/${name}/issues/${issueNumber}`
-      );
-      linkedIssue = result.issue;
-    } catch {}
-  }
+  const comparison =
+    source && base && compare
+      ? apiWith<PullRequestDiff>(
+          fetch,
+          `/repositories/${owner}/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(compare)}&sourceRepository=${encodeURIComponent(`${source.owner}/${source.name}`)}`
+        ).catch(() => null)
+      : null;
   return {
     repositories,
     repository,
@@ -77,7 +72,7 @@ export const load = (async ({ fetch, url, parent }) => {
     targetBranches: options.target.branches,
     base,
     compare,
-    comparison,
-    linkedIssue
+    comparison: await comparison,
+    linkedIssue: await linkedIssue
   };
 }) satisfies PageLoad;

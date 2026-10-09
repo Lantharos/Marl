@@ -5,6 +5,7 @@ import { json, problem, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
 import { repositoryOverviewBody } from '../../http/request-schemas';
 import { authorizeRepository } from '../access/access';
+import { renderDocument } from './documents';
 
 type OverviewDocument = { path: string; label: string };
 
@@ -21,7 +22,9 @@ export async function getRepositoryOverview(
   env: Env,
   principal: Principal | null,
   owner: string,
-  name: string
+  name: string,
+  url: URL,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -33,7 +36,12 @@ export async function getRepositoryOverview(
     stored?.documentsJson === null || stored?.documentsJson === undefined
       ? automaticOverviewDocuments(available)
       : selectedOverviewDocuments(available, stored.documentsJson);
+  const requested = url.searchParams.get('document');
+  const active = selected.find((document) => document.path === requested) ?? selected[0];
   return json({
+    document: active
+      ? await overviewDocument(env, principal, owner, name, repository.defaultBranch, active, ctx)
+      : null,
     documents: selected,
     availableDocuments: available,
     canManage: repository.role === 'maintain' || repository.role === 'admin'
@@ -80,6 +88,19 @@ export async function updateRepositoryOverview(
   return json({
     documents: paths.map((path) => available.find((document) => document.path === path)!)
   });
+}
+
+async function overviewDocument(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  name: string,
+  revision: string,
+  document: OverviewDocument,
+  ctx: ExecutionContext
+) {
+  const rendered = await renderDocument(env, principal, owner, name, revision, document.path, ctx);
+  return { ...document, html: rendered instanceof Response ? null : rendered.html };
 }
 
 async function overviewCandidates(env: Env, repositoryId: string, defaultBranch: string): Promise<OverviewDocument[]> {

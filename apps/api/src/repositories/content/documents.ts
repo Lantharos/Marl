@@ -6,7 +6,7 @@ import { json, problem, readJson } from '../../http/http';
 import { markdownPreviewBody } from '../../http/request-schemas';
 import { readBlob } from './source';
 
-export async function renderRepositoryDocument(
+export async function renderDocument(
   env: Env,
   principal: Principal | null,
   owner: string,
@@ -14,16 +14,16 @@ export async function renderRepositoryDocument(
   revision: string,
   path: string,
   ctx: ExecutionContext
-) {
+): Promise<{ html: string; truncated: boolean } | Response> {
   const response = await readBlob(env, principal, owner, repository, revision, path, ctx);
   if (!response.ok || !response.body) return response;
   const preview = await readBlobPreview(response, response.body);
   if (preview.binary) return problem(415, 'document_not_text', 'This file cannot be shown as a document.');
   const format = /\.(?:md|markdown)$/i.test(path) ? 'markdown' : 'plain';
-  return json({
+  return {
     html: renderMarkdown(preview.content, { owner, repository, revision, path }, format, 'document'),
     truncated: preview.truncated
-  });
+  };
 }
 
 export async function previewMarkdown(request: Request) {

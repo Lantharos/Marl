@@ -56,7 +56,7 @@
       ['tree', 'blob', 'commit', 'branches', 'search'].some((segment) => path.startsWith(`${base}/${segment}`))
   );
   const tabs = $derived([
-    { key: 'overview', href: `${base}?overview=1`, label: 'Overview', icon: BookOpen, active: path === base },
+    { key: 'overview', href: base, label: 'Overview', icon: BookOpen, active: path === base },
     { key: 'code', href: `${base}/code`, label: 'Code', icon: Code2, active: codeActive },
     {
       key: 'releases',

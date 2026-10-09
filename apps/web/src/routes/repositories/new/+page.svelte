@@ -34,7 +34,7 @@
         method: 'POST',
         body: JSON.stringify({ owner, name: submittedName, description: description.trim(), visibility })
       });
-      await goto(`/${owner}/${submittedName}`);
+      await goto(`/${owner}/${submittedName}/code`);
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'Marl could not create the repository. Try again.';
     } finally {

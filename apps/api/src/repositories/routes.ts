@@ -13,7 +13,6 @@ import {
 import { listBranchRules, putBranchRule } from './branch-rules';
 import { deleteBranch } from './branches';
 import { downloadRepositoryBundle } from './content/bundle';
-import { renderRepositoryDocument } from './content/documents';
 import { listDeletedRepositories, restoreRepository } from './lifecycle';
 import { readRepositoryMedia, uploadRepositoryMedia } from './content/media';
 import {
@@ -58,8 +57,8 @@ export const repositoryRoutes = [
   route('GET', repository, 'optional', ({ env, principal }, { owner, repo }) =>
     getRepository(env, principal, owner, repo)
   ),
-  route('GET', `${repository}/overview`, 'optional', ({ env, principal }, { owner, repo }) =>
-    getRepositoryOverview(env, principal, owner, repo)
+  route('GET', `${repository}/overview`, 'optional', ({ env, principal, url, execution }, { owner, repo }) =>
+    getRepositoryOverview(env, principal, owner, repo, url, execution)
   ),
   route('PUT', `${repository}/overview`, 'user', ({ request, env, principal }, { owner, repo }) =>
     updateRepositoryOverview(request, env, principal, owner, repo)
@@ -87,9 +86,6 @@ export const repositoryRoutes = [
   ),
   route('GET', `${repository}/source/:revision/*path`, 'optional', ({ env, principal, execution }, params) =>
     sourcePreview(env, principal, params.owner, params.repo, params.revision, params.path, execution)
-  ),
-  route('GET', `${repository}/document/:revision/*path`, 'optional', ({ env, principal, execution }, params) =>
-    renderRepositoryDocument(env, principal, params.owner, params.repo, params.revision, params.path, execution)
   ),
   route('POST', `${repository}/media`, 'user', ({ request, env, principal }, { owner, repo }) =>
     uploadRepositoryMedia(request, env, principal, owner, repo)
