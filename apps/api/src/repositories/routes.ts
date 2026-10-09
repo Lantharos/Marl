@@ -65,11 +65,15 @@ export const repositoryRoutes = [
   route('GET', `${repository}/commits`, 'optional', ({ env, principal, url }, { owner, repo }) =>
     listCommits(env, principal, owner, repo, url)
   ),
-  route('GET', `${repository}/commits/:commit/patch`, 'optional', ({ env, principal, url }, { owner, repo, commit }) =>
-    readCommitPatch(env, principal, owner, repo, commit, url)
+  route(
+    'GET',
+    `${repository}/commits/:commit/patch`,
+    'optional',
+    ({ env, principal, url, execution }, { owner, repo, commit }) =>
+      readCommitPatch(env, principal, owner, repo, commit, url, execution)
   ),
-  route('GET', `${repository}/commits/:commit`, 'optional', ({ env, principal }, { owner, repo, commit }) =>
-    getCommit(env, principal, owner, repo, commit)
+  route('GET', `${repository}/commits/:commit`, 'optional', ({ env, principal, execution }, { owner, repo, commit }) =>
+    getCommit(env, principal, owner, repo, commit, execution)
   ),
   route('GET', `${repository}/tree`, 'optional', ({ env, principal, url, execution }, { owner, repo }) =>
     listTree(env, principal, owner, repo, url, execution)
@@ -128,8 +132,8 @@ export const repositoryRoutes = [
   route('GET', `${repository}/search/code`, 'optional', ({ env, principal, url }, { owner, repo }) =>
     searchRepositoryCode(env, principal, owner, repo, url)
   ),
-  route('GET', `${repository}/templates`, 'optional', ({ env, principal }, { owner, repo }) =>
-    getRepositoryTemplates(env, principal, owner, repo)
+  route('GET', `${repository}/templates`, 'optional', ({ env, principal, execution }, { owner, repo }) =>
+    getRepositoryTemplates(env, principal, owner, repo, execution)
   ),
   route('GET', `${repository}/bundle`, 'optional', ({ env, principal }, { owner, repo }) =>
     downloadRepositoryBundle(env, principal, owner, repo)

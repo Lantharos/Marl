@@ -1,7 +1,7 @@
 import type { Principal } from '../../auth/principal';
 import { safeRepositoryPath } from '../../core/domain';
 import type { Env } from '../../core/platform';
-import { requestGitGateway } from '../../git/gateway';
+import { requestGitObject } from '../../git/gateway';
 import { rawBlobHeaders } from '../../git/raw-content';
 import { problem } from '../../http/http';
 import { authorizeRepository, type RepositoryAccess } from '../access/access';
@@ -64,16 +64,7 @@ export async function blobResponse(
     return new Response(cached.body, {
       headers: rawBlobHeaders(path, repository.visibility, cached.headers.get('content-length'), immutableRevision)
     });
-  const response = await (
-    env.ENVIRONMENT === 'development'
-      ? requestGitGateway(
-          env,
-          '/_marl/blob',
-          { owner: repository.owner, repository: repository.name, objectId },
-          { attempts: 3 }
-        )
-      : requestGitGateway(env, '/_marl/object', { repositoryId: repository.id, objectId }, { attempts: 3 })
-  ).catch(() => null);
+  const response = await requestGitObject(env, repository, objectId, 3).catch(() => null);
   if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob')
     return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
   const length = response.headers.get('content-length');

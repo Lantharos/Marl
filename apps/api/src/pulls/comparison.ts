@@ -5,7 +5,8 @@ import { json, problem, readJsonValue } from '../http/http';
 import type { Env } from '../core/platform';
 import { pullRepository as repo, findPullId } from './context';
 import { allPullThreads } from './timeline';
-import { repositoryCan } from '../repositories/access/access';
+import { repositoryCan, type RepositoryAccess } from '../repositories/access/access';
+import { cachedGatewayRead } from '../git/gateway-cache';
 
 async function knownRevision(env: Env, pullId: string, commitId: string | null) {
   if (!commitId || !/^[0-9a-f]{40,64}$/.test(commitId)) return false;
@@ -20,14 +21,23 @@ async function knownRevision(env: Env, pullId: string, commitId: string | null) 
 type ComparedFile = { path: string } & Record<string, unknown>;
 type Comparison = { files: ComparedFile[] } & Record<string, unknown>;
 
-async function compare(env: Env, owner: string, name: string, base: string, head: string, direct = false) {
-  const response = await requestGitGateway(
-    env,
-    '/_marl/compare',
-    { owner, repository: name, base, head, direct },
-    { attempts: 2 }
+async function compare(
+  env: Env,
+  execution: ExecutionContext,
+  repository: RepositoryAccess,
+  base: string,
+  head: string,
+  direct = false
+) {
+  const response = await cachedGatewayRead(env, execution, ['compare', repository.id, base, head, String(direct)], () =>
+    requestGitGateway(
+      env,
+      '/_marl/compare',
+      { owner: repository.owner, repository: repository.name, base, head, direct },
+      { attempts: 2 }
+    )
   );
-  return response.ok ? readJsonValue<Comparison>(response, 16 * 1024 * 1024) : null;
+  return response?.ok ? readJsonValue<Comparison>(response, 16 * 1024 * 1024) : null;
 }
 
 export async function getPullDiff(
@@ -36,7 +46,8 @@ export async function getPullDiff(
   owner: string,
   name: string,
   number: number,
-  url: URL
+  url: URL,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repository = await repo(env, principal, owner, name);
   if (!repository || !repositoryCan(repository, principal, 'repository.read'))
@@ -51,8 +62,10 @@ export async function getPullDiff(
   if (since && !(await knownRevision(env, pull.id, since)))
     return problem(422, 'unknown_revision', 'That revision is not part of this pull.');
   const [full, incremental, timelineThreads] = await Promise.all([
-    compare(env, owner, name, pull.targetCommitId, pull.sourceCommitId),
-    since && since !== pull.sourceCommitId ? compare(env, owner, name, since, pull.sourceCommitId, true) : null,
+    compare(env, execution, repository, pull.targetCommitId, pull.sourceCommitId),
+    since && since !== pull.sourceCommitId
+      ? compare(env, execution, repository, since, pull.sourceCommitId, true)
+      : null,
     allPullThreads(env, principal, pull.id, { owner, repository: name })
   ]);
   if (!full || (since && since !== pull.sourceCommitId && !incremental))
@@ -70,7 +83,8 @@ export async function getPullPatch(
   owner: string,
   name: string,
   number: number,
-  url: URL
+  url: URL,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repository = await repo(env, principal, owner, name);
   if (!repository || !repositoryCan(repository, principal, 'repository.read'))
@@ -102,11 +116,9 @@ export async function getPullPatch(
       return problem(422, 'unknown_revision', 'That revision is not part of this pull.');
     revision.base = since;
   }
-  const response = await requestGitGateway(
-    env,
-    '/_marl/patch',
-    { owner, repository: name, base: revision.base, head: revision.head, path },
-    { attempts: 2 }
+  const { base, head } = revision;
+  const response = await cachedGatewayRead(env, execution, ['patch', repository.id, base, head, path], () =>
+    requestGitGateway(env, '/_marl/patch', { owner, repository: name, base, head, path }, { attempts: 2 })
   ).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
   return new Response(response.body, {

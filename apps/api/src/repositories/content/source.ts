@@ -3,6 +3,7 @@ import type { Principal } from '../../auth/principal';
 import { safeRepositoryPath } from '../../core/domain';
 import { pageResult, pageSize, readCursor } from '../../http/cursor';
 import { requestGitGateway } from '../../git/gateway';
+import { cachedGatewayRead } from '../../git/gateway-cache';
 import { json, problem, readJsonValue } from '../../http/http';
 import type { D1Result, Env } from '../../core/platform';
 import { authorizeRepository, authorizeRepositoryId, repositoryCan, repositoryListFilter } from '../access/access';
@@ -132,7 +133,8 @@ export async function getCommit(
   principal: Principal | null,
   owner: string,
   name: string,
-  commitId: string
+  commitId: string,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -164,13 +166,10 @@ export async function getCommit(
       authorAvatarUrl: string | null;
     }>();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
-  const response = await requestGitGateway(
-    env,
-    '/_marl/commit',
-    { owner, repository: name, commitId },
-    { attempts: 2 }
+  const response = await cachedGatewayRead(env, execution, ['commit', repo.id, commitId], () =>
+    requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 })
   );
-  if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
+  if (!response?.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   const commit = await readJsonValue<{ author?: string; authorEmail?: string }>(response, 16 * 1024 * 1024);
   if (!commit || typeof commit.author !== 'string')
     return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
@@ -189,7 +188,8 @@ export async function readCommitPatch(
   owner: string,
   name: string,
   commitId: string,
-  url: URL
+  url: URL,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -208,11 +208,8 @@ export async function readCommitPatch(
   }
   const base =
     Array.isArray(parents) && typeof parents[0] === 'string' ? parents[0] : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-  const response = await requestGitGateway(
-    env,
-    '/_marl/patch',
-    { owner, repository: name, base, head: resolved.id, path },
-    { attempts: 2 }
+  const response = await cachedGatewayRead(env, execution, ['patch', repo.id, base, resolved.id, path], () =>
+    requestGitGateway(env, '/_marl/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 })
   ).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
   return new Response(response.body, {

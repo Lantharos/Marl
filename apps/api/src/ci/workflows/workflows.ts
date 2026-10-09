@@ -4,7 +4,7 @@ import { principalHasScope, type Principal } from '../../auth/principal';
 import { auditStatement } from '../../core/audit';
 import { identifier } from '../../core/domain';
 import { pageResult, pageSize, readCursor } from '../../http/cursor';
-import { requestGitGateway } from '../../git/gateway';
+import { requestGitObject } from '../../git/gateway';
 import { json, problem, readBody } from '../../http/http';
 import type { Env } from '../../core/platform';
 import { parseRunJobs, type RunJob } from '../runs/jobs';
@@ -95,10 +95,10 @@ export async function queuePushWorkflows(
   queuePush = true
 ): Promise<{ queued: number; warnings: WorkflowWarning[] }> {
   const repository = await env.DB.prepare(
-    `SELECT organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.id=?`
+    `SELECT repositories.id,organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.id=?`
   )
     .bind(repositoryId)
-    .first<{ owner: string; name: string }>();
+    .first<{ id: string; owner: string; name: string }>();
   if (!repository) return { queued: 0, warnings: [{ path: '', error: 'Repository metadata is missing.' }] };
   const entries = await env.DB.prepare(
     `SELECT path,object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND kind='blob' AND (path LIKE '.marl/workflows/%.yml' OR path LIKE '.marl/workflows/%.yaml' OR path LIKE '.github/workflows/%.yml' OR path LIKE '.github/workflows/%.yaml') ORDER BY path LIMIT 100`
@@ -116,12 +116,7 @@ export async function queuePushWorkflows(
     const batch = await Promise.all(
       entries.results.slice(offset, offset + 8).map(async (entry) => ({
         entry,
-        object: await requestGitGateway(
-          env,
-          '/_marl/blob',
-          { owner: repository.owner, repository: repository.name, objectId: entry.objectId },
-          { attempts: 2 }
-        )
+        object: await requestGitObject(env, repository, entry.objectId, 2)
       }))
     );
     for (const { entry, object } of batch) {

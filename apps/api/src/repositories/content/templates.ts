@@ -1,9 +1,9 @@
 import type { RepositoryTemplates } from '@marl/contracts';
 import type { Principal } from '../../auth/principal';
 import type { Env } from '../../core/platform';
-import { requestGitGateway } from '../../git/gateway';
 import { json, problem, readBody } from '../../http/http';
 import { authorizeRepository } from '../access/access';
+import { blobResponse } from './blobs';
 
 const maximumTemplateBytes = 64 * 1024;
 const templatePaths = {
@@ -16,7 +16,13 @@ const templatePaths = {
   issue: ['.marl/issue_template.md', '.github/issue_template.md', 'issue_template.md', 'docs/issue_template.md']
 };
 
-export async function getRepositoryTemplates(env: Env, principal: Principal | null, owner: string, name: string) {
+export async function getRepositoryTemplates(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  name: string,
+  execution: ExecutionContext
+) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
   const candidates = [...templatePaths.pull, ...templatePaths.issue];
@@ -27,9 +33,9 @@ export async function getRepositoryTemplates(env: Env, principal: Principal | nu
     .all<{ path: string; objectId: string }>();
   const objects = new Map(entries.results.map((entry) => [entry.path, entry.objectId]));
   const read = async (paths: string[]) => {
-    const objectId = paths.map((path) => objects.get(path)).find(Boolean);
-    if (!objectId) return null;
-    const response = await requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId });
+    const path = paths.find((candidate) => objects.has(candidate));
+    if (!path) return null;
+    const response = await blobResponse(env, execution, repository, path, objects.get(path)!, false);
     const bytes = response.ok ? await readBody(response, maximumTemplateBytes) : null;
     if (!bytes) await response.body?.cancel();
     return bytes ? new TextDecoder().decode(bytes) : null;
