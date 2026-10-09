@@ -26,6 +26,19 @@ export async function renderDocument(
   };
 }
 
+export async function readDocument(
+  env: Env,
+  principal: Principal | null,
+  owner: string,
+  repository: string,
+  revision: string,
+  path: string,
+  ctx: ExecutionContext
+) {
+  const rendered = await renderDocument(env, principal, owner, repository, revision, path, ctx);
+  return rendered instanceof Response ? rendered : json(rendered);
+}
+
 export async function previewMarkdown(request: Request) {
   const body = await readJson(request, markdownPreviewBody);
   if (!body) return problem(422, 'invalid_markdown', 'Markdown previews are limited to 100,000 characters.');
