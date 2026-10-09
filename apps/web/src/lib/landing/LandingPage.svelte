@@ -9,6 +9,7 @@
   import LandingHeading from './LandingHeading.svelte';
   import LandingProse from './LandingProse.svelte';
   import LandingReview from './LandingReview.svelte';
+  import LandingRun from './LandingRun.svelte';
   import { landingWidth } from './layout.js';
 
   const description =
@@ -172,6 +173,33 @@
         Pulls, revision by revision.
       </LandingHeading>
       <LandingReview />
+    </section>
+
+    <section
+      class={['mx-auto scroll-mt-12 pt-8 pb-36 max-[900px]:pt-4 max-[900px]:pb-20', landingWidth]}
+      id="runs"
+      aria-labelledby="runs-title"
+    >
+      <div
+        class="mb-14 grid grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] items-end gap-16 max-[900px]:mb-10 max-[900px]:grid-cols-1 max-[900px]:gap-8"
+      >
+        <LandingHeading id="runs-title">Your checks run on your machines.</LandingHeading>
+        <div class="grid gap-5">
+          <LandingProse>
+            In December 2025, GitHub <a
+              href="https://www.theregister.com/2025/12/17/github_charge_dev_own_hardware/"
+              target="_blank"
+              rel="noreferrer">announced a per-minute fee</a
+            > for Actions jobs on self-hosted runners, then postponed it days later. A fee for running code on hardware you
+            already pay for.
+          </LandingProse>
+          <LandingProse>
+            On Marl, every job runs on a runner you connect, in a fresh container that’s removed afterwards. Existing
+            GitHub workflows run too, and anything Marl can’t run is flagged instead of quietly passing.
+          </LandingProse>
+        </div>
+      </div>
+      <LandingRun />
     </section>
 
     <section
