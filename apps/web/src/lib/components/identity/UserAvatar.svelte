@@ -7,7 +7,7 @@
     size = 28,
     label = ''
   }: { name: string; src?: string | null; size?: number; label?: string } = $props();
-  const [background, color] = $derived(avatarTone(name));
+  const tone = $derived(avatarTone(name));
 </script>
 
 <span
@@ -15,8 +15,8 @@
   style:width={`${size}px`}
   style:height={`${size}px`}
   style:font-size={`${Math.max(8, Math.round(size * 0.34))}px`}
-  style:background={src ? undefined : background}
-  style:color
+  style:background={src ? undefined : `var(--color-avatar-${tone})`}
+  style:color={`var(--color-on-avatar-${tone})`}
   role={label ? 'img' : undefined}
   aria-label={label || undefined}
 >
