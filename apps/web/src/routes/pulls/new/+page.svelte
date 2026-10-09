@@ -3,9 +3,8 @@
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import type { PullRequestDiff } from '@marl/contracts';
-  import ArrowRight from '@lucide/svelte/icons/arrow-right';
+  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
-  import FileDiff from '@lucide/svelte/icons/file-diff';
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import Checkbox from '#lib/components/controls/Checkbox.svelte';
   import Button from '#lib/components/controls/Button.svelte';
@@ -13,11 +12,10 @@
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
-  import DiffStat from '#lib/code/DiffStat.svelte';
-  import Spinner from '#lib/components/feedback/Spinner.svelte';
   import FormShell from '#lib/components/page/FormShell.svelte';
   import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
   import Select from '#lib/components/controls/Select.svelte';
+  import ComparisonFiles from '#lib/pulls/new/ComparisonFiles.svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import type { PageData } from './$types';
 
@@ -75,6 +73,7 @@
       description: `${source.branches.length} branches`
     }))
   );
+  const forkSources = $derived(sources.length > 1 || sourceRepository !== repository);
   const sourceBranches = $derived(
     sources.find((source) => `${source.owner}/${source.name}` === sourceRepository)?.branches ?? []
   );
@@ -222,55 +221,45 @@
           </span>
         </a>
       {/if}
-      <div class="grid gap-5 sm:grid-cols-2">
-        <Field label="Repository"
-          ><Select
-            bind:value={repository}
-            options={repositoryOptions}
-            ariaLabel="Repository"
-            onchange={loadBranches}
-          /></Field
-        >
-        <Field label="Source repository"
-          ><Select
-            bind:value={sourceRepository}
-            options={sourceOptions}
-            ariaLabel="Source repository"
-            onchange={loadSource}
-          /></Field
-        >
-      </div>
-      <div class="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        <Field label="Base branch"
-          ><Select bind:value={base} options={baseOptions} ariaLabel="Base branch" onchange={loadComparison} /></Field
-        >
-        <ArrowRight size={18} class="mb-3.5 hidden text-ink-faint sm:block" />
-        <Field label="Compare branch"
-          ><Select
-            bind:value={compare}
-            options={compareOptions}
-            ariaLabel="Compare branch"
-            onchange={loadComparison}
-          /></Field
-        >
-      </div>
-      <div
-        class="flex min-h-11 items-center gap-2.5 rounded-lg bg-surface-muted px-3.5 text-sm text-ink-muted"
-        aria-live="polite"
-      >
-        {#if comparing}<Spinner />{:else}<FileDiff size={16} />{/if}
-        <span class="flex-1"
-          >{comparing
-            ? 'Building comparison'
-            : comparison
-              ? `${comparison.files.length} changed ${comparison.files.length === 1 ? 'file' : 'files'}`
-              : 'Choose two branches with changes'}</span
-        >
-        {#if comparison}<DiffStat
-            additions={comparison.files.reduce((sum, file) => sum + file.additions, 0)}
-            deletions={comparison.files.reduce((sum, file) => sum + file.deletions, 0)}
-          />{/if}
-      </div>
+      <section class="grid gap-2 rounded-2xl bg-surface-muted/60 p-2" aria-label="Comparison">
+        <div class="grid gap-4 p-2 pb-3">
+          <Field label="Repository"
+            ><Select
+              bind:value={repository}
+              options={repositoryOptions}
+              ariaLabel="Repository"
+              onchange={loadBranches}
+            /></Field
+          >
+          <div class="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <Field label="Into"
+              ><Select
+                bind:value={base}
+                options={baseOptions}
+                ariaLabel="Base branch"
+                onchange={loadComparison}
+              /></Field
+            >
+            <ArrowLeft size={18} class="mb-3.5 hidden text-ink-faint sm:block" aria-hidden="true" />
+            <div class="grid min-w-0 gap-2">
+              <span class="text-sm font-semibold text-ink-strong">From</span>
+              {#if forkSources}<Select
+                  bind:value={sourceRepository}
+                  options={sourceOptions}
+                  ariaLabel="Source repository"
+                  onchange={loadSource}
+                />{/if}
+              <Select
+                bind:value={compare}
+                options={compareOptions}
+                ariaLabel="Compare branch"
+                onchange={loadComparison}
+              />
+            </div>
+          </div>
+        </div>
+        <ComparisonFiles {comparison} {comparing} />
+      </section>
       <Field label="Title"
         ><input class="field" bind:value={title} maxlength="240" required placeholder="What changes, and why?" /></Field
       >
@@ -280,7 +269,7 @@
           bind:value={body}
           bind:uploading
           context={markdownContext}
-          minHeight={180}
+          minHeight={360}
           placeholder="Give reviewers the context they need."
         />
       </div>
