@@ -60,9 +60,11 @@
 
   let highlighted = $state.raw<Record<string, ComparisonTokens>>({});
   const highlighting = new Map<string, AbortController>();
+  const comparedFiles = $derived(
+    [comparison?.old.revision, comparison?.new.revision, ...files.map((file: DiffFile) => file.path)].join('\n')
+  );
   $effect(() => {
-    files;
-    comparison;
+    comparedFiles;
     highlighted = {};
     expandedFiles = {};
     loadedPatches = {};
@@ -225,7 +227,8 @@
       loadingFiles[file.path] = true;
       failedFiles[file.path] = false;
       try {
-        loadedPatches[file.path] = await onLoadPatch(file);
+        const patch = await onLoadPatch(file);
+        loadedPatches[file.path] = patch;
       } catch {
         failedFiles[file.path] = true;
         return;
