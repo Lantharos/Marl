@@ -386,6 +386,7 @@ pub(crate) async fn activate_repository_state(
         if !is_object_id(pack) {
             bail!("repository generation contains an invalid pack")
         }
+        let mut linked = false;
         for kind in ["pack", "idx"] {
             let source = cache.join(format!("pack-{pack}.{kind}"));
             if !fs::try_exists(&source).await? {
@@ -394,7 +395,11 @@ pub(crate) async fn activate_repository_state(
             let destination = target.join(format!("pack-{pack}.{kind}"));
             if !fs::try_exists(&destination).await? {
                 fs::hard_link(source, destination).await?;
+                linked = true;
             }
+        }
+        if !linked {
+            continue;
         }
         let output = Command::new("git")
             .args(["verify-pack", "-v"])
@@ -402,6 +407,9 @@ pub(crate) async fn activate_repository_state(
             .output()
             .await?;
         if !output.status.success() {
+            for kind in ["pack", "idx"] {
+                fs::remove_file(target.join(format!("pack-{pack}.{kind}"))).await?;
+            }
             bail!("repository pack {pack} failed verification")
         }
     }
