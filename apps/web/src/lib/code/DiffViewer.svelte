@@ -61,7 +61,7 @@
   let highlighted = $state.raw<Record<string, ComparisonTokens>>({});
   const highlighting = new Map<string, AbortController>();
   const comparedFiles = $derived(
-    [comparison?.old.revision, comparison?.new.revision, ...files.map((file: DiffFile) => file.path)].join('\n')
+    [comparison?.old?.revision, comparison?.new.revision, ...files.map((file: DiffFile) => file.path)].join('\n')
   );
   $effect(() => {
     comparedFiles;
