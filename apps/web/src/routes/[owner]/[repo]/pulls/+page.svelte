@@ -1,40 +1,37 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import type { PullRequestSummary } from '@marl/contracts';
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
   import FilterBar from '#lib/components/page/FilterBar.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import PullQueue from '#lib/pulls/PullQueue.svelte';
-  import { api, MarlApiError } from '#lib/api.js';
+  import { CursorList } from '#lib/ui/cursor-list.svelte.js';
+  import { api } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner);
   const repo = $derived(page.params.repo);
-  let items = $state.raw<PullRequestSummary[]>(untrack(() => data.pullRequests));
-  let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
-  let query = $state(untrack(() => data.query));
-  let activeFilter = $state(untrack(() => data.state[0].toUpperCase() + data.state.slice(1)));
-  let selectedLabels = $state<string[]>(untrack(() => data.labels));
-  let loadingMore = $state(false);
-  let loadError = $state('');
+  let query = $derived(data.query);
+  let activeFilter = $derived(data.state[0].toUpperCase() + data.state.slice(1));
+  let selectedLabels = $derived([...data.labels]);
   let queryTimer: ReturnType<typeof setTimeout> | undefined;
-  let listGeneration = 0;
-
-  $effect(() => {
-    items = [...data.pullRequests];
-    nextCursor = data.nextCursor;
-    query = data.query;
-    activeFilter = data.state[0].toUpperCase() + data.state.slice(1);
-    selectedLabels = [...data.labels];
-    loadingMore = false;
-    loadError = '';
-    listGeneration += 1;
-    clearTimeout(queryTimer);
-  });
+  const pulls = new CursorList(
+    () => ({ items: data.pullRequests, nextCursor: data.nextCursor }),
+    async (cursor) => {
+      const params = new URLSearchParams({ limit: '30', state: data.state, cursor });
+      if (data.query) params.set('q', data.query);
+      for (const label of data.labels) params.append('label', label);
+      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(
+        `/repositories/${data.repository.owner}/${data.repository.name}/pulls?${params}`
+      );
+      return { items: result.pullRequests, nextCursor: result.nextCursor };
+    },
+    'More pulls could not be loaded.'
+  );
 
   function navigate(state = activeFilter, value = query, labels = selectedLabels) {
     const params = new URLSearchParams();
@@ -50,32 +47,6 @@
   function changeQuery(value: string) {
     clearTimeout(queryTimer);
     queryTimer = setTimeout(() => navigate(activeFilter, value), 220);
-  }
-
-  async function loadMore() {
-    if (!nextCursor || loadingMore) return;
-    const generation = listGeneration;
-    const cursor = nextCursor;
-    const route = { owner, repo };
-    loadingMore = true;
-    loadError = '';
-    try {
-      const params = new URLSearchParams({ limit: '30', state: activeFilter.toLowerCase(), cursor });
-      if (query.trim()) params.set('q', query.trim());
-      for (const label of selectedLabels) params.append('label', label);
-      const result = await api<{ pullRequests: PullRequestSummary[]; nextCursor: string | null }>(
-        `/repositories/${route.owner}/${route.repo}/pulls?${params}`
-      );
-      if (generation !== listGeneration || owner !== route.owner || repo !== route.repo) return;
-      const ids = new Set(items.map((pull) => pull.id));
-      items = [...items, ...result.pullRequests.filter((pull) => !ids.has(pull.id))];
-      nextCursor = result.nextCursor;
-    } catch (cause) {
-      if (generation === listGeneration)
-        loadError = cause instanceof MarlApiError ? cause.message : 'More pulls could not be loaded.';
-    } finally {
-      if (generation === listGeneration) loadingMore = false;
-    }
   }
   onDestroy(() => clearTimeout(queryTimer));
 </script>
@@ -107,11 +78,11 @@
   onLabelsChange={(labels) => navigate(activeFilter, query, labels)}
 />
 <PullQueue
-  pulls={items}
+  pulls={pulls.items}
   grouped={activeFilter === 'Open'}
   emptyTitle={query || selectedLabels.length ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
   emptyDescription={query || selectedLabels.length
     ? 'Try another search or remove a label filter.'
     : 'Changes proposed to this repository will appear here.'}
 />
-<InfiniteScroll cursor={nextCursor} loading={loadingMore} error={loadError} onload={loadMore} />
+<InfiniteScroll list={pulls} />

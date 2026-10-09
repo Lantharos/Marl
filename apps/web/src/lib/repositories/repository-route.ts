@@ -34,7 +34,7 @@ export function isPublicRepositoryPath(pathname: string) {
     /^commits\/[^/]+$/.test(section) ||
     /^commit\/[^/]+$/.test(section) ||
     /^issues(?:\/\d+)?$/.test(section) ||
-    /^pulls(?:\/(?:\d+|queue))?$/.test(section) ||
+    /^pulls(?:\/(?:\d+(?:\/(?:changes|commits|checks))?|queue))?$/.test(section) ||
     section === 'releases' ||
     /^releases\/tag\/.+$/.test(section)
   );

@@ -1,3 +1,16 @@
+<script lang="ts" module>
+  export function chipClass(active: boolean, removable = false) {
+    return [
+      'inline-flex h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm leading-none font-semibold whitespace-nowrap transition-colors active:brightness-95',
+      removable
+        ? 'border border-(--chip-color)/35 bg-(--chip-color)/12 text-ink-strong'
+        : active
+          ? 'bg-surface-muted text-ink-strong'
+          : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong'
+    ];
+  }
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
@@ -21,15 +34,7 @@
 <button
   {...attributes}
   type="button"
-  class={[
-    'inline-flex h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm leading-none font-semibold whitespace-nowrap transition-colors active:brightness-95',
-    removable
-      ? 'border border-(--chip-color)/35 bg-(--chip-color)/12 text-ink-strong'
-      : active
-        ? 'bg-surface-muted text-ink-strong'
-        : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong',
-    className
-  ]}
+  class={[chipClass(active, removable), className]}
   style:--chip-color={color}
   aria-pressed={removable ? undefined : active}
 >

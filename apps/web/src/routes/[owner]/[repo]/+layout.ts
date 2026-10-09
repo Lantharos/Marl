@@ -8,6 +8,7 @@ export const load = (async ({ fetch, params, url }) => {
   const result = await routeLoad(
     apiWith<{
       repository: RepositorySummary & {
+        defaultBranch: string;
         cloneUrl: string;
         sshCloneUrl: string | null;
         permissions: RepositoryPermissions;

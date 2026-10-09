@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { untrack } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { navigating, page } from '$app/state';
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import BookOpen from '@lucide/svelte/icons/book-open';
@@ -9,29 +9,18 @@
   import Trash2 from '@lucide/svelte/icons/trash';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '#lib/components/controls/Button.svelte';
+  import ChipLink from '#lib/components/controls/ChipLink.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
-  import Spinner from '#lib/components/feedback/Spinner.svelte';
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
-  import { repositoryDocumentPath } from '#lib/repositories/repository-path.js';
   import { isoTimestamp } from '#lib/time.js';
   import type { RepositoryDocument } from './+page';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
-  let documents = $state<RepositoryDocument[]>(untrack(() => [...data.documents]));
-  let activeDocument = $state<RepositoryDocument | null>(untrack(() => data.activeDocument));
-  let documentHtml = $state(untrack(() => data.documentHtml));
-  let documentCache = $state<Record<string, string>>(
-    untrack(() => (data.activeDocument && data.documentHtml ? { [data.activeDocument.path]: data.documentHtml } : {}))
-  );
-  let loading = $state(false);
-  let error = $state(false);
+  let { data }: PageProps = $props();
   let editorOpen = $state(false);
   let draftDocuments = $state<RepositoryDocument[]>([]);
   let saving = $state(false);
@@ -39,37 +28,24 @@
   const remainingDocuments = $derived(
     data.availableDocuments.filter((candidate) => !draftDocuments.some((document) => document.path === candidate.path))
   );
-  const canonicalOwner = $derived(data.repository.owner);
-  const canonicalRepository = $derived(data.repository.name);
-  const repositoryPath = $derived(`/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`);
+  const owner = $derived(data.repository.owner);
+  const repo = $derived(data.repository.name);
+  const repositoryPath = $derived(`/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
   const repositoryUrl = $derived(`https://marl.sh${repositoryPath}`);
   const seoDescription = $derived(
-    data.repository.description || `${canonicalOwner}/${canonicalRepository} is a public Git repository hosted on Marl.`
+    data.repository.description || `${owner}/${repo} is a public Git repository hosted on Marl.`
   );
   const repositoryUpdatedAt = $derived(isoTimestamp(data.repository.updatedAt));
+  const switching = $derived(navigating.to?.route.id === page.route.id);
 
-  async function selectDocument(document: RepositoryDocument) {
-    activeDocument = document;
-    error = false;
-    if (documentCache[document.path] !== undefined) {
-      documentHtml = documentCache[document.path];
-      return;
-    }
-    loading = true;
-    try {
-      const result = await api<{ html: string }>(repositoryDocumentPath(owner, repo, data.revision, document.path));
-      documentCache = { ...documentCache, [document.path]: result.html };
-      documentHtml = result.html;
-    } catch {
-      documentHtml = null;
-      error = true;
-    } finally {
-      loading = false;
-    }
+  function documentHref(documents: RepositoryDocument[], document: RepositoryDocument) {
+    return document.path === documents[0]?.path
+      ? `/${owner}/${repo}`
+      : `?${new URLSearchParams({ doc: document.path })}`;
   }
 
   function openEditor() {
-    draftDocuments = [...documents];
+    draftDocuments = [...data.documents];
     saveError = '';
     editorOpen = true;
   }
@@ -90,14 +66,13 @@
         method: 'PUT',
         body: JSON.stringify({ documents: draftDocuments.map((document) => document.path) })
       });
-      documents = result.documents;
+      const active = result.documents.find((document) => document.path === data.document?.path) ?? result.documents[0];
+      await goto(active ? documentHref(result.documents, active) : `/${owner}/${repo}`, {
+        invalidate: ['marl:repository-overview'],
+        replace: true,
+        reset: false
+      });
       editorOpen = false;
-      const next = documents.find((document) => document.path === activeDocument?.path) ?? documents[0] ?? null;
-      if (next) await selectDocument(next);
-      else {
-        activeDocument = null;
-        documentHtml = null;
-      }
     } catch (cause) {
       saveError = cause instanceof MarlApiError ? cause.message : 'The overview could not be updated.';
     } finally {
@@ -107,14 +82,14 @@
 </script>
 
 <Seo
-  title={`${canonicalOwner}/${canonicalRepository} · Marl`}
+  title={`${owner}/${repo} · Marl`}
   description={seoDescription}
   path={repositoryPath}
   robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
   jsonLd={{
     '@context': 'https://schema.org',
     '@type': 'SoftwareSourceCode',
-    name: `${canonicalOwner}/${canonicalRepository}`,
+    name: `${owner}/${repo}`,
     description: seoDescription,
     url: repositoryUrl,
     codeRepository: repositoryUrl,
@@ -123,19 +98,13 @@
 />
 
 <article class="min-w-0">
-  {#if documents.length || data.canManage}
+  {#if data.documents.length || data.canManage}
     <nav aria-label="Repository documents" class="mb-5 flex flex-wrap items-center gap-1">
-      {#each documents as document (document.path)}
-        <button
-          type="button"
-          aria-pressed={activeDocument?.path === document.path}
-          class={[
-            'inline-flex h-8.5 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors',
-            activeDocument?.path === document.path
-              ? 'bg-surface-muted text-ink-strong'
-              : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong'
-          ]}
-          onclick={() => void selectDocument(document)}><FileText size={14} />{document.label}</button
+      {#each data.documents as document (document.path)}
+        <ChipLink
+          active={data.document?.path === document.path}
+          href={documentHref(data.documents, document)}
+          data-sveltekit-reset={false}><FileText size={14} />{document.label}</ChipLink
         >
       {/each}
       {#if data.canManage}<Button
@@ -148,14 +117,12 @@
           onclick={openEditor}><Plus size={15} /></Button
         >{/if}
     </nav>
-    {#if activeDocument}
-      <div class={['transition-opacity', loading && 'opacity-50']} aria-busy={loading}>
-        {#if error}<Notice>This document could not be loaded.</Notice>{:else if documentHtml}<MarkdownBody
-            html={documentHtml}
+    {#if data.document}
+      <div class={['transition-opacity', switching && 'opacity-50']} aria-busy={switching}>
+        {#if data.document.html === null}<Notice>This document could not be loaded.</Notice>{:else}<MarkdownBody
+            html={data.document.html}
             variant="document"
-          />{:else if loading}<span class="flex items-center gap-2 text-sm text-ink-muted"
-            ><Spinner />Loading document</span
-          >{/if}
+          />{/if}
       </div>
     {:else}
       <div class="surface">
@@ -174,7 +141,7 @@
         title="No project overview yet"
         description="Add a README, license, contributing guide, security policy, or code of conduct to introduce this repository."
       >
-        {#if data.shellUser}<LinkButton size="small" href="/{owner}/{repo}/code">Browse the code</LinkButton>{/if}
+        <LinkButton size="small" href="/{owner}/{repo}/code">Browse the code</LinkButton>
       </EmptyState>
     </div>
   {/if}

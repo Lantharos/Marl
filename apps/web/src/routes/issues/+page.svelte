@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import type { IssueSummary } from '@marl/contracts';
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
   import Page from '#lib/components/page/Page.svelte';
@@ -8,28 +8,24 @@
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import IssueList from '#lib/issues/IssueList.svelte';
   import IssueViews from '#lib/issues/IssueViews.svelte';
-  import { api, MarlApiError } from '#lib/api.js';
+  import { CursorList } from '#lib/ui/cursor-list.svelte.js';
+  import { api } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let issues = $state.raw<IssueSummary[]>(untrack(() => data.issues));
-  let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
-  let query = $state(untrack(() => data.query));
-  let active = $state(untrack(() => data.state[0].toUpperCase() + data.state.slice(1)));
-  let loading = $state(false);
-  let loadError = $state('');
+  let query = $derived(data.query);
+  let active = $derived(data.state[0].toUpperCase() + data.state.slice(1));
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let listGeneration = 0;
-  $effect(() => {
-    issues = data.issues;
-    nextCursor = data.nextCursor;
-    query = data.query;
-    active = data.state[0].toUpperCase() + data.state.slice(1);
-    loading = false;
-    loadError = '';
-    listGeneration += 1;
-    clearTimeout(timer);
-  });
+  const issues = new CursorList(
+    () => ({ items: data.issues, nextCursor: data.nextCursor }),
+    async (cursor) => {
+      const params = new URLSearchParams({ limit: '40', state: data.state, cursor, view: data.view });
+      if (data.query) params.set('q', data.query);
+      const result = await api<{ issues: IssueSummary[]; nextCursor: string | null }>(`/issues?${params}`);
+      return { items: result.issues, nextCursor: result.nextCursor };
+    },
+    'More issues could not be loaded.'
+  );
   function navigate(state = active, value = query, view = data.view) {
     const params = new URLSearchParams({ view });
     if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase());
@@ -39,27 +35,6 @@
   function changeQuery(value: string) {
     clearTimeout(timer);
     timer = setTimeout(() => navigate(active, value), 220);
-  }
-  async function loadMore() {
-    if (!nextCursor || loading) return;
-    const generation = listGeneration;
-    const cursor = nextCursor;
-    loading = true;
-    loadError = '';
-    try {
-      const params = new URLSearchParams({ limit: '40', state: active.toLowerCase(), cursor, view: data.view });
-      if (query.trim()) params.set('q', query.trim());
-      const result = await api<{ issues: IssueSummary[]; nextCursor: string | null }>(`/issues?${params}`);
-      if (generation !== listGeneration) return;
-      const ids = new Set(issues.map((issue) => issue.id));
-      issues = [...issues, ...result.issues.filter((issue) => !ids.has(issue.id))];
-      nextCursor = result.nextCursor;
-    } catch (cause) {
-      if (generation === listGeneration)
-        loadError = cause instanceof MarlApiError ? cause.message : 'More issues could not be loaded.';
-    } finally {
-      if (generation === listGeneration) loading = false;
-    }
   }
   onDestroy(() => clearTimeout(timer));
 </script>
@@ -77,7 +52,7 @@
   />
   <IssueViews value={data.view} personal onChange={(view) => navigate(active, query, view)} />
   <IssueList
-    {issues}
+    issues={issues.items}
     showRepository
     emptyTitle={data.view !== 'all'
       ? `No ${data.view} discussions`
@@ -86,5 +61,5 @@
         : `No ${active.toLowerCase()} issues`}
     emptyDescription={query ? 'Try another search.' : 'Issues from repositories you can access will appear here.'}
   />
-  <InfiniteScroll cursor={nextCursor} {loading} error={loadError} onload={loadMore} />
+  <InfiniteScroll list={issues} />
 </Page>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import type { IssueSummary } from '@marl/contracts';
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
   import FilterBar from '#lib/components/page/FilterBar.svelte';
@@ -9,32 +9,30 @@
   import Seo from '#lib/components/page/Seo.svelte';
   import IssueList from '#lib/issues/IssueList.svelte';
   import IssueViews from '#lib/issues/IssueViews.svelte';
-  import { api, MarlApiError } from '#lib/api.js';
+  import { CursorList } from '#lib/ui/cursor-list.svelte.js';
+  import { api } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner);
   const repo = $derived(page.params.repo);
-  let issues = $state.raw<IssueSummary[]>(untrack(() => data.issues));
-  let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
-  let query = $state(untrack(() => data.query));
-  let active = $state(untrack(() => data.state[0].toUpperCase() + data.state.slice(1)));
-  let selectedLabels = $state<string[]>(untrack(() => data.labels));
-  let loading = $state(false);
-  let loadError = $state('');
+  let query = $derived(data.query);
+  let active = $derived(data.state[0].toUpperCase() + data.state.slice(1));
+  let selectedLabels = $derived([...data.labels]);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let listGeneration = 0;
-  $effect(() => {
-    issues = data.issues;
-    nextCursor = data.nextCursor;
-    query = data.query;
-    active = data.state[0].toUpperCase() + data.state.slice(1);
-    selectedLabels = [...data.labels];
-    loading = false;
-    loadError = '';
-    listGeneration += 1;
-    clearTimeout(timer);
-  });
+  const issues = new CursorList(
+    () => ({ items: data.issues, nextCursor: data.nextCursor }),
+    async (cursor) => {
+      const params = new URLSearchParams({ limit: '30', state: data.state, cursor, view: data.view });
+      if (data.query) params.set('q', data.query);
+      for (const label of data.labels) params.append('label', label);
+      const result = await api<{ issues: IssueSummary[]; nextCursor: string | null }>(
+        `/repositories/${data.repository.owner}/${data.repository.name}/issues?${params}`
+      );
+      return { items: result.issues, nextCursor: result.nextCursor };
+    },
+    'More issues could not be loaded.'
+  );
   function navigate(state = active, value = query, labels = selectedLabels, view = data.view) {
     const params = new URLSearchParams({ view });
     if (state.toLowerCase() !== 'open') params.set('state', state.toLowerCase());
@@ -48,31 +46,6 @@
   function changeQuery(value: string) {
     clearTimeout(timer);
     timer = setTimeout(() => navigate(active, value), 220);
-  }
-  async function loadMore() {
-    if (!nextCursor || loading) return;
-    const generation = listGeneration;
-    const cursor = nextCursor;
-    const route = { owner, repo };
-    loading = true;
-    loadError = '';
-    try {
-      const params = new URLSearchParams({ limit: '30', state: active.toLowerCase(), cursor, view: data.view });
-      if (query.trim()) params.set('q', query.trim());
-      for (const label of selectedLabels) params.append('label', label);
-      const result = await api<{ issues: IssueSummary[]; nextCursor: string | null }>(
-        `/repositories/${route.owner}/${route.repo}/issues?${params}`
-      );
-      if (generation !== listGeneration || owner !== route.owner || repo !== route.repo) return;
-      const ids = new Set(issues.map((issue) => issue.id));
-      issues = [...issues, ...result.issues.filter((issue) => !ids.has(issue.id))];
-      nextCursor = result.nextCursor;
-    } catch (cause) {
-      if (generation === listGeneration)
-        loadError = cause instanceof MarlApiError ? cause.message : 'More issues could not be loaded.';
-    } finally {
-      if (generation === listGeneration) loading = false;
-    }
   }
   onDestroy(() => clearTimeout(timer));
 </script>
@@ -105,7 +78,7 @@
   onChange={(view) => navigate(active, query, selectedLabels, view)}
 />
 <IssueList
-  {issues}
+  issues={issues.items}
   emptyTitle={data.view !== 'all'
     ? `No ${data.view} discussions`
     : query || selectedLabels.length
@@ -115,4 +88,4 @@
     ? 'Try another search or remove a label filter.'
     : 'New issues will appear here.'}
 />
-<InfiniteScroll cursor={nextCursor} {loading} error={loadError} onload={loadMore} />
+<InfiniteScroll list={issues} />

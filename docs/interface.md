@@ -14,7 +14,15 @@ available on hover and keyboard focus;
 on small screens the menu names the same destinations. Search remains available from
 the header and with Ctrl K. In a repository's code view, T opens Go to file and / focuses code search. While writing, Ctrl . inserts a saved reply. Pressing ? lists every
 keyboard shortcut; pull pages add shortcuts for moving through tabs, changed files, and open
-conversations.
+conversations, and the Inbox adds J and K to move between items, Enter to open one, and E to
+mark it done.
+
+What someone is looking at lives in the address. A pull's Overview, Changes, Commits, and Checks
+sections, the overview document, and the code browser's branch and path each have their own URL,
+so links, refresh, and back and forward return to the same view. The code browser keeps the branch
+picker, history, Go to file, and code search above every folder and file; choosing a branch opens
+that branch. Marking Inbox items read or done updates the list immediately and restores it if the
+change fails.
 
 Navigation reuses the current tab's shell for up to a minute instead of fetching the same
 profile and repository list on every page change. Account, repository, and organization

@@ -1,26 +1,18 @@
-import { redirect } from '@sveltejs/kit';
 import { apiWith } from '#lib/api.js';
 import { routeLoad } from '#lib/load.js';
-import { repositoryDocumentPath } from '#lib/repositories/repository-path.js';
 import type { PageLoad } from './$types';
 
 export type RepositoryDocument = { path: string; label: string };
-type Overview = { documents: RepositoryDocument[]; availableDocuments: RepositoryDocument[]; canManage: boolean };
+type Overview = {
+  document: (RepositoryDocument & { html: string | null }) | null;
+  documents: RepositoryDocument[];
+  availableDocuments: RepositoryDocument[];
+  canManage: boolean;
+};
 
-export const load = (async ({ fetch, params, parent, url }) => {
-  const parentData = await parent();
-  const revision = parentData.repository.defaultBranch ?? 'main';
-  const overview = await routeLoad(apiWith<Overview>(fetch, `/repositories/${params.owner}/${params.repo}/overview`));
-  if (parentData.shellUser && !overview.documents.length && !url.searchParams.has('overview'))
-    redirect(307, `/${params.owner}/${params.repo}/code`);
-  const activeDocument = overview.documents[0] ?? null;
-  const documentHtml = activeDocument
-    ? await apiWith<{ html: string }>(
-        fetch,
-        repositoryDocumentPath(params.owner, params.repo, revision, activeDocument.path)
-      )
-        .then((result) => result.html)
-        .catch(() => null)
-    : null;
-  return { revision, ...overview, activeDocument, documentHtml };
+export const load = (async ({ fetch, params, url, depends }) => {
+  depends('marl:repository-overview');
+  const requested = url.searchParams.get('doc');
+  const query = requested ? `?${new URLSearchParams({ document: requested })}` : '';
+  return routeLoad(apiWith<Overview>(fetch, `/repositories/${params.owner}/${params.repo}/overview${query}`));
 }) satisfies PageLoad;

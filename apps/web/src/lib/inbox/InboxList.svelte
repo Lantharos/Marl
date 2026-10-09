@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { tick } from 'svelte';
   import type { InboxItem } from '@marl/contracts';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import Check from '@lucide/svelte/icons/check';
@@ -7,60 +7,73 @@
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import Button from '#lib/components/controls/Button.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Time from '#lib/components/page/Time.svelte';
-  import { api } from '#lib/api.js';
+  import { plainKey } from '#lib/ui/keyboard.js';
+  import { inboxReason } from './inbox-item';
 
   let {
     items,
     compact = false,
     emptyTitle = 'All caught up',
     emptyDescription = 'Mentions, assignments, and updates will appear here.',
-    onChange = () => {}
+    onOpen,
+    onToggleDone
   }: {
     items: InboxItem[];
     compact?: boolean;
     emptyTitle?: string;
     emptyDescription?: string;
-    onChange?: () => void | Promise<void>;
+    onOpen: (item: InboxItem) => void;
+    onToggleDone?: (item: InboxItem) => void;
   } = $props();
+  let list = $state<HTMLElement>();
 
-  function reason(item: InboxItem) {
-    if (item.reason === 'mention') return 'mentioned you';
-    if (item.reason === 'assignment') return `assigned this ${item.kind === 'pull' ? 'pull' : 'issue'} to you`;
-    if (item.reason === 'failure') return 'run you triggered failed';
-    if (item.reason === 'authored') return `updated ${item.kind === 'pull' ? 'a pull' : 'an issue'} you opened`;
-    return `updated ${item.kind === 'pull' ? 'a pull' : 'an issue'} you joined`;
-  }
-
-  async function open(event: MouseEvent, item: InboxItem) {
+  function open(event: MouseEvent, item: InboxItem) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    if (item.unread)
-      await api(`/inbox/${item.kind}/${item.id.slice(item.id.indexOf(':') + 1)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ read: true })
-      });
-    await goto(item.href);
+    onOpen(item);
   }
 
-  async function setDone(item: InboxItem) {
-    await api(`/inbox/${item.kind}/${item.id.slice(item.id.indexOf(':') + 1)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ done: !item.done })
-    });
-    await onChange();
+  function links() {
+    return [...(list?.querySelectorAll<HTMLAnchorElement>('[data-inbox-item]') ?? [])];
+  }
+
+  function focusItem(index: number) {
+    const targets = links();
+    targets[Math.max(0, Math.min(index, targets.length - 1))]?.focus();
+  }
+
+  async function triage(event: KeyboardEvent, toggleDone: (item: InboxItem) => void) {
+    const key = plainKey(event);
+    if (key !== 'j' && key !== 'k' && key !== 'e') return;
+    const current = links().findIndex((link) => link === document.activeElement);
+    if (key === 'e') {
+      if (current < 0) return;
+      event.preventDefault();
+      toggleDone(items[current]);
+      await tick();
+      focusItem(current);
+      return;
+    }
+    event.preventDefault();
+    focusItem(current < 0 ? 0 : current + (key === 'j' ? 1 : -1));
   }
 </script>
 
-<section class="surface p-1.5" aria-label="Inbox items">
+<svelte:window onkeydown={onToggleDone && ((event) => triage(event, onToggleDone))} />
+<section bind:this={list} class="surface p-1.5" aria-label="Inbox items">
   {#each items as item (item.id)}
-    <article class="group relative flex items-center gap-1 rounded-lg transition-colors hover:bg-surface-hover">
+    <article
+      class="group relative flex items-center gap-1 rounded-lg transition-colors hover:bg-surface-hover has-[a:focus-visible]:bg-surface-hover"
+    >
       <a
         href={item.href}
+        data-inbox-item
         onclick={(event) => open(event, item)}
         class={[
-          'grid min-w-0 flex-1 grid-cols-[32px_minmax(0,1fr)] items-center gap-3 px-3',
+          'grid min-w-0 flex-1 grid-cols-[32px_minmax(0,1fr)] items-center gap-3 rounded-lg px-3',
           compact ? 'min-h-15 py-2.5' : 'min-h-17 py-3'
         ]}
       >
@@ -90,16 +103,22 @@
               ? `#${item.number}`
               : item.kind === 'pull'
                 ? `!${item.number}`
-                : `run ${item.number}`} · {reason(item)} · <Time value={item.updatedAt} class="text-ink-muted" /></span
+                : `run ${item.number}`} · {inboxReason(item)} · <Time
+              value={item.updatedAt}
+              class="text-ink-muted"
+            /></span
           >
         </span>
       </a>
-      {#if !compact}<button
-          class="mr-2 grid size-8 shrink-0 place-items-center rounded-md text-ink-muted opacity-100 transition hover:bg-surface-muted hover:text-ink-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+      {#if onToggleDone}<Button
+          icon
+          size="small"
+          variant="ghost"
+          class="mr-2 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-has-[a:focus-visible]:opacity-100"
           aria-label={item.done ? 'Move back to inbox' : 'Mark as done'}
           title={item.done ? 'Move back to inbox' : 'Mark as done'}
-          onclick={() => setDone(item)}
-          >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</button
+          onclick={() => onToggleDone(item)}
+          >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</Button
         >{/if}
     </article>
   {:else}

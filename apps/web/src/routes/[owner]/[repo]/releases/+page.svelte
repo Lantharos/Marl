@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import type { ReleaseSummary } from '@marl/contracts';
   import Download from '@lucide/svelte/icons/download';
   import Tag from '@lucide/svelte/icons/tag';
@@ -10,47 +9,24 @@
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import Time from '#lib/components/page/Time.svelte';
-  import { api, MarlApiError } from '#lib/api.js';
+  import { api } from '#lib/api.js';
   import { releasePath } from '#lib/releases/release-path.js';
+  import { CursorList } from '#lib/ui/cursor-list.svelte.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
   const owner = $derived(page.params.owner ?? '');
   const repository = $derived(page.params.repo ?? '');
-  let releases = $state.raw<ReleaseSummary[]>(untrack(() => data.releases));
-  let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
-  let loading = $state(false);
-  let error = $state('');
-  let generation = 0;
-
-  $effect(() => {
-    releases = data.releases;
-    nextCursor = data.nextCursor;
-    loading = false;
-    error = '';
-    generation++;
-  });
-
-  async function loadMore() {
-    if (!nextCursor || loading) return;
-    const version = generation;
-    loading = true;
-    error = '';
-    try {
+  const releases = new CursorList(
+    () => ({ items: data.releases, nextCursor: data.nextCursor }),
+    async (cursor) => {
       const result = await api<{ releases: ReleaseSummary[]; nextCursor: string | null }>(
-        `/repositories/${owner}/${repository}/releases?limit=30&cursor=${encodeURIComponent(nextCursor)}`
+        `/repositories/${owner}/${repository}/releases?limit=30&cursor=${encodeURIComponent(cursor)}`
       );
-      if (version !== generation) return;
-      const ids = new Set(releases.map((release) => release.id));
-      releases = [...releases, ...result.releases.filter((release) => !ids.has(release.id))];
-      nextCursor = result.nextCursor;
-    } catch (cause) {
-      if (version === generation)
-        error = cause instanceof MarlApiError ? cause.message : 'More releases could not be loaded.';
-    } finally {
-      if (version === generation) loading = false;
-    }
-  }
+      return { items: result.releases, nextCursor: result.nextCursor };
+    },
+    'More releases could not be loaded.'
+  );
 </script>
 
 <Seo
@@ -64,9 +40,9 @@
   actionHref={data.canCreate ? `/${owner}/${repository}/releases/new` : undefined}
   actionLabel={data.canCreate ? 'New release' : undefined}
 />
-{#if releases.length}
+{#if releases.items.length}
   <div class="surface p-1.5">
-    {#each releases as release (release.id)}
+    {#each releases.items as release (release.id)}
       <article
         class="relative grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-4 transition-colors hover:bg-surface-hover sm:gap-4"
       >
@@ -124,4 +100,4 @@
     </EmptyState>
   </div>
 {/if}
-<InfiniteScroll cursor={nextCursor} {loading} {error} onload={loadMore} />
+<InfiniteScroll list={releases} />

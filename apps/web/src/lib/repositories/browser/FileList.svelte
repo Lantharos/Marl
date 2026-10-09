@@ -4,21 +4,17 @@
   import File from '@lucide/svelte/icons/file';
   import Folder from '@lucide/svelte/icons/folder';
   import Time from '#lib/components/page/Time.svelte';
-  import { entryHref } from './entry-path';
+  import { entryHref, type CodeLocation } from './entry-path';
   import type { TreeEntry } from './types';
 
   let {
-    owner,
-    repository,
-    revision,
+    location,
     entries,
     parentPath,
     empty = 'This folder is empty.',
     header
   }: {
-    owner: string;
-    repository: string;
-    revision: string;
+    location: CodeLocation;
     entries: TreeEntry[];
     parentPath?: string;
     empty?: string;
@@ -36,12 +32,12 @@
     </header>{/if}
   <div class="divide-y divide-line-subtle">
     {#if parentPath !== undefined}
-      <a class={rowClass} href={entryHref(owner, repository, revision, 'tree', parentPath)}
+      <a class={rowClass} href={entryHref(location, 'tree', parentPath)}
         ><span class="flex items-center gap-2.5 text-ink-muted"><CornerLeftUp size={15} />..</span></a
       >
     {/if}
     {#each entries as entry (entry.path)}
-      <a class={[rowClass, 'group']} href={entryHref(owner, repository, revision, entry.kind, entry.path)}>
+      <a class={[rowClass, 'group']} href={entryHref(location, entry.kind, entry.path)}>
         <span class="flex min-w-0 items-center gap-2.5">
           {#if entry.kind === 'tree'}<Folder size={16} class="shrink-0 fill-current text-brand" />{:else}<File
               size={16}

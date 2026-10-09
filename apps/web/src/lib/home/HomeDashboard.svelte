@@ -6,6 +6,7 @@
   import Plus from '@lucide/svelte/icons/plus';
   import FirstSteps from './FirstSteps.svelte';
   import InboxList from '#lib/inbox/InboxList.svelte';
+  import { openInboxItem } from '#lib/inbox/inbox-item.js';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
@@ -59,7 +60,7 @@
     <div class="grid min-w-0 gap-9">
       <section>
         {@render sectionHeader('Inbox', '/inbox', 'View inbox')}
-        <InboxList items={inbox.items} compact />
+        <InboxList items={inbox.items} compact onOpen={(item) => void openInboxItem(item).catch(() => {})} />
       </section>
       <section>
         {@render sectionHeader('Recent runs', '/runs', 'All runs')}
