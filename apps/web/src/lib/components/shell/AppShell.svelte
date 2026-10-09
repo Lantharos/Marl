@@ -8,6 +8,7 @@
   import { dismissable } from '#lib/actions/dismissable.js';
   import BrandMark from '../identity/BrandMark.svelte';
   import SkipLink from '../page/SkipLink.svelte';
+  import Kbd from '../page/Kbd.svelte';
   import AccountMenu from './AccountMenu.svelte';
   import CommandPalette from './commands/CommandPalette.svelte';
   import type { ShellOrganization, ShellUser } from '#lib/shell-cache.js';
@@ -30,8 +31,6 @@
   } = $props();
   let searchOpen = $state(false);
   let mobileOpen = $state(false);
-  let createOpen = $state(false);
-  let accountOpen = $state(false);
   let shortcutsOpen = $state(false);
   let shortcut = $state('Ctrl K');
   const commands = $derived(shellCommands(user, repositories, organizations));
@@ -40,14 +39,8 @@
     if (/Mac|iPhone|iPad/.test(navigator.platform)) shortcut = '⌘K';
   });
 
-  function closeMenus() {
-    mobileOpen = false;
-    createOpen = false;
-    accountOpen = false;
-  }
-
   function openSearch() {
-    closeMenus();
+    mobileOpen = false;
     searchOpen = true;
   }
 
@@ -57,7 +50,7 @@
       if (searchOpen) searchOpen = false;
       else openSearch();
     }
-    if (event.key === 'Escape') closeMenus();
+    if (event.key === 'Escape') mobileOpen = false;
     if (plainKey(event) === '?') {
       event.preventDefault();
       shortcutsOpen = true;
@@ -83,14 +76,11 @@
     >
       <Search size={15} class="shrink-0" />
       <span class="flex-1 text-left text-sm max-sm:hidden">Find anything</span>
-      <kbd
-        class="rounded-sm border border-line bg-surface-muted px-1.5 py-px font-sans text-2xs text-ink-muted max-sm:hidden"
-        >{shortcut}</kbd
-      >
+      <Kbd class="max-sm:hidden">{shortcut}</Kbd>
     </button>
     <div class="flex items-center justify-end gap-1.5">
-      <CreateMenu bind:open={createOpen} />
-      <AccountMenu {user} bind:open={accountOpen} />
+      <CreateMenu />
+      <AccountMenu {user} />
       <button
         class="grid size-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink-strong lg:hidden"
         aria-label="Toggle navigation"

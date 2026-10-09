@@ -1,5 +1,6 @@
 <script lang="ts">
   import Modal from '../overlays/Modal.svelte';
+  import Kbd from '../page/Kbd.svelte';
 
   let { open, onClose }: { open: boolean; onClose: () => void } = $props();
   const groups = [
@@ -54,10 +55,7 @@
               <dt class="text-sm text-ink">{shortcut.label}</dt>
               <dd class="flex shrink-0 items-center gap-1">
                 {#each shortcut.keys as key, index (index)}
-                  {#if key === '–'}<span class="text-xs text-ink-faint">to</span>{:else}<kbd
-                      class="min-w-6 rounded-md border border-line bg-surface px-1.5 py-0.5 text-center font-sans text-xs text-ink-strong shadow-subtle"
-                      >{key}</kbd
-                    >{/if}
+                  {#if key === '–'}<span class="text-xs text-ink-faint">to</span>{:else}<Kbd>{key}</Kbd>{/if}
                 {/each}
               </dd>
             </div>

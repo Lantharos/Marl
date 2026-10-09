@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import Chip from '#lib/components/controls/Chip.svelte';
   import SearchField from '#lib/components/controls/SearchField.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import { plainKey } from '#lib/ui/keyboard.js';
 
   let {
@@ -63,11 +64,19 @@
     spellcheck="false"
   />
   {#if !compact}
-    <Chip active={matchCase} title="Match case" aria-label="Match case" onclick={() => toggle('case')}
-      ><span class="font-mono text-xs">Aa</span></Chip
-    >
-    <Chip active={useRegex} title="Regular expression" aria-label="Regular expression" onclick={() => toggle('regex')}
-      ><span class="font-mono text-xs">.*</span></Chip
-    >
+    <Tooltip text="Match case" as="label">
+      {#snippet children(tooltip)}
+        <Chip active={matchCase} onclick={() => toggle('case')} {...tooltip}
+          ><span class="font-mono text-xs">Aa</span></Chip
+        >
+      {/snippet}
+    </Tooltip>
+    <Tooltip text="Regular expression" as="label">
+      {#snippet children(tooltip)}
+        <Chip active={useRegex} onclick={() => toggle('regex')} {...tooltip}
+          ><span class="font-mono text-xs">.*</span></Chip
+        >
+      {/snippet}
+    </Tooltip>
   {/if}
 </form>

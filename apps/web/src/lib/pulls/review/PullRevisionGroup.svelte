@@ -3,6 +3,7 @@
   import type { PullRevisionSummary } from '@marl/contracts';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
 
@@ -40,7 +41,11 @@
         >{/if}
       <code class="font-mono text-xs text-ink-faint">{revision.commitId.slice(0, 7)}</code>
     </span>
-    <span class="truncate text-sm text-ink-strong" title={revision.title}>{revision.title}</span>
+    <Tooltip text={revision.title}>
+      {#snippet children(tooltip)}
+        <span {...tooltip} class="truncate text-sm text-ink-strong">{revision.title}</span>
+      {/snippet}
+    </Tooltip>
     <span class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-ink-muted">
       {#if revision.current}<UserProfileLink
           handle={revision.actor}

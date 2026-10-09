@@ -5,11 +5,11 @@
   import FileWarning from '@lucide/svelte/icons/file-exclamation-point';
   import Files from '@lucide/svelte/icons/files';
   import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus';
-  import { dismissable } from '#lib/actions/dismissable.js';
-  import { popoverMotion } from '#lib/ui/popover.js';
   import { parsePatchLines, type PatchLine } from '#lib/code/diff.js';
   import Button from '../components/controls/Button.svelte';
   import SearchField from '../components/controls/SearchField.svelte';
+  import Popover from '../components/overlays/Popover.svelte';
+  import Tooltip from '../components/overlays/Tooltip.svelte';
   import DiffStat from './DiffStat.svelte';
   import Tokens from '#lib/code/Tokens.svelte';
   import { comparisonTokens, type CodeComparison, type ComparisonTokens } from '#lib/code/comparison.js';
@@ -257,36 +257,30 @@
       ><DiffStat {additions} {deletions} class="ml-1 max-sm:hidden" />
     </div>
     {#if files.length > 1}
-      <div class="relative" use:dismissable={() => (navigatorOpen = false)}>
-        <Button size="small" aria-expanded={navigatorOpen} onclick={() => (navigatorOpen = !navigatorOpen)}
-          >Jump to file <ChevronDown size={14} /></Button
-        >
-        {#if navigatorOpen}
-          <div
-            class="absolute top-[calc(100%+6px)] right-0 z-80 w-[min(440px,calc(100vw-32px))] origin-top-right overflow-hidden popover p-1.5"
-            transition:popoverMotion
-          >
-            <SearchField
-              bind:value={fileQuery}
-              label="Find a changed file"
-              class="mb-1.5 border-transparent font-mono"
-            />
-            <div class="grid max-h-80 gap-0.5 overflow-auto">
-              {#each matchingFiles as file (file.path)}
-                <button
-                  type="button"
-                  class="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
-                  onclick={() => goToFile(file)}
-                  ><span class="truncate font-mono text-xs text-ink">{file.path}</span><DiffStat
-                    additions={file.additions}
-                    deletions={file.deletions}
-                  /></button
-                >
-              {:else}<p class="px-2 py-5 text-center text-sm text-ink-muted">No matching files</p>{/each}
-            </div>
-          </div>
-        {/if}
-      </div>
+      <Popover
+        bind:open={navigatorOpen}
+        class="w-[min(440px,calc(100vw-32px))] p-1.5"
+        role="dialog"
+        aria-label="Jump to file"
+      >
+        {#snippet trigger(popover)}
+          <Button size="small" {...popover}>Jump to file <ChevronDown size={14} /></Button>
+        {/snippet}
+        <SearchField bind:value={fileQuery} label="Find a changed file" class="mb-1.5 border-transparent font-mono" />
+        <div class="grid max-h-80 gap-0.5 overflow-auto">
+          {#each matchingFiles as file (file.path)}
+            <button
+              type="button"
+              class="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
+              onclick={() => goToFile(file)}
+              ><span class="truncate font-mono text-xs text-ink">{file.path}</span><DiffStat
+                additions={file.additions}
+                deletions={file.deletions}
+              /></button
+            >
+          {:else}<p class="px-2 py-5 text-center text-sm text-ink-muted">No matching files</p>{/each}
+        </div>
+      </Popover>
     {/if}
   </div>
   <div class="grid min-w-0 gap-4">
@@ -307,14 +301,18 @@
             >{file.status}</span
           >
           <DiffStat additions={file.additions} deletions={file.deletions} class="ml-auto" />
-          {#if file.reason && file.expanded}<Button
-              icon
-              size="small"
-              variant="ghost"
-              aria-label="Collapse {file.path}"
-              title="Collapse file"
-              onclick={() => (expandedFiles[file.path] = false)}><ChevronUp size={15} /></Button
-            >{/if}
+          {#if file.reason && file.expanded}<Tooltip text="Collapse file">
+              {#snippet children(tooltip)}
+                <Button
+                  icon
+                  size="small"
+                  variant="ghost"
+                  aria-label="Collapse {file.path}"
+                  onclick={() => (expandedFiles[file.path] = false)}
+                  {...tooltip}><ChevronUp size={15} /></Button
+                >
+              {/snippet}
+            </Tooltip>{/if}
         </header>
         <div class="overflow-auto border-t border-line-subtle">
           {#if !file.expanded}

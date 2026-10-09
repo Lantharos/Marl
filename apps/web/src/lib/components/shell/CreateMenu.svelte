@@ -7,11 +7,9 @@
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import Plus from '@lucide/svelte/icons/plus';
   import Server from '@lucide/svelte/icons/server';
-  import { dismissable } from '#lib/actions/dismissable.js';
-  import { popoverMotion } from '#lib/ui/popover.js';
-  import MenuLink from './MenuLink.svelte';
+  import Menu from '../overlays/menu/Menu.svelte';
+  import MenuItem from '../overlays/menu/MenuItem.svelte';
 
-  let { open = $bindable(false) }: { open?: boolean } = $props();
   const items = [
     { href: '/repositories/new', label: 'Repository', icon: BookOpen },
     { href: '/import', label: 'Import from GitHub', icon: Import },
@@ -22,19 +20,14 @@
   ];
 </script>
 
-<div class="relative" use:dismissable={() => (open = false)}>
-  <button
-    aria-label="Create"
-    aria-expanded={open}
-    onclick={() => (open = !open)}
-    class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-surface px-2 text-xs font-semibold text-ink shadow-surface transition-colors hover:bg-surface-muted hover:text-ink-strong max-sm:w-8 max-sm:px-0"
-    ><Plus size={15} /><span class="max-sm:hidden">New</span><ChevronDown size={13} class="max-sm:hidden" /></button
-  >
-  {#if open}
-    <div class="absolute top-10 right-0 z-80 w-52 origin-top-right popover p-1.5" transition:popoverMotion>
-      {#each items as item (item.href)}<MenuLink href={item.href} icon={item.icon} onclick={() => (open = false)}
-          >{item.label}</MenuLink
-        >{/each}
-    </div>
-  {/if}
-</div>
+<Menu label="Create" class="w-52">
+  {#snippet trigger(menu)}
+    <button
+      {...menu}
+      aria-label="Create"
+      class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-surface px-2 text-xs font-semibold text-ink shadow-surface transition-colors hover:bg-surface-muted hover:text-ink-strong max-sm:w-8 max-sm:px-0"
+      ><Plus size={15} /><span class="max-sm:hidden">New</span><ChevronDown size={13} class="max-sm:hidden" /></button
+    >
+  {/snippet}
+  {#each items as item (item.href)}<MenuItem href={item.href} icon={item.icon}>{item.label}</MenuItem>{/each}
+</Menu>

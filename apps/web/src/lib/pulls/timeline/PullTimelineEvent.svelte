@@ -2,6 +2,7 @@
   import type { PullRequestEvent } from '@marl/contracts';
   import Time from '../../components/page/Time.svelte';
   import UserProfileLink from '../../components/identity/UserProfileLink.svelte';
+  import Tooltip from '../../components/overlays/Tooltip.svelte';
 
   let { event, repository }: { event: PullRequestEvent; repository: { owner: string; name: string } } = $props();
   const commits = $derived.by(() => {
@@ -86,11 +87,16 @@
     </p>
     {#if commits.length}
       <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
-        {#each commits.slice(0, 3) as commit (commit.id)}<a
-            class="font-mono text-ink-muted hover:text-brand"
-            href="/{repository.owner}/{repository.name}/commit/{encodeURIComponent(commit.id)}"
-            title={commit.title}>{commit.id.slice(0, 7)}</a
-          >{/each}{#if commits.length > 3}<span class="text-ink-faint">+{commits.length - 3} more</span>{/if}
+        {#each commits.slice(0, 3) as commit (commit.id)}<Tooltip text={commit.title}>
+            {#snippet children(tooltip)}
+              <a
+                {...tooltip}
+                class="font-mono text-ink-muted hover:text-brand"
+                href="/{repository.owner}/{repository.name}/commit/{encodeURIComponent(commit.id)}"
+                >{commit.id.slice(0, 7)}</a
+              >
+            {/snippet}
+          </Tooltip>{/each}{#if commits.length > 3}<span class="text-ink-faint">+{commits.length - 3} more</span>{/if}
       </div>
     {/if}
   </div>

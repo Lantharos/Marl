@@ -3,10 +3,10 @@
   import Lock from '@lucide/svelte/icons/lock';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Unlock from '@lucide/svelte/icons/lock-open';
-  import { dismissable } from '#lib/actions/dismissable.js';
   import Button from '../controls/Button.svelte';
   import UserProfileLink from '../identity/UserProfileLink.svelte';
   import MetadataPicker from '../overlays/MetadataPicker.svelte';
+  import type { PopoverTrigger } from '../overlays/Popover.svelte';
   import LabelPill from './LabelPill.svelte';
 
   type MetadataUpdate = { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean };
@@ -29,8 +29,6 @@
     onCreateLabel: (name: string) => Promise<void>;
   } = $props();
 
-  let open = $state<'assignees' | 'labels' | null>(null);
-  let anchor = $state<HTMLElement>();
   let query = $state('');
   let creating = $state(false);
 
@@ -62,19 +60,6 @@
       }))
   );
 
-  function openPicker(picker: 'assignees' | 'labels', event: MouseEvent) {
-    anchor = event.currentTarget as HTMLElement;
-    query = '';
-    open = open === picker ? null : picker;
-  }
-
-  function closeOnEscape(event: KeyboardEvent) {
-    if (event.key !== 'Escape' || !open) return;
-    event.stopPropagation();
-    open = null;
-    anchor?.focus();
-  }
-
   function toggled(ids: string[], id: string) {
     return ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id];
   }
@@ -91,25 +76,40 @@
   }
 </script>
 
-<svelte:window onkeydown={closeOnEscape} />
-
-{#snippet heading(title: string, picker: 'assignees' | 'labels')}
-  <div class="flex h-7 items-center justify-between">
-    <h3 class="text-xs font-semibold text-ink-muted">{title}</h3>
-    {#if item.canManage}<Button
-        icon
-        size="small"
-        variant="ghost"
-        aria-label={`Edit ${title.toLowerCase()}`}
-        aria-expanded={open === picker}
-        onclick={(event) => openPicker(picker, event)}><Pencil size={13} /></Button
-      >{/if}
-  </div>
+{#snippet editButton(title: string, popover: PopoverTrigger)}
+  <Button
+    icon
+    size="small"
+    variant="ghost"
+    aria-label={`Edit ${title.toLowerCase()}`}
+    onclick={() => (query = '')}
+    {...popover}><Pencil size={13} /></Button
+  >
 {/snippet}
 
 <section class="grid gap-6">
-  <div use:dismissable={() => open === 'assignees' && (open = null)}>
-    {@render heading('Assignees', 'assignees')}
+  <div>
+    <div class="flex h-7 items-center justify-between">
+      <h3 class="text-xs font-semibold text-ink-muted">Assignees</h3>
+      {#if item.canManage}
+        <MetadataPicker
+          bind:query
+          placeholder="Find a person"
+          options={assigneeOptions}
+          {busy}
+          empty="No matching people"
+          onToggle={(id) =>
+            onUpdate({
+              assigneeIds: toggled(
+                item.assignees.map((person) => person.id),
+                id
+              )
+            })}
+        >
+          {#snippet trigger(popover)}{@render editButton('Assignees', popover)}{/snippet}
+        </MetadataPicker>
+      {/if}
+    </div>
     <div class="mt-2 grid gap-2">
       {#each item.assignees as person (person.id)}<UserProfileLink
           handle={person.handle}
@@ -118,50 +118,36 @@
           size={24}
         />{:else}<span class="text-sm text-ink-faint">No one assigned</span>{/each}
     </div>
-    {#if open === 'assignees'}
-      <MetadataPicker
-        {anchor}
-        bind:query
-        placeholder="Find a person"
-        options={assigneeOptions}
-        {busy}
-        empty="No matching people"
-        onToggle={(id) =>
-          onUpdate({
-            assigneeIds: toggled(
-              item.assignees.map((person) => person.id),
-              id
-            )
-          })}
-      />
-    {/if}
   </div>
 
-  <div use:dismissable={() => open === 'labels' && (open = null)}>
-    {@render heading('Labels', 'labels')}
+  <div>
+    <div class="flex h-7 items-center justify-between">
+      <h3 class="text-xs font-semibold text-ink-muted">Labels</h3>
+      {#if item.canManage}
+        <MetadataPicker
+          bind:query
+          placeholder="Find or create a label"
+          options={labelOptions}
+          busy={busy || creating}
+          empty="No matching labels"
+          create={canCreate ? { label: labelName, busy: creating, onCreate: createLabel } : undefined}
+          onToggle={(id) =>
+            onUpdate({
+              labelIds: toggled(
+                item.labels.map((label) => label.id),
+                id
+              )
+            })}
+        >
+          {#snippet trigger(popover)}{@render editButton('Labels', popover)}{/snippet}
+        </MetadataPicker>
+      {/if}
+    </div>
     <div class="mt-2 flex flex-wrap gap-1.5">
       {#each item.labels as label (label.id)}<LabelPill name={label.name} color={label.color} />{:else}<span
           class="text-sm text-ink-faint">No labels</span
         >{/each}
     </div>
-    {#if open === 'labels'}
-      <MetadataPicker
-        {anchor}
-        bind:query
-        placeholder="Find or create a label"
-        options={labelOptions}
-        busy={busy || creating}
-        empty="No matching labels"
-        create={canCreate ? { label: labelName, busy: creating, onCreate: createLabel } : undefined}
-        onToggle={(id) =>
-          onUpdate({
-            labelIds: toggled(
-              item.labels.map((label) => label.id),
-              id
-            )
-          })}
-      />
-    {/if}
   </div>
 
   <div class="flex min-h-9 items-center justify-between gap-3 text-sm text-ink-muted">

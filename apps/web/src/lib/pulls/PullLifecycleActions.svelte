@@ -4,9 +4,9 @@
   import GitMerge from '@lucide/svelte/icons/git-merge';
   import ListOrdered from '@lucide/svelte/icons/list-ordered';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import { dismissable } from '#lib/actions/dismissable.js';
   import Button from '#lib/components/controls/Button.svelte';
-  import { popoverMotion } from '#lib/ui/popover.js';
+  import Menu from '#lib/components/overlays/menu/Menu.svelte';
+  import MenuItem from '#lib/components/overlays/menu/MenuItem.svelte';
 
   export type PullLifecycleAction = 'merge' | 'enqueue' | 'dequeue' | 'close' | 'reopen' | 'ready';
   let {
@@ -26,12 +26,16 @@
     onAction: (action: PullLifecycleAction) => Promise<void>;
     onApproveChecks: () => Promise<void>;
   } = $props();
-  let choosingMethod = $state(false);
   let requirementsOpen = $state(false);
   let confirmingMerge = $state(false);
   const selectedMethod = $derived(
     pull.allowedMergeMethods.includes(mergeMethod) ? mergeMethod : pull.allowedMergeMethods[0]
   );
+  const methodLabels: Record<MergeMethod, string> = {
+    merge: 'Merge commit',
+    squash: 'Squash and merge',
+    rebase: 'Rebase and merge'
+  };
   const queued = $derived(pull.mergeQueue.entry);
   const mergeLabel = $derived(
     pull.mergeQueue.enabled
@@ -79,7 +83,7 @@
         onclick={() => onAction('dequeue')}>Remove from queue</Button
       >{/if}
   {:else if pull.canMerge && pull.mergeRequirements.ready && !conflicted && selectedMethod}
-    <div class="relative flex gap-1" use:dismissable={() => (choosingMethod = false)}>
+    <div class="flex gap-1">
       <Button
         variant="primary"
         size="small"
@@ -92,37 +96,17 @@
           }
         }}><GitMerge size={15} />{mergeLabel}</Button
       >
-      {#if pull.allowedMergeMethods.length > 1}<Button
-          icon
-          size="small"
-          aria-label="Choose merge method"
-          aria-expanded={choosingMethod}
-          onclick={() => (choosingMethod = !choosingMethod)}><ChevronDown size={15} /></Button
-        >{/if}
-      {#if choosingMethod}
-        <div
-          class="absolute top-[calc(100%+6px)] left-0 z-50 grid min-w-48 origin-top-left gap-0.5 popover p-1.5"
-          transition:popoverMotion
-        >
+      {#if pull.allowedMergeMethods.length > 1}
+        <Menu label="Merge method" class="min-w-48">
+          {#snippet trigger(menu)}
+            <Button icon size="small" aria-label="Choose merge method" {...menu}><ChevronDown size={15} /></Button>
+          {/snippet}
           {#each pull.allowedMergeMethods as method (method)}
-            <button
-              type="button"
-              class={[
-                'flex h-9 items-center rounded-lg px-2.5 text-left text-sm transition-colors hover:bg-surface-hover',
-                method === selectedMethod ? 'font-semibold text-ink-strong' : 'text-ink'
-              ]}
-              onclick={() => {
-                mergeMethod = method;
-                choosingMethod = false;
-              }}
-              >{method === 'squash'
-                ? 'Squash and merge'
-                : method === 'rebase'
-                  ? 'Rebase and merge'
-                  : 'Merge commit'}</button
+            <MenuItem checked={method === selectedMethod} onselect={() => (mergeMethod = method)}
+              >{methodLabels[method]}</MenuItem
             >
           {/each}
-        </div>
+        </Menu>
       {/if}
     </div>
   {/if}

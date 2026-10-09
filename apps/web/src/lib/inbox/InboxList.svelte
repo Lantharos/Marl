@@ -11,6 +11,7 @@
   import Button from '#lib/components/controls/Button.svelte';
   import List from '#lib/components/list/List.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import { plainKey } from '#lib/ui/keyboard.js';
   import { inboxReason } from './inbox-item';
@@ -108,16 +109,19 @@
           >
         </span>
       </a>
-      {#if onToggleDone}<Button
-          icon
-          size="small"
-          variant="ghost"
-          class="mr-2 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-has-[a:focus-visible]:opacity-100"
-          aria-label={item.done ? 'Move back to inbox' : 'Mark as done'}
-          title={item.done ? 'Move back to inbox' : 'Mark as done'}
-          onclick={() => onToggleDone(item)}
-          >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</Button
-        >{/if}
+      {#if onToggleDone}<Tooltip text={item.done ? 'Move back to inbox' : 'Mark as done'} as="label">
+          {#snippet children(tooltip)}
+            <Button
+              {...tooltip}
+              icon
+              size="small"
+              variant="ghost"
+              class="mr-2 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-has-[a:focus-visible]:opacity-100"
+              onclick={() => onToggleDone(item)}
+              >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</Button
+            >
+          {/snippet}
+        </Tooltip>{/if}
     </article>
   {:else}
     <EmptyState compact icon={Check} title={emptyTitle} description={emptyDescription} />

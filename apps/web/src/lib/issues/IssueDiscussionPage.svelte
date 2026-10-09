@@ -9,8 +9,8 @@
   import BellOff from '@lucide/svelte/icons/bell-off';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import Pencil from '@lucide/svelte/icons/pencil';
-  import X from '@lucide/svelte/icons/x';
   import Button from '#lib/components/controls/Button.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
   import Field from '#lib/components/controls/Field.svelte';
   import ReferenceTimelineEvent from '#lib/components/discussion/ReferenceTimelineEvent.svelte';
   import WorkItemMetadata from '#lib/components/discussion/WorkItemMetadata.svelte';
@@ -176,15 +176,7 @@
 </header>
 
 {#if pageState.error}
-  <div
-    class="mb-4 flex items-center gap-2 rounded-lg bg-danger-soft py-1.5 pr-1.5 pl-3 text-sm text-danger"
-    role="alert"
-  >
-    <span class="flex-1">{pageState.error}</span>
-    <Button icon size="small" variant="ghost" aria-label="Dismiss error" onclick={() => (pageState.error = '')}
-      ><X size={14} /></Button
-    >
-  </div>
+  <Notice class="mb-4" dismissLabel="Dismiss error" ondismiss={() => (pageState.error = '')}>{pageState.error}</Notice>
 {/if}
 
 <div

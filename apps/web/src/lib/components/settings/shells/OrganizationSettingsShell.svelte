@@ -34,7 +34,8 @@
     { href: `${base}/agents`, label: 'Agents', icon: Bot, active: active === 'agents' },
     ...(showSecrets
       ? [{ href: `${base}/secrets`, label: 'CI secrets', icon: KeyRound, active: active === 'secrets' }]
-      : [])
+      : []),
+    { href: `${base}/webhooks`, label: 'Webhooks', icon: Webhook, active: active === 'webhooks' }
   ]);
 </script>
 

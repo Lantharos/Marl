@@ -14,6 +14,7 @@
     disabled?: boolean;
     onchange?: (checked: boolean) => void;
   } = $props();
+  const id = $props.id();
 
   function toggle() {
     checked = !checked;
@@ -25,21 +26,22 @@
   type="button"
   role="checkbox"
   aria-checked={checked}
-  aria-label={label}
+  aria-labelledby="{id}-label"
+  aria-describedby={description ? `${id}-description` : undefined}
   {disabled}
   onclick={toggle}
   class="flex min-h-10 w-full items-start gap-3 rounded-lg p-2.5 text-left transition-colors hover:not-disabled:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
 >
   <span
     class={[
-      'mt-px grid size-4.5 shrink-0 place-items-center rounded-[5px] border transition-colors',
+      'mt-px grid size-4.5 shrink-0 place-items-center rounded-sm border transition-colors',
       checked ? 'border-brand bg-brand text-on-brand' : 'border-line-strong bg-surface'
     ]}
   >
     {#if checked}<Check size={13} strokeWidth={2.8} />{/if}
   </span>
   <span class="min-w-0">
-    <span class="block text-sm font-semibold text-ink-strong">{label}</span>
-    {#if description}<span class="mt-0.5 block text-xs text-ink-muted">{description}</span>{/if}
+    <span id="{id}-label" class="block text-sm font-semibold text-ink-strong">{label}</span>
+    {#if description}<span id="{id}-description" class="mt-0.5 block text-xs text-ink-muted">{description}</span>{/if}
   </span>
 </button>

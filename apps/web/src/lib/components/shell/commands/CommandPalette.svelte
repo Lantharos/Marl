@@ -5,6 +5,7 @@
   import Search from '@lucide/svelte/icons/search';
   import { api } from '#lib/api.js';
   import { popoverMotion } from '#lib/ui/popover.js';
+  import Kbd from '../../page/Kbd.svelte';
   import Spinner from '../../feedback/Spinner.svelte';
   import { commandIcons } from './command-icons';
   import { matchCommands, type Command } from './commands';
@@ -133,7 +134,7 @@
         class="h-full min-w-0 flex-1 bg-transparent text-base text-ink-strong outline-none placeholder:text-ink-faint"
       />
       {#if loading}<Spinner class="text-ink-faint" />{/if}
-      <kbd class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-sans text-2xs text-ink-muted">Esc</kbd>
+      <Kbd>Esc</Kbd>
     </header>
     <div
       id="command-results"

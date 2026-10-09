@@ -6,6 +6,7 @@
   import CircleX from '@lucide/svelte/icons/circle-x';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import Tooltip, { type TooltipTrigger } from '#lib/components/overlays/Tooltip.svelte';
 
   let {
     state,
@@ -15,23 +16,32 @@
   }: { state: RunState; awaitingApproval?: boolean; label?: string; size?: number } = $props();
 </script>
 
-<span
-  class={[
-    'inline-grid shrink-0 place-items-center',
-    awaitingApproval && 'text-warning',
-    !awaitingApproval && state === 'success' && 'text-success',
-    !awaitingApproval && state === 'failure' && 'text-danger',
-    !awaitingApproval && state === 'running' && 'text-brand',
-    !awaitingApproval && (state === 'queued' || state === 'canceled') && 'text-ink-faint'
-  ]}
-  role="img"
-  aria-label={label ?? (awaitingApproval ? 'Awaiting approval' : state)}
-  title={label}
->
-  {#if awaitingApproval}<ShieldCheck {size} />
-  {:else if state === 'success'}<CircleCheck {size} />
-  {:else if state === 'failure'}<CircleX {size} />
-  {:else if state === 'running'}<LoaderCircle {size} class="animate-spin [animation-duration:1.6s]" />
-  {:else if state === 'canceled'}<CircleSlash {size} />
-  {:else}<CircleDashed {size} />{/if}
-</span>
+{#snippet icon(attributes: TooltipTrigger | { 'aria-label': string })}
+  <span
+    {...attributes}
+    class={[
+      'inline-grid shrink-0 place-items-center',
+      awaitingApproval && 'text-warning',
+      !awaitingApproval && state === 'success' && 'text-success',
+      !awaitingApproval && state === 'failure' && 'text-danger',
+      !awaitingApproval && state === 'running' && 'text-brand',
+      !awaitingApproval && (state === 'queued' || state === 'canceled') && 'text-ink-faint'
+    ]}
+    role="img"
+  >
+    {#if awaitingApproval}<ShieldCheck {size} />
+    {:else if state === 'success'}<CircleCheck {size} />
+    {:else if state === 'failure'}<CircleX {size} />
+    {:else if state === 'running'}<LoaderCircle {size} class="animate-spin [animation-duration:1.6s]" />
+    {:else if state === 'canceled'}<CircleSlash {size} />
+    {:else}<CircleDashed {size} />{/if}
+  </span>
+{/snippet}
+
+{#if label}
+  <Tooltip text={label} as="label">
+    {#snippet children(tooltip)}{@render icon(tooltip)}{/snippet}
+  </Tooltip>
+{:else}
+  {@render icon({ 'aria-label': awaitingApproval ? 'Awaiting approval' : state })}
+{/if}

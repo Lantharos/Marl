@@ -7,6 +7,7 @@
   import Home from '@lucide/svelte/icons/house';
   import Inbox from '@lucide/svelte/icons/inbox';
   import Server from '@lucide/svelte/icons/server';
+  import Tooltip from '../overlays/Tooltip.svelte';
 
   let { open, onNavigate }: { open: boolean; onNavigate: () => void } = $props();
   const destinations = [
@@ -30,24 +31,26 @@
 >
   {#each destinations as destination (destination.href)}
     {@const current = active(destination.href)}
-    <a
-      href={destination.href}
-      aria-current={current ? 'page' : undefined}
-      onclick={onNavigate}
-      class={[
-        'group relative flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors lg:grid lg:size-9 lg:place-items-center lg:p-0',
-        current
-          ? 'bg-surface-muted text-ink-strong lg:bg-transparent'
-          : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong'
-      ]}
-    >
-      <destination.icon size={18} />
-      <span class="lg:sr-only">{destination.label}</span>
-      <span
-        class="pointer-events-none absolute top-11 left-1/2 z-90 hidden -translate-x-1/2 -translate-y-0.5 rounded-md bg-surface-raised px-2 py-1 text-xs whitespace-nowrap text-ink opacity-0 shadow-popover transition-[opacity,translate] duration-100 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 lg:block"
-        aria-hidden="true">{destination.label}</span
-      >
-      {#if current}<span class="absolute inset-x-2 -bottom-2 hidden h-0.5 rounded-full bg-brand lg:block"></span>{/if}
-    </a>
+    <Tooltip text={destination.label} placement="bottom" as="label" class="max-lg:hidden">
+      {#snippet children(tooltip)}
+        <a
+          {...tooltip}
+          href={destination.href}
+          aria-current={current ? 'page' : undefined}
+          onclick={onNavigate}
+          class={[
+            'relative flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors lg:grid lg:size-9 lg:place-items-center lg:p-0',
+            current
+              ? 'bg-surface-muted text-ink-strong lg:bg-transparent'
+              : 'text-ink-muted hover:bg-surface-hover hover:text-ink-strong'
+          ]}
+        >
+          <destination.icon size={18} />
+          <span class="lg:hidden">{destination.label}</span>
+          {#if current}<span class="absolute inset-x-2 -bottom-2 hidden h-0.5 rounded-full bg-brand lg:block"
+            ></span>{/if}
+        </a>
+      {/snippet}
+    </Tooltip>
   {/each}
 </nav>

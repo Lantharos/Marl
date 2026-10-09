@@ -3,6 +3,7 @@
   import type { LinkedWorkItem } from '@marl/contracts';
   import WorkItemStateIcon from './WorkItemStateIcon.svelte';
   import WorkItemReference from './WorkItemReference.svelte';
+  import Tooltip from '../overlays/Tooltip.svelte';
 
   let {
     items,
@@ -28,23 +29,27 @@
     {#if items.length}
       <div class="mt-2 grid gap-0.5 rounded-lg bg-surface-muted p-1">
         {#each items as item (`${item.kind}:${item.id}`)}
-          <a
-            href={href(item)}
-            title={item.title}
-            class="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2 rounded-md px-2 py-2.5 transition-colors hover:bg-surface-hover"
-          >
-            <WorkItemStateIcon kind={item.kind} state={item.state} size={15} />
-            <span class="min-w-0">
-              <strong class="line-clamp-2 text-sm leading-snug font-semibold text-ink-strong">{item.title}</strong>
-              <span class="mt-1 block truncate text-xs text-ink-muted"
-                ><WorkItemReference
-                  kind={item.kind}
-                  number={item.number}
-                  repository={sameRepository(item) ? undefined : `${item.repository.owner}/${item.repository.name}`}
-                />{#if item.closes}<span class="ml-2 text-ink">Closes on merge</span>{/if}</span
+          <Tooltip text={item.title}>
+            {#snippet children(tooltip)}
+              <a
+                {...tooltip}
+                href={href(item)}
+                class="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2 rounded-md px-2 py-2.5 transition-colors hover:bg-surface-hover"
               >
-            </span>
-          </a>
+                <WorkItemStateIcon kind={item.kind} state={item.state} size={15} />
+                <span class="min-w-0">
+                  <strong class="line-clamp-2 text-sm leading-snug font-semibold text-ink-strong">{item.title}</strong>
+                  <span class="mt-1 block truncate text-xs text-ink-muted"
+                    ><WorkItemReference
+                      kind={item.kind}
+                      number={item.number}
+                      repository={sameRepository(item) ? undefined : `${item.repository.owner}/${item.repository.name}`}
+                    />{#if item.closes}<span class="ml-2 text-ink">Closes on merge</span>{/if}</span
+                  >
+                </span>
+              </a>
+            {/snippet}
+          </Tooltip>
         {/each}
       </div>
     {/if}

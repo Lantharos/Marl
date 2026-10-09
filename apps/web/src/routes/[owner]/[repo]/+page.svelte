@@ -15,6 +15,7 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import { isoTimestamp } from '#lib/time.js';
   import type { RepositoryDocument } from './+page';
@@ -107,15 +108,13 @@
           data-sveltekit-reset={false}><FileText size={14} />{document.label}</ChipLink
         >
       {/each}
-      {#if data.canManage}<Button
-          icon
-          size="small"
-          variant="ghost"
-          class="rounded-full"
-          aria-label="Manage showcased files"
-          title="Manage showcased files"
-          onclick={openEditor}><Plus size={15} /></Button
-        >{/if}
+      {#if data.canManage}<Tooltip text="Manage showcased files" as="label">
+          {#snippet children(tooltip)}
+            <Button icon size="small" variant="ghost" class="rounded-full" onclick={openEditor} {...tooltip}
+              ><Plus size={15} /></Button
+            >
+          {/snippet}
+        </Tooltip>{/if}
     </nav>
     {#if data.document}
       <div class={['transition-opacity', switching && 'opacity-50']} aria-busy={switching}>

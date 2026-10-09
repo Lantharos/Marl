@@ -13,6 +13,7 @@
   import DiscussionEntry from '../../components/discussion/DiscussionEntry.svelte';
   import MarkdownBody from '../../components/markdown/MarkdownBody.svelte';
   import MarkdownComposer from '../../components/markdown/MarkdownComposer.svelte';
+  import Tooltip from '../../components/overlays/Tooltip.svelte';
 
   let {
     thread,
@@ -120,9 +121,13 @@
         aria-label={threadState.resolvedOpen ? 'Collapse resolved conversation' : 'Expand resolved conversation'}
         onclick={() => (threadState.resolvedOpen = !threadState.resolvedOpen)}><ChevronRight size={15} /></Button
       >{/if}
-    <strong class="min-w-0 truncate font-mono text-xs font-semibold text-ink-strong" title={thread.path}
-      >{thread.path}</strong
-    >
+    <Tooltip text={thread.path}>
+      {#snippet children(tooltip)}
+        <strong {...tooltip} class="min-w-0 truncate font-mono text-xs font-semibold text-ink-strong"
+          >{thread.path}</strong
+        >
+      {/snippet}
+    </Tooltip>
     <span class="text-xs whitespace-nowrap text-ink-muted">{rangeLabel}</span>
     <div class="ml-auto flex items-center gap-1.5">
       {#if thread.outdated}<span class="text-xs text-ink-muted">Outdated</span>
@@ -218,15 +223,20 @@
                 >
               {/if}
             {/if}
-            {#if viewerId && !comment.deleted && comment.authorId !== viewerId}<Button
-                variant="ghost"
-                size="small"
-                icon
-                aria-label="Report comment"
-                title="Report comment"
-                onclick={() => reporting.open({ type: 'review_comment', id: comment.id, label: 'comment' })}
-                ><Flag size={14} /></Button
-              >{/if}
+            {#if viewerId && !comment.deleted && comment.authorId !== viewerId}<Tooltip
+                text="Report comment"
+                as="label"
+              >
+                {#snippet children(tooltip)}
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    icon
+                    onclick={() => reporting.open({ type: 'review_comment', id: comment.id, label: 'comment' })}
+                    {...tooltip}><Flag size={14} /></Button
+                  >
+                {/snippet}
+              </Tooltip>{/if}
           {/snippet}
           {#snippet children()}
             {#if comment.deleted}<p class="text-sm text-ink-muted italic">Comment deleted</p>

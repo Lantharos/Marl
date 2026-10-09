@@ -1,11 +1,11 @@
 import type { Attachment } from 'svelte/attachments';
 import { cubicOut } from 'svelte/easing';
 import type { TransitionConfig } from 'svelte/transition';
-import { positionFloatingPanel } from './floating';
 
-export function popoverMotion(node: Element, { upward = false, duration = 150 } = {}): TransitionConfig {
+export type Placement = 'top' | 'bottom' | 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
+
+export function popoverMotion(_node: Element, { upward = false, duration = 150 } = {}): TransitionConfig {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  node.setAttribute('data-popover-motion', '');
   return {
     duration: reduced ? 0 : duration,
     easing: cubicOut,
@@ -14,28 +14,21 @@ export function popoverMotion(node: Element, { upward = false, duration = 150 } 
   };
 }
 
-export function anchoredPopover(
-  anchor: HTMLElement | undefined,
-  options: Parameters<typeof positionFloatingPanel>[2] = {}
-): Attachment<HTMLElement> {
-  return (panel) => {
-    if (!anchor) return;
-    let frame = 0;
-    const position = () => positionFloatingPanel(anchor, panel, options);
-    const schedule = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(position);
-    };
-    position();
-    const observer = new ResizeObserver(schedule);
-    observer.observe(panel);
-    window.addEventListener('resize', schedule);
-    document.addEventListener('scroll', schedule, true);
+function anchorNames(node: HTMLElement) {
+  return node.style
+    .getPropertyValue('anchor-name')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+export function anchorAs(name: string): Attachment<HTMLElement> {
+  return (node) => {
+    node.style.setProperty('anchor-name', [...anchorNames(node), name].join(', '));
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener('resize', schedule);
-      document.removeEventListener('scroll', schedule, true);
+      const remaining = anchorNames(node).filter((existing) => existing !== name);
+      if (remaining.length) node.style.setProperty('anchor-name', remaining.join(', '));
+      else node.style.removeProperty('anchor-name');
     };
   };
 }

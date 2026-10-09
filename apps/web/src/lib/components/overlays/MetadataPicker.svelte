@@ -12,22 +12,24 @@
 <script lang="ts">
   import Check from '@lucide/svelte/icons/check';
   import Plus from '@lucide/svelte/icons/plus';
-  import { anchoredPopover, popoverMotion } from '#lib/ui/popover.js';
+  import type { Snippet } from 'svelte';
   import SearchField from '../controls/SearchField.svelte';
   import Spinner from '../feedback/Spinner.svelte';
   import UserAvatar from '../identity/UserAvatar.svelte';
+  import Popover, { type PopoverTrigger } from './Popover.svelte';
 
   let {
-    anchor,
+    open = $bindable(false),
     query = $bindable(''),
     placeholder,
     options,
     busy = false,
     empty,
     create,
-    onToggle
+    onToggle,
+    trigger
   }: {
-    anchor?: HTMLElement;
+    open?: boolean;
     query?: string;
     placeholder: string;
     options: PickerOption[];
@@ -35,6 +37,7 @@
     empty: string;
     create?: { label: string; busy: boolean; onCreate: () => void };
     onToggle: (id: string) => void;
+    trigger: Snippet<[PopoverTrigger]>;
   } = $props();
   let input = $state<HTMLInputElement>();
 
@@ -43,10 +46,12 @@
   });
 </script>
 
-<div
-  class="fixed z-90 flex flex-col overflow-hidden popover p-1.5"
-  {@attach anchoredPopover(anchor, { width: 290 })}
-  transition:popoverMotion
+<Popover
+  bind:open
+  {trigger}
+  class="flex w-72.5 max-w-[calc(100vw-24px)] flex-col p-1.5"
+  role="dialog"
+  aria-label={placeholder}
 >
   <SearchField
     bind:value={query}
@@ -93,4 +98,4 @@
       <p class="px-2 py-5 text-center text-sm text-ink-muted">{empty}</p>
     {/if}
   </div>
-</div>
+</Popover>

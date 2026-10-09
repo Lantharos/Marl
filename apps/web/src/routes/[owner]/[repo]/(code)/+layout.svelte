@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Kbd from '#lib/components/page/Kbd.svelte';
   import { page } from '$app/state';
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import Search from '@lucide/svelte/icons/search';
@@ -52,9 +53,7 @@
         revision={location.revision}
       />
       <Button size="small" onclick={() => (finderOpen = true)}
-        ><Search size={14} />Go to file<kbd
-          class="ml-1 rounded-sm bg-surface-muted px-1.5 font-sans text-2xs text-ink-muted max-sm:hidden">T</kbd
-        ></Button
+        ><Search size={14} />Go to file<Kbd class="ml-1 max-sm:hidden">T</Kbd></Button
       >
     </div>
   </div>

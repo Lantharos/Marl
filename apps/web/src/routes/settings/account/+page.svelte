@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import QrCode from '#lib/components/auth/QrCode.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
@@ -23,6 +24,7 @@
   let twoFactorCode = $state('');
   let totpUri = $state('');
   let backupCodes = $state<string[]>([]);
+  let backupCodesOpen = $state(false);
   let busy = $state('');
   let passkeyState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
@@ -70,6 +72,7 @@
     }
     twoFactorEnabled = true;
     twoFactorConfirmed = true;
+    backupCodesOpen = true;
   }
 
   async function disableTwoFactor() {
@@ -112,6 +115,7 @@
         twoFactorCode = '';
         totpUri = '';
         backupCodes = [];
+        backupCodesOpen = false;
         error = '';
       }}>{twoFactorEnabled ? 'Disable' : 'Set up'}</Button
     >
@@ -185,14 +189,23 @@
           />
         </Field>
       {/if}
-      <details open={twoFactorConfirmed} class="text-sm text-ink-muted">
-        <summary class="cursor-pointer font-medium text-ink-strong">Recovery codes</summary>
-        <div class="mt-2.5 grid grid-cols-2 gap-1.5">
-          {#each backupCodes as code (code)}<code class="rounded-md bg-canvas p-1.5 text-center font-mono text-xs"
-              >{code}</code
-            >{/each}
-        </div>
-      </details>
+      <div>
+        <Button
+          size="small"
+          variant="ghost"
+          class="-ml-2.5"
+          aria-expanded={backupCodesOpen}
+          aria-controls="recovery-codes"
+          onclick={() => (backupCodesOpen = !backupCodesOpen)}>Recovery codes<ChevronDown size={14} /></Button
+        >
+        {#if backupCodesOpen}
+          <div id="recovery-codes" class="mt-2 grid grid-cols-2 gap-1.5 text-ink-muted">
+            {#each backupCodes as code (code)}<code class="rounded-md bg-canvas p-1.5 text-center font-mono text-xs"
+                >{code}</code
+              >{/each}
+          </div>
+        {/if}
+      </div>
     {/if}
     {#if error}<Notice>{error}</Notice>{/if}
   </div>

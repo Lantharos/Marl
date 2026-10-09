@@ -21,7 +21,6 @@
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let avatarState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
-  let avatarInput = $state<HTMLInputElement>();
 
   function reset(state: 'save' | 'avatar') {
     setTimeout(() => (state === 'save' ? (saveState = 'idle') : (avatarState = 'idle')), 1800);
@@ -40,9 +39,7 @@
     }
   }
 
-  async function chooseAvatar(event: Event) {
-    const file = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.files?.[0] : null;
-    if (!file) return;
+  async function chooseAvatar(file: File) {
     avatarState = 'saving';
     error = '';
     try {
@@ -57,8 +54,6 @@
     } catch (cause) {
       avatarState = 'idle';
       error = cause instanceof MarlApiError ? cause.message : 'Organization avatar could not be updated.';
-    } finally {
-      if (avatarInput) avatarInput.value = '';
     }
   }
 </script>
@@ -73,21 +68,13 @@
           state={avatarState}
           label="Change organization avatar"
           size={72}
-          onclick={() => avatarInput?.click()}
-          ><OrganizationAvatar {name} src={avatarUrl} size={72} /></ImageUploadButton
+          onchoose={chooseAvatar}><OrganizationAvatar {name} src={avatarUrl} size={72} /></ImageUploadButton
         >{:else}<OrganizationAvatar {name} src={avatarUrl} size={72} />{/if}
       <div>
         <strong class="block text-base font-semibold text-ink-strong">Organization avatar</strong>
         <p class="mt-1 text-sm text-ink-muted">
           {canEdit ? 'PNG, JPEG, or WebP up to 2 MB.' : 'Only organization owners can change this avatar.'}
         </p>
-        {#if canEdit}<input
-            bind:this={avatarInput}
-            class="hidden"
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onchange={chooseAvatar}
-          />{/if}
       </div>
     </section>
     <Field label="Organization name"
