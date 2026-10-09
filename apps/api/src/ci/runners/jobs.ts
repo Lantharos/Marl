@@ -266,14 +266,13 @@ export async function completeJob(request: Request, env: Env, runner: Runner, jo
     .bind(job.runId)
     .all<{ state: string; count: number }>();
   const states = new Set(remaining.results.map((row) => row.state));
-  const runState = states.has('failure')
-    ? 'failure'
-    : states.has('canceled')
-      ? 'canceled'
-      : states.has('running')
-        ? 'running'
-        : states.has('queued')
-          ? 'queued'
+  const runState =
+    states.has('running') || states.has('queued')
+      ? 'running'
+      : states.has('failure')
+        ? 'failure'
+        : states.has('canceled')
+          ? 'canceled'
           : 'success';
   const transition = await env.DB.prepare(
     `UPDATE runs SET state=?,completed_at=CASE WHEN ? IN ('success','failure','canceled') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=? AND state<>?`
