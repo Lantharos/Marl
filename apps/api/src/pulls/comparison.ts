@@ -5,7 +5,7 @@ import { json, problem, readJsonValue } from '../http/http';
 import type { Env } from '../core/platform';
 import { pullRepository as repo, findPullId } from './context';
 import { allPullThreads } from './timeline';
-import { authorizeRepository } from '../repositories/access/access';
+import { repositoryCan } from '../repositories/access/access';
 
 async function knownRevision(env: Env, pullId: string, commitId: string | null) {
   if (!commitId || !/^[0-9a-f]{40,64}$/.test(commitId)) return false;
@@ -38,8 +38,8 @@ export async function getPullDiff(
   number: number,
   url: URL
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(
     'SELECT id,source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?'
@@ -72,8 +72,8 @@ export async function getPullPatch(
   number: number,
   url: URL
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const path = url.searchParams.get('path') ?? '';
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
@@ -125,19 +125,16 @@ export async function compareBranches(
   name: string,
   url: URL
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const base = url.searchParams.get('base');
   const head = url.searchParams.get('head');
   const sourceParts = (url.searchParams.get('sourceRepository') ?? `${owner}/${name}`).split('/');
   if (!validBranchName(base) || !validBranchName(head) || sourceParts.length !== 2)
     return problem(422, 'invalid_comparison', 'Choose valid repositories and branches.');
-  const sourceRepository = await repo(env, sourceParts[0], sourceParts[1]);
-  if (
-    !sourceRepository ||
-    !(await authorizeRepository(env, principal, sourceParts[0], sourceParts[1], 'repository.read'))
-  )
+  const sourceRepository = await repo(env, principal, sourceParts[0], sourceParts[1]);
+  if (!sourceRepository || !repositoryCan(sourceRepository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Source repository not found.');
   if ((await comparisonRoot(env, sourceRepository.id)) !== (await comparisonRoot(env, repository.id)))
     return problem(422, 'unrelated_repositories', 'These repositories are not in the same fork network.');

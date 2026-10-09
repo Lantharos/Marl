@@ -103,8 +103,8 @@ export async function listPulls(
 ): Promise<Response> {
   const search = readListQuery(url);
   if ('error' in search) return search.error;
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const limit = pageSize(url);
   const cursor = readCursor(url);
@@ -292,8 +292,8 @@ export async function getPullTimeline(
   number: number,
   url: URL
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(
     'SELECT id,source_commit_id AS sourceCommitId FROM pull_requests WHERE repository_id=? AND number=?'
@@ -320,8 +320,8 @@ export async function getPullUpdates(
   number: number,
   url: URL
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(
     'SELECT id,realtime_version AS realtimeVersion FROM pull_requests WHERE repository_id=? AND number=?'

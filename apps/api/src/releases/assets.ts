@@ -4,7 +4,7 @@ import type { Principal } from '../auth/principal';
 import { identifier } from '../core/domain';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
-import { authorizeRepository, authorizeRepositoryId } from '../repositories/access/access';
+import { authorizeRepository, authorizeRepositoryId, repositoryCan } from '../repositories/access/access';
 import { releaseAssetUploadBody } from '../http/request-schemas';
 
 const partBytes = 8 * 1024 * 1024;
@@ -250,9 +250,9 @@ export async function downloadReleaseAsset(env: Env, principal: Principal | null
       repositoryId: string;
       draft: number;
     }>();
-  if (!asset || !(await authorizeRepositoryId(env, principal, asset.repositoryId, 'repository.read')))
-    return problem(404, 'release_asset_not_found', 'Release asset not found.');
-  if (asset.draft && !(await authorizeRepositoryId(env, principal, asset.repositoryId, 'repository.push')))
+  const repository = asset && (await authorizeRepositoryId(env, principal, asset.repositoryId, 'repository.read'));
+  if (!asset || !repository) return problem(404, 'release_asset_not_found', 'Release asset not found.');
+  if (asset.draft && !repositoryCan(repository, principal, 'repository.push'))
     return problem(404, 'release_asset_not_found', 'Release asset not found.');
   const object = await env.OBJECTS.get(asset.objectKey);
   if (!object) return problem(502, 'release_asset_missing', 'Release asset bytes are missing.');

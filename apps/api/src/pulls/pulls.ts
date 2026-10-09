@@ -7,7 +7,6 @@ import { pinPullRefs } from '../git/writes';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
 import {
-  canManageRepository as membership,
   createPullEvent,
   detachedSource,
   preservePullRefs,
@@ -21,7 +20,7 @@ import { commitPullUpdate } from './realtime/updates';
 import { queuePullWorkflows } from './merge/checks';
 import { revisionUpdateStatements } from './review/revision-updates';
 import { createPullBody, updatePullBody } from '../http/request-schemas';
-import { authorizeRepository } from '../repositories/access/access';
+import { repositoryCan } from '../repositories/access/access';
 import { referenceStatements } from '../issues/references/work-items';
 import { mentionStatements } from '../issues/references/mentions';
 
@@ -32,8 +31,8 @@ export async function createPull(
   owner: string,
   name: string
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await authorizeRepository(env, principal, owner, name, 'repository.read')))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const body = await readJson(request, createPullBody);
   if (
@@ -48,11 +47,11 @@ export async function createPull(
   const sourceParts = body.sourceRepository?.split('/') ?? [owner, name];
   if (sourceParts.length !== 2) return problem(422, 'invalid_source_repository', 'Choose a valid source repository.');
   const [sourceOwner, sourceName] = sourceParts;
-  const sourceRepository = await repo(env, sourceOwner, sourceName);
-  if (!sourceRepository || !(await authorizeRepository(env, principal, sourceOwner, sourceName, 'repository.push')))
+  const sourceRepository = await repo(env, principal, sourceOwner, sourceName);
+  if (!sourceRepository || !repositoryCan(sourceRepository, principal, 'repository.push'))
     return problem(404, 'source_repository_not_found', 'Source repository not found.');
   const sameRepository = sourceRepository.id === repository.id;
-  if (sameRepository && !(await membership(env, principal, repository)))
+  if (sameRepository && !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   if ((await forkRoot(env, sourceRepository.id)) !== (await forkRoot(env, repository.id)))
     return problem(
@@ -178,8 +177,8 @@ export async function updatePullDetails(
   name: string,
   number: number
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository)))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare('SELECT id,title,body FROM pull_requests WHERE repository_id=? AND number=?')
     .bind(repository.id, number)
@@ -250,8 +249,8 @@ export async function transitionPull(
   number: number,
   action: 'ready' | 'close' | 'reopen'
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository)))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(`${pullSelect} WHERE pull_requests.repository_id=? AND pull_requests.number=?`)
     .bind(repository.id, number)

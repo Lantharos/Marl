@@ -8,7 +8,7 @@ import { requestGitGateway } from '../git/gateway';
 import { json, problem, readJson, readJsonValue } from '../http/http';
 import { pageResult, pageSize, readCursor } from '../http/cursor';
 import type { Env } from '../core/platform';
-import { authorizeRepository } from '../repositories/access/access';
+import { authorizeRepository, repositoryCan } from '../repositories/access/access';
 import { createReleaseBody, updateReleaseBody } from '../http/request-schemas';
 import { deleteReleaseStorage, listReleaseAssets } from './assets';
 
@@ -46,7 +46,7 @@ export async function listReleases(
 ): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const canEdit = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.push'));
+  const canEdit = repositoryCan(repository, principal, 'repository.push');
   const limit = pageSize(url, 20, 100);
   const cursor = readCursor(url);
   const filters = ['releases.repository_id=?', ...(canEdit ? [] : ['releases.draft=0'])];
@@ -86,7 +86,7 @@ export async function getRelease(
     .bind(repository.id, releaseId)
     .first<ReleaseRow>();
   if (!row) return problem(404, 'release_not_found', 'Release not found.');
-  const canEdit = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.push'));
+  const canEdit = repositoryCan(repository, principal, 'repository.push');
   if (row.draft && !canEdit) return problem(404, 'release_not_found', 'Release not found.');
   const release: ReleaseDetail = {
     ...summarize(row),
@@ -112,7 +112,7 @@ export async function getReleaseByTag(
     .bind(repository.id, tag)
     .first<ReleaseRow>();
   if (!row) return problem(404, 'release_not_found', 'Release not found.');
-  const canEdit = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.push'));
+  const canEdit = repositoryCan(repository, principal, 'repository.push');
   if (row.draft && !canEdit) return problem(404, 'release_not_found', 'Release not found.');
   const release: ReleaseDetail = {
     ...summarize(row),
@@ -357,7 +357,7 @@ export async function downloadReleaseArchive(
     .bind(repository.id, releaseId)
     .first<{ tagName: string; targetCommitId: string; draft: number }>();
   if (!release) return problem(404, 'release_not_found', 'Release not found.');
-  if (release.draft && !(await authorizeRepository(env, principal, owner, name, 'repository.push')))
+  if (release.draft && !repositoryCan(repository, principal, 'repository.push'))
     return problem(404, 'release_not_found', 'Release not found.');
   const response = await requestGitGateway(
     env,

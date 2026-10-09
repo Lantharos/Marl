@@ -21,7 +21,7 @@ import {
   issueStateBody,
   updateIssueBody
 } from '../http/request-schemas';
-import { authorizeRepository } from '../repositories/access/access';
+import { authorizeRepository, repositoryCan } from '../repositories/access/access';
 import type { RepositoryAccess } from '../repositories/access/access';
 import { linkedWorkItems, referenceStatements } from './references/work-items';
 import { mentionStatements } from './references/mentions';
@@ -362,7 +362,7 @@ async function editableIssue(
     .bind(repository.id, number)
     .first<EditableIssue>();
   if (!issue) return { response: problem(404, 'issue_not_found', 'Issue not found.') };
-  if (issue.authorId !== principal.id && !(await authorizeRepository(env, principal, owner, name, 'repository.triage')))
+  if (issue.authorId !== principal.id && !repositoryCan(repository, principal, 'repository.triage'))
     return { response: problem(403, 'issue_permission_denied', 'You cannot change this issue.') };
   return { repository, issue };
 }
