@@ -59,7 +59,8 @@ export function markdownExtensions(context?: MarkdownContext): TokenizerAndRende
           return {
             type: 'marlReference',
             raw: reference[0],
-            href: `/${reference[1] ?? context!.owner}/${reference[2] ?? context!.repository}/${reference[3] === '#' ? 'issues' : 'pulls'}/${reference[4]}`
+            href: `/${reference[1] ?? context!.owner}/${reference[2] ?? context!.repository}/${reference[3] === '#' ? 'issues' : 'pulls'}/${reference[4]}`,
+            html: `${escapeHtml(reference[1] ? `${reference[1]}/${reference[2]}` : '')}<span class="reference-sigil">${reference[3]}</span>${reference[4]}`
           };
         const mention = /^@([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)(?![\w-])/i.exec(source);
         if (mention) return { type: 'marlReference', raw: mention[0], href: `/${mention[1]}` };
@@ -71,7 +72,8 @@ export function markdownExtensions(context?: MarkdownContext): TokenizerAndRende
             href: `/${context.owner}/${context.repository}/commit/${commit[0]}`
           };
       },
-      renderer: (token) => `<a data-marl-reference="true" href="${escapeHtml(token.href)}">${escapeHtml(token.raw)}</a>`
+      renderer: (token) =>
+        `<a data-marl-reference="true" href="${escapeHtml(token.href)}">${token.html ?? escapeHtml(token.raw)}</a>`
     }
   ];
 }

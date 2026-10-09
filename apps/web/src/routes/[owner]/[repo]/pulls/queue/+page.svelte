@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import { page } from '$app/state';
   import ListOrdered from '@lucide/svelte/icons/list-ordered';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
@@ -35,7 +36,7 @@
             href="/{owner}/{repo}/pulls/{entry.number}">{entry.title}</a
           >
           <p class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-muted">
-            <span>!{entry.number} by</span>
+            <span><WorkItemReference kind="pull" number={entry.number} /> by</span>
             <UserProfileLink
               handle={entry.author}
               displayName={entry.authorDisplayName}
