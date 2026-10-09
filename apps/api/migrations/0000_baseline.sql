@@ -1223,5 +1223,6 @@ CREATE TABLE `merge_queue_entries` (
 );
 --> statement-breakpoint
 CREATE INDEX `merge_queue_by_target` ON `merge_queue_entries` (`repository_id`,`target_branch`,`state`,`enqueued_at`);--> statement-breakpoint
+CREATE INDEX `merge_queue_by_state` ON `merge_queue_entries` (`state`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `merge_queue_by_commit` ON `merge_queue_entries` (`merge_commit_id`) WHERE state = 'testing';--> statement-breakpoint
 CREATE UNIQUE INDEX `merge_queue_active_pull` ON `merge_queue_entries` (`pull_request_id`) WHERE state IN ('queued','testing','merging');

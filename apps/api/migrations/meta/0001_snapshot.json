@@ -1,6 +1,6 @@
 {
-  "id": "8b57545b-afdd-4b9f-bcab-26a1d75725b6",
-  "prevId": "2f39cd93-fcae-4862-bcd7-7c4c13dda51c",
+  "id": "3bb5c813-2338-4903-b11c-54abad393e6a",
+  "prevId": "82481d31-f4d4-4f43-a451-9d39806ac006",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -8842,6 +8842,14 @@
             "target_branch",
             "state",
             "enqueued_at"
+          ],
+          "isUnique": false
+        },
+        "merge_queue_by_state": {
+          "name": "merge_queue_by_state",
+          "columns": [
+            "state",
+            "updated_at"
           ],
           "isUnique": false
         },

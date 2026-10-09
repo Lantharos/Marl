@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2f39cd93-fcae-4862-bcd7-7c4c13dda51c",
+  "id": "82481d31-f4d4-4f43-a451-9d39806ac006",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "auth_account": {
@@ -8842,6 +8842,14 @@
             "target_branch",
             "state",
             "enqueued_at"
+          ],
+          "isUnique": false
+        },
+        "merge_queue_by_state": {
+          "name": "merge_queue_by_state",
+          "columns": [
+            "state",
+            "updated_at"
           ],
           "isUnique": false
         },
