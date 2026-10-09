@@ -29,6 +29,14 @@
       ]
     },
     {
+      title: 'Pull lists',
+      shortcuts: [
+        { keys: ['J'], label: 'Next pull' },
+        { keys: ['K'], label: 'Previous pull' },
+        { keys: ['Enter'], label: 'Open the selected pull' }
+      ]
+    },
+    {
       title: 'Pulls',
       shortcuts: [
         { keys: ['1', '–', '4'], label: 'Overview, changes, commits, checks' },

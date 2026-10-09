@@ -7,7 +7,7 @@
   import FilterBar from '#lib/components/page/FilterBar.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
-  import PullQueue from '#lib/pulls/PullQueue.svelte';
+  import PullQueue from '#lib/pulls/list/PullQueue.svelte';
   import { CursorList } from '#lib/ui/cursor-list.svelte.js';
   import { api } from '#lib/api.js';
   import type { PageData } from './$types';
@@ -48,6 +48,12 @@
     clearTimeout(queryTimer);
     queryTimer = setTimeout(() => navigate(activeFilter, value), 220);
   }
+  function clearFilters() {
+    clearTimeout(queryTimer);
+    query = '';
+    selectedLabels = [];
+    navigate(activeFilter, '', []);
+  }
   onDestroy(() => clearTimeout(queryTimer));
 </script>
 
@@ -80,9 +86,10 @@
 <PullQueue
   pulls={pulls.items}
   grouped={activeFilter === 'Open'}
-  emptyTitle={query || selectedLabels.length ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
-  emptyDescription={query || selectedLabels.length
+  emptyTitle={data.query || data.labels.length ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
+  emptyDescription={data.query || data.labels.length
     ? 'Try another search or remove a label filter.'
     : 'Changes proposed to this repository will appear here.'}
+  onClearFilters={data.query || data.labels.length ? clearFilters : undefined}
 />
 <InfiniteScroll list={pulls} />
