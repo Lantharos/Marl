@@ -1,19 +1,56 @@
 <script lang="ts">
-  let { scene, class: className = '' }: { scene: 'landscape' | 'courtyard' | 'inlay'; class?: string } = $props();
-  const url = (theme: 'dark' | 'light', small: boolean) =>
-    `url('/landing/${scene}/${theme}${small ? '-small' : ''}.webp')`;
-  const responsive = (theme: 'dark' | 'light') => `image-set(${url(theme, true)} 1x, ${url(theme, false)} 2x)`;
+  import type { ClassValue } from 'svelte/elements';
+
+  type Scene = 'landscape' | 'courtyard' | 'inlay';
+  type Theme = 'light' | 'dark';
+
+  let {
+    scene,
+    sizes,
+    priority = false,
+    class: className
+  }: { scene: Scene; sizes: string; priority?: boolean; class: ClassValue } = $props();
+
+  const heights: Record<Scene, number> = { landscape: 768, courtyard: 1024, inlay: 1024 };
+  const themes: Theme[] = ['light', 'dark'];
+  const blend = { light: 'mix-blend-darken dark:hidden', dark: 'mix-blend-lighten light:hidden' };
+  const source = (theme: Theme) => `/landing/${scene}/${theme}.webp`;
+  const sources = (theme: Theme) => `/landing/${scene}/${theme}-small.webp 960w, ${source(theme)} 1536w`;
 </script>
 
-<div
-  aria-hidden="true"
-  class={[
-    'pointer-events-none bg-canvas bg-no-repeat bg-blend-lighten select-none light:bg-blend-multiply',
-    'bg-(image:--art-dark) lg:bg-(image:--art-dark-large) light:bg-(image:--art-light) lg:light:bg-(image:--art-light-large)',
-    className
-  ]}
-  style:--art-dark={responsive('dark')}
-  style:--art-light={responsive('light')}
-  style:--art-dark-large={url('dark', false)}
-  style:--art-light-large={url('light', false)}
-></div>
+{#if priority}
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset={sources('dark')} {sizes} />
+    <img
+      class={[
+        'pointer-events-none mix-blend-darken select-none dark:mix-blend-lighten [:root[data-theme]_&]:hidden',
+        className
+      ]}
+      src={source('light')}
+      srcset={sources('light')}
+      {sizes}
+      width={1536}
+      height={heights[scene]}
+      alt=""
+      fetchpriority="high"
+    />
+  </picture>
+{/if}
+{#each themes as theme (theme)}
+  <img
+    class={[
+      'pointer-events-none select-none',
+      blend[theme],
+      priority && '[:root:not([data-theme])_&]:hidden',
+      className
+    ]}
+    src={source(theme)}
+    srcset={sources(theme)}
+    {sizes}
+    width={1536}
+    height={heights[scene]}
+    alt=""
+    loading="lazy"
+    decoding="async"
+  />
+{/each}
