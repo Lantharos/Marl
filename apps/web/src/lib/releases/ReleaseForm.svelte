@@ -7,7 +7,6 @@
   import Trash2 from '@lucide/svelte/icons/trash';
   import Upload from '@lucide/svelte/icons/upload';
   import Tag from '@lucide/svelte/icons/tag';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import Button from '#lib/components/controls/Button.svelte';
   import Field from '#lib/components/controls/Field.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
@@ -157,8 +156,7 @@
 
 <div>
   <header class="mb-6">
-    <BackLink href="/{owner}/{repository}/releases" label="Releases" />
-    <h1 class="mt-4 flex items-center gap-2.5 text-3xl font-semibold tracking-tight text-ink-strong">
+    <h1 class="flex items-center gap-2.5 text-3xl font-semibold tracking-tight text-ink-strong">
       <Tag size={22} class="text-brand" />{release ? 'Edit release' : 'New release'}
     </h1>
   </header>

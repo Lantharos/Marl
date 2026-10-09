@@ -15,7 +15,6 @@
   import { formatBytes } from '#lib/bytes.js';
   import Button from '#lib/components/controls/Button.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import { awaitingCheckApproval, runStateLabel } from '#lib/runs/run-state.js';
   import RunLog from '#lib/runs/RunLog.svelte';
@@ -228,11 +227,7 @@
 
 <svelte:head><title>{run.name} #{run.number} · {owner}/{repo} · Marl</title></svelte:head>
 
-<BackLink
-  href={run.workflowId ? `/${owner}/${repo}/runs/workflows/${run.workflowId}` : `/${owner}/${repo}/runs`}
-  label={run.name}
-/>
-<header class="mt-5 mb-6 flex flex-wrap items-start justify-between gap-5">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-5">
   <div class="flex min-w-0 gap-3.5">
     <span class="grid size-10.5 shrink-0 place-items-center rounded-xl bg-surface-muted"
       ><RunStateIcon state={run.state} {awaitingApproval} label={runStateLabel(run)} size={20} /></span

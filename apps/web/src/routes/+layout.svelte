@@ -9,7 +9,6 @@
   import AppShell from '#lib/components/shell/AppShell.svelte';
   import LegalUpdateNotice from '#lib/legal/LegalUpdateNotice.svelte';
   import ReportDialog from '#lib/reporting/ReportDialog.svelte';
-  import SiteFooter from '#lib/components/shell/SiteFooter.svelte';
   import NavigationProgress from '#lib/components/shell/NavigationProgress.svelte';
   import { isIndexableRepositoryPath, privateRoots } from '#lib/repositories/repository-route.js';
   import { watchShellChanges } from '#lib/shell-cache.js';
@@ -18,9 +17,6 @@
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
   const authRoutes = new Set(['/sign-in', '/sign-up', '/forgot-password', '/reset-password', '/two-factor']);
   const confirmation = new IdentityConfirmation();
-  const showFooter = $derived(
-    !page.error && !authRoutes.has(page.route.id ?? '') && (Boolean(data.shellUser) || page.url.pathname !== '/')
-  );
   const indexable = $derived.by(() => {
     const parts = page.url.pathname.split('/').filter(Boolean);
     const repository = (page.data as { repository?: { visibility?: string } }).repository;
@@ -55,7 +51,6 @@
 {:else}
   {@render children()}
 {/if}
-{#if showFooter}<SiteFooter />{/if}
 {#if data.shellUser}<ReportDialog />{/if}
 <IdentityConfirmationModal
   open={confirmation.open}

@@ -7,7 +7,6 @@
   import Users from '@lucide/svelte/icons/users';
   import Webhook from '@lucide/svelte/icons/webhook';
   import OrganizationAvatar from '../../identity/OrganizationAvatar.svelte';
-  import BackLink from '../../page/BackLink.svelte';
   import Page from '../../page/Page.svelte';
   import SettingsLayout from '../SettingsLayout.svelte';
   import SettingsNav from '../SettingsNav.svelte';
@@ -40,7 +39,6 @@
 </script>
 
 {#snippet sidebar()}
-  <div class="mb-5 hidden md:block"><BackLink href="/organizations" label="Organizations" /></div>
   <a
     href="/{slug}"
     class="group mb-4 grid grid-cols-[32px_minmax(0,1fr)_14px] items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-surface-hover"

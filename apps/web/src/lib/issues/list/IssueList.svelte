@@ -35,11 +35,15 @@
 </script>
 
 <svelte:window onkeydown={move} />
-<List as="section" bind:element={list} aria-label="Issues">
+<section bind:this={list} aria-label="Issues" class="grid gap-6">
   {#each groups as group (group.title)}
-    <h2 class="px-3 pt-2.5 pb-1 text-xs font-semibold text-ink-muted first:pt-1.5">{group.title}</h2>
-    {#each group.issues as issue (issue.id)}<IssueRow {issue} {showRepository} />{/each}
+    <div>
+      <h2 class="mb-2 px-1 text-sm font-semibold text-ink-strong">{group.title}</h2>
+      <List>
+        {#each group.issues as issue (issue.id)}<IssueRow {issue} {showRepository} />{/each}
+      </List>
+    </div>
   {:else}
-    <EmptyState compact icon={CircleDot} title={emptyTitle} description={emptyDescription} />
+    <List><EmptyState compact icon={CircleDot} title={emptyTitle} description={emptyDescription} /></List>
   {/each}
-</List>
+</section>

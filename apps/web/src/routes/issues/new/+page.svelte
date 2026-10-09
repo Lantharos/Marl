@@ -7,7 +7,6 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
   import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import Kbd from '#lib/components/page/Kbd.svelte';
   import Page from '#lib/components/page/Page.svelte';
   import RepositoryPicker from '#lib/issues/new/RepositoryPicker.svelte';
@@ -61,7 +60,6 @@
 
 <svelte:head><title>New issue · Marl</title></svelte:head>
 <Page class="[--page-width:984px]">
-  <BackLink href={repository ? `/${parts.owner}/${parts.name}/issues` : '/issues'} label="Issues" />
   {#if !repository}
     <EmptyState
       class="mt-10"
@@ -73,7 +71,7 @@
     </EmptyState>
   {:else}
     <form
-      class="mt-5 grid gap-4 [html:has(&)]:scroll-pb-20"
+      class="grid gap-4 [html:has(&)]:scroll-pb-20"
       onsubmit={(event) => {
         event.preventDefault();
         void create();

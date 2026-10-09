@@ -137,9 +137,7 @@
   <Notice class="mb-4" dismissLabel="Dismiss error" ondismiss={() => (pageState.error = '')}>{pageState.error}</Notice>
 {/if}
 
-<div
-  class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-10 xl:grid-cols-[minmax(0,920px)_300px] xl:justify-between"
->
+<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_300px]">
   <div class="min-w-0" {@attach (node) => observeIssueDiscussion(node, pageState.markRead)}>
     <IssueReport {issue} onEdit={openEditor} />
 

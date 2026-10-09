@@ -45,8 +45,6 @@
   description={current.status === 'running'
     ? 'You can leave this page. The import keeps running and the repository fills in as it goes.'
     : undefined}
-  backHref="/repositories"
-  backLabel="Repositories"
 >
   <ol class="grid gap-1">
     {#each steps as step, index (step.label)}

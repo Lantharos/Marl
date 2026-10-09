@@ -46,8 +46,6 @@
 <FormShell
   title="Create a repository"
   description="Moving a project from GitHub? Import it with its history, issues, pulls, and releases instead."
-  backHref="/repositories"
-  backLabel="Repositories"
 >
   <LinkButton size="small" class="mb-6" href="/import">Import from GitHub</LinkButton>
   <form

@@ -61,22 +61,24 @@
 <svelte:window onkeydown={move} />
 
 {#if pulls.length}
-  <List bind:element={list} as="section" aria-label="Pulls">
+  <section bind:this={list} aria-label="Pulls" class="grid gap-6">
     {#each sections as section (section.key)}
-      <div class="not-first:mt-2">
+      <div>
         {#if section.title}
-          <h2 class="flex items-center gap-2 px-3 pt-2.5 pb-1.5 text-xs font-semibold text-ink-muted">
+          <h2 class="mb-2 flex items-center gap-2 px-1 text-sm font-semibold text-ink-strong">
             {section.title}<span class="font-normal text-ink-faint tabular-nums">{section.pulls.length}</span>
           </h2>
         {/if}
-        <ul class="grid gap-px">
-          {#each section.pulls as pull (pull.id)}
-            <li><PullRow {pull} {showRepository} /></li>
-          {/each}
-        </ul>
+        <List>
+          <ul class="grid gap-px">
+            {#each section.pulls as pull (pull.id)}
+              <li><PullRow {pull} {showRepository} /></li>
+            {/each}
+          </ul>
+        </List>
       </div>
     {/each}
-  </List>
+  </section>
   <p class="mt-3 hidden items-center justify-end gap-1.5 px-1 text-xs text-ink-faint pointer-fine:flex">
     <Kbd>J</Kbd><Kbd>K</Kbd> to move <span class="ml-2"><Kbd>Enter</Kbd></span> to open
   </p>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { legalDocuments } from '#lib/legal/documents.js';
 
-  let { width = 'page-frame' }: { width?: string } = $props();
+  let { width }: { width: string } = $props();
 
   const links = [
     { href: '/lantharos/marl', label: 'Source' },

@@ -12,7 +12,6 @@
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import RunRow from '#lib/runs/RunRow.svelte';
   import { workflowTrigger } from '#lib/runs/workflow-triggers.js';
   import type { PageData } from './$types';
@@ -51,8 +50,7 @@
 
 <svelte:head><title>{workflow.name} · {owner}/{repo} · Marl</title></svelte:head>
 
-<BackLink href="/{owner}/{repo}/runs" label="Workflows" />
-<header class="mt-5 mb-6 flex flex-wrap items-start justify-between gap-5">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-5">
   <div class="flex min-w-0 gap-3.5">
     <span class="grid size-10.5 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><Zap size={19} /></span
     >

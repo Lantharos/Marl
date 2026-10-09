@@ -189,7 +189,7 @@
 
 <svelte:head><title>New pull · Marl</title></svelte:head>
 
-<FormShell title="Open a pull" backHref="/pulls" backLabel="Pulls">
+<FormShell title="Open a pull">
   {#if error}<Notice class="mb-5">{error}</Notice>{/if}
   {#if repositories.length === 0}
     <EmptyState

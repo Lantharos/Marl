@@ -73,11 +73,14 @@ large files show their first 1 MiB with the original a click away.
 
 Every page has exactly one main landmark, and a Skip to content link leads to it. Working
 pages, including repositories, pulls, issues, settings, lists, and the home dashboard, share
-one frame up to 1440 px wide with 16, 24, or 32 px gutters, so their content lines up with the
-repository header. Inside that frame, reading stays at a comfortable measure: issue discussions
-cap their main column at 920 px, settings content at 880 px, and policies at 720 px. Forms and
+one frame up to 1280 px wide with 16, 24, or 32 px gutters, so their content lines up with the
+repository header. Inside that frame, reading stays at a comfortable measure: an issue's discussion
+sits directly beside its sidebar, settings content caps at 880 px, and policies at 720 px. Forms and
 other single-task pages use a 720 px column. A pull keeps its summary column at 360 px, or
 420 px on wide screens, so short titles fit on one line; the conversation and diff take the rest.
+
+The policy and status links live in the landing page's footer; working pages have no footer.
+Pages don't repeat the browser's back button with their own back links.
 
 Hide scrollbars across pages and nested panels without disabling scrolling. Wheel, trackpad,
 touch, and keyboard navigation remain available, including horizontal scrolling through code.
@@ -90,7 +93,8 @@ button.
 
 A shared surface means the contents belong together: a conversation, file list, form,
 revision, or list of repositories, pulls, or runs. Lists share one surface with rounded,
-hover-highlighted rows. Settings groups do not get a surface: a group heading sits on the
+hover-highlighted rows; grouped lists, such as issues by date or pulls by readiness, put each
+group's heading on the canvas above its own surface. Settings groups do not get a surface: a group heading sits on the
 canvas above rows separated by hairlines. Use spacing between independent groups. Avoid repeated
 rules inside a group unless they clarify a real boundary. Repository navigation uses its
 connected island treatment. Filters and document selectors
@@ -124,7 +128,7 @@ code stays dark on light in both appearances so every camera can read it.
 Sign in, account creation, password recovery, and two-factor pages place a single column of
 fields on the canvas, above the arched doorway from the access error artwork. The doorway
 is anchored to the bottom edge and never sits behind a field. On phones the column comes
-first and a smaller image follows. These pages omit the global footer. Sign in offers saved
+first and a smaller image follows. Sign in offers saved
 passkeys directly from the username field's autofill, alongside the Use a passkey button.
 
 ## Profile repositories

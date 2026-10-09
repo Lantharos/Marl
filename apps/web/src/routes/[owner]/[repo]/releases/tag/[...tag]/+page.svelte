@@ -7,7 +7,6 @@
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import ReleaseAssets from '#lib/releases/ReleaseAssets.svelte';
@@ -29,8 +28,7 @@
   robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
 />
 
-<BackLink href="/{owner}/{repository}/releases" label="All releases" />
-<header class="mt-5 mb-8 flex flex-wrap items-start justify-between gap-6">
+<header class="mb-8 flex flex-wrap items-start justify-between gap-6">
   <div class="flex min-w-0 gap-3.5">
     <span class="grid size-10.5 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><Tag size={19} /></span
     >

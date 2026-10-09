@@ -17,7 +17,6 @@
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import { CursorList } from '#lib/ui/cursor-list.svelte.js';
   type RepositoryData = {
     repositories: RepositorySummary[];
@@ -66,7 +65,7 @@
 <svelte:head><title>Repositories{owner ? ` · ${owner}` : ''} · Marl</title></svelte:head>
 
 <Page>
-  {#if owner}<div class="mb-4"><BackLink href="/{owner}" label={owner} /></div>{/if}
+  {#if owner}{/if}
   <PageHeader title="Repositories">
     {#snippet action()}{#if !owner}<div class="flex gap-2">
           <LinkButton variant="ghost" href="/repositories/deleted"><RotateCcw size={16} />Recently deleted</LinkButton>

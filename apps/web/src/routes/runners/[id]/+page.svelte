@@ -1,6 +1,5 @@
 <script lang="ts">
   import Cpu from '@lucide/svelte/icons/cpu';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import Page from '#lib/components/page/Page.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import RunnerStatus from '#lib/runs/RunnerStatus.svelte';
@@ -11,8 +10,7 @@
 
 <svelte:head><title>{runner?.name ?? 'Runner'} · Marl</title></svelte:head>
 <Page width="narrow">
-  <BackLink href="/runners" label="Runners" />
-  <header class="mt-5 mb-6 grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3.5">
+  <header class="mb-6 grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3.5">
     <span class="grid size-11 place-items-center rounded-xl bg-surface-muted text-ink-muted"><Cpu size={22} /></span>
     <div class="min-w-0">
       <h1 class="truncate text-2xl font-semibold tracking-tight text-ink-strong">{runner.name}</h1>

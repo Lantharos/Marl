@@ -62,8 +62,6 @@
 <FormShell
   title="Import from GitHub"
   description="Bring a repository over with its full Git history, labels, issues, pulls, comments, and releases."
-  backHref="/repositories/new"
-  backLabel="New repository"
 >
   <form
     class="grid gap-6"

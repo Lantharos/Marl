@@ -56,12 +56,7 @@
 </script>
 
 <svelte:head><title>Connect runner · Marl</title></svelte:head>
-<FormShell
-  backHref="/runners"
-  backLabel="Runners"
-  title="Connect a runner"
-  description="Give one machine permission to pick up jobs for an organization."
->
+<FormShell title="Connect a runner" description="Give one machine permission to pick up jobs for an organization.">
   {#if token}
     <div class="grid gap-4">
       <div>

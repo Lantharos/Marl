@@ -5,7 +5,6 @@
   import Button from '#lib/components/controls/Button.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
-  import BackLink from '#lib/components/page/BackLink.svelte';
   import Page from '#lib/components/page/Page.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
@@ -32,7 +31,6 @@
 
 <svelte:head><title>Recently deleted · Marl</title></svelte:head>
 <Page width="narrow">
-  <div class="mb-4"><BackLink href="/repositories" label="Repositories" /></div>
   <PageHeader
     title="Recently deleted"
     description="Restore repositories within 30 days of deletion. Code and discussions are kept until then; cancelled runs stay cancelled."
