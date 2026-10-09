@@ -101,6 +101,15 @@ export type PullTimelineItem =
       value: WorkItemReferenceEvent;
     };
 
+export interface PullRevisionReviewer {
+  id: Identifier;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+  kind?: IdentityKind;
+  state: PullRequestReview['state'];
+}
+
 export interface PullRevisionSummary {
   sequence: number;
   number: number;
@@ -109,9 +118,11 @@ export interface PullRevisionSummary {
   actor: string;
   actorDisplayName: string;
   createdAt: string;
-  commitCount: number;
+  commits: Array<{ id: string; title: string }>;
   activityCount: number;
   conversationCount: number;
+  unresolvedCount: number;
+  reviewers: PullRevisionReviewer[];
   reviewState: 'none' | 'commented' | 'approved' | 'changes_requested';
   forcePushed: boolean;
   current: boolean;

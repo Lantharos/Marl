@@ -21,17 +21,21 @@ export async function initialPullTimeline(
   currentHead: string,
   context: MarkdownContext
 ): Promise<PullTimelineWindow> {
-  const [rows, boundaries, reviews] = await Promise.all([
+  const [rows, boundaries, reviews, unresolvedThreads] = await Promise.all([
     timelineRows(env, pullId, 'ORDER BY sequence'),
     revisionBoundaries(env, pullId),
     env.DB.prepare(
-      'SELECT id,author_id AS authorId,state FROM pull_request_reviews WHERE pull_request_id=? ORDER BY created_at,id'
+      'SELECT pull_request_reviews.id,pull_request_reviews.author_id AS authorId,pull_request_reviews.state,users.handle,users.display_name AS displayName,users.avatar_url AS avatarUrl,users.kind FROM pull_request_reviews JOIN users ON users.id=pull_request_reviews.author_id WHERE pull_request_reviews.pull_request_id=? ORDER BY pull_request_reviews.created_at,pull_request_reviews.id'
     )
       .bind(pullId)
       .all<RevisionReview>()
-      .then((result) => result.results)
+      .then((result) => result.results),
+    env.DB.prepare('SELECT id FROM review_threads WHERE pull_request_id=? AND resolved_at IS NULL')
+      .bind(pullId)
+      .all<{ id: string }>()
+      .then((result) => new Set(result.results.map((thread) => thread.id)))
   ]);
-  const revisions = summarizePullRevisions(rows, boundaries, reviews, currentHead);
+  const revisions = summarizePullRevisions(rows, boundaries, reviews, unresolvedThreads, currentHead);
   const currentRevision = revisions.at(-1);
   const visibleRows = currentRevision ? rows.filter((row) => row.sequence > currentRevision.sequence) : rows;
   return {

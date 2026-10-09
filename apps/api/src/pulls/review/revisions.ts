@@ -1,4 +1,4 @@
-import type { PullRevisionSummary, PullRequestReview } from '@marl/contracts';
+import type { PullRevisionReviewer, PullRevisionSummary } from '@marl/contracts';
 
 export type RevisionTimelineRow = {
   sequence: number;
@@ -16,7 +16,7 @@ export type RevisionBoundary = {
   createdAt: string;
 };
 
-export type RevisionReview = Pick<PullRequestReview, 'id' | 'state'> & { authorId: string };
+export type RevisionReview = Omit<PullRevisionReviewer, 'id'> & { id: string; authorId: string };
 
 type TimelineCommit = { id: string; title: string };
 
@@ -24,6 +24,7 @@ export function summarizePullRevisions(
   rows: RevisionTimelineRow[],
   boundaries: RevisionBoundary[],
   reviews: RevisionReview[],
+  unresolvedThreads: ReadonlySet<string>,
   currentHead: string
 ): PullRevisionSummary[] {
   const orderedBoundaries: RevisionBoundary[] = [];
@@ -49,13 +50,17 @@ export function summarizePullRevisions(
   return orderedBoundaries.map((boundary, index) => {
     const nextSequence = orderedBoundaries[index + 1]?.sequence ?? Number.POSITIVE_INFINITY;
     const activity = rows.filter((row) => row.sequence > boundary.sequence && row.sequence < nextSequence);
-    const latestReviews = new Map<string, RevisionReview['state']>();
+    const latestReviews = new Map<string, PullRevisionReviewer>();
     for (const row of activity) {
       if (row.kind !== 'review') continue;
       const review = reviewById.get(row.entityId);
-      if (review) latestReviews.set(review.authorId, review.state);
+      if (!review) continue;
+      const { authorId, handle, displayName, avatarUrl, kind, state } = review;
+      latestReviews.delete(authorId);
+      latestReviews.set(authorId, { id: authorId, handle, displayName, avatarUrl, kind, state });
     }
-    const states = [...latestReviews.values()];
+    const reviewers = [...latestReviews.values()].toReversed();
+    const states = reviewers.map((reviewer) => reviewer.state);
     const commits = parseCommits(boundary.details.commits);
     const current = index === orderedBoundaries.length - 1;
     return {
@@ -66,11 +71,13 @@ export function summarizePullRevisions(
       actor: boundary.actor,
       actorDisplayName: boundary.actorDisplayName,
       createdAt: boundary.createdAt,
-      commitCount: commits.length,
+      commits,
       activityCount: activity.length,
       conversationCount: activity.filter(
         (row) => row.kind === 'comment' || row.kind === 'review' || row.kind === 'thread'
       ).length,
+      unresolvedCount: activity.filter((row) => row.kind === 'thread' && unresolvedThreads.has(row.entityId)).length,
+      reviewers,
       reviewState: states.includes('changes_requested')
         ? 'changes_requested'
         : states.includes('approved')
