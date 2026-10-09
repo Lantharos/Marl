@@ -4,6 +4,8 @@ import { dev } from '$app/env';
 import { themeCookie } from '#lib/theme.js';
 
 const localApi = 'http://127.0.0.1:42618';
+const sessionCookie = /(?:^|;\s*)(?:__Secure-)?marl\.session_token=/;
+const viewerRoutes = new Set(['/api/v1/session', '/api/v1/shell', '/api/v1/dashboard']);
 
 export const handle: Handle = async ({ event, resolve }) => {
   const theme = event.cookies.get(themeCookie);
@@ -21,16 +23,24 @@ export const handle: Handle = async ({ event, resolve }) => {
   return response;
 };
 
-function apiRequest(event: Parameters<HandleFetch>[0]['event'], target: string, request: Request) {
+function apiRequest(target: string, request: Request, cookie: string | null) {
   const forwarded = new Request(target, request);
-  const cookie = event.request.headers.get('cookie');
   if (cookie) forwarded.headers.set('cookie', cookie);
   return forwarded;
 }
 
-export const handleFetch: HandleFetch = ({ event, request, fetch }) => {
+function signedOut() {
+  return Response.json(
+    { error: { code: 'authentication_required', message: 'Sign in to use the Marl API.' } },
+    { status: 401 }
+  );
+}
+
+export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
   const url = new URL(request.url);
   if (url.origin !== event.url.origin || !url.pathname.startsWith('/api/')) return fetch(request);
-  if (dev) return fetch(apiRequest(event, `${localApi}${url.pathname}${url.search}`, request));
-  return env.MARL_API.fetch(apiRequest(event, `http://marl-api.internal${url.pathname}${url.search}`, request));
+  const cookie = event.request.headers.get('cookie');
+  if (viewerRoutes.has(url.pathname) && !sessionCookie.test(cookie ?? '')) return signedOut();
+  if (dev) return fetch(apiRequest(`${localApi}${url.pathname}${url.search}`, request, cookie));
+  return env.MARL_API.fetch(apiRequest(`http://marl-api.internal${url.pathname}${url.search}`, request, cookie));
 };
