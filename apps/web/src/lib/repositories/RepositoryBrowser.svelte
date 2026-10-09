@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
   import Lock from '@lucide/svelte/icons/lock';
-  import { api, MarlApiError } from '#lib/api.js';
+  import { api } from '#lib/api.js';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import Plus from '@lucide/svelte/icons/plus';
   import RotateCcw from '@lucide/svelte/icons/archive-restore';
@@ -15,6 +15,7 @@
   import Time from '#lib/components/page/Time.svelte';
   import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
   import BackLink from '#lib/components/page/BackLink.svelte';
+  import { CursorList } from '#lib/ui/cursor-list.svelte.js';
   type RepositoryData = {
     repositories: RepositorySummary[];
     nextCursor: string | null;
@@ -29,25 +30,20 @@
     owner = '',
     filters = ['All', 'Public', 'Private', 'Archived']
   }: { data: RepositoryData; endpoint?: string; path?: string; owner?: string; filters?: string[] } = $props();
-  let items = $state.raw<RepositorySummary[]>(untrack(() => data.repositories));
-  let nextCursor = $state<string | null>(untrack(() => data.nextCursor));
-  let query = $state(untrack(() => data.query));
-  let activeFilter = $state(untrack(() => data.visibility[0].toUpperCase() + data.visibility.slice(1)));
-  let loadingMore = $state(false);
-  let loadError = $state('');
+  let query = $derived(data.query);
+  let activeFilter = $derived(data.visibility[0].toUpperCase() + data.visibility.slice(1));
   let queryTimer: ReturnType<typeof setTimeout> | undefined;
-  let listGeneration = 0;
-
-  $effect(() => {
-    items = [...data.repositories];
-    nextCursor = data.nextCursor;
-    query = data.query;
-    activeFilter = data.visibility[0].toUpperCase() + data.visibility.slice(1);
-    loadingMore = false;
-    loadError = '';
-    listGeneration += 1;
-    clearTimeout(queryTimer);
-  });
+  const repositories = new CursorList(
+    () => ({ items: data.repositories, nextCursor: data.nextCursor }),
+    async (cursor) => {
+      const params = new URLSearchParams({ limit: '30', visibility: data.visibility, q: data.query, cursor });
+      const result = await api<{ repositories: RepositorySummary[]; nextCursor: string | null }>(
+        `${endpoint}?${params}`
+      );
+      return { items: result.repositories, nextCursor: result.nextCursor };
+    },
+    'More repositories could not be loaded.'
+  );
 
   function navigate(visibility = activeFilter, value = query) {
     const params = new URLSearchParams();
@@ -61,27 +57,6 @@
     queryTimer = setTimeout(() => navigate(activeFilter, value), 220);
   }
 
-  async function loadMore() {
-    if (!nextCursor || loadingMore) return;
-    const generation = listGeneration;
-    const cursor = nextCursor;
-    loadingMore = true;
-    loadError = '';
-    try {
-      const result = await api<{ repositories: RepositorySummary[]; nextCursor: string | null }>(
-        `${endpoint}?limit=30&visibility=${activeFilter.toLowerCase()}&q=${encodeURIComponent(query.trim())}&cursor=${encodeURIComponent(cursor)}`
-      );
-      if (generation !== listGeneration) return;
-      const ids = new Set(items.map((repository) => repository.id));
-      items = [...items, ...result.repositories.filter((repository) => !ids.has(repository.id))];
-      nextCursor = result.nextCursor;
-    } catch (cause) {
-      if (generation === listGeneration)
-        loadError = cause instanceof MarlApiError ? cause.message : 'More repositories could not be loaded.';
-    } finally {
-      if (generation === listGeneration) loadingMore = false;
-    }
-  }
   onDestroy(() => clearTimeout(queryTimer));
 </script>
 
@@ -104,7 +79,7 @@
     onQueryChange={changeQuery}
   />
   <section class="surface p-1.5" aria-label="Repositories">
-    {#each items as repository (repository.id)}
+    {#each repositories.items as repository (repository.id)}
       <a
         class="group grid min-h-18 grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3.5 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover"
         href="/{repository.owner}/{repository.name}"
@@ -146,5 +121,5 @@
       </EmptyState>
     {/each}
   </section>
-  <InfiniteScroll cursor={nextCursor} loading={loadingMore} error={loadError} onload={loadMore} />
+  <InfiniteScroll list={repositories} />
 </main>
