@@ -9,8 +9,12 @@
 
   type Branch = { name: string; commitId: string; updatedAt: string };
 
-  let { branches, selected, href }: { branches: Branch[]; selected: string; href: (branch: string) => string } =
-    $props();
+  let {
+    branches,
+    selected,
+    href,
+    class: className = ''
+  }: { branches: Branch[]; selected: string; href: (branch: string) => string; class?: string } = $props();
   let open = $state(false);
   let query = $state('');
   const matches = $derived(branches.filter((branch) => branch.name.toLowerCase().includes(query.trim().toLowerCase())));
@@ -24,11 +28,9 @@
   aria-label="Switch branch"
 >
   {#snippet trigger(popover)}
-    <Button size="small" {...popover}
-      ><GitBranch size={15} /><span class="max-w-48 truncate font-mono text-xs">{selected}</span><ChevronDown
-        size={13}
-        class="text-ink-muted"
-      /></Button
+    <Button size="small" class={['min-w-0', className]} {...popover}
+      ><GitBranch size={15} /><span class="min-w-0 flex-1 truncate text-left font-mono text-xs">{selected}</span
+      ><ChevronDown size={13} class="text-ink-muted" /></Button
     >
   {/snippet}
   <SearchField label="Find a branch" bind:value={query} data-1p-ignore />

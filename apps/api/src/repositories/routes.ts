@@ -33,6 +33,7 @@ import {
   readBlob,
   readCommitPatch
 } from './content/source';
+import { readDocument } from './content/documents';
 import { getRepositoryOverview, updateRepositoryOverview } from './content/overview';
 import {
   getRepositorySettings,
@@ -86,6 +87,9 @@ export const repositoryRoutes = [
   ),
   route('GET', `${repository}/source/:revision/*path`, 'optional', ({ env, principal, execution }, params) =>
     sourcePreview(env, principal, params.owner, params.repo, params.revision, params.path, execution)
+  ),
+  route('GET', `${repository}/document/:revision/*path`, 'optional', ({ env, principal, execution }, params) =>
+    readDocument(env, principal, params.owner, params.repo, params.revision, params.path, execution)
   ),
   route('POST', `${repository}/media`, 'user', ({ request, env, principal }, { owner, repo }) =>
     uploadRepositoryMedia(request, env, principal, owner, repo)

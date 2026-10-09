@@ -5,7 +5,7 @@
   const parts = $derived(path.split('/').filter(Boolean));
 </script>
 
-<nav class="mb-4 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm" aria-label="Path">
+<nav class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm" aria-label="Path">
   <a class="font-semibold text-brand hover:underline" href={treeHref(location)}>{location.repository}</a>
   {#each parts as part, index (`${index}:${part}`)}
     <span class="text-ink-faint">/</span>
