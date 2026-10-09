@@ -1,9 +1,9 @@
-import { apiWith } from '#lib/api.js';
 import { routeLoad } from '#lib/load.js';
-import type { Tree } from '#lib/repositories/browser/types.js';
+import { folderReadme, loadFolderChain } from '#lib/repositories/browser/content-cache.svelte.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, params }) => {
-  const query = new URLSearchParams({ revision: params.revision, ...(params.path ? { path: params.path } : {}) });
-  return { tree: await routeLoad(apiWith<Tree>(fetch, `/repositories/${params.owner}/${params.repo}/tree?${query}`)) };
+  const location = { owner: params.owner, repository: params.repo, revision: params.revision };
+  const folders = await routeLoad(loadFolderChain(fetch, location, params.path));
+  return { folders, readme: folderReadme(fetch, location, folders[params.path]) };
 }) satisfies PageLoad;

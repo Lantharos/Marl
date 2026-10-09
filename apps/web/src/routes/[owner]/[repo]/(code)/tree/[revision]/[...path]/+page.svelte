@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import Seo from '#lib/components/page/Seo.svelte';
-  import TreeView from '#lib/repositories/browser/TreeView.svelte';
+  import FolderView from '#lib/repositories/browser/FolderView.svelte';
   import type { PageProps } from './$types';
 
   let { data, params }: PageProps = $props();
@@ -14,7 +14,7 @@
   path={page.url.pathname}
   robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
 />
-<TreeView
+<FolderView
   location={{
     owner: data.repository.owner,
     repository: data.repository.name,
@@ -22,5 +22,6 @@
     defaultBranch: data.repository.defaultBranch
   }}
   path={params.path}
-  tree={data.tree}
+  tree={data.folders[params.path]}
+  readme={data.readme}
 />

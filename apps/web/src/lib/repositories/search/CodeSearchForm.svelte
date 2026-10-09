@@ -58,7 +58,7 @@
     bind:value
     bind:input
     label="Search code"
-    class={compact ? 'w-full sm:w-64' : 'min-w-0 flex-1'}
+    class={compact ? 'w-full' : 'min-w-0 flex-1'}
     enterkeyhint="search"
     autocomplete="off"
     spellcheck="false"

@@ -24,7 +24,7 @@
     'grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 text-sm transition-colors hover:bg-surface-hover sm:grid-cols-[minmax(160px,280px)_minmax(0,1fr)_auto]';
 </script>
 
-<section class="overflow-hidden surface" aria-label="Files">
+<section class="overflow-hidden surface" aria-label="Files" data-sveltekit-preload-data="hover">
   {#if header}<header
       class="flex min-h-13 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-subtle bg-surface-muted/60 px-4 py-2"
     >

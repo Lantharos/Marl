@@ -1,6 +1,15 @@
 export type BranchSummary = { name: string; commitId: string; title: string; updatedAt: string };
 
-export type TreeEntry = { path: string; name: string; kind: 'blob' | 'tree'; message?: string; updatedAt?: string };
+export type TreeEntry = {
+  path: string;
+  name: string;
+  kind: 'blob' | 'tree';
+  byteSize?: number | null;
+  commitId?: string;
+  message?: string;
+  author?: string;
+  updatedAt?: string;
+};
 
 export type LatestCommit = {
   id: string;
@@ -15,4 +24,8 @@ export type LatestCommit = {
 
 export type CommitSummary = LatestCommit & { authoredAt: string };
 
-export type Tree = { commit: LatestCommit; entries: TreeEntry[] };
+export type Tree = { revision: string; commit: LatestCommit; entries: TreeEntry[] };
+
+export type Folders = Record<string, Tree>;
+
+export type RenderedDocument = { html: string; truncated: boolean };

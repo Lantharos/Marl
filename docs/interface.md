@@ -18,11 +18,9 @@ conversations, and the Inbox adds J and K to move between items, Enter to open o
 mark it done.
 
 What someone is looking at lives in the address. A pull's Overview, Changes, Commits, and Checks
-sections, the overview document, and the code browser's branch and path each have their own URL,
-so links, refresh, and back and forward return to the same view. The code browser keeps the branch
-picker, history, Go to file, and code search above every folder and file; choosing a branch opens
-that branch. Marking Inbox items read or done updates the list immediately and restores it if the
-change fails.
+sections, the overview document, and the code browser's branch, path, and Markdown view each have
+their own URL, so links, refresh, and back and forward return to the same view. Marking Inbox items
+read or done updates the list immediately and restores it if the change fails.
 
 Navigation reuses the current tab's shell for up to a minute instead of fetching the same
 profile and repository list on every page change. Account, repository, and organization
@@ -47,6 +45,28 @@ monospace face and dimmed, so `!7` cannot be misread as 17 in lists, timelines, 
 
 Muted text is for supporting metadata and faint text for the quietest hints and placeholders.
 Both meet AA contrast on every surface in both appearances.
+
+## Code browser
+
+The Code tab reads like an editor. On wide screens a file tree sits beside the content, with the
+branch picker, branch count, code search, and Go to file at its top; the tree stays in view while the
+content scrolls. Folders open in place and load their entries the first time they open. Everything
+already opened stays loaded while someone moves around the repository, and pointing at or moving to
+an entry starts loading it before it is chosen. The tree follows the address: opening a file
+highlights it and expands its folders, and back and forward leave the tree as it was. Only the
+visible rows are drawn, so folders with thousands of entries scroll as smoothly as small ones.
+
+The arrow keys move through the tree, Right and Left open and close folders, Enter opens the
+highlighted entry, and typing the start of a name jumps to it. Dragging the tree's edge resizes it,
+and hiding it gives the content the full width; both choices are remembered on that device. On phones
+and narrow windows the tree opens as a sheet from the button beside the path, and the content keeps
+the full width.
+
+A folder lists its entries with the latest commit for each, followed by its README when it has one.
+A file shows its latest commit and History above the content, with Raw, copy, and download beside the
+file name. Markdown files open rendered, with a switch to the source. Line links such as `#L10-L20`
+select lines in any source view. Images preview inline, other binary files offer a download, and very
+large files show their first 1 MiB with the original a click away.
 
 ## Page widths
 
