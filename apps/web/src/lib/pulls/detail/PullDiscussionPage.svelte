@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type { PullRequestDetail } from '@marl/contracts';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import FileDiff from '@lucide/svelte/icons/file-diff';
@@ -8,7 +9,7 @@
   import MessageSquare from '@lucide/svelte/icons/message-square';
   import X from '@lucide/svelte/icons/x';
   import Button from '#lib/components/controls/Button.svelte';
-  import Chip from '#lib/components/controls/Chip.svelte';
+  import ChipLink from '#lib/components/controls/ChipLink.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import { reporting } from '#lib/reporting/reporting.svelte.js';
   import { seoExcerpt } from '#lib/seo.js';
@@ -26,11 +27,16 @@
 
   let {
     pull: source,
+    tab,
     viewerId,
     publicRepository
-  }: { pull: PullRequestDetail; viewerId?: string; publicRepository: boolean } = $props();
+  }: { pull: PullRequestDetail; tab: PullTab; viewerId?: string; publicRepository: boolean } = $props();
   const route = { owner: page.params.owner ?? '', repo: page.params.repo ?? '', number: Number(page.params.number) };
-  const pageState = new PullPageState(route, () => source);
+  const pageState = new PullPageState(
+    route,
+    () => source,
+    () => tab
+  );
   const mergeability = new PullMergeability();
   const context = { owner: route.owner, repository: route.repo };
   const pull = $derived(pageState.pull);
@@ -50,17 +56,18 @@
     })
   );
 
-  async function selectTab(next: PullTab) {
-    const focusChanges = next === 'changes' && pageState.tab !== 'changes';
-    pageState.tab = next;
-    if (next === 'changes') void pageState.loadDiff();
-    if (!focusChanges) return;
-    await tick();
+  $effect(() => {
+    if (pageState.tab === 'changes') untrack(() => void pageState.loadDiff());
+  });
+
+  afterNavigate(({ type, from, to }) => {
+    const openedChanges = to?.params?.tab === 'changes' && from?.params?.tab !== 'changes';
+    if (type === 'popstate' || from?.route.id !== to?.route.id || !openedChanges) return;
     changesView?.scrollIntoView({
       behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start'
     });
-  }
+  });
 
   const tabOrder: PullTab[] = ['overview', 'changes', 'commits', 'checks'];
 
@@ -68,15 +75,15 @@
     const key = plainKey(event);
     if (!key) return;
     const tabIndex = Number(key) - 1;
-    if (tabOrder[tabIndex]) void selectTab(tabOrder[tabIndex]);
+    if (tabOrder[tabIndex]) void pageState.selectTab(tabOrder[tabIndex]);
     else if ((key === 'j' || key === 'k') && pageState.tab === 'changes')
       stepThrough('[data-review-file]', key === 'j' ? 1 : -1);
     else if (key === 'n' || key === 'p') stepThrough('[data-review-thread="open"]', key === 'n' ? 1 : -1);
     else if (key === 'r' && pageState.reviewable) {
-      if (pageState.tab !== 'changes') await selectTab('changes');
+      if (pageState.tab !== 'changes') await pageState.selectTab('changes');
       pageState.reviewOpen = true;
     } else if (key === 'c' && viewerId) {
-      if (pageState.tab !== 'overview') await selectTab('overview');
+      if (pageState.tab !== 'overview') await pageState.selectTab('overview');
       await tick();
       document.querySelector<HTMLTextAreaElement>('[data-pull-composer] textarea')?.focus();
     } else return;
@@ -131,9 +138,9 @@
   <div class="min-w-0" bind:this={changesView}>
     <nav class="mb-4 flex gap-1.5 overflow-x-auto pb-0.5 max-sm:-mx-4 max-sm:px-4" aria-label="Pull sections">
       {#each tabs as { id, label, icon: Icon, count } (id)}
-        <Chip active={pageState.tab === id} onclick={() => selectTab(id)}
+        <ChipLink active={pageState.tab === id} href={pageState.tabHref(id)} data-sveltekit-reset={false}
           ><Icon size={14} />{label}{#if count !== null}<span class="text-xs text-ink-muted tabular-nums">{count}</span
-            >{/if}</Chip
+            >{/if}</ChipLink
         >
       {/each}
     </nav>

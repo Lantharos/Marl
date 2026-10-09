@@ -8,6 +8,7 @@ import type {
   PullTimelineWindow,
   ReviewThread
 } from '@marl/contracts';
+import { goto } from '$app/navigation';
 import { api, MarlApiError } from '#lib/api.js';
 import { reviewThreadContext, type ThreadCodeLine } from '#lib/code/diff.js';
 import { PullTimelineState } from '../timeline/PullTimelineState.svelte';
@@ -23,12 +24,12 @@ type UpdateResult = { update?: PullRealtimeUpdate };
 
 export class PullPageState {
   readonly route: Route;
+  tab: PullTab;
   pull: PullRequestDetail;
   timeline: PullTimelineState;
   diff = $state<PullRequestDiff | null>(null);
   diffLoading = $state(false);
   diffScope = $state<'all' | 'since'>('all');
-  tab = $state<PullTab>('overview');
   error = $state('');
   busy = $state(false);
   approvingChecks = $state(false);
@@ -44,8 +45,9 @@ export class PullPageState {
   #catchUp: Promise<void> | null = null;
   #stateRefreshQueued = false;
 
-  constructor(route: Route, source: () => PullRequestDetail) {
+  constructor(route: Route, source: () => PullRequestDetail, tab: () => PullTab) {
     this.route = route;
+    this.tab = $derived(tab());
     this.pull = $derived(source());
     this.timeline = $derived(new PullTimelineState(source().timeline));
   }
@@ -53,6 +55,11 @@ export class PullPageState {
   get endpoint() {
     return `/repositories/${this.route.owner}/${this.route.repo}/pulls/${this.route.number}`;
   }
+
+  tabHref = (tab: PullTab) =>
+    `/${this.route.owner}/${this.route.repo}/pulls/${this.route.number}${tab === 'overview' ? '' : `/${tab}`}`;
+
+  selectTab = (tab: PullTab) => goto(this.tabHref(tab), { reset: false });
 
   get open() {
     return this.pull.state !== 'merged' && this.pull.state !== 'closed';
@@ -246,7 +253,7 @@ export class PullPageState {
     this.#markReviewed();
     this.reviewBody = '';
     this.reviewOpen = false;
-    this.tab = 'overview';
+    await this.selectTab('overview');
   };
 
   addComment = async () => {
