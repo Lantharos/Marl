@@ -29,7 +29,7 @@
       {#if index > 0 && match.line - file.matches[index - 1].line > 1}
         <div class="h-2 bg-surface-muted/60" aria-hidden="true"></div>
       {/if}
-      <a href="{href}#L{match.line}" class="flex min-w-max font-mono text-[13px] leading-6 hover:bg-surface-hover">
+      <a href="{href}#L{match.line}" class="flex min-w-max font-mono text-sm leading-6 hover:bg-surface-hover">
         <span class="sticky left-0 w-15.5 shrink-0 bg-surface-muted pr-3 text-right text-ink-faint select-none"
           >{match.line}</span
         >

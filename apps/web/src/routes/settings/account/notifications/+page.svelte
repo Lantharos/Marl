@@ -8,6 +8,8 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
+  import List from '#lib/components/list/List.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -85,16 +87,14 @@
 />
 {#if error}<Notice class="mb-4">{error}</Notice>{/if}
 
-<div class="grid gap-8">
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Email</h2>
+<div class="grid gap-10">
+  <SettingsGroup title="Email" divided={false}>
     <SettingsChoices bind:value={mode} options={modes} label="Email notifications" />
-  </section>
+  </SettingsGroup>
 
   {#if mode !== 'off'}
-    <section>
-      <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">What to email about</h2>
-      <div class="grid gap-0.5 surface p-1.5">
+    <SettingsGroup title="What to email about" divided={false}>
+      <List class="grid gap-0.5">
         {#each reasons as reason (reason.value)}
           <Checkbox
             checked={preferences.reasons.includes(reason.value)}
@@ -103,37 +103,34 @@
             onchange={(checked) => toggleReason(reason.value, checked)}
           />
         {/each}
-      </div>
-    </section>
+      </List>
+    </SettingsGroup>
   {/if}
 
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Repositories</h2>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      {#each preferences.repositories as repository (`${repository.owner}/${repository.name}`)}
-        <div class="flex min-h-15 items-center justify-between gap-3 py-2.5">
-          <span class="min-w-0">
-            <a
-              class="block truncate text-sm font-semibold text-ink-strong hover:text-brand"
-              href="/{repository.owner}/{repository.name}">{repository.owner}/{repository.name}</a
-            >
-            <span class="text-xs text-ink-muted">{levelLabels[repository.level]}</span>
-          </span>
-          <Button
-            icon
-            size="small"
-            variant="ghost"
-            aria-label="Notify about all activity in {repository.owner}/{repository.name}"
-            title="Notify about all activity"
-            onclick={() => reset(repository.owner, repository.name)}><X size={15} /></Button
+  <SettingsGroup title="Repositories">
+    {#each preferences.repositories as repository (`${repository.owner}/${repository.name}`)}
+      <div class="flex min-h-15 items-center justify-between gap-3 py-2.5">
+        <span class="min-w-0">
+          <a
+            class="block truncate text-sm font-semibold text-ink-strong hover:text-brand"
+            href="/{repository.owner}/{repository.name}">{repository.owner}/{repository.name}</a
           >
-        </div>
-      {:else}
-        <p class="py-5 text-sm text-ink-muted">
-          Every repository notifies you about activity involving you. Use the bell on a repository to limit it to
-          mentions or ignore it.
-        </p>
-      {/each}
-    </div>
-  </section>
+          <span class="text-xs text-ink-muted">{levelLabels[repository.level]}</span>
+        </span>
+        <Button
+          icon
+          size="small"
+          variant="ghost"
+          aria-label="Notify about all activity in {repository.owner}/{repository.name}"
+          title="Notify about all activity"
+          onclick={() => reset(repository.owner, repository.name)}><X size={15} /></Button
+        >
+      </div>
+    {:else}
+      <p class="py-5 text-sm text-ink-muted">
+        Every repository notifies you about activity involving you. Use the bell on a repository to limit it to mentions
+        or ignore it.
+      </p>
+    {/each}
+  </SettingsGroup>
 </div>

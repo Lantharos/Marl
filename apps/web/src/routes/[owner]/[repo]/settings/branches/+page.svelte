@@ -14,6 +14,7 @@
   import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import type { BranchRule as Rule } from './+page';
   import type { PageData } from './$types';
 
@@ -182,57 +183,51 @@
     Using the all-branches rule. Changes create an override for <code class="font-mono text-ink">{pattern}</code>.
   </p>{/if}
 
-<div class="grid gap-8">
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Review</h2>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      <SettingRow
-        title="Required approvals"
-        value={current.requiredApprovals === 0
-          ? 'No approval required'
-          : `${current.requiredApprovals} ${current.requiredApprovals === 1 ? 'approval' : 'approvals'}`}
-        onclick={() => edit('approvals')}
-      />
-      <SettingRow
-        title="Required checks"
-        value={current.requiredChecks.length ? current.requiredChecks.join(' · ') : 'None required'}
-        onclick={() => edit('checks')}
-      />
-      <SettingRow
-        title="Review conversations"
-        value={current.requireConversations ? 'Resolve before merging' : 'Open conversations allowed'}
-        onclick={() => edit('conversations')}
-      />
-      <SettingRow
-        title="Approvals on new revisions"
-        value={current.carryApprovalsForward ? 'Carry approvals forward' : 'Review each revision'}
-        onclick={() => edit('carry')}
-      />
-    </div>
-  </section>
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Merging</h2>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      <SettingRow
-        title="Who can merge"
-        value={current.allowAuthorMerge ? 'Maintainers and eligible authors' : 'Maintainers only'}
-        onclick={() => edit('author')}
-      />
-      <SettingRow
-        title="Merge queue"
-        value={current.mergeQueue ? 'Pulls merge through the queue' : 'Pulls merge directly'}
-        onclick={() => edit('queue')}
-      />
-      <SettingRow
-        title="Merge methods"
-        value={methods
-          .filter((method) => current.allowedMergeMethods.includes(method.value))
-          .map((method) => method.label)
-          .join(' · ')}
-        onclick={() => edit('methods')}
-      />
-    </div>
-  </section>
+<div class="grid gap-10">
+  <SettingsGroup title="Review">
+    <SettingRow
+      title="Required approvals"
+      value={current.requiredApprovals === 0
+        ? 'No approval required'
+        : `${current.requiredApprovals} ${current.requiredApprovals === 1 ? 'approval' : 'approvals'}`}
+      onclick={() => edit('approvals')}
+    />
+    <SettingRow
+      title="Required checks"
+      value={current.requiredChecks.length ? current.requiredChecks.join(' · ') : 'None required'}
+      onclick={() => edit('checks')}
+    />
+    <SettingRow
+      title="Review conversations"
+      value={current.requireConversations ? 'Resolve before merging' : 'Open conversations allowed'}
+      onclick={() => edit('conversations')}
+    />
+    <SettingRow
+      title="Approvals on new revisions"
+      value={current.carryApprovalsForward ? 'Carry approvals forward' : 'Review each revision'}
+      onclick={() => edit('carry')}
+    />
+  </SettingsGroup>
+  <SettingsGroup title="Merging">
+    <SettingRow
+      title="Who can merge"
+      value={current.allowAuthorMerge ? 'Maintainers and eligible authors' : 'Maintainers only'}
+      onclick={() => edit('author')}
+    />
+    <SettingRow
+      title="Merge queue"
+      value={current.mergeQueue ? 'Pulls merge through the queue' : 'Pulls merge directly'}
+      onclick={() => edit('queue')}
+    />
+    <SettingRow
+      title="Merge methods"
+      value={methods
+        .filter((method) => current.allowedMergeMethods.includes(method.value))
+        .map((method) => method.label)
+        .join(' · ')}
+      onclick={() => edit('methods')}
+    />
+  </SettingsGroup>
 </div>
 
 <Modal open={field !== null} size="small" title={field ? titles[field] : ''} onClose={() => !saving && (field = null)}>
@@ -295,7 +290,7 @@
             class="inline-flex items-center gap-1 rounded-md bg-surface-muted py-1 pr-1 pl-2.5 font-mono text-xs text-ink"
             >{check}<button
               type="button"
-              class="grid size-5 place-items-center rounded text-ink-muted hover:bg-surface-hover hover:text-ink-strong"
+              class="grid size-5 place-items-center rounded-sm text-ink-muted hover:bg-surface-hover hover:text-ink-strong"
               aria-label={`Remove ${check}`}
               disabled={saving}
               onclick={() => (draft.requiredChecks = draft.requiredChecks.filter((value) => value !== check))}

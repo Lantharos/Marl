@@ -10,7 +10,10 @@
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import FilterBar from '#lib/components/page/FilterBar.svelte';
+  import Page from '#lib/components/page/Page.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
@@ -62,7 +65,7 @@
 
 <svelte:head><title>Repositories{owner ? ` · ${owner}` : ''} · Marl</title></svelte:head>
 
-<main class="mx-auto w-full max-w-240 px-4 pt-8 pb-20 sm:px-6 sm:pt-10">
+<Page>
   {#if owner}<div class="mb-4"><BackLink href="/{owner}" label={owner} /></div>{/if}
   <PageHeader title="Repositories">
     {#snippet action()}{#if !owner}<div class="flex gap-2">
@@ -78,10 +81,10 @@
     onActiveChange={() => navigate()}
     onQueryChange={changeQuery}
   />
-  <section class="surface p-1.5" aria-label="Repositories">
+  <List as="section" aria-label="Repositories">
     {#each repositories.items as repository (repository.id)}
-      <a
-        class="group grid min-h-18 grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3.5 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover"
+      <ListRow
+        class="group grid min-h-18 grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3.5 py-3"
         href="/{repository.owner}/{repository.name}"
       >
         <RepositoryIcon name={repository.name} src={repository.iconUrl} size={36} />
@@ -102,7 +105,7 @@
             >{/if}
         </span>
         <Time value={repository.updatedAt} class="text-xs text-ink-faint" />
-      </a>
+      </ListRow>
     {:else}
       <EmptyState
         icon={FolderGit2}
@@ -120,6 +123,6 @@
           >{/if}
       </EmptyState>
     {/each}
-  </section>
+  </List>
   <InfiniteScroll list={repositories} />
-</main>
+</Page>

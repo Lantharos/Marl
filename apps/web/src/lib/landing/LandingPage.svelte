@@ -123,7 +123,7 @@
       </div>
       <div class="min-w-0 overflow-hidden rounded-xl bg-surface-muted">
         <div
-          class="overflow-x-auto p-8 font-mono text-[13px] leading-[1.8] focus-visible:rounded-xl focus-visible:outline-offset-[-4px] max-sm:px-4.5 max-sm:py-6 max-sm:text-xs [&_i]:w-5 [&_i]:flex-none [&_i]:text-brand [&_i]:not-italic [&_p]:mb-1 [&_p]:flex [&_p]:w-max [&_p]:min-w-full [&_p]:whitespace-nowrap"
+          class="overflow-x-auto p-8 font-mono text-sm leading-[1.8] focus-visible:rounded-xl focus-visible:outline-offset-[-4px] max-sm:px-4.5 max-sm:py-6 max-sm:text-xs [&_i]:w-5 [&_i]:flex-none [&_i]:text-brand [&_i]:not-italic [&_p]:mb-1 [&_p]:flex [&_p]:w-max [&_p]:min-w-full [&_p]:whitespace-nowrap"
           role="region"
           aria-label="Git clone and push example"
           {@attach keyboardScroll}

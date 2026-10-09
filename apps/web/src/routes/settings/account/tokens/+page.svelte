@@ -12,6 +12,7 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import { formatDate, formatTimestamp } from '#lib/time.js';
   import type { PageData } from './$types';
@@ -90,7 +91,7 @@
     >{/snippet}
 </SettingsHeader>
 {#if error && !tokenDialog && !revoking}<Notice class="mb-4">{error}</Notice>{/if}
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each tokens as token (token.id)}
     <article class="grid min-h-20 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
       <KeyRound size={18} class="text-ink-muted" />
@@ -122,7 +123,7 @@
       description="Create a token to push over HTTPS or automate Marl from scripts."
     />
   {/each}
-</div>
+</SettingsGroup>
 
 {#snippet tokenActions()}
   {#if newToken}<Button size="small" variant="primary" onclick={() => (tokenDialog = false)}>Done</Button>{:else}

@@ -107,12 +107,7 @@
 />
 
 <div
-  class={[
-    'grid items-start gap-7 lg:gap-8',
-    pageState.tab === 'changes'
-      ? 'lg:grid-cols-[minmax(280px,0.7fr)_minmax(0,2fr)] xl:grid-cols-[300px_minmax(0,1fr)]'
-      : 'lg:grid-cols-[minmax(300px,0.85fr)_minmax(0,1.75fr)]'
-  ]}
+  class="grid items-start gap-7 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[420px_minmax(0,1fr)] xl:gap-10"
 >
   <PullSummary
     conflicted={mergeability.conflicted}

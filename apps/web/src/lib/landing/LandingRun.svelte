@@ -20,7 +20,7 @@
   <section class="min-w-0 pb-3" aria-label="Workflow file">
     <h3 class="px-3.5 pt-3.5 pb-3 font-mono text-xs text-ink-muted">{workflowPath}</h3>
     <div
-      class="overflow-x-auto font-mono text-[13px] leading-[1.7] focus-visible:outline-offset-[-2px]"
+      class="overflow-x-auto font-mono text-sm leading-[1.7] focus-visible:outline-offset-[-2px]"
       role="region"
       aria-label="Workflow source"
       {@attach keyboardScroll}

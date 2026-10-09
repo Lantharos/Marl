@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { IssueEvent } from '@marl/contracts';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import Time from '#lib/components/page/Time.svelte';
@@ -15,7 +16,11 @@
     {#if event.kind === 'closed_by_pull'}<a
         class="font-medium text-ink hover:text-brand"
         href="/{event.details.owner}/{event.details.repository}/pulls/{event.details.number}"
-        >{event.details.owner}/{event.details.repository}!{event.details.number}</a
+        ><WorkItemReference
+          kind="pull"
+          number={event.details.number}
+          repository="{event.details.owner}/{event.details.repository}"
+        /></a
       >{/if}
   </p>
   <Time value={createdAt} class="text-xs text-ink-faint" />

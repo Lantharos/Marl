@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { InboxItem } from '@marl/contracts';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import Check from '@lucide/svelte/icons/check';
@@ -8,6 +9,7 @@
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import Button from '#lib/components/controls/Button.svelte';
+  import List from '#lib/components/list/List.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import { plainKey } from '#lib/ui/keyboard.js';
@@ -63,7 +65,7 @@
 </script>
 
 <svelte:window onkeydown={onToggleDone && ((event) => triage(event, onToggleDone))} />
-<section bind:this={list} class="surface p-1.5" aria-label="Inbox items">
+<List as="section" bind:element={list} aria-label="Inbox items">
   {#each items as item (item.id)}
     <article
       class="group relative flex items-center gap-1 rounded-lg transition-colors hover:bg-surface-hover has-[a:focus-visible]:bg-surface-hover"
@@ -99,14 +101,10 @@
               ></span>{/if}
           </span>
           <span class="mt-0.5 block truncate text-xs text-ink-muted"
-            ><span class="text-ink">{item.repository.owner}/{item.repository.name}</span> · {item.kind === 'issue'
-              ? `#${item.number}`
-              : item.kind === 'pull'
-                ? `!${item.number}`
-                : `run ${item.number}`} · {inboxReason(item)} · <Time
-              value={item.updatedAt}
-              class="text-ink-muted"
-            /></span
+            ><span class="text-ink">{item.repository.owner}/{item.repository.name}</span> · {#if item.kind === 'run'}run {item.number}{:else}<WorkItemReference
+                kind={item.kind}
+                number={item.number}
+              />{/if} · {inboxReason(item)} · <Time value={item.updatedAt} class="text-ink-muted" /></span
           >
         </span>
       </a>
@@ -124,4 +122,4 @@
   {:else}
     <EmptyState compact icon={Check} title={emptyTitle} description={emptyDescription} />
   {/each}
-</section>
+</List>

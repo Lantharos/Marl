@@ -9,6 +9,8 @@
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Square from '@lucide/svelte/icons/square';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import { api, apiTextCursorAll, MarlApiError } from '#lib/api.js';
   import { formatBytes } from '#lib/bytes.js';
   import Button from '#lib/components/controls/Button.svelte';
@@ -243,7 +245,8 @@
         <span class="font-semibold text-ink capitalize">{runStateLabel(run)}</span>
         <span aria-hidden="true">·</span>{runOrigin(run)}
         <span aria-hidden="true">·</span><Time value={run.queuedAt} class="text-ink-muted" />
-        <span class="inline-flex items-center gap-1 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink"
+        <span
+          class="inline-flex items-center gap-1 rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink"
           ><GitBranch size={12} />{run.branch}<a
             class="text-ink-muted hover:text-brand"
             href="/{owner}/{repo}/commit/{run.commit}">{run.commit.slice(0, 7)}</a
@@ -330,10 +333,10 @@
       {#if job.artifacts.length}
         <section>
           <h3 class="mb-2 text-sm font-semibold text-ink-strong">Artifacts</h3>
-          <div class="surface p-1.5">
+          <List>
             {#each job.artifacts as artifact (artifact.id)}
-              <a
-                class="group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
+              <ListRow
+                class="group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2.5 py-2.5"
                 href="/api/v1/artifacts/{artifact.id}"
               >
                 <Archive size={15} class="text-ink-muted" />
@@ -341,9 +344,9 @@
                   >{artifact.name}</strong
                 >
                 <span class="text-xs text-ink-muted tabular-nums">{formatBytes(artifact.byteSize)}</span>
-              </a>
+              </ListRow>
             {/each}
-          </div>
+          </List>
         </section>
       {/if}
     {/if}

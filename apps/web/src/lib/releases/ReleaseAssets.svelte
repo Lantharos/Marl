@@ -4,6 +4,7 @@
   import FileArchive from '@lucide/svelte/icons/file-archive';
   import Trash2 from '@lucide/svelte/icons/trash';
   import Upload from '@lucide/svelte/icons/upload';
+  import List from '#lib/components/list/List.svelte';
   import Button from '#lib/components/controls/Button.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import SearchField from '#lib/components/controls/SearchField.svelte';
@@ -75,7 +76,7 @@
   </header>
   {#if error}<Notice class="mb-2">{error}</Notice>{/if}
   {#if assets.length > 6}<SearchField label="Find a file" bind:value={query} class="mb-2" />{/if}
-  <div class="surface p-1.5">
+  <List>
     {#each shown as asset (asset.id)}
       <div
         class="group grid grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-lg py-1.5 pr-1.5 pl-3 transition-colors hover:bg-surface-hover"
@@ -121,5 +122,5 @@
     {/each}
     {#if !assets.length && !uploading.length}<p class="px-3 py-4 text-sm text-ink-muted">No downloads attached.</p>{/if}
     {#if assets.length && !shown.length}<p class="px-3 py-4 text-sm text-ink-muted">No matching files.</p>{/if}
-  </div>
+  </List>
 </section>

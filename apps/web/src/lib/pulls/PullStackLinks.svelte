@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PullStack } from '@marl/contracts';
   import Layers from '@lucide/svelte/icons/layers';
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
 
   let { stack, repository }: { stack: PullStack; repository: string } = $props();
 </script>
@@ -14,12 +15,13 @@
     {#if stack.base}<span class="truncate"
         >Builds on <a
           class="font-medium text-ink-strong hover:text-brand"
-          href="/{repository}/pulls/{stack.base.number}">!{stack.base.number} {stack.base.title}</a
+          href="/{repository}/pulls/{stack.base.number}"
+          ><WorkItemReference kind="pull" number={stack.base.number} /> {stack.base.title}</a
         ></span
       >{/if}
     {#each stack.dependents as dependent (dependent.number)}<span class="truncate"
         ><a class="font-medium text-ink-strong hover:text-brand" href="/{repository}/pulls/{dependent.number}"
-          >!{dependent.number} {dependent.title}</a
+          ><WorkItemReference kind="pull" number={dependent.number} /> {dependent.title}</a
         > builds on this</span
       >{/each}
     {#if stack.dependents.length}<span class="text-ink-faint">Merging this retargets them to its target branch.</span

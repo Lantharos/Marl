@@ -3,6 +3,8 @@
   import type { ReleaseSummary } from '@marl/contracts';
   import Download from '@lucide/svelte/icons/download';
   import Tag from '@lucide/svelte/icons/tag';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
@@ -41,11 +43,9 @@
   actionLabel={data.canCreate ? 'New release' : undefined}
 />
 {#if releases.items.length}
-  <div class="surface p-1.5">
+  <List>
     {#each releases.items as release (release.id)}
-      <article
-        class="relative grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-4 transition-colors hover:bg-surface-hover sm:gap-4"
-      >
+      <ListRow as="article" class="relative grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 py-4 sm:gap-4">
         <span
           class={[
             'grid size-8 place-items-center rounded-lg',
@@ -84,9 +84,9 @@
               >{release.assetCount} {release.assetCount === 1 ? 'file' : 'files'}</span
             ></LinkButton
           >{/if}
-      </article>
+      </ListRow>
     {/each}
-  </div>
+  </List>
 {:else}
   <div class="surface">
     <EmptyState

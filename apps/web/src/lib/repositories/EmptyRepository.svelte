@@ -69,7 +69,7 @@
           </div>{/if}
       </div>
       <div class="relative rounded-lg bg-surface-muted">
-        <pre class="overflow-x-auto py-3.5 pr-12 pl-4 font-mono text-[13px] leading-[1.75] text-ink-strong"><code
+        <pre class="overflow-x-auto py-3.5 pr-12 pl-4 font-mono text-sm leading-[1.75] text-ink-strong"><code
             >{commands}</code
           ></pre>
         <Button

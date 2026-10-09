@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { PullRequestSummary } from '@marl/contracts';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
@@ -7,6 +8,8 @@
   import GitMerge from '@lucide/svelte/icons/git-merge';
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import GitPullRequestClosed from '@lucide/svelte/icons/git-pull-request-closed';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import LabelPill from '#lib/components/discussion/LabelPill.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
@@ -67,12 +70,10 @@
             <span class="text-xs text-ink-muted tabular-nums">{section.pulls.length}</span>
           </header>
         {/if}
-        <div class="surface p-1.5">
+        <List>
           {#each section.pulls as pull (pull.id)}
             {@const signal = pullSignal(pull)}
-            <article
-              class="relative grid grid-cols-[32px_minmax(0,1fr)] gap-3 rounded-lg px-3 py-3.5 transition-colors hover:bg-surface-hover"
-            >
+            <ListRow as="article" class="relative grid grid-cols-[32px_minmax(0,1fr)] gap-3 py-3.5">
               <span class={['grid size-8 place-items-center rounded-lg', tones[signal.tone]]} title={signal.label}>
                 {#if pull.state === 'merged'}<GitMerge size={17} />
                 {:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />
@@ -97,13 +98,13 @@
                       href="/{pull.repository.owner}/{pull.repository.name}"
                       >{pull.repository.owner}/{pull.repository.name}</a
                     ><span aria-hidden="true">·</span>{/if}
-                  <span>!{pull.number}</span><span>by</span><a
+                  <WorkItemReference kind="pull" number={pull.number} /><span>by</span><a
                     class="relative z-1 hover:text-brand"
                     href="/{pull.author}">{pull.authorDisplayName}</a
                   ><span aria-hidden="true">·</span><Time value={pull.updatedAt} class="text-ink-muted" />
                 </p>
                 <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
-                  <code class="max-w-full truncate rounded bg-surface-muted px-1.5 py-0.5 font-mono"
+                  <code class="max-w-full truncate rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono"
                     >{pull.sourceRepository &&
                     `${pull.sourceRepository.owner}/${pull.sourceRepository.name}` !==
                       `${pull.repository.owner}/${pull.repository.name}`
@@ -111,7 +112,7 @@
                       : ''}{pull.sourceBranch}</code
                   >
                   <ArrowRight size={12} class="text-ink-faint" />
-                  <code class="rounded bg-surface-muted px-1.5 py-0.5 font-mono">{pull.targetBranch}</code>
+                  <code class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono">{pull.targetBranch}</code>
                   {#if pull.checkSummary.total}<span
                       class={[
                         'ml-1 inline-flex items-center gap-1',
@@ -128,9 +129,9 @@
                     </span>{/if}
                 </div>
               </div>
-            </article>
+            </ListRow>
           {/each}
-        </div>
+        </List>
       </section>
     {/each}
   </div>

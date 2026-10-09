@@ -1,8 +1,18 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { ClassValue } from 'svelte/elements';
 
-  let { width = 'default', children }: { width?: 'narrow' | 'default' | 'wide'; children: Snippet } = $props();
-  const widths = { narrow: 'max-w-215', default: 'max-w-240', wide: 'max-w-290' };
+  let {
+    width = 'wide',
+    class: className,
+    children
+  }: { width?: 'narrow' | 'wide'; class?: ClassValue; children: Snippet } = $props();
 </script>
 
-<main class={['mx-auto w-full px-4 pt-8 pb-20 sm:px-6 sm:pt-10', widths[width]]}>{@render children()}</main>
+<main
+  id="main-content"
+  tabindex="-1"
+  class={['page-frame pt-8 pb-20 outline-none sm:pt-10', width === 'narrow' && '[--page-width:768px]', className]}
+>
+  {@render children()}
+</main>

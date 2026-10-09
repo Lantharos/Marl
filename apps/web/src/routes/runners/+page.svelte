@@ -2,6 +2,8 @@
   import type { RunnerSummary } from '@marl/contracts';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Cpu from '@lucide/svelte/icons/cpu';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import FilterBar from '#lib/components/page/FilterBar.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
@@ -46,10 +48,10 @@
     bind:active={activeFilter}
     bind:query
   />
-  <section class="surface p-1.5">
+  <List as="section">
     {#each filteredRunners as runner (runner.id)}
-      <a
-        class="group grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover sm:grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_96px_80px]"
+      <ListRow
+        class="group grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 py-3 sm:grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_96px_80px]"
         href="/runners/{runner.id}"
       >
         <span class="grid size-8 place-items-center rounded-lg bg-surface-muted text-ink-muted"><Cpu size={17} /></span>
@@ -63,7 +65,7 @@
         </span>
         <span class="hidden min-w-0 flex-wrap gap-1 sm:flex">
           {#each runner.labels as label (label)}<code
-              class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-2xs text-ink-muted">{label}</code
+              class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-2xs text-ink-muted">{label}</code
             >{/each}
         </span>
         <span class="hidden gap-1 sm:grid">
@@ -76,7 +78,7 @@
           >
         </span>
         <span class="justify-self-end"><RunnerStatus state={runner.state} /></span>
-      </a>
+      </ListRow>
     {:else}
       <EmptyState
         icon={Cpu}
@@ -89,5 +91,5 @@
           >{/if}
       </EmptyState>
     {/each}
-  </section>
+  </List>
 </Page>

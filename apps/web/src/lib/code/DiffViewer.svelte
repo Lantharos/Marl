@@ -303,7 +303,7 @@
       >
         <header class="flex min-h-11 items-center gap-2.5 bg-surface-muted px-3">
           <strong class="truncate font-mono text-xs font-semibold text-ink-strong">{file.path}</strong>
-          <span class="rounded bg-canvas px-1.5 py-0.5 text-2xs text-ink-muted capitalize max-sm:hidden"
+          <span class="rounded-sm bg-canvas px-1.5 py-0.5 text-2xs text-ink-muted capitalize max-sm:hidden"
             >{file.status}</span
           >
           <DiffStat additions={file.additions} deletions={file.deletions} class="ml-auto" />

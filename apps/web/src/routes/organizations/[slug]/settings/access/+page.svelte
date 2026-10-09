@@ -15,6 +15,7 @@
   import Modal from '#lib/components/overlays/Modal.svelte';
   import SettingItem from '#lib/components/settings/SettingItem.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import OrganizationSettingsShell from '#lib/components/settings/shells/OrganizationSettingsShell.svelte';
   import Select from '#lib/components/controls/Select.svelte';
   import SettingsAction from '#lib/components/settings/SettingsAction.svelte';
@@ -162,16 +163,6 @@
   }
 </script>
 
-{#snippet sectionHeader(title: string, description: string, action?: import('svelte').Snippet)}
-  <header class="mb-3 flex flex-wrap items-end justify-between gap-3">
-    <div>
-      <h2 class="text-base font-semibold text-ink-strong">{title}</h2>
-      <p class="mt-0.5 text-sm text-ink-muted">{description}</p>
-    </div>
-    {#if action}{@render action()}{/if}
-  </header>
-{/snippet}
-
 <svelte:head><title>{organizationName} access · Marl</title></svelte:head>
 <OrganizationSettingsShell
   name={organizationName}
@@ -180,14 +171,11 @@
   active="access"
   showSecrets={canAdminister}
 >
-  <SettingsHeader
-    title="People and teams"
-    description="Organization membership and the access inherited by every repository."
-  />
+  <SettingsHeader title="People and teams" />
   {#if error}<Notice class="mb-4">{error}</Notice>{/if}
   <div class="grid gap-10">
     {#if isOwner && data.organization.kind !== 'personal'}
-      <section class="surface px-4 sm:px-5">
+      <SettingsGroup label="Base repository role">
         <SettingItem
           title="Base repository role"
           description="The access every member has to this organization’s repositories."
@@ -197,132 +185,118 @@
           </div>
           <SettingsAction state={saveState} label="Save" onclick={saveSettings} />
         </SettingItem>
-      </section>
+      </SettingsGroup>
     {/if}
 
-    <section>
-      {#snippet inviteAction()}{#if canAdminister && data.organization.kind !== 'personal'}<Button
+    <SettingsGroup title="Members" description="Organization roles govern teams, repositories, and invitations.">
+      {#snippet action()}{#if canAdminister && data.organization.kind !== 'personal'}<Button
             size="small"
             onclick={() => {
               memberRole = 'member';
               dialog = 'invite';
             }}>Invite member</Button
           >{/if}{/snippet}
-      {@render sectionHeader(
-        'Members',
-        'Organization roles govern teams, repositories, and invitations.',
-        inviteAction
-      )}
-      <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-        {#each members as member (member.id)}
-          <article class="flex min-h-17 items-center gap-3 py-3">
-            <span class="min-w-0 flex-1">
-              <UserProfileLink
-                handle={member.handle}
-                displayName={member.displayName}
-                avatarUrl={member.avatarUrl}
-                size={30}
-                detail={`@${member.handle}${member.email ? ` · ${member.email}` : ''}`}
+      {#each members as member (member.id)}
+        <article class="flex min-h-17 items-center gap-3 py-3">
+          <span class="min-w-0 flex-1">
+            <UserProfileLink
+              handle={member.handle}
+              displayName={member.displayName}
+              avatarUrl={member.avatarUrl}
+              size={30}
+              detail={`@${member.handle}${member.email ? ` · ${member.email}` : ''}`}
+            />
+          </span>
+          {#if member.role === 'owner' || !isOwner}<span
+              class="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-muted capitalize"
+              >{member.role}</span
+            >{:else}
+            <div class="w-40">
+              <Select
+                value={member.role}
+                options={memberRoles}
+                ariaLabel={`Role for ${member.handle}`}
+                onchange={(value) => changeMember(member, value)}
               />
-            </span>
-            {#if member.role === 'owner' || !isOwner}<span
-                class="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-muted capitalize"
-                >{member.role}</span
-              >{:else}
-              <div class="w-40">
-                <Select
-                  value={member.role}
-                  options={memberRoles}
-                  ariaLabel={`Role for ${member.handle}`}
-                  onchange={(value) => changeMember(member, value)}
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="small"
-                icon
-                aria-label={`Remove ${member.handle}`}
-                onclick={() => (removing = member)}><Trash2 size={15} /></Button
-              >{/if}
-          </article>
-        {/each}
-      </div>
-    </section>
+            </div>
+            <Button
+              variant="ghost"
+              size="small"
+              icon
+              aria-label={`Remove ${member.handle}`}
+              onclick={() => (removing = member)}><Trash2 size={15} /></Button
+            >{/if}
+        </article>
+      {/each}
+    </SettingsGroup>
 
     {#if invitations.length}
-      <section>
-        {@render sectionHeader('Pending invitations', 'Invitations expire automatically after seven days.')}
-        <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-          {#each invitations as invitation (invitation.id)}
-            <article class="flex min-h-15 items-center gap-3 py-3">
-              <div class="min-w-0 flex-1">
-                <strong class="block truncate text-sm font-semibold text-ink-strong">{invitation.email}</strong>
-                <span class="text-xs text-ink-muted capitalize">{invitation.role}</span>
-              </div>
-              <Button variant="ghost" size="small" onclick={() => revokeInvitation(invitation)}>Revoke</Button>
-            </article>
-          {/each}
-        </div>
-      </section>
+      <SettingsGroup title="Pending invitations" description="Invitations expire automatically after seven days.">
+        {#each invitations as invitation (invitation.id)}
+          <article class="flex min-h-15 items-center gap-3 py-3">
+            <div class="min-w-0 flex-1">
+              <strong class="block truncate text-sm font-semibold text-ink-strong">{invitation.email}</strong>
+              <span class="text-xs text-ink-muted capitalize">{invitation.role}</span>
+            </div>
+            <Button variant="ghost" size="small" onclick={() => revokeInvitation(invitation)}>Revoke</Button>
+          </article>
+        {/each}
+      </SettingsGroup>
     {/if}
 
     {#if data.organization.kind !== 'personal'}
-      <section>
-        {#snippet teamAction()}{#if canAdminister}<Button size="small" onclick={() => (dialog = 'team')}
-              >New team</Button
+      <SettingsGroup title="Teams" description="Grant repository access once and keep membership centralized.">
+        {#snippet action()}{#if canAdminister}<Button size="small" onclick={() => (dialog = 'team')}>New team</Button
             >{/if}{/snippet}
-        {@render sectionHeader('Teams', 'Grant repository access once and keep membership centralized.', teamAction)}
-        <div class="grid gap-3">
-          {#each teams as team (team.id)}
-            <article class="surface p-4">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="min-w-0">
-                  <strong class="block truncate text-base font-semibold text-ink-strong">{team.name}</strong>
-                  <span class="text-xs text-ink-muted"
-                    >{team.slug} · {team.members} {team.members === 1 ? 'member' : 'members'}</span
+        {#each teams as team (team.id)}
+          <article class="py-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <strong class="block truncate text-base font-semibold text-ink-strong">{team.name}</strong>
+                <span class="text-xs text-ink-muted"
+                  >{team.slug} · {team.members} {team.members === 1 ? 'member' : 'members'}</span
+                >
+              </div>
+              {#if canAdminister}<div class="flex gap-1.5">
+                  <Button
+                    size="small"
+                    onclick={() => {
+                      selectedTeam = team.id;
+                      selectedUser = userOptions[0]?.value ?? '';
+                      dialog = 'team-member';
+                    }}>Add member</Button
                   >
-                </div>
-                {#if canAdminister}<div class="flex gap-1.5">
-                    <Button
-                      size="small"
-                      onclick={() => {
-                        selectedTeam = team.id;
-                        selectedUser = userOptions[0]?.value ?? '';
-                        dialog = 'team-member';
-                      }}>Add member</Button
-                    >
-                    <Button
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    icon
+                    aria-label={`Delete ${team.name}`}
+                    onclick={() => {
+                      selectedTeam = team.id;
+                      dialog = 'delete-team';
+                    }}><Trash2 size={15} /></Button
+                  >
+                </div>{/if}
+            </div>
+            <div class="mt-3 grid gap-1">
+              {#each teamMembers.filter((member) => member.teamId === team.id) as member (member.userId)}
+                <div class="flex min-h-9 items-center justify-between gap-3 rounded-md bg-surface-muted px-3 text-sm">
+                  <span class="truncate text-ink-strong"
+                    >{member.displayName} <span class="text-ink-muted">@{member.handle}</span></span
+                  >
+                  {#if canAdminister}<Button
                       variant="ghost"
                       size="small"
                       icon
-                      aria-label={`Delete ${team.name}`}
-                      onclick={() => {
-                        selectedTeam = team.id;
-                        dialog = 'delete-team';
-                      }}><Trash2 size={15} /></Button
-                    >
-                  </div>{/if}
-              </div>
-              <div class="mt-3 grid gap-1">
-                {#each teamMembers.filter((member) => member.teamId === team.id) as member (member.userId)}
-                  <div class="flex min-h-9 items-center justify-between gap-3 rounded-md bg-surface-muted px-3 text-sm">
-                    <span class="truncate text-ink-strong"
-                      >{member.displayName} <span class="text-ink-muted">@{member.handle}</span></span
-                    >
-                    {#if canAdminister}<Button
-                        variant="ghost"
-                        size="small"
-                        icon
-                        aria-label={`Remove ${member.handle} from ${team.name}`}
-                        onclick={() => removeTeamMember(team, member)}><Trash2 size={14} /></Button
-                      >{/if}
-                  </div>
-                {:else}<p class="text-sm text-ink-muted">No members in this team.</p>{/each}
-              </div>
-            </article>
-          {:else}<p class="surface px-5 py-6 text-sm text-ink-muted">No teams yet.</p>{/each}
-        </div>
-      </section>
+                      aria-label={`Remove ${member.handle} from ${team.name}`}
+                      onclick={() => removeTeamMember(team, member)}><Trash2 size={14} /></Button
+                    >{/if}
+                </div>
+              {:else}<p class="text-sm text-ink-muted">No members in this team.</p>{/each}
+            </div>
+          </article>
+        {:else}<p class="py-6 text-sm text-ink-muted">No teams yet.</p>{/each}
+      </SettingsGroup>
     {/if}
   </div>
 </OrganizationSettingsShell>

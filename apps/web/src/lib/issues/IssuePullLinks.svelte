@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { LinkedWorkItem, PullRequestSummary } from '@marl/contracts';
   import Link from '@lucide/svelte/icons/link';
   import { api, MarlApiError } from '#lib/api.js';
@@ -139,7 +140,9 @@
           <span class="min-w-0">
             <strong class="block truncate text-sm font-semibold text-ink-strong">{pull.title}</strong>
             <span class="mt-0.5 flex gap-2 truncate text-xs text-ink-muted"
-              >!{pull.number}<span class="truncate font-mono">{pull.sourceBranch}</span></span
+              ><WorkItemReference kind="pull" number={pull.number} /><span class="truncate font-mono"
+                >{pull.sourceBranch}</span
+              ></span
             >
           </span>
           {#if linking === pull.id}<Spinner />{/if}

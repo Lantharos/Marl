@@ -11,6 +11,7 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import type { PageData } from './$types';
 
@@ -70,7 +71,7 @@
     >{/snippet}
 </SettingsHeader>
 {#if error && !open && !removing}<Notice class="mb-4">{error}</Notice>{/if}
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each sshKeys as key (key.id)}
     <article class="grid min-h-20 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
       <KeyRound size={18} class="text-ink-muted" />
@@ -102,7 +103,7 @@
       description="Add a public key to use the SSH clone URL shown on repositories."
     />
   {/each}
-</div>
+</SettingsGroup>
 
 <Modal {open} title="Add SSH key" onClose={() => !busy && (open = false)}>
   <form

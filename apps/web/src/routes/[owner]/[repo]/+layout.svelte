@@ -136,7 +136,7 @@
 <section class="relative">
   <div class="bg-surface">
     <div
-      class="mx-auto flex min-h-16 w-[min(1240px,calc(100%-32px))] items-center justify-between gap-x-4 gap-y-3 py-2.5 max-sm:flex-wrap max-sm:pb-3 sm:w-[min(1240px,calc(100%-48px))] sm:gap-5"
+      class="page-frame flex min-h-16 items-center justify-between gap-x-4 gap-y-3 py-2.5 max-sm:flex-wrap max-sm:pb-3 sm:gap-5"
     >
       <div class="flex min-w-0 items-center gap-3 max-sm:basis-full">
         <RepositoryIcon name={repo} src={repository?.iconUrl} size={36} />
@@ -204,8 +204,8 @@
   <RepositoryTabs {tabs} />
 </section>
 
-<div class="mx-auto w-[min(1240px,calc(100%-32px))] pt-7 pb-18 sm:w-[min(1240px,calc(100%-48px))]">
+<main id="main-content" tabindex="-1" class="page-frame pt-7 pb-18 outline-none">
   {@render children()}
-</div>
+</main>
 
 <ForkDialog bind:open={forkOpen} {owner} repository={repo} options={forkOptions} />

@@ -10,6 +10,7 @@
   import LinkButton from '../controls/LinkButton.svelte';
   import OrganizationAvatar from '../identity/OrganizationAvatar.svelte';
   import UserAvatar from '../identity/UserAvatar.svelte';
+  import Page from '../page/Page.svelte';
   import ProfileActivity from './ProfileActivity.svelte';
   import ProfileRepositoryList from './ProfileRepositoryList.svelte';
   import ContributionGraph from './ContributionGraph.svelte';
@@ -44,7 +45,7 @@
   <span><strong class="font-semibold text-ink-strong tabular-nums">{value}</strong> {label}</span>
 {/snippet}
 
-<main class="mx-auto grid w-full max-w-280 gap-9 px-4 pt-8 pb-20 sm:px-6 sm:pt-13 lg:grid-cols-[240px_minmax(0,1fr)]">
+<Page class="grid gap-9 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
   <aside class="self-start">
     <UserAvatar name={userProfile.displayName || userProfile.handle} src={userProfile.avatarUrl} size={116} />
     <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink-strong">{userProfile.displayName}</h1>
@@ -103,4 +104,4 @@
       </section>
     </div>
   </div>
-</main>
+</Page>

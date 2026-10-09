@@ -3,6 +3,7 @@
   import Button from '#lib/components/controls/Button.svelte';
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
+  import Page from '#lib/components/page/Page.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import TabLinks from '#lib/components/page/TabLinks.svelte';
   import InboxList from '#lib/inbox/InboxList.svelte';
@@ -20,8 +21,8 @@
   /></svelte:head
 >
 
-<main class="mx-auto w-full max-w-240 px-4 pt-8 pb-20 sm:px-6 sm:pt-10">
-  <PageHeader title="Inbox" description="Mentions, assignments, and updates from work you’re part of.">
+<Page>
+  <PageHeader title="Inbox">
     {#snippet action()}{#if inbox.counts.unread}<Button onclick={inbox.markAllRead}
           ><CheckCheck size={16} />Mark all read</Button
         >{/if}{/snippet}
@@ -50,4 +51,4 @@
     onToggleDone={inbox.toggleDone}
   />
   <InfiniteScroll list={inbox.list} />
-</main>
+</Page>

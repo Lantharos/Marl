@@ -2,6 +2,8 @@
   import type { PublicProfileRepository } from '@marl/contracts';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
+  import List from '../list/List.svelte';
+  import ListRow from '../list/ListRow.svelte';
   import EmptyState from '../feedback/EmptyState.svelte';
   import Time from '../page/Time.svelte';
   import RepositoryIcon from '../identity/RepositoryIcon.svelte';
@@ -11,11 +13,11 @@
   }: { repositories: PublicProfileRepository[]; empty?: string } = $props();
 </script>
 
-<div class="surface p-1.5">
+<List>
   {#each repositories as repository (repository.id)}
-    <a
+    <ListRow
       href="/{repository.owner}/{repository.name}"
-      class="group grid grid-cols-[28px_minmax(0,1fr)_16px] items-start gap-3 rounded-lg px-3 py-4 transition-colors hover:bg-surface-hover"
+      class="group grid grid-cols-[28px_minmax(0,1fr)_16px] items-start gap-3 py-4"
     >
       <RepositoryIcon name={repository.name} src={repository.iconUrl} size={28} />
       <span class="min-w-0">
@@ -33,8 +35,8 @@
         >
       </span>
       <ArrowUpRight size={15} class="mt-1 text-ink-faint group-hover:text-brand" />
-    </a>
+    </ListRow>
   {:else}
     <EmptyState compact icon={FolderGit2} title={empty} />
   {/each}
-</div>
+</List>

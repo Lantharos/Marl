@@ -10,6 +10,9 @@
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
+  import Page from '#lib/components/page/Page.svelte';
   import RepositoryIcon from '#lib/components/identity/RepositoryIcon.svelte';
   import RunStateIcon from '#lib/runs/RunStateIcon.svelte';
   import { awaitingCheckApproval, runStateLabel } from '#lib/runs/run-state.js';
@@ -44,7 +47,7 @@
   </header>
 {/snippet}
 
-<main class="mx-auto w-full max-w-290 px-4 pt-8 pb-20 sm:px-6 sm:pt-12">
+<Page>
   <header class="mb-8">
     <h1 class="text-3xl font-semibold tracking-tight text-ink-strong sm:text-4xl">Hey, {firstName}.</h1>
     {#if inbox.counts.unread > 0}<p class="mt-2 text-base text-ink-muted">
@@ -56,7 +59,9 @@
       >Some live data couldn’t be reached. What loaded is still shown below.</Notice
     >{/if}
 
-  <div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
+  <div
+    class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_380px] xl:gap-14"
+  >
     <div class="grid min-w-0 gap-9">
       <section>
         {@render sectionHeader('Inbox', '/inbox', 'View inbox')}
@@ -64,11 +69,11 @@
       </section>
       <section>
         {@render sectionHeader('Recent runs', '/runs', 'All runs')}
-        <div class="surface p-1.5">
+        <List>
           {#each runs.slice(0, 5) as run (run.id)}
-            <a
+            <ListRow
               href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"
-              class="grid min-h-15 grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
+              class="grid min-h-15 grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 py-2.5"
             >
               <RunStateIcon
                 state={run.state}
@@ -86,7 +91,7 @@
                 >
               </span>
               <Time value={run.queuedAt} class="text-xs whitespace-nowrap text-ink-faint" />
-            </a>
+            </ListRow>
           {:else}
             <EmptyState
               compact
@@ -95,7 +100,7 @@
               description="Runs appear here once a repository with a workflow pushes to a self-hosted runner."
             />
           {/each}
-        </div>
+        </List>
       </section>
     </div>
 
@@ -103,11 +108,11 @@
       {#if data.onboarding}<FirstSteps steps={data.onboarding} />{/if}
       <section>
         {@render sectionHeader('Repositories', '/repositories', 'All repositories')}
-        <div class="surface p-1.5">
+        <List>
           {#each repositories.slice(0, 7) as repository (repository.id)}
-            <a
+            <ListRow
               href="/{repository.owner}/{repository.name}"
-              class="group grid grid-cols-[26px_minmax(0,1fr)_14px] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover"
+              class="group grid grid-cols-[26px_minmax(0,1fr)_14px] items-center gap-3 py-2.5"
             >
               <RepositoryIcon name={repository.name} src={repository.iconUrl} size={26} />
               <span class="min-w-0">
@@ -115,7 +120,7 @@
                 <span class="block truncate text-xs text-ink-muted">{repository.owner}</span>
               </span>
               <ArrowUpRight size={14} class="text-ink-faint group-hover:text-brand" />
-            </a>
+            </ListRow>
           {:else}
             <EmptyState
               compact
@@ -128,8 +133,8 @@
               >
             </EmptyState>
           {/each}
-        </div>
+        </List>
       </section>
     </aside>
   </div>
-</main>
+</Page>

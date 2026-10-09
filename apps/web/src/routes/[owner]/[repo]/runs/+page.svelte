@@ -4,6 +4,8 @@
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import FileCode2 from '@lucide/svelte/icons/file-code-corner';
   import Zap from '@lucide/svelte/icons/zap';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import FilterBar from '#lib/components/page/FilterBar.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
@@ -46,10 +48,10 @@
   bind:query
 />
 {#if filtered.length}
-  <div class="surface p-1.5">
+  <List>
     {#each filtered as workflow (workflow.id)}
-      <a
-        class="group grid grid-cols-[32px_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 py-3.5 transition-colors hover:bg-surface-hover sm:grid-cols-[32px_minmax(0,1fr)_minmax(180px,240px)] sm:gap-4"
+      <ListRow
+        class="group grid grid-cols-[32px_minmax(0,1fr)] items-center gap-3 py-3.5 sm:grid-cols-[32px_minmax(0,1fr)_minmax(180px,240px)] sm:gap-4"
         href="/{owner}/{repo}/runs/workflows/{workflow.id}"
       >
         <span
@@ -104,9 +106,9 @@
             </span>
           {/if}
         </span>
-      </a>
+      </ListRow>
     {/each}
-  </div>
+  </List>
 {:else}
   <div class="surface">
     <EmptyState

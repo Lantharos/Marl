@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { LinkedWorkItem } from '@marl/contracts';
   import WorkItemStateIcon from './WorkItemStateIcon.svelte';
+  import WorkItemReference from './WorkItemReference.svelte';
 
   let {
     items,
@@ -36,9 +37,11 @@
             <span class="min-w-0">
               <strong class="line-clamp-2 text-sm leading-snug font-semibold text-ink-strong">{item.title}</strong>
               <span class="mt-1 block truncate text-xs text-ink-muted"
-                >{#if !sameRepository(item)}{item.repository.owner}/{item.repository.name}{/if}{item.kind === 'issue'
-                  ? '#'
-                  : '!'}{item.number}{#if item.closes}<span class="ml-2 text-ink">Closes on merge</span>{/if}</span
+                ><WorkItemReference
+                  kind={item.kind}
+                  number={item.number}
+                  repository={sameRepository(item) ? undefined : `${item.repository.owner}/${item.repository.name}`}
+                />{#if item.closes}<span class="ml-2 text-ink">Closes on merge</span>{/if}</span
               >
             </span>
           </a>

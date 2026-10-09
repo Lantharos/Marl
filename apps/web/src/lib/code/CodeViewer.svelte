@@ -110,7 +110,7 @@
       {#each lines.slice(start, end) as line, offset (start + offset)}
         {@const number = start + offset + 1}
         {@const isSelected = selected && number >= selected[0] && number <= selected[1]}
-        <div class={['flex h-6 font-mono text-[13px] leading-6', isSelected && 'bg-brand-soft']}>
+        <div class={['flex h-6 font-mono text-sm leading-6', isSelected && 'bg-brand-soft']}>
           <a
             href="#L{number}"
             onclick={(event) => choose(event, number)}

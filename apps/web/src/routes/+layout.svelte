@@ -16,7 +16,11 @@
   import type { LayoutData } from './$types';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
+  const authRoutes = new Set(['/sign-in', '/sign-up', '/forgot-password', '/reset-password', '/two-factor']);
   const confirmation = new IdentityConfirmation();
+  const showFooter = $derived(
+    !page.error && !authRoutes.has(page.route.id ?? '') && (Boolean(data.shellUser) || page.url.pathname !== '/')
+  );
   const indexable = $derived.by(() => {
     const parts = page.url.pathname.split('/').filter(Boolean);
     const repository = (page.data as { repository?: { visibility?: string } }).repository;
@@ -51,7 +55,7 @@
 {:else}
   {@render children()}
 {/if}
-{#if !page.error && (data.shellUser || page.url.pathname !== '/')}<SiteFooter />{/if}
+{#if showFooter}<SiteFooter />{/if}
 {#if data.shellUser}<ReportDialog />{/if}
 <IdentityConfirmationModal
   open={confirmation.open}

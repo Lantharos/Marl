@@ -78,7 +78,7 @@
         data-1p-ignore
         class="h-full min-w-0 flex-1 bg-transparent text-base text-ink-strong outline-none placeholder:text-ink-faint"
       />
-      <kbd class="rounded bg-surface-muted px-1.5 py-0.5 font-sans text-2xs text-ink-muted">Esc</kbd>
+      <kbd class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-sans text-2xs text-ink-muted">Esc</kbd>
     </header>
     <div
       id="file-results"

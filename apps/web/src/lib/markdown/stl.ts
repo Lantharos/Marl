@@ -13,6 +13,15 @@ import {
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+function tokenColor(element: HTMLElement, token: string) {
+  const probe = document.createElement('span');
+  probe.style.color = `var(${token})`;
+  element.append(probe);
+  const color = getComputedStyle(probe).color;
+  probe.remove();
+  return color;
+}
+
 export function renderStl(target: HTMLElement, source: string) {
   if (!/^\s*solid\b/.test(source)) throw new Error('Use an ASCII STL solid.');
   const geometry = new STLLoader().parse(source);
@@ -22,10 +31,14 @@ export function renderStl(target: HTMLElement, source: string) {
     throw new Error('The STL has no valid triangles.');
   }
   geometry.center();
-  const material = new MeshStandardMaterial({ color: '#df7759', roughness: 0.8, metalness: 0 });
+  const material = new MeshStandardMaterial({
+    color: tokenColor(target, '--color-brand'),
+    roughness: 0.8,
+    metalness: 0
+  });
   const model = new Mesh(geometry, material);
   const scene = new Scene();
-  scene.background = new Color('#161616');
+  scene.background = new Color(tokenColor(target, '--color-surface-muted'));
   scene.add(model, new AmbientLight(0xffffff, 2));
   const light = new DirectionalLight(0xffffff, 3);
   light.position.set(3, 5, 4);

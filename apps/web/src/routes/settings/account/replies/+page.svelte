@@ -13,6 +13,7 @@
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { savedReplies } from '#lib/saved-replies/saved-replies.svelte.js';
   import type { PageData } from './$types';
 
@@ -68,7 +69,7 @@
 >
   {#snippet action()}<Button size="small" onclick={() => edit('new')}>New reply</Button>{/snippet}
 </SettingsHeader>
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each savedReplies.replies as reply (reply.id)}
     <article class="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
       <MessageSquareText size={18} class="text-ink-muted" />
@@ -100,7 +101,7 @@
       description="Save a reply here, or from any comment box with the reply button."
     />
   {/each}
-</div>
+</SettingsGroup>
 
 <Modal
   open={editing !== null}

@@ -15,6 +15,7 @@
   import SettingItem from '#lib/components/settings/SettingItem.svelte';
   import SettingRow from '#lib/components/settings/SettingRow.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { completeRepositoryName, repositoryName } from '#lib/repositories/repository-name.js';
   import { validSlug } from '@marl/contracts';
   import type { PageData } from './$types';
@@ -156,11 +157,11 @@
 </script>
 
 <svelte:head><title>Settings · {owner}/{repo} · Marl</title></svelte:head>
-<SettingsHeader title="General" description="How this repository appears and who owns it." />
+<SettingsHeader title="General" />
 {#if error && !dialog}<Notice class="mb-4">{error}</Notice>{/if}
 
-<div class="grid gap-8">
-  <section class="grid gap-6 surface p-5 sm:p-6">
+<div class="grid gap-10">
+  <section class="grid max-w-180 gap-6">
     <div class="flex items-center gap-4">
       <ImageUploadButton state={iconState} label="Change repository icon" size={56} onclick={() => iconInput?.click()}
         ><RepositoryIcon name={repo} src={iconUrl} size={56} /></ImageUploadButton
@@ -206,62 +207,53 @@
     </form>
   </section>
 
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Code and visibility</h2>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      <SettingRow
-        title="Default branch"
-        value={defaultBranch}
-        disabled={!branchOptions.length}
-        onclick={() => open('branch')}
-      />
-      <SettingRow
-        title="Visibility"
-        value={visibility === 'public'
-          ? 'Public. Anyone can view and clone this repository.'
-          : 'Private. Only people with access can view and clone it.'}
-        action={visibility === 'public' ? 'Make private' : 'Make public'}
-        onclick={() => open('visibility')}
-      />
-    </div>
-  </section>
+  <SettingsGroup title="Code and visibility">
+    <SettingRow
+      title="Default branch"
+      value={defaultBranch}
+      disabled={!branchOptions.length}
+      onclick={() => open('branch')}
+    />
+    <SettingRow
+      title="Visibility"
+      value={visibility === 'public'
+        ? 'Public. Anyone can view and clone this repository.'
+        : 'Private. Only people with access can view and clone it.'}
+      action={visibility === 'public' ? 'Make private' : 'Make public'}
+      onclick={() => open('visibility')}
+    />
+  </SettingsGroup>
 
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Ownership</h2>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      <SettingRow title="Name" value={`${owner}/${repo}`} action="Rename" onclick={() => open('rename')} />
-      <SettingRow
-        title="Owner"
-        value="Move this repository and its full history to another organization."
-        action="Transfer"
-        disabled={ownerOptions.length < 2}
-        onclick={() => open('transfer')}
-      />
-    </div>
-  </section>
+  <SettingsGroup title="Ownership">
+    <SettingRow title="Name" value={`${owner}/${repo}`} action="Rename" onclick={() => open('rename')} />
+    <SettingRow
+      title="Owner"
+      value="Move this repository and its full history to another organization."
+      action="Transfer"
+      disabled={ownerOptions.length < 2}
+      onclick={() => open('transfer')}
+    />
+  </SettingsGroup>
 
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Lifecycle</h2>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      {#if upstream}<SettingRow
-          title="Fork"
-          value={`Forked from ${upstream.owner}/${upstream.name}. Detaching keeps this repository and its history.`}
-          action="Detach"
-          onclick={() => open('detach')}
-        />{/if}
-      <SettingRow
-        title={archived ? 'Archived' : 'Archive'}
-        value={archived
-          ? 'Pushes are rejected. Unarchive to restore normal activity.'
-          : 'Make the repository read-only while preserving every object.'}
-        action={archived ? 'Unarchive' : 'Archive'}
-        onclick={() => open('archive')}
-      />
-      <SettingItem title="Delete repository" description="Hidden immediately and permanently purged after 30 days.">
-        <Button size="small" variant="danger-soft" onclick={() => open('delete')}>Delete</Button>
-      </SettingItem>
-    </div>
-  </section>
+  <SettingsGroup title="Lifecycle">
+    {#if upstream}<SettingRow
+        title="Fork"
+        value={`Forked from ${upstream.owner}/${upstream.name}. Detaching keeps this repository and its history.`}
+        action="Detach"
+        onclick={() => open('detach')}
+      />{/if}
+    <SettingRow
+      title={archived ? 'Archived' : 'Archive'}
+      value={archived
+        ? 'Pushes are rejected. Unarchive to restore normal activity.'
+        : 'Make the repository read-only while preserving every object.'}
+      action={archived ? 'Unarchive' : 'Archive'}
+      onclick={() => open('archive')}
+    />
+    <SettingItem title="Delete repository" description="Hidden immediately and permanently purged after 30 days.">
+      <Button size="small" variant="danger-soft" onclick={() => open('delete')}>Delete</Button>
+    </SettingItem>
+  </SettingsGroup>
 </div>
 
 <Modal open={dialog === 'branch'} size="small" title="Change default branch" onClose={() => !busy && (dialog = null)}>

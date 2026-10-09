@@ -11,6 +11,7 @@
   import TerminalSquare from '@lucide/svelte/icons/square-terminal';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import UserRound from '@lucide/svelte/icons/user-round';
+  import Page from '../../page/Page.svelte';
   import SettingsLayout from '../SettingsLayout.svelte';
   import SettingsNav from '../SettingsNav.svelte';
 
@@ -84,4 +85,4 @@
   <p class="mb-3 hidden px-3 text-sm font-semibold text-ink-muted md:block">Account settings</p>
   <SettingsNav label="Account settings" {items} />
 {/snippet}
-<SettingsLayout {sidebar} content={children} />
+<Page><SettingsLayout {sidebar} content={children} /></Page>

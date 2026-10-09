@@ -33,6 +33,30 @@ Text follows one scale: 11, 12, 13, 14, 15, 17, 20, 24, 30, and 38 px. Working c
 reads at 14 px, controls and field labels at 13 px, and supporting metadata at 12 px, never
 below 11 px. Page titles use 24–30 px. Code has its own monospace scale and horizontal
 scrolling. Do not shrink a filename, command, or comment to fit a narrow screen.
+Headings use the 600 weight, including headings inside Markdown. Corners use the
+6, 8, 10, 14, and 18 px radii; small inline code is the only exception.
+
+Code, branch names, commit hashes, and other literal text use Maple Mono, whose rounded
+terminals sit comfortably beside Open Runde. Both families are served from Marl itself.
+The common Latin files load first; accented Latin, Greek, and Cyrillic files load only on
+pages that use those characters. The wordmark is drawn from Maple Mono's outlines, so it
+looks the same before fonts load and on every system.
+
+Issue references use `#` and pull references use `!`, as in Markdown. The sign is set in the
+monospace face and dimmed, so `!7` cannot be misread as 17 in lists, timelines, or titles.
+
+Muted text is for supporting metadata and faint text for the quietest hints and placeholders.
+Both meet AA contrast on every surface in both appearances.
+
+## Page widths
+
+Every page has exactly one main landmark, and a Skip to content link leads to it. Working
+pages, including repositories, pulls, issues, settings, lists, and the home dashboard, share
+one frame up to 1440 px wide with 16, 24, or 32 px gutters, so their content lines up with the
+repository header. Inside that frame, reading stays at a comfortable measure: issue discussions
+cap their main column at 920 px, settings content at 880 px, and policies at 720 px. Forms and
+other single-task pages use a 720 px column. A pull keeps its summary column at 360 px, or
+420 px on wide screens, so short titles fit on one line; the conversation and diff take the rest.
 
 Hide scrollbars across pages and nested panels without disabling scrolling. Wheel, trackpad,
 touch, and keyboard navigation remain available, including horizontal scrolling through code.
@@ -44,7 +68,9 @@ button.
 ## Grouping
 
 A shared surface means the contents belong together: a conversation, file list, form,
-revision, or settings operation. Use spacing between independent groups. Avoid repeated
+revision, or list of repositories, pulls, or runs. Lists share one surface with rounded,
+hover-highlighted rows. Settings groups do not get a surface: a group heading sits on the
+canvas above rows separated by hairlines. Use spacing between independent groups. Avoid repeated
 rules inside a group unless they clarify a real boundary. Repository navigation uses its
 connected island treatment. Filters and document selectors
 use rounded chips; the overview document stays on the canvas. Status colors describe
@@ -68,8 +94,17 @@ opens a focused editor; changing one setting preserves the other rules. Branches
 own rule show the all-branches policy they inherit. Secrets use a compact list with separate
 add and change dialogs, and confirmation before deletion.
 
-Account pages use the same spacing and list surfaces. Email and SSH-key creation open focused
-dialogs; existing credentials and devices remain the primary content.
+Account pages use the same groups and spacing. Email and SSH-key creation open focused
+dialogs; existing credentials and devices remain the primary content. The authenticator QR
+code stays dark on light in both appearances so every camera can read it.
+
+## Signing in
+
+Sign in, account creation, password recovery, and two-factor pages place a single column of
+fields on the canvas, above the arched doorway from the access error artwork. The doorway
+is anchored to the bottom edge and never sits behind a field. On phones the column comes
+first and a smaller image follows. These pages omit the global footer. Sign in offers saved
+passkeys directly from the username field's autofill, alongside the Use a passkey button.
 
 ## Profile repositories
 

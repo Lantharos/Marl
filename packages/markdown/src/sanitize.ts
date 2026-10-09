@@ -119,7 +119,7 @@ export function sanitizeMarkdown(html: string, context: MarkdownContext | undefi
       ],
       code: [/^language-[\w+-]+$/],
       div: ['markdown-math'],
-      span: ['markdown-math', 'markdown-alert-title', 'markdown-emoji', 'color-swatch'],
+      span: ['markdown-math', 'markdown-alert-title', 'markdown-emoji', 'color-swatch', 'reference-sigil'],
       section: ['footnotes'],
       h2: ['sr-only'],
       li: ['task-list-item'],

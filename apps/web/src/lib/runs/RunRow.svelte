@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { RunSummary } from '@marl/contracts';
   import GitBranch from '@lucide/svelte/icons/git-branch';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import { awaitingCheckApproval, runStateLabel } from './run-state';
   import { runOrigin } from './workflow-triggers';
@@ -14,8 +15,8 @@
   const label = $derived(runStateLabel(run));
 </script>
 
-<a
-  class="group grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover"
+<ListRow
+  class="group grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-3 py-3"
   href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"
 >
   <span class="mt-0.5"
@@ -30,7 +31,7 @@
         {/if}run #{run.number}{/if} · <Time value={run.queuedAt} class="text-ink-muted" /></span
     >
     <span
-      class="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink-muted"
+      class="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink-muted"
       ><GitBranch size={12} class="shrink-0" /><span class="truncate">{run.branch}</span><span class="text-ink-faint"
         >{run.commit.slice(0, 7)}</span
       ></span
@@ -40,4 +41,4 @@
     <span class="text-xs font-semibold text-ink capitalize">{label}</span>
     <span class="text-xs text-ink-muted">{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</span>
   </span>
-</a>
+</ListRow>

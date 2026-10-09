@@ -6,6 +6,9 @@
   import LinkButton from '../controls/LinkButton.svelte';
   import OrganizationAvatar from '../identity/OrganizationAvatar.svelte';
   import UserAvatar from '../identity/UserAvatar.svelte';
+  import List from '../list/List.svelte';
+  import ListRow from '../list/ListRow.svelte';
+  import Page from '../page/Page.svelte';
   import ProfileActivity from './ProfileActivity.svelte';
   import ProfileRepositoryList from './ProfileRepositoryList.svelte';
 
@@ -39,7 +42,7 @@
   <span><strong class="font-semibold text-ink-strong tabular-nums">{value}</strong> {label}</span>
 {/snippet}
 
-<main class="mx-auto w-full max-w-280 px-4 pt-8 pb-20 sm:px-6 sm:pt-13">
+<Page>
   <header class="flex flex-wrap items-start gap-5">
     <OrganizationAvatar name={organization.name} src={organization.avatarUrl} size={92} />
     <div class="min-w-0 flex-1">
@@ -61,7 +64,7 @@
     {@render stat(data.stats.members, data.stats.members === 1 ? 'member' : 'members')}
     {@render stat(data.stats.contributions, 'contributions this year')}
   </div>
-  <div class="grid gap-9 lg:grid-cols-[minmax(0,1fr)_280px]">
+  <div class="grid gap-9 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-12">
     <div class="grid min-w-0 content-start gap-8">
       <section>
         {@render section('Repositories', `/${canonicalIdentity}/-/repositories`)}
@@ -77,12 +80,9 @@
         <h2 class="text-base font-semibold text-ink-strong">People</h2>
         <span class="text-sm text-ink-muted tabular-nums">{data.stats.members}</span>
       </header>
-      <div class="surface p-1.5">
+      <List>
         {#each data.members as member (member.handle)}
-          <a
-            href="/{member.handle}"
-            class="group flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-hover"
-          >
+          <ListRow href="/{member.handle}" class="group flex items-center gap-3 py-2">
             <UserAvatar name={member.displayName || member.handle} src={member.avatarUrl} size={32} />
             <span class="min-w-0">
               <strong class="block truncate text-sm font-semibold text-ink-strong group-hover:text-brand"
@@ -90,9 +90,9 @@
               >
               <span class="block truncate text-xs text-ink-muted">@{member.handle}</span>
             </span>
-          </a>
+          </ListRow>
         {/each}
-      </div>
+      </List>
     </aside>
   </div>
-</main>
+</Page>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import WifiOff from '@lucide/svelte/icons/wifi-off';
+  import Scene from '#lib/components/page/Scene.svelte';
 
   let {
     status,
@@ -12,7 +13,7 @@
   const offline = $derived(!status);
 </script>
 
-<section
+<main
   class="grid h-dvh min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,auto)] overflow-clip bg-canvas"
   aria-labelledby="error-title"
 >
@@ -51,18 +52,13 @@
       </div>
     </div>
   </div>
-  <div
+  <Scene
+    {scene}
     class={[
-      'w-full bg-canvas bg-(image:--art-small-dark) [background-size:auto_100%] bg-bottom bg-no-repeat bg-blend-lighten light:bg-(image:--art-small-light) light:bg-blend-darken',
-      'h-[min(260px,38dvh)] sm:bg-(image:--art-dark) sm:bg-cover sm:light:bg-(image:--art-light)',
+      'h-[min(260px,38dvh)]',
       offline
         ? 'sm:h-[min(36vw,calc(100dvh-340px),510px)] [@media(max-height:520px)]:h-[max(0px,calc(100dvh-245px))]'
         : 'sm:h-[min(36vw,54dvh,510px)]'
     ]}
-    aria-hidden="true"
-    style:--art-dark={`url('/errors/${scene}/dark.webp')`}
-    style:--art-light={`url('/errors/${scene}/light.webp')`}
-    style:--art-small-dark={`url('/errors/${scene}/dark-small.webp')`}
-    style:--art-small-light={`url('/errors/${scene}/light-small.webp')`}
-  ></div>
-</section>
+  />
+</main>

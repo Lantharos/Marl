@@ -6,7 +6,9 @@
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import BackLink from '#lib/components/page/BackLink.svelte';
+  import Page from '#lib/components/page/Page.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { formatDate } from '#lib/time.js';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
@@ -29,14 +31,14 @@
 </script>
 
 <svelte:head><title>Recently deleted · Marl</title></svelte:head>
-<main class="mx-auto w-full max-w-215 px-4 pt-8 pb-20 sm:px-6 sm:pt-10">
+<Page width="narrow">
   <div class="mb-4"><BackLink href="/repositories" label="Repositories" /></div>
   <PageHeader
     title="Recently deleted"
     description="Restore repositories within 30 days of deletion. Code and discussions are kept until then; cancelled runs stay cancelled."
   />
   {#if error}<Notice class="mb-4">{error}</Notice>{/if}
-  <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+  <SettingsGroup label="Deleted repositories">
     {#each data.repositories as repository (`${repository.owner}/${repository.name}`)}
       <div class="flex min-h-18 items-center justify-between gap-5 py-3">
         <div class="min-w-0">
@@ -66,5 +68,5 @@
         description="Repositories you delete stay here for 30 days."
       />
     {/each}
-  </div>
-</main>
+  </SettingsGroup>
+</Page>

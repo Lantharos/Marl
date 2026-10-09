@@ -53,7 +53,7 @@
       />
       <Button size="small" onclick={() => (finderOpen = true)}
         ><Search size={14} />Go to file<kbd
-          class="ml-1 rounded bg-surface-muted px-1.5 font-sans text-2xs text-ink-muted max-sm:hidden">T</kbd
+          class="ml-1 rounded-sm bg-surface-muted px-1.5 font-sans text-2xs text-ink-muted max-sm:hidden">T</kbd
         ></Button
       >
     </div>

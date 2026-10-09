@@ -1,5 +1,6 @@
 @import 'tailwindcss';
-@import './lib/styles/fonts.css';
+@import './lib/styles/fonts/open-runde.css';
+@import './lib/styles/fonts/maple-mono.css';
 
 @custom-variant light {
   :root[data-theme='light'] & {
@@ -28,7 +29,7 @@
   --color-black: #000;
   --color-white: #fff;
   --font-sans: 'Open Runde', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --font-mono: 'Maple Mono', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
   --text-2xs: 11px;
   --text-2xs--line-height: 1.45;
@@ -67,8 +68,8 @@
   --color-line-strong: light-dark(#c2c0b9, #3a3a3f);
   --color-ink-strong: light-dark(#1b1a18, #f1f0ed);
   --color-ink: light-dark(#3e3c38, #d0cfcb);
-  --color-ink-muted: light-dark(#6e6b65, #aaa9a4);
-  --color-ink-faint: light-dark(#75716a, #95948e);
+  --color-ink-muted: light-dark(#5d5a54, #aaa9a4);
+  --color-ink-faint: light-dark(#716d67, #8c8b85);
   --color-brand: light-dark(#b64f35, #df7557);
   --color-brand-hover: light-dark(#9f422c, #ec8667);
   --color-brand-strong: light-dark(#923b28, #f09a7e);
@@ -84,6 +85,18 @@
   --color-warning-soft: light-dark(#f7edd9, #2a2115);
   --color-merged: light-dark(#7449b8, #a887e0);
   --color-merged-soft: light-dark(#efe8fa, #221b2e);
+  --color-avatar-1: #d5b496;
+  --color-avatar-2: #d9a08a;
+  --color-avatar-3: #c9b98a;
+  --color-avatar-4: #a9bf9c;
+  --color-avatar-5: #9fb8c4;
+  --color-avatar-6: #b9a8cf;
+  --color-on-avatar-1: #3d2518;
+  --color-on-avatar-2: #44200f;
+  --color-on-avatar-3: #39301a;
+  --color-on-avatar-4: #1f3320;
+  --color-on-avatar-5: #1b2f3a;
+  --color-on-avatar-6: #2c2140;
   --shadow-subtle: 0 1px 2px light-dark(rgb(24 23 20 / 0.06), rgb(0 0 0 / 0.18));
   --shadow-surface:
     0 0 0 1px light-dark(rgb(24 23 20 / 0.07), rgb(255 255 255 / 0.055)),
@@ -198,6 +211,27 @@
       transition-duration: 0ms !important;
     }
   }
+}
+
+@utility page-frame {
+  width: 100%;
+  max-width: var(--page-width, 1440px);
+  margin-inline: auto;
+  padding-inline: 16px;
+
+  @media (width >= 40rem) {
+    padding-inline: 24px;
+  }
+
+  @media (width >= 64rem) {
+    padding-inline: 32px;
+  }
+}
+
+@utility reference-sigil {
+  margin-inline-end: -0.08em;
+  font-family: var(--font-mono);
+  opacity: 0.6;
 }
 
 @utility surface {

@@ -11,6 +11,7 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -93,7 +94,7 @@
 
 {#if error && !open && !removing}<Notice class="mb-4">{error}</Notice>{/if}
 {#if notice}<Notice tone="success" class="mb-4">{notice}</Notice>{/if}
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each emails as email (email.id)}
     <article class="grid min-h-19 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3">
       <span class={email.verified ? 'text-success' : 'text-warning'}
@@ -126,7 +127,7 @@
       </div>
     </article>
   {/each}
-</div>
+</SettingsGroup>
 
 <Modal
   {open}

@@ -4,6 +4,8 @@
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import GitPullRequestArrow from '@lucide/svelte/icons/git-pull-request-arrow';
   import Trash2 from '@lucide/svelte/icons/trash';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '#lib/components/controls/Button.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
@@ -71,11 +73,9 @@
     />{/snippet}
 </PageHeader>
 
-<div class="surface p-1.5">
+<List>
   {#each visible as branch (branch.name)}
-    <article
-      class="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover"
-    >
+    <ListRow as="article" class="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 py-3">
       <span
         class={[
           'grid size-8 place-items-center rounded-lg',
@@ -125,13 +125,13 @@
             }}><Trash2 size={15} /></Button
           >{/if}
       </div>
-    </article>
+    </ListRow>
   {:else}
     <p class="px-3 py-10 text-center text-sm text-ink-muted">
       {query ? 'No matching branches' : 'This repository has no branches yet.'}
     </p>
   {/each}
-</div>
+</List>
 
 <ConfirmDialog
   open={deleting !== null}

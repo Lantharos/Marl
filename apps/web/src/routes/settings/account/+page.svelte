@@ -1,14 +1,15 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import QRCode from 'qrcode';
   import Check from '@lucide/svelte/icons/check';
   import KeyRound from '@lucide/svelte/icons/key-round';
+  import QrCode from '#lib/components/auth/QrCode.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
   import Button from '#lib/components/controls/Button.svelte';
   import Field from '#lib/components/controls/Field.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import SettingItem from '#lib/components/settings/SettingItem.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import SigningSettings from '#lib/components/settings/panels/SigningSettings.svelte';
   import { authClient } from '#lib/auth-client.js';
   import type { PageData } from './$types';
@@ -21,7 +22,6 @@
   let twoFactorPassword = $state('');
   let twoFactorCode = $state('');
   let totpUri = $state('');
-  let totpQr = $state('');
   let backupCodes = $state<string[]>([]);
   let busy = $state('');
   let passkeyState = $state<'idle' | 'saving' | 'saved'>('idle');
@@ -57,7 +57,6 @@
     }
     totpUri = result.data.totpURI;
     backupCodes = result.data.backupCodes;
-    totpQr = await QRCode.toDataURL(totpUri, { width: 220, margin: 1, color: { dark: '#171719', light: '#ffffff' } });
   }
 
   async function confirmTwoFactor() {
@@ -89,12 +88,9 @@
 </script>
 
 <svelte:head><title>Sign-in and security · Marl</title></svelte:head>
-<SettingsHeader
-  title="Sign-in and security"
-  description="Protect your account with a passkey, a second factor, and signed commits."
-/>
+<SettingsHeader title="Sign-in and security" />
 {#if error && !twoFactorDialog}<Notice class="mb-4">{error}</Notice>{/if}
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   <SettingItem title="Passkeys" description="Use your device or security key without entering a password.">
     <Button size="small" loading={passkeyState === 'saving'} onclick={addPasskey} disabled={passkeyState !== 'idle'}
       >{#if passkeyState === 'saved'}<Check size={15} />Added{:else if passkeyState === 'idle'}<KeyRound size={15} />Add
@@ -121,7 +117,7 @@
     >
   </SettingItem>
   <SigningSettings endpoint="/signing" initialMode={data.signingMode} personal />
-</div>
+</SettingsGroup>
 
 {#snippet twoFactorActions()}
   {#if disablingTwoFactor}
@@ -172,7 +168,7 @@
         <input class="field" type="password" autocomplete="current-password" bind:value={twoFactorPassword} />
       </Field>
     {:else}
-      <img src={totpQr} alt="Authenticator setup QR code" class="mx-auto w-45 rounded-lg" />
+      <QrCode value={totpUri} label="Authenticator setup QR code" />
       <p class="text-sm text-ink-muted">
         {twoFactorConfirmed
           ? 'Two-factor authentication is active. Save these recovery codes now.'

@@ -12,7 +12,7 @@
   min-height: 32px;
   padding: 6px 9px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-ink-muted);
   font: inherit;
@@ -31,7 +31,7 @@
   position: relative;
   margin: 16px 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
   box-shadow: var(--shadow-surface);
 }
@@ -43,7 +43,7 @@
   display: flex;
   gap: 2px;
   padding: 2px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-surface);
   opacity: 0;
@@ -58,7 +58,7 @@
   height: 28px;
   padding: 0 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-ink-muted);
   font: inherit;
@@ -91,7 +91,7 @@
 .markdown .diagram-canvas > canvas {
   display: block;
   max-width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 .markdown .markdown-diagram > details {
   margin: 0;

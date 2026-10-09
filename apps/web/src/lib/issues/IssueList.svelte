@@ -1,7 +1,10 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { IssueSummary } from '@marl/contracts';
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import LabelPill from '#lib/components/discussion/LabelPill.svelte';
   import WorkItemStateIcon from '#lib/components/discussion/WorkItemStateIcon.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
@@ -20,11 +23,9 @@
   } = $props();
 </script>
 
-<div class="surface p-1.5">
+<List>
   {#each issues as issue (issue.id)}
-    <article
-      class="relative grid min-h-18 grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-3 rounded-lg px-3 py-3.5 transition-colors hover:bg-surface-hover"
-    >
+    <ListRow as="article" class="relative grid min-h-18 grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-3 py-3.5">
       <span class="mt-0.5"><WorkItemStateIcon kind="issue" state={issue.state} size={18} /></span>
       <div class="min-w-0">
         <div class="flex min-w-0 items-start gap-2">
@@ -47,7 +48,7 @@
               href="/{issue.repository.owner}/{issue.repository.name}"
               >{issue.repository.owner}/{issue.repository.name}</a
             >{/if}
-          <span>#{issue.number}</span><span aria-hidden="true">·</span><a
+          <WorkItemReference kind="issue" number={issue.number} /><span aria-hidden="true">·</span><a
             class="relative z-1 hover:text-brand"
             href="/{issue.author}">{issue.authorDisplayName}</a
           ><span aria-hidden="true">·</span><Time value={issue.updatedAt} class="text-ink-muted" />
@@ -62,8 +63,8 @@
           class="mt-0.5 flex items-center gap-1 text-xs text-ink-muted tabular-nums"
           aria-label={`${issue.commentCount} replies`}><MessageCircle size={15} />{issue.commentCount}</span
         >{/if}
-    </article>
+    </ListRow>
   {:else}
     <EmptyState icon={CircleDot} title={emptyTitle} description={emptyDescription} />
   {/each}
-</div>
+</List>

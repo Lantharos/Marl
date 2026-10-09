@@ -1,7 +1,7 @@
 .markdown .markdown-alert {
   padding: 14px 18px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
 }
 .markdown .markdown-alert-title {
@@ -9,7 +9,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--color-brand);
 }
 .markdown .markdown-alert-title::before {
