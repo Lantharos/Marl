@@ -103,8 +103,11 @@ revision when it returns. Manual dispatches and retries are never superseded. Se
 `supersede: false` at the top level of a native workflow when every push must run. GitHub
 workflows can opt out with `concurrency.cancel-in-progress: false`.
 
-The repository Runs tab lists workflow definitions from the default branch and keeps each
-workflow's run history together. A **Run workflow** action is available only when the file
+The repository Runs tab lists recent runs across every workflow, newest first, with status,
+trigger, branch, commit, and duration on one line. Workflows from the default branch sit beside
+the list; choosing one narrows the history to that workflow and shows its file, triggers, and
+any problem that stops it from running. Runs can be filtered by state and searched by name,
+branch, or commit, and the filters stay in the address. A **Run workflow** action is available only when the file
 declares `workflow_dispatch`; Marl does not accept arbitrary commands from the Runs UI.
 
 The GitHub workflow reader supports `runs-on`, `needs`, simple strategy matrices with
@@ -151,6 +154,20 @@ Secrets are injected as environment variables. The runner masks their exact valu
 log upload, including live frames and persisted chunks. Values are never returned by list APIs or
 shown again in settings. Changing or deleting a secret requires a fresh administrator session and
 is written to the audit log.
+
+## Reading a run
+
+A run with several jobs draws them as a graph, with each job placed after the jobs it needs.
+Choosing a job keeps it in the address, so a link opens the same job. Its log is split into the
+steps the runner reported, each with its status and how long it took; the step that is running or
+failed opens automatically. Steps after a failure appear as skipped, and a step that failed with
+`continue-on-error` is marked separately.
+
+Logs stay fast at their full size: only the lines on screen are drawn, colors from the job's
+output are kept, and new output streams in while the job runs. Search finds text across every
+step, including collapsed ones; Ctrl F opens it while a log is on the page. Jump to failure opens
+the failed step at its first error. Every line number is a link, and the whole log can be
+downloaded as a text file.
 
 ## Execution model
 

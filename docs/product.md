@@ -280,8 +280,9 @@ content are reviewed together. A disabled repository shows its reason instead of
 
 ## Runs and runners
 
-Runs expose queue time, execution time, job dependencies, live logs, runner identity,
-cancellation, retry, and artifacts. A waiting job explains which runner labels it requires.
+Runs expose queue time, execution time, job dependencies, live logs grouped by step with their
+durations, runner identity, cancellation, retry, and artifacts. A waiting job explains which
+runner labels it requires.
 
 Runners are always self-hosted. Marl does not imply that hosted execution is available or
 planned.

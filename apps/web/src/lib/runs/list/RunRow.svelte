@@ -3,42 +3,44 @@
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import ListRow from '#lib/components/list/ListRow.svelte';
   import Time from '#lib/components/page/Time.svelte';
-  import { awaitingCheckApproval, runStateLabel } from './run-state';
-  import { runOrigin } from './workflow-triggers';
-  import RunStateIcon from './RunStateIcon.svelte';
+  import { elapsed } from '../duration';
+  import { awaitingCheckApproval, runStateLabel } from '../run-state';
+  import { runTriggerLabel } from '../workflow-triggers';
+  import RunStateIcon from '../RunStateIcon.svelte';
 
-  let {
-    run,
-    showRepository = true,
-    inWorkflow = false
-  }: { run: RunSummary; showRepository?: boolean; inWorkflow?: boolean } = $props();
-  const label = $derived(runStateLabel(run));
+  let { run, showRepository = false, now }: { run: RunSummary; showRepository?: boolean; now: number } = $props();
+  const duration = $derived(elapsed(run.startedAt, run.completedAt, now));
+  const origin = $derived(
+    [
+      showRepository && `${run.repository.owner}/${run.repository.name}`,
+      `${runTriggerLabel(run.trigger)}${run.actor ? ` by ${run.actor}` : ''}`
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  );
 </script>
 
 <ListRow
-  class="group grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-3 py-3"
+  class="group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-x-3 py-2.5 sm:grid-cols-[18px_minmax(0,1.3fr)_minmax(0,1fr)_96px]"
   href="/{run.repository.owner}/{run.repository.name}/runs/{run.number}"
 >
-  <span class="mt-0.5"
-    ><RunStateIcon state={run.state} awaitingApproval={awaitingCheckApproval(run)} {label} size={18} /></span
-  >
+  <RunStateIcon state={run.state} awaitingApproval={awaitingCheckApproval(run)} label={runStateLabel(run)} />
   <span class="min-w-0">
-    <strong class="block truncate text-base font-semibold text-ink-strong group-hover:text-brand"
-      >{inWorkflow ? `Run #${run.number}` : run.name}</strong
-    >
-    <span class="mt-0.5 block truncate text-xs text-ink-muted"
-      >{#if inWorkflow}{runOrigin(run)}{:else}{#if showRepository}{run.repository.owner}/{run.repository.name} ·
-        {/if}run #{run.number}{/if} · <Time value={run.queuedAt} class="text-ink-muted" /></span
-    >
-    <span
-      class="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink-muted"
-      ><GitBranch size={12} class="shrink-0" /><span class="truncate">{run.branch}</span><span class="text-ink-faint"
-        >{run.commit.slice(0, 7)}</span
-      ></span
+    <span class="flex min-w-0 items-baseline gap-1.5">
+      <strong class="truncate text-sm font-semibold text-ink-strong group-hover:text-brand">{run.name}</strong>
+      <span class="shrink-0 text-sm text-ink-muted tabular-nums">#{run.number}</span>
+    </span>
+    <span class="block truncate text-xs text-ink-muted"
+      >{origin}<span class="sm:hidden">{` · ${run.branch}`}</span></span
     >
   </span>
-  <span class="grid justify-items-end gap-1 text-right">
-    <span class="text-xs font-semibold text-ink capitalize">{label}</span>
-    <span class="text-xs text-ink-muted">{run.jobs} {run.jobs === 1 ? 'job' : 'jobs'}</span>
+  <span class="hidden min-w-0 items-center gap-1.5 font-mono text-xs text-ink-muted sm:flex">
+    <GitBranch size={13} class="shrink-0" /><span class="truncate text-ink">{run.branch}</span><span
+      class="shrink-0 text-ink-faint">{run.commit.slice(0, 7)}</span
+    >
+  </span>
+  <span class="grid justify-items-end text-xs text-ink-muted">
+    {#if duration}<span class="text-ink tabular-nums">{duration}</span>{/if}
+    <Time value={run.queuedAt} class="text-xs whitespace-nowrap text-ink-muted" />
   </span>
 </ListRow>

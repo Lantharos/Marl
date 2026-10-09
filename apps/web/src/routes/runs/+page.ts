@@ -1,18 +1,13 @@
 import type { RunSummary } from '@marl/contracts';
 import { apiWith } from '#lib/api.js';
 import { routeLoad } from '#lib/load.js';
+import { readRunQuery, runListPath } from '#lib/runs/list/run-query.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, url }) => {
-  const state = ['all', 'active', 'success', 'failure', 'canceled'].includes(url.searchParams.get('state') ?? '')
-    ? url.searchParams.get('state')!
-    : 'all';
-  const query = url.searchParams.get('q') ?? '';
+  const filters = readRunQuery(url);
   const result = await routeLoad(
-    apiWith<{ runs: RunSummary[]; nextCursor: string | null }>(
-      fetch,
-      `/runs?limit=30&state=${state}&q=${encodeURIComponent(query)}`
-    )
+    apiWith<{ runs: RunSummary[]; nextCursor: string | null }>(fetch, runListPath('/runs', filters))
   );
-  return { ...result, state, query };
+  return { ...result, ...filters };
 }) satisfies PageLoad;
