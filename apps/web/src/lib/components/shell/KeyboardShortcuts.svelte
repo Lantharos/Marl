@@ -22,6 +22,14 @@
       ]
     },
     {
+      title: 'Issues',
+      shortcuts: [
+        { keys: ['J'], label: 'Next issue' },
+        { keys: ['K'], label: 'Previous issue' },
+        { keys: ['Enter'], label: 'Open the selected issue' }
+      ]
+    },
+    {
       title: 'Code',
       shortcuts: [
         { keys: ['T'], label: 'Go to file' },

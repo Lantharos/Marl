@@ -1,26 +1,18 @@
 import type { WorkItemLabel, IssueSummary } from '@marl/contracts';
 import { apiWith } from '#lib/api.js';
+import { issuePage, readIssueFilters } from '#lib/issues/list/issue-list.js';
 import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, params, url }) => {
-  const state = ['open', 'closed', 'all'].includes(url.searchParams.get('state') ?? '')
-    ? url.searchParams.get('state')!
-    : 'open';
-  const query = url.searchParams.get('q') ?? '';
-  const view = url.searchParams.get('view') ?? 'all';
-  const labels = url.searchParams.getAll('label');
-  const search = new URLSearchParams({ limit: '30', state });
-  search.set('view', view);
-  if (query) search.set('q', query);
-  for (const label of labels) search.append('label', label);
+  const filters = readIssueFilters(url);
   const result = await routeLoad(
     apiWith<{
       issues: IssueSummary[];
       nextCursor: string | null;
       availableLabels: WorkItemLabel[];
       counts: { open?: number; closed?: number };
-    }>(fetch, `/repositories/${params.owner}/${params.repo}/issues?${search}`)
+    }>(fetch, `/repositories/${params.owner}/${params.repo}/issues?${issuePage(filters, 30)}`)
   );
-  return { ...result, state, query, labels, view };
+  return { ...result, filters };
 }) satisfies PageLoad;
