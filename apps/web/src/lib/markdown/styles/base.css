@@ -72,13 +72,13 @@
   border-radius: 4px;
   background: var(--color-surface-muted);
   color: var(--color-ink-strong);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.9em;
 }
 .markdown pre {
   overflow: auto;
   padding: 11px 13px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
 }
 .markdown pre code {
@@ -98,7 +98,7 @@
 .markdown h6 {
   margin: 20px 0 10px;
   color: var(--color-ink-strong);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
 }
 .markdown h1 {
@@ -140,7 +140,7 @@
 .markdown th {
   background: var(--color-surface-muted);
   color: var(--color-ink-strong);
-  font-weight: 650;
+  font-weight: 600;
 }
 .markdown tr:nth-child(2n) td {
   background: color-mix(in srgb, var(--color-surface-muted) 48%, transparent);
@@ -177,11 +177,11 @@
 }
 .markdown details {
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
 }
 .markdown summary {
   color: var(--color-ink-strong);
   cursor: pointer;
-  font-weight: 630;
+  font-weight: 600;
 }
