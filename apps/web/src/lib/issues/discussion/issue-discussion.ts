@@ -8,10 +8,16 @@ export type DiscussionThread = {
   root: DiscussionComment;
   replies: DiscussionComment[];
 };
-export type DiscussionItem = DiscussionThread | Exclude<IssueTimelineItem, { kind: 'comment' }>;
+export type ActivityEntry = Exclude<IssueTimelineItem, { kind: 'comment' }>;
+export type DiscussionActivity = { kind: 'activity'; sequence: number; entries: ActivityEntry[] };
+export type DiscussionItem = DiscussionThread | DiscussionActivity;
 
 export function isDiscussionEvent(event: IssueEvent) {
   return event.kind === 'closed' || event.kind === 'reopened' || event.kind === 'closed_by_pull';
+}
+
+export function isMechanical(entry: ActivityEntry) {
+  return entry.kind === 'event' && !isDiscussionEvent(entry.value);
 }
 
 export function issueDiscussion(timeline: IssueTimelineWindow): DiscussionItem[] {
@@ -20,10 +26,10 @@ export function issueDiscussion(timeline: IssueTimelineWindow): DiscussionItem[]
     if (item.kind === 'comment') comments.set(item.value.id, { comment: item.value, sequence: item.sequence });
   }
   const threads = new Map<string, DiscussionThread>();
-  const events: DiscussionItem[] = [];
+  const entries: ActivityEntry[] = [];
   for (const item of timeline.items.toSorted((left, right) => left.sequence - right.sequence)) {
     if (item.kind !== 'comment') {
-      if (item.kind === 'reference' || isDiscussionEvent(item.value)) events.push(item);
+      entries.push(item);
       continue;
     }
     const rootId = item.value.parentId ?? item.value.id;
@@ -35,7 +41,14 @@ export function issueDiscussion(timeline: IssueTimelineWindow): DiscussionItem[]
     }
     if (item.value.id !== thread.root.comment.id) thread.replies.push({ comment: item.value, sequence: item.sequence });
   }
-  return [...threads.values(), ...events].toSorted((left, right) => left.sequence - right.sequence);
+  const items: DiscussionItem[] = [];
+  for (const item of [...threads.values(), ...entries].toSorted((left, right) => left.sequence - right.sequence)) {
+    const previous = items.at(-1);
+    if (item.kind === 'thread') items.push(item);
+    else if (previous?.kind === 'activity') previous.entries.push(item);
+    else items.push({ kind: 'activity', sequence: item.sequence, entries: [item] });
+  }
+  return items;
 }
 
 export function issueEventCopy(event: IssueEvent) {

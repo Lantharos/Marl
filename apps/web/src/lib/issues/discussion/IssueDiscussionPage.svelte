@@ -1,32 +1,23 @@
 <script lang="ts">
-  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import { page } from '$app/state';
   import { tick } from 'svelte';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import type { IssueComment, IssueDetail, IssueTimelineItem } from '@marl/contracts';
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
-  import Flag from '@lucide/svelte/icons/flag';
-  import Bell from '@lucide/svelte/icons/bell';
-  import BellOff from '@lucide/svelte/icons/bell-off';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import Pencil from '@lucide/svelte/icons/pencil';
   import Button from '#lib/components/controls/Button.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import Field from '#lib/components/controls/Field.svelte';
-  import ReferenceTimelineEvent from '#lib/components/discussion/ReferenceTimelineEvent.svelte';
   import WorkItemMetadata from '#lib/components/discussion/WorkItemMetadata.svelte';
-  import WorkItemStateIcon from '#lib/components/discussion/WorkItemStateIcon.svelte';
-  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
-  import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
-  import Time from '#lib/components/page/Time.svelte';
-  import { reporting } from '#lib/reporting/reporting.svelte.js';
   import { seoExcerpt } from '#lib/seo.js';
+  import IssueActivity from './IssueActivity.svelte';
   import IssueConclusion from './IssueConclusion.svelte';
   import IssueDiscussionThread from './IssueDiscussionThread.svelte';
-  import IssueEventRow from './IssueEventRow.svelte';
+  import IssueHeader from './IssueHeader.svelte';
   import IssuePullLinks from './IssuePullLinks.svelte';
+  import IssueReport from './IssueReport.svelte';
   import { isDiscussionEvent, issueDiscussion, observeIssueDiscussion } from './issue-discussion';
   import { IssuePageState } from './issue-page-state.svelte';
 
@@ -47,8 +38,7 @@
   }));
   const issue = $derived(pageState.issue);
   const timeline = $derived(pageState.timeline);
-  const threads = $derived(issueDiscussion(timeline));
-  const history = $derived(timeline.items.filter((item) => item.kind === 'event' && !isDiscussionEvent(item.value)));
+  const discussion = $derived(issueDiscussion(timeline));
   const comments = $derived(
     new Map(
       [...timeline.context, ...timeline.items.flatMap((item) => (item.kind === 'comment' ? [item.value] : []))].map(
@@ -59,6 +49,7 @@
   const canReply = $derived(Boolean(data.shellUser) && (!issue.locked || issue.canManage));
   const draftKey = $derived(data.shellUser ? `issue:${issue.id}:${data.shellUser.id}` : undefined);
   const resumeSequence = $derived(data.issue.participation.lastReadSequence);
+  const conversations = $derived(discussion.filter((item) => item.kind === 'thread').length);
   const hasUnread = $derived(resumeSequence > 0 && timeline.items.some((item) => item.sequence > resumeSequence));
   let comment = $state('');
   let uploading = $state(false);
@@ -66,9 +57,6 @@
   let editing = $state(false);
   let editedTitle = $state('');
   let editedBody = $state('');
-  let reportExpanded = $state(false);
-  let reportOverflow = $state(false);
-  let historyOpen = $state(false);
   let detailsOpen = $state(false);
   let conclusionEditor = $state<IssueConclusion>();
 
@@ -124,17 +112,6 @@
     else document.getElementById('issue-composer')?.scrollIntoView({ block: 'center', behavior: 'instant' });
   }
 
-  function measureReport(node: HTMLElement) {
-    const measure = () => {
-      if (!reportExpanded) reportOverflow = node.scrollHeight > node.clientHeight + 1;
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    const markdown = node.querySelector('.markdown');
-    if (markdown) observer.observe(markdown);
-    return () => observer.disconnect();
-  }
-
   function promoteConclusion(selected: IssueComment) {
     detailsOpen = true;
     conclusionEditor?.promote(selected);
@@ -148,103 +125,49 @@
   robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
 />
 
-<header class="mb-6">
-  <h1 class="text-2xl leading-tight font-semibold tracking-tight text-balance text-ink-strong sm:text-3xl">
-    {issue.title}
-    <WorkItemReference kind="issue" number={issue.number} class="font-normal text-ink-faint" />
-  </h1>
-  <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-muted">
-    <span
-      class={[
-        'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold',
-        issue.state === 'open' ? 'bg-success-soft text-success' : 'bg-surface-muted text-ink-muted'
-      ]}
-      ><WorkItemStateIcon kind="issue" state={issue.state} size={14} />{issue.state === 'open'
-        ? 'Open'
-        : 'Closed'}</span
-    >
-    <span>{issue.commentCount} {issue.commentCount === 1 ? 'comment' : 'comments'}</span>
-    {#if data.shellUser}<Button
-        size="small"
-        variant="ghost"
-        disabled={pageState.busy}
-        aria-pressed={issue.participation.following}
-        onclick={pageState.toggleFollowing}
-        >{#if issue.participation.following}<BellOff size={14} />Following{:else}<Bell size={14} />Follow{/if}</Button
-      >{/if}
-    {#if data.shellUser && !issue.canEdit}<Button
-        size="small"
-        variant="ghost"
-        onclick={() => reporting.open({ type: 'issue', id: issue.id, label: 'issue' })}><Flag size={14} />Report</Button
-      >{/if}
-  </div>
-</header>
+<IssueHeader
+  {issue}
+  signedIn={Boolean(data.shellUser)}
+  busy={pageState.busy}
+  onFollow={pageState.toggleFollowing}
+  onChangeState={pageState.changeState}
+/>
 
 {#if pageState.error}
   <Notice class="mb-4" dismissLabel="Dismiss error" ondismiss={() => (pageState.error = '')}>{pageState.error}</Notice>
 {/if}
 
 <div
-  class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-10 xl:grid-cols-[minmax(0,920px)_300px] xl:justify-between"
+  class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-10 xl:grid-cols-[minmax(0,920px)_300px] xl:justify-between"
 >
   <div class="min-w-0" {@attach (node) => observeIssueDiscussion(node, pageState.markRead)}>
-    <article class="surface p-4 sm:p-5">
-      <header class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <UserProfileLink
-          handle={issue.author}
-          displayName={issue.authorDisplayName}
-          avatarUrl={issue.authorAvatarUrl}
-          kind={issue.authorKind}
-          size={30}
-          class="mr-auto"
-        />
-        <Time value={issue.createdAt} />
-        {#if issue.canEdit}<Button size="small" variant="ghost" onclick={openEditor}><Pencil size={14} />Edit</Button
-          >{/if}
-      </header>
-      <div
-        class={[
-          'mt-3.5',
-          !reportExpanded && 'max-h-150 overflow-hidden',
-          !reportExpanded && reportOverflow && 'mask-b-from-80%'
-        ]}
-        {@attach measureReport}
-      >
-        {#if issue.bodyHtml}<MarkdownBody html={issue.bodyHtml} />{:else}<p class="text-sm text-ink-faint italic">
-            No description provided.
-          </p>{/if}
-      </div>
-      {#if reportOverflow}<Button
-          class="mt-2 -ml-2"
-          size="small"
-          variant="ghost"
-          aria-expanded={reportExpanded}
-          onclick={() => (reportExpanded = !reportExpanded)}
-          >{reportExpanded ? 'Show less' : 'Read full description'}<ChevronDown size={14} /></Button
-        >{/if}
-    </article>
+    <IssueReport {issue} onEdit={openEditor} />
 
-    <section class="mt-8" aria-labelledby="discussion-title">
-      <header class="mb-3 flex min-h-9 items-center justify-between gap-3">
-        <h2 id="discussion-title" class="text-base font-semibold text-ink-strong">Discussion</h2>
+    <section class="mt-7" aria-labelledby="discussion-title">
+      <header class="mb-2.5 flex min-h-8 items-center justify-between gap-3">
+        <h2 id="discussion-title" class="text-base font-semibold text-ink-strong">
+          Discussion{#if conversations}<span class="ml-1.5 font-medium text-ink-faint tabular-nums"
+              >{conversations}</span
+            >{/if}
+        </h2>
         <div class="flex gap-1">
           {#if hasUnread}<Button size="small" variant="ghost" disabled={pageState.busy} onclick={resume}>Resume</Button
             >{/if}
-          {#if threads.length}<Button size="small" variant="ghost" onclick={latest}
+          {#if discussion.length}<Button size="small" variant="ghost" onclick={latest}
               >Latest<ArrowDown size={14} /></Button
             >{/if}
         </div>
       </header>
       {#if timeline.hidden > 0}<Button
-          class="mb-3"
+          class="mb-2.5"
           block
           variant="ghost"
           loading={pageState.busy}
           onclick={pageState.loadOlder}
           >Load earlier discussion <span class="font-normal text-ink-faint">{timeline.hidden} updates</span></Button
         >{/if}
-      <div class="grid gap-3">
-        {#each threads as item (item.kind === 'thread' ? item.id : item.sequence)}
+      <div class="grid gap-2.5">
+        {#each discussion as item (item.kind === 'thread' ? item.id : item.sequence)}
           {#if item.kind === 'thread'}<IssueDiscussionThread
               thread={item}
               viewerId={data.shellUser?.id}
@@ -260,19 +183,7 @@
               onSource={showSource}
               onConclude={promoteConclusion}
             />
-          {:else if item.kind === 'reference'}<div id={`activity-${item.sequence}`}>
-              <ReferenceTimelineEvent reference={item.value} /><span
-                class="block h-px"
-                data-read-sequence={item.sequence}
-                aria-hidden="true"
-              ></span>
-            </div>
-          {:else}<IssueEventRow
-              id={`activity-${item.sequence}`}
-              event={item.value}
-              sequence={item.sequence}
-              createdAt={item.createdAt}
-            />{/if}
+          {:else}<IssueActivity entries={item.entries} labels={issue.availableLabels} />{/if}
         {/each}
       </div>
       {#if canReply}
@@ -283,7 +194,7 @@
             {context}
             disabled={pageState.busy || !canReply}
             draftKey={draftKey ? `${draftKey}:comment` : undefined}
-            placeholder={threads.length ? 'Add to the discussion' : 'What do you think?'}
+            placeholder={conversations ? 'Start a new conversation' : 'What do you think?'}
             minHeight={120}
             onsubmit={async () => {
               if (await pageState.addComment(comment)) comment = '';
@@ -304,29 +215,10 @@
       {:else}<p class="mt-5 text-sm text-ink-muted">
           <a class="font-semibold text-brand hover:underline" href="/sign-in">Sign in</a> to join the discussion.
         </p>{/if}
-      {#if history.length}
-        <section class="mt-8 border-t border-line-subtle pt-3">
-          <Button
-            size="small"
-            variant="ghost"
-            class="-ml-2"
-            aria-expanded={historyOpen}
-            onclick={() => (historyOpen = !historyOpen)}
-            >History <span class="text-ink-faint">{history.length}</span><ChevronDown size={14} /></Button
-          >
-          {#if historyOpen}<div class="mt-1">
-              {#each history as item (item.sequence)}{#if item.kind === 'event'}<IssueEventRow
-                    event={item.value}
-                    sequence={item.sequence}
-                    createdAt={item.createdAt}
-                  />{/if}{/each}
-            </div>{/if}
-        </section>
-      {/if}
     </section>
   </div>
 
-  <aside class="min-w-0 lg:sticky lg:top-20">
+  <aside class="min-w-0 max-lg:order-first lg:sticky lg:top-20">
     <Button
       class="w-full justify-between lg:hidden"
       aria-expanded={detailsOpen}
@@ -356,12 +248,6 @@
         onUpdate={pageState.updateMetadata}
         onCreateLabel={pageState.createLabel}
       />
-      {#if issue.canEdit}<Button
-          size="small"
-          class="justify-self-start"
-          disabled={pageState.busy}
-          onclick={pageState.changeState}>{issue.state === 'open' ? 'Close issue' : 'Reopen issue'}</Button
-        >{/if}
     </div>
   </aside>
 </div>

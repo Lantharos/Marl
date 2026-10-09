@@ -6,6 +6,7 @@
   import ActionMenu from '#lib/components/overlays/ActionMenu.svelte';
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import type { MarkdownContext } from '#lib/markdown/context.js';
@@ -20,6 +21,7 @@
     canConclude,
     busy,
     replyTarget,
+    nested = false,
     draftKey,
     onReply,
     onSave,
@@ -35,6 +37,7 @@
     canConclude: boolean;
     busy: boolean;
     replyTarget?: IssueComment;
+    nested?: boolean;
     draftKey?: string;
     onReply: (comment: IssueComment, quote: string) => void;
     onSave: (id: string, body: string) => Promise<boolean>;
@@ -98,36 +101,41 @@
 
 <article
   id={`comment-${comment.id}`}
-  class="relative min-w-0 scroll-my-25 rounded-sm outline-none target:outline target:outline-offset-8 target:outline-brand focus-visible:outline focus-visible:outline-offset-8 focus-visible:outline-brand"
+  class="relative min-w-0 scroll-my-25 rounded-sm outline-none target:outline target:outline-offset-6 target:outline-brand focus-visible:outline focus-visible:outline-offset-6 focus-visible:outline-brand"
   tabindex="-1"
 >
-  <header class="flex min-h-7 flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-ink-muted">
+  <header class="flex min-h-8 items-center gap-x-2 text-sm text-ink-muted">
     <UserProfileLink
       handle={comment.author}
       displayName={comment.authorDisplayName}
       avatarUrl={comment.authorAvatarUrl}
       kind={comment.authorKind}
-      size={28}
-      class="mr-auto"
+      size={nested ? 24 : 28}
     />
-    <a class="text-xs text-ink-muted hover:text-ink-strong" href={`#comment-${comment.id}`}
+    {#if replyTarget && replyTarget.id !== comment.parentId}<a
+        class="flex min-w-0 items-center gap-1 text-xs text-ink-muted hover:text-brand"
+        href={`#comment-${replyTarget.id}`}
+        onclick={(event) => {
+          event.preventDefault();
+          void onSource(replyTarget!.id);
+        }}><Reply size={12} class="shrink-0" /><span class="truncate">{replyTarget.authorDisplayName}</span></a
+      >{/if}
+    <a class="ml-auto shrink-0 text-xs text-ink-muted hover:text-ink-strong" href={`#comment-${comment.id}`}
       ><Time value={comment.createdAt} class="text-ink-muted" /></a
     >
-    {#if comment.updatedAt !== comment.createdAt && !comment.deleted}<span class="text-xs text-ink-faint">edited</span
+    {#if comment.updatedAt !== comment.createdAt && !comment.deleted}<span class="shrink-0 text-xs text-ink-faint"
+        >edited</span
       >{/if}
-    {#if !comment.deleted && actions.length}<div class="-mr-1.5">
+    {#if !comment.deleted && !editing}<div class="-mr-1.5 flex shrink-0 items-center">
+        {#if canReply}<Tooltip text="Reply" as="label">
+            {#snippet children(tooltip)}<Button {...tooltip} icon size="small" variant="ghost" onclick={reply}
+                ><Reply size={15} /></Button
+              >{/snippet}
+          </Tooltip>{/if}
         <ActionMenu label={`Options for ${comment.authorDisplayName}’s comment`} {actions} />
       </div>{/if}
   </header>
-  {#if replyTarget && replyTarget.id !== comment.parentId}<a
-      class="mt-2.5 flex w-fit items-center gap-1.5 text-xs text-ink-muted hover:text-brand"
-      href={`#comment-${replyTarget.id}`}
-      onclick={(event) => {
-        event.preventDefault();
-        void onSource(replyTarget!.id);
-      }}><Reply size={13} />{replyTarget.authorDisplayName}</a
-    >{/if}
-  <div class="pt-3" bind:this={bodyElement}>
+  <div class={['pt-1', nested ? 'sm:pl-8' : 'sm:pl-9']} bind:this={bodyElement}>
     {#if comment.deleted}<p class="text-sm text-ink-faint italic">Comment deleted.</p>
     {:else if editing}
       <MarkdownComposer
@@ -161,8 +169,6 @@
         }}>Delete</Button
       >
     </div>
-  {:else if !comment.deleted && !editing && canReply}
-    <Button class="mt-2 -ml-2" size="small" variant="ghost" onclick={reply}><Reply size={14} />Reply</Button>
   {/if}
   {#if sequence !== undefined}<span class="block h-px" data-read-sequence={sequence} aria-hidden="true"></span>{/if}
 </article>
