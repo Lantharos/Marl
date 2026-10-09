@@ -43,7 +43,12 @@ function checks(pull: PullRequestDetail): Requirement {
       outcome: checksPass ? 'optional' : 'blocked',
       label: `${failed} of ${total} checks failed`
     };
-  if (running) return { key: 'checks', outcome: 'waiting', label: `${running} of ${total} checks running` };
+  if (running)
+    return {
+      key: 'checks',
+      outcome: checksPass ? 'optional' : 'waiting',
+      label: `${running} of ${total} checks running`
+    };
   if (!checksPass) return { key: 'checks', outcome: 'waiting', label: 'Required checks have not reported' };
   return { key: 'checks', outcome: 'met', label: total ? `${plural(passed, 'check')} passed` : 'No checks reported' };
 }
