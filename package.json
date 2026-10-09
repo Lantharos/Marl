@@ -25,7 +25,8 @@
     "devalue": "^6.0.0",
     "lodash-es": "^4.18.1",
     "esbuild": "^0.28.2",
-    "cookie": "^1.1.1"
+    "cookie": "^1.1.1",
+    "katex": "^0.19.0"
   },
   "devDependencies": {
     "prettier": "^3.9.9",
