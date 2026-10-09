@@ -40,6 +40,7 @@ export const mergeQueueEntries = sqliteTable(
   },
   (table) => [
     index('merge_queue_by_target').on(table.repositoryId, table.targetBranch, table.state, table.enqueuedAt),
+    index('merge_queue_by_state').on(table.state, table.updatedAt),
     index('merge_queue_by_commit')
       .on(table.mergeCommitId)
       .where(sql`state = 'testing'`),

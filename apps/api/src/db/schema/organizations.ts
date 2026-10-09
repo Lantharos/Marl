@@ -114,7 +114,6 @@ export const teams = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`)
   },
   (table) => [
-    index('teams_by_organization').on(table.organizationId, sql`${table.slug} COLLATE NOCASE`),
     uniqueIndex('teams_organization_id_slug_unique').on(table.organizationId, sql`${table.slug} COLLATE NOCASE`)
   ]
 );

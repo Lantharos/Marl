@@ -129,7 +129,7 @@ export default {
         typeof route.body?.actorId === 'string' && route.body.actorId.length > 0 && route.body.actorId.length <= 200
           ? route.body.actorId
           : undefined;
-      if (route.writes)
+      if (route.writes && request.method === 'POST')
         return handleReceivePack(
           request,
           container,

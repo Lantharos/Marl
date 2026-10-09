@@ -1,6 +1,6 @@
 {
-  "id": "d717e743-eeb4-4612-9b94-7783829aacdc",
-  "prevId": "83ccfb90-1703-496d-bf19-91bfde2818ad",
+  "id": "3bb5c813-2338-4903-b11c-54abad393e6a",
+  "prevId": "82481d31-f4d4-4f43-a451-9d39806ac006",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -2538,26 +2538,7 @@
           "default": "0"
         }
       },
-      "indexes": {
-        "commit_changes_by_position": {
-          "name": "commit_changes_by_position",
-          "columns": [
-            "repository_id",
-            "path",
-            "position"
-          ],
-          "isUnique": false
-        },
-        "commit_changes_by_path": {
-          "name": "commit_changes_by_path",
-          "columns": [
-            "repository_id",
-            "path",
-            "commit_id"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "commit_changes_repository_id_commit_id_commits_repository_id_id_fk": {
           "name": "commit_changes_repository_id_commit_id_commits_repository_id_id_fk",
@@ -2687,6 +2668,13 @@
             "\"authored_at\" COLLATE BINARY DESC"
           ],
           "isUnique": false
+        },
+        "commits_by_author_email": {
+          "name": "commits_by_author_email",
+          "columns": [
+            "\"author_email\" COLLATE NOCASE"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2733,6 +2721,77 @@
           "value": "signature_status IN ('verified', 'unverified', 'invalid')"
         }
       }
+    },
+    "directory_last_changes": {
+      "name": "directory_last_changes",
+      "columns": {
+        "repository_id": {
+          "name": "repository_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "commit_id": {
+          "name": "commit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "changes": {
+          "name": "changes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "directory_last_changes_repository_id_commit_id_commits_repository_id_id_fk": {
+          "name": "directory_last_changes_repository_id_commit_id_commits_repository_id_id_fk",
+          "tableFrom": "directory_last_changes",
+          "columnsFrom": [
+            "repository_id",
+            "commit_id"
+          ],
+          "tableTo": "commits",
+          "columnsTo": [
+            "repository_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "directory_last_changes_repository_id_commit_id_path_pk": {
+          "columns": [
+            "repository_id",
+            "commit_id",
+            "path"
+          ],
+          "name": "directory_last_changes_repository_id_commit_id_path_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "indexed_commit_changes": {
       "name": "indexed_commit_changes",
@@ -3926,6 +3985,14 @@
             "issue_id",
             "created_at",
             "id"
+          ],
+          "isUnique": false
+        },
+        "issue_comments_by_author": {
+          "name": "issue_comments_by_author",
+          "columns": [
+            "author_id",
+            "issue_id"
           ],
           "isUnique": false
         }
@@ -5569,14 +5636,6 @@
         }
       },
       "indexes": {
-        "teams_by_organization": {
-          "name": "teams_by_organization",
-          "columns": [
-            "organization_id",
-            "\"slug\" COLLATE NOCASE"
-          ],
-          "isUnique": false
-        },
         "teams_organization_id_slug_unique": {
           "name": "teams_organization_id_slug_unique",
           "columns": [
@@ -7293,14 +7352,6 @@
         }
       },
       "indexes": {
-        "pull_realtime_updates_pull_version_idx": {
-          "name": "pull_realtime_updates_pull_version_idx",
-          "columns": [
-            "pull_request_id",
-            "version"
-          ],
-          "isUnique": false
-        },
         "pull_realtime_updates_pull_request_id_version_unique": {
           "name": "pull_realtime_updates_pull_request_id_version_unique",
           "columns": [
@@ -7347,7 +7398,16 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "pull_request_assignees_by_user": {
+          "name": "pull_request_assignees_by_user",
+          "columns": [
+            "user_id",
+            "pull_request_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "pull_request_assignees_pull_request_id_pull_requests_id_fk": {
           "name": "pull_request_assignees_pull_request_id_pull_requests_id_fk",
@@ -7449,6 +7509,14 @@
           "columns": [
             "pull_request_id",
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "pull_request_comments_by_author": {
+          "name": "pull_request_comments_by_author",
+          "columns": [
+            "author_id",
+            "pull_request_id"
           ],
           "isUnique": false
         }
@@ -7714,6 +7782,14 @@
             "created_at"
           ],
           "isUnique": false
+        },
+        "reviews_by_author": {
+          "name": "reviews_by_author",
+          "columns": [
+            "author_id",
+            "pull_request_id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -7938,6 +8014,13 @@
             "source_repository_id",
             "state",
             "source_branch"
+          ],
+          "isUnique": false
+        },
+        "pull_requests_by_author": {
+          "name": "pull_requests_by_author",
+          "columns": [
+            "author_id"
           ],
           "isUnique": false
         },
@@ -8172,6 +8255,14 @@
           "columns": [
             "thread_id",
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "review_comments_by_author": {
+          "name": "review_comments_by_author",
+          "columns": [
+            "author_id",
+            "thread_id"
           ],
           "isUnique": false
         }
@@ -8754,6 +8845,14 @@
           ],
           "isUnique": false
         },
+        "merge_queue_by_state": {
+          "name": "merge_queue_by_state",
+          "columns": [
+            "state",
+            "updated_at"
+          ],
+          "isUnique": false
+        },
         "merge_queue_by_commit": {
           "name": "merge_queue_by_commit",
           "columns": [
@@ -8891,6 +8990,13 @@
           }
         }
       },
+      "commits_by_author_email": {
+        "columns": {
+          "\"author_email\" COLLATE NOCASE": {
+            "isExpression": true
+          }
+        }
+      },
       "personal_access_tokens_by_user": {
         "columns": {
           "\"created_at\" COLLATE BINARY DESC": {
@@ -8993,13 +9099,6 @@
         }
       },
       "organizations_slug_unique": {
-        "columns": {
-          "\"slug\" COLLATE NOCASE": {
-            "isExpression": true
-          }
-        }
-      },
-      "teams_by_organization": {
         "columns": {
           "\"slug\" COLLATE NOCASE": {
             "isExpression": true

@@ -6,18 +6,10 @@ import { pinPullRefs } from '../git/writes';
 import { problem } from '../http/http';
 import type { Env } from '../core/platform';
 import { mergeRequirements, type CheckCounts, type RequirementReview } from './merge/requirements';
-import { authorizeRepository, lookupRepository } from '../repositories/access/access';
+import { lookupRepository, type RepositoryAccess } from '../repositories/access/access';
 import { commitAuthorIdSql } from '../git/commit-authors';
 import { commitSignatureStatusSql } from '../git/commit-signing';
 
-type PullRepository = {
-  id: string;
-  owner: string;
-  name: string;
-  visibility: 'public' | 'private';
-  organizationId: string;
-  defaultBranch: string;
-};
 export type PullRow = {
   id: string;
   repositoryId: string;
@@ -77,26 +69,8 @@ export function createPullEvent(
   };
 }
 
-export async function pullRepository(env: Env, owner: string, name: string): Promise<PullRepository | null> {
-  const repository = await lookupRepository(env, owner, name);
-  return repository
-    ? {
-        id: repository.id,
-        owner: repository.owner,
-        name: repository.name,
-        visibility: repository.visibility,
-        organizationId: repository.organizationId,
-        defaultBranch: repository.defaultBranch
-      }
-    : null;
-}
-
-export async function canManageRepository(
-  env: Env,
-  principal: Principal,
-  repository: PullRepository
-): Promise<boolean> {
-  return Boolean(await authorizeRepository(env, principal, repository.owner, repository.name, 'repository.triage'));
+export function pullRepository(env: Env, principal: Principal | null, owner: string, name: string) {
+  return lookupRepository(env, owner, name, principal);
 }
 
 export function reviewStatusFor(pull: PullRow, reviews: RequirementReview[]): ReviewStatus {
@@ -229,7 +203,11 @@ export async function summarizePullRows(env: Env, rows: PullRow[]) {
   });
 }
 
-export async function preservePullRefs(env: Env, repository: PullRepository, pull: PullRow): Promise<Response | null> {
+export async function preservePullRefs(
+  env: Env,
+  repository: RepositoryAccess,
+  pull: PullRow
+): Promise<Response | null> {
   const gateway = await pinPullRefs(env, {
     owner: repository.owner,
     repository: repository.name,

@@ -4,7 +4,8 @@ import { auditStatement } from '../core/audit';
 import { identifier } from '../core/domain';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
-import { canManageRepository as membership, createPullEvent, pullRepository as repo, findPullId } from './context';
+import { createPullEvent, pullRepository as repo, findPullId } from './context';
+import { repositoryCan } from '../repositories/access/access';
 import { commitPullUpdate } from './realtime/updates';
 import { createPullLabelBody, pullMetadataBody } from '../http/request-schemas';
 
@@ -16,8 +17,8 @@ export async function updatePullMetadata(
   name: string,
   number: number
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository)))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(
     'SELECT id,locked_at AS lockedAt FROM pull_requests WHERE repository_id=? AND number=?'
@@ -145,8 +146,8 @@ export async function createPullLabel(
   name: string,
   number: number
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository)))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await findPullId(env, repository.id, number);
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');

@@ -4,10 +4,10 @@ import { canDeletePullComment } from './review/comment-access';
 import { identifier } from '../core/domain';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
-import { canManageRepository as membership, pullRepository as repo } from './context';
+import { pullRepository as repo } from './context';
 import { commitPullUpdate } from './realtime/updates';
 import { commentBody } from '../http/request-schemas';
-import { authorizeRepository } from '../repositories/access/access';
+import { authorizeRepository, repositoryCan } from '../repositories/access/access';
 import { deleteReferenceStatements, referenceStatements } from '../issues/references/work-items';
 import { deleteMentionStatements, mentionStatements } from '../issues/references/mentions';
 
@@ -19,8 +19,8 @@ export async function addPullComment(
   name: string,
   number: number
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository)))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(
     `SELECT id,locked_at AS lockedAt FROM pull_requests WHERE repository_id=? AND number=?`

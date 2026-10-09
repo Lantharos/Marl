@@ -24,15 +24,8 @@ import {
   uploadRepositoryIcon
 } from './repositories';
 import { detachRepositoryFork, forkRepository } from './forks';
-import {
-  getCommit,
-  listBranches,
-  listCommits,
-  listPullSources,
-  listTree,
-  readBlob,
-  readCommitPatch
-} from './content/source';
+import { getCommit, listBranches, listCommits, listPullSources, listTree, readCommitPatch } from './content/source';
+import { readBlob } from './content/blobs';
 import { readDocument } from './content/documents';
 import { getRepositoryOverview, updateRepositoryOverview } from './content/overview';
 import {
@@ -46,8 +39,8 @@ import {
 const repository = '/repositories/:owner/:repo';
 
 export const repositoryRoutes = [
-  route('GET', '/repository-icons/:repository/:file', 'public', ({ env }, { repository, file }) =>
-    readRepositoryIcon(env, repository, file)
+  route('GET', '/repository-icons/:repository/:file', 'public', ({ env, execution }, { repository, file }) =>
+    readRepositoryIcon(env, execution, repository, file)
   ),
   route(['GET', 'HEAD'], '/media/:id(media_[a-z0-9]+)', 'optional', ({ request, env, principal }, { id }) =>
     readRepositoryMedia(request, env, principal, id)
@@ -73,14 +66,18 @@ export const repositoryRoutes = [
   route('GET', `${repository}/commits`, 'optional', ({ env, principal, url }, { owner, repo }) =>
     listCommits(env, principal, owner, repo, url)
   ),
-  route('GET', `${repository}/commits/:commit/patch`, 'optional', ({ env, principal, url }, { owner, repo, commit }) =>
-    readCommitPatch(env, principal, owner, repo, commit, url)
+  route(
+    'GET',
+    `${repository}/commits/:commit/patch`,
+    'optional',
+    ({ env, principal, url, execution }, { owner, repo, commit }) =>
+      readCommitPatch(env, principal, owner, repo, commit, url, execution)
   ),
-  route('GET', `${repository}/commits/:commit`, 'optional', ({ env, principal }, { owner, repo, commit }) =>
-    getCommit(env, principal, owner, repo, commit)
+  route('GET', `${repository}/commits/:commit`, 'optional', ({ env, principal, execution }, { owner, repo, commit }) =>
+    getCommit(env, principal, owner, repo, commit, execution)
   ),
-  route('GET', `${repository}/tree`, 'optional', ({ env, principal, url }, { owner, repo }) =>
-    listTree(env, principal, owner, repo, url)
+  route('GET', `${repository}/tree`, 'optional', ({ env, principal, url, execution }, { owner, repo }) =>
+    listTree(env, principal, owner, repo, url, execution)
   ),
   route('GET', `${repository}/blob/:revision/*path`, 'optional', ({ env, principal, execution }, params) =>
     readBlob(env, principal, params.owner, params.repo, params.revision, params.path, execution)
@@ -139,8 +136,8 @@ export const repositoryRoutes = [
   route('GET', `${repository}/search/code`, 'optional', ({ env, principal, url }, { owner, repo }) =>
     searchRepositoryCode(env, principal, owner, repo, url)
   ),
-  route('GET', `${repository}/templates`, 'optional', ({ env, principal }, { owner, repo }) =>
-    getRepositoryTemplates(env, principal, owner, repo)
+  route('GET', `${repository}/templates`, 'optional', ({ env, principal, execution }, { owner, repo }) =>
+    getRepositoryTemplates(env, principal, owner, repo, execution)
   ),
   route('GET', `${repository}/bundle`, 'optional', ({ env, principal }, { owner, repo }) =>
     downloadRepositoryBundle(env, principal, owner, repo)

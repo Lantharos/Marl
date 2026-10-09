@@ -3,11 +3,12 @@ import type { Principal } from '../../auth/principal';
 import { safeRepositoryPath } from '../../core/domain';
 import { pageResult, pageSize, readCursor } from '../../http/cursor';
 import { requestGitGateway } from '../../git/gateway';
+import { cachedGatewayRead } from '../../git/gateway-cache';
 import { json, problem, readJsonValue } from '../../http/http';
 import type { D1Result, Env } from '../../core/platform';
 import { authorizeRepository, authorizeRepositoryId, repositoryCan, repositoryListFilter } from '../access/access';
 import { commitAuthorIdSql } from '../../git/commit-authors';
-import { rawBlobHeaders } from '../../git/raw-content';
+import { directoryLastChanges } from './last-changes';
 
 export async function listBranches(
   env: Env,
@@ -95,12 +96,12 @@ export async function listCommits(
   const revision = url.searchParams.get('revision') ?? repo.defaultBranch;
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
+  const after = cursor ? 'WHERE (authored_at<? OR (authored_at=? AND id<?))' : '';
   const values = cursor
-    ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1]
-    : [resolved.id, repo.id, repo.id, limit + 1];
+    ? [repo.id, resolved.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1, repo.id]
+    : [repo.id, resolved.id, repo.id, limit + 1, repo.id];
   const result = await env.DB.prepare(
-    `WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,${commitSignatureStatusSql('commit_rows')} AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`
+    `WITH RECURSIVE history(id,parents,authored_at) AS (SELECT id,parent_ids,authored_at FROM commits WHERE repository_id=? AND id=? UNION SELECT commits.id,commits.parent_ids,commits.authored_at FROM history JOIN json_each(history.parents) CROSS JOIN commits ON commits.repository_id=? AND commits.id=json_each.value), page AS (SELECT id,authored_at FROM history ${after} ORDER BY authored_at DESC,id DESC LIMIT ?) SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,${commitSignatureStatusSql('commit_rows')} AS signatureStatus,(SELECT COUNT(*) FROM history) AS total FROM page CROSS JOIN commits AS commit_rows ON commit_rows.repository_id=? AND commit_rows.id=page.id LEFT JOIN users AS commit_authors ON commit_authors.id=${commitAuthorIdSql('commit_rows')} ORDER BY page.authored_at DESC,page.id DESC`
   )
     .bind(...values)
     .all<{
@@ -132,7 +133,8 @@ export async function getCommit(
   principal: Principal | null,
   owner: string,
   name: string,
-  commitId: string
+  commitId: string,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -164,13 +166,10 @@ export async function getCommit(
       authorAvatarUrl: string | null;
     }>();
   if (!indexed) return problem(404, 'commit_not_found', 'Commit not found.');
-  const response = await requestGitGateway(
-    env,
-    '/_marl/commit',
-    { owner, repository: name, commitId },
-    { attempts: 2 }
+  const response = await cachedGatewayRead(env, execution, ['commit', repo.id, commitId], () =>
+    requestGitGateway(env, '/_marl/commit', { owner, repository: name, commitId }, { attempts: 2 })
   );
-  if (!response.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
+  if (!response?.ok) return problem(502, 'commit_gateway_failed', 'Git gateway could not read this commit.');
   const commit = await readJsonValue<{ author?: string; authorEmail?: string }>(response, 16 * 1024 * 1024);
   if (!commit || typeof commit.author !== 'string')
     return problem(502, 'commit_gateway_failed', 'Git gateway returned invalid commit data.');
@@ -189,7 +188,8 @@ export async function readCommitPatch(
   owner: string,
   name: string,
   commitId: string,
-  url: URL
+  url: URL,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -208,11 +208,8 @@ export async function readCommitPatch(
   }
   const base =
     Array.isArray(parents) && typeof parents[0] === 'string' ? parents[0] : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-  const response = await requestGitGateway(
-    env,
-    '/_marl/patch',
-    { owner, repository: name, base, head: resolved.id, path },
-    { attempts: 2 }
+  const response = await cachedGatewayRead(env, execution, ['patch', repo.id, base, resolved.id, path], () =>
+    requestGitGateway(env, '/_marl/patch', { owner, repository: name, base, head: resolved.id, path }, { attempts: 2 })
   ).catch(() => null);
   if (!response?.ok) return problem(502, 'patch_gateway_failed', 'Git gateway could not read this file diff.');
   return new Response(response.body, {
@@ -229,7 +226,8 @@ export async function listTree(
   principal: Principal | null,
   owner: string,
   name: string,
-  url: URL
+  url: URL,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -257,21 +255,17 @@ export async function listTree(
     if (!historical) return problem(502, 'tree_gateway_failed', 'Git gateway could not read this repository tree.');
     entries = historical;
   }
-  const paths = entries.map((entry) => entry.path).filter((path): path is string => typeof path === 'string');
-  const lastChanges = paths.length
-    ? await env.DB.prepare(
-        `WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`
-      )
-        .bind(resolved.id, repo.id, JSON.stringify(paths), repo.id)
-        .all<{
-          path: string;
-          commitId: string;
-          message: string;
-          author: string;
-          updatedAt: string;
-        }>()
-    : { results: [] };
-  const metadata = new Map(lastChanges.results.map((change) => [change.path, change]));
+  const lastChanges = query
+    ? []
+    : await directoryLastChanges(
+        env,
+        execution,
+        repo.id,
+        resolved.id,
+        parentPath,
+        entries.map((entry) => entry.path as string)
+      );
+  const metadata = new Map(lastChanges.map((change) => [change.path, change]));
   return json({
     revision,
     path: parentPath,
@@ -293,66 +287,6 @@ export async function listTree(
   });
 }
 
-export async function readBlob(
-  env: Env,
-  principal: Principal | null,
-  owner: string,
-  name: string,
-  revision: string,
-  path: string,
-  ctx: ExecutionContext
-): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
-  if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
-  const resolved = await resolveRevision(env, repo.id, revision);
-  if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  let entry = await env.DB.prepare(
-    `SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`
-  )
-    .bind(repo.id, resolved.treeId, path)
-    .first<{ objectId: string }>();
-  if (!entry?.objectId) {
-    const parentPath = path.split('/').slice(0, -1).join('/');
-    const historical = await readGatewayTree(env, owner, name, resolved.id, parentPath);
-    if (!historical) return problem(502, 'tree_gateway_failed', 'Git gateway could not resolve this historical file.');
-    entry = historical.find((candidate) => candidate.path === path && candidate.kind === 'blob') ?? null;
-  }
-  if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const immutableRevision = revision.toLowerCase() === resolved.id.toLowerCase();
-  const cacheKey = new Request(
-    `https://blob-cache.marl.internal/v3/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`
-  );
-  const publicCache = caches.default;
-  if (repo.visibility === 'public') {
-    const cached = await publicCache.match(cacheKey);
-    if (cached) {
-      const headers = new Headers(cached.headers);
-      headers.set(
-        'cache-control',
-        immutableRevision ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate'
-      );
-      return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers });
-    }
-  }
-  const response = await (
-    env.ENVIRONMENT === 'development'
-      ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 3 })
-      : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 3 })
-  ).catch(() => null);
-  if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob')
-    return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
-  const result = new Response(response.body, {
-    headers: rawBlobHeaders(path, repo.visibility, response.headers.get('content-length'), immutableRevision)
-  });
-  if (repo.visibility === 'public') {
-    const cached = result.clone();
-    cached.headers.set('cache-control', 'public, max-age=31536000, immutable');
-    ctx.waitUntil(publicCache.put(cacheKey, cached));
-  }
-  return result;
-}
-
 type TreeEntry = {
   path: string;
   name: string;
@@ -361,7 +295,7 @@ type TreeEntry = {
   byteSize?: number;
 };
 
-async function readGatewayTree(
+export async function readGatewayTree(
   env: Env,
   owner: string,
   repository: string,

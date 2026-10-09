@@ -150,6 +150,22 @@ export async function requestGitGateway<Path extends GitGatewayPath>(
   return retryGatewayRequest(() => fetch(request()), attempts);
 }
 
+export function requestGitObject(
+  env: Env,
+  repository: { id: string; owner: string; name: string },
+  objectId: string,
+  attempts: number
+) {
+  return env.ENVIRONMENT === 'development'
+    ? requestGitGateway(
+        env,
+        '/_marl/blob',
+        { owner: repository.owner, repository: repository.name, objectId },
+        { attempts }
+      )
+    : requestGitGateway(env, '/_marl/object', { repositoryId: repository.id, objectId }, { attempts });
+}
+
 export async function retryGatewayRequest(send: () => Promise<Response>, attempts = 2) {
   let lastResponse: Response | undefined;
   let lastError: unknown;

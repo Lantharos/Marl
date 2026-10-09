@@ -3,7 +3,8 @@ import type { Principal } from '../../auth/principal';
 import { identifier } from '../../core/domain';
 import { json, problem, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
-import { canManageRepository as membership, pullRepository as repo } from '../context';
+import { pullRepository as repo } from '../context';
+import { repositoryCan } from '../../repositories/access/access';
 import { commitPullUpdate } from '../realtime/updates';
 import { reviewBody } from '../../http/request-schemas';
 import { referenceStatements } from '../../issues/references/work-items';
@@ -17,8 +18,8 @@ export async function reviewPull(
   name: string,
   number: number
 ): Promise<Response> {
-  const repository = await repo(env, owner, name);
-  if (!repository || !(await membership(env, principal, repository)))
+  const repository = await repo(env, principal, owner, name);
+  if (!repository || !repositoryCan(repository, principal, 'repository.triage'))
     return problem(404, 'repository_not_found', 'Repository not found.');
   const pull = await env.DB.prepare(
     `SELECT id, source_commit_id AS sourceCommitId, state FROM pull_requests WHERE repository_id = ? AND number = ?`

@@ -121,10 +121,10 @@ export async function uploadAvatar(request: Request, env: Env, principal: Princi
   return json({ avatarUrl });
 }
 
-export async function readAvatar(env: Env, userId: string, file: string) {
+export async function readAvatar(env: Env, execution: ExecutionContext, userId: string, file: string) {
   if (!/^usr_[a-z0-9]+$|^[A-Za-z0-9_-]{8,}$/.test(userId) || !/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(file))
     return problem(404, 'avatar_not_found', 'Avatar not found.');
-  return readImageAsset(env, `avatars/${userId}/${file}`);
+  return readImageAsset(env, execution, `avatars/${userId}/${file}`);
 }
 
 async function usernameTaken(env: Env, userId: string, username: string) {

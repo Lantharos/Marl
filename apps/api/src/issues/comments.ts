@@ -5,7 +5,7 @@ import { identifier } from '../core/domain';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
 import { commentBody, issueCommentBody } from '../http/request-schemas';
-import { authorizeRepository } from '../repositories/access/access';
+import { authorizeRepository, repositoryCan } from '../repositories/access/access';
 import { deleteReferenceStatements, linkedWorkItems, referenceStatements } from './references/work-items';
 import { deleteMentionStatements, mentionStatements } from './references/mentions';
 
@@ -23,7 +23,7 @@ export async function addIssueComment(
     .bind(repository.id, number)
     .first<{ id: string; lockedAt: string | null }>();
   if (!issue) return problem(404, 'issue_not_found', 'Issue not found.');
-  if (issue.lockedAt && !(await authorizeRepository(env, principal, owner, name, 'repository.triage')))
+  if (issue.lockedAt && !repositoryCan(repository, principal, 'repository.triage'))
     return problem(423, 'issue_locked', 'This issue is locked.');
   const body = await readJson(request, issueCommentBody);
   if (!body?.body.trim()) return problem(422, 'invalid_comment', 'Comment body is required.');
@@ -181,12 +181,10 @@ async function commentContext(env: Env, principal: Principal, commentId: string)
   )
     .bind(commentId)
     .first<{ authorId: string; deletedAt: string | null; issueId: string; owner: string; repository: string }>();
-  if (!row || !(await authorizeRepository(env, principal, row.owner, row.repository, 'repository.read'))) return null;
+  const repository = row && (await authorizeRepository(env, principal, row.owner, row.repository, 'repository.read'));
+  if (!row || !repository) return null;
   return {
     ...row,
-    canManage:
-      row.authorId === principal.id
-        ? false
-        : Boolean(await authorizeRepository(env, principal, row.owner, row.repository, 'repository.triage'))
+    canManage: row.authorId !== principal.id && repositoryCan(repository, principal, 'repository.triage')
   };
 }

@@ -8,7 +8,12 @@ import { initialIssueTimeline, olderIssueTimeline } from './timeline';
 import { issueConclusion, issueParticipation } from './discussion';
 import { readListQuery } from '../http/list-query';
 import type { Env } from '../core/platform';
-import { authorizeRepository, repositoryListFilter, repositoryReadFilter } from '../repositories/access/access';
+import {
+  authorizeRepository,
+  repositoryCan,
+  repositoryListFilter,
+  repositoryReadFilter
+} from '../repositories/access/access';
 import { linkedWorkItems } from './references/work-items';
 
 export async function listIssues(
@@ -132,7 +137,7 @@ export async function getIssue(
     .bind(repository.id, number)
     .first<IssueRow>();
   if (!row) return problem(404, 'issue_not_found', 'Issue not found.');
-  const canManage = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.triage'));
+  const canManage = repositoryCan(repository, principal, 'repository.triage');
   const context = { owner, repository: name };
   const [summary, availableLabels, availableAssignees, timeline, linkedItems, conclusion, participation, canConclude] =
     await Promise.all([
@@ -151,7 +156,7 @@ export async function getIssue(
       linkedWorkItems(env, principal, 'issue', row.id),
       issueConclusion(env, row.id, context),
       issueParticipation(env, row.id, principal?.id),
-      authorizeRepository(env, principal, owner, name, 'repository.maintain').then(Boolean)
+      repositoryCan(repository, principal, 'repository.maintain')
     ]);
   const issue: IssueDetail = {
     ...summary[0],
@@ -188,7 +193,7 @@ export async function getIssueTimeline(
   const after = Number(url.searchParams.get('after') ?? 0);
   if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after) || before <= after)
     return problem(422, 'invalid_timeline_cursor', 'Timeline cursor is invalid.');
-  const canManage = Boolean(await authorizeRepository(env, principal, owner, name, 'repository.triage'));
+  const canManage = repositoryCan(repository, principal, 'repository.triage');
   return json({
     timeline: await olderIssueTimeline(env, principal, issue.id, before, after, { owner, repository: name }, canManage)
   });
