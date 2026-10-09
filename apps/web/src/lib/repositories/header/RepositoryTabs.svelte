@@ -22,7 +22,7 @@
     const rightCurve = Math.max(13, width - 13);
     const rightControl = Math.max(13, width - 5.8);
     const shape = `C -5.4 ${top} 0 5.4 0 12 V 29 C 0 36.2 5.8 42 13 42 H ${rightCurve} C ${rightControl} 42 ${width} 36.2 ${width} 29 V 12 C ${width} 5.4 ${width + 5.4} ${top} ${width + 12} ${top}`;
-    return outline ? `M -8192 ${top} H -12 ${shape} H 8192` : `M -12 ${top} ${shape} V -2 H -12 Z`;
+    return outline ? `M -12 ${top} ${shape}` : `M -12 ${top} ${shape} V -2 H -12 Z`;
   }
 
   function move(left: number, width: number, animate: boolean) {
@@ -110,12 +110,13 @@
   });
 </script>
 
-<div class="page-frame">
+<div class="relative">
+  <div class="absolute inset-x-0 top-0 bg-line-subtle" style:height="{strokeWidth}px" aria-hidden="true"></div>
   <nav
     {@attach track}
     aria-label="Repository"
     onscroll={() => nav && update(nav, false)}
-    class="relative z-1 flex h-10 gap-1 overflow-x-auto"
+    class="page-frame relative z-1 flex h-11 gap-1 overflow-x-auto"
   >
     <span
       class="pointer-events-none absolute top-0 left-0 z-1 h-10.75 w-px will-change-transform"

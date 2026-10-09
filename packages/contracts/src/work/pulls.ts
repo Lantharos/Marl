@@ -71,7 +71,6 @@ export interface PullRequestDetail extends PullRequestSummary {
   realtimeVersion: number;
   linkedItems: LinkedWorkItem[];
   timeline: PullTimelineWindow;
-  stack: PullStack;
   viewerLastReview: { commitId: string; createdAt: string } | null;
 }
 
@@ -156,7 +155,6 @@ export type PullRequestEventKind =
   | 'force_pushed'
   | 'thread_resolved'
   | 'thread_reopened'
-  | 'retargeted'
   | 'queued'
   | 'dequeued';
 
@@ -252,11 +250,6 @@ export interface PullRequestDiff {
     patchOmitted?: 'deleted' | 'large' | 'lazy';
   }>;
   threads?: ReviewThread[];
-}
-
-export interface PullStack {
-  base: { number: number; title: string; state: string } | null;
-  dependents: Array<{ number: number; title: string; state: string }>;
 }
 
 export interface MergeQueueEntry {

@@ -203,10 +203,6 @@ ready-for-review actions live beside the summary and never submit an unfinished 
 repository labels make ownership and triage visible without replacing review state. The commits,
 changes, checks, and overview views all describe the same pinned head revision.
 
-A pull that targets another open pull's branch is part of a stack. Its summary links the pull it
-builds on and the pulls that build on it. When the base pull merges, every pull built on it is
-retargeted to the base's target branch and records the change in its timeline.
-
 A reviewer who returns after new commits can switch the changes view to show only what changed
 since their last review. Marl compares the reviewed revision directly with the current head and
 limits the result to files the pull touches, so a rebase does not bury the new work.

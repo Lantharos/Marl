@@ -1,4 +1,3 @@
-import { pullStack } from './stacks';
 import { bodyExcerpt, renderBody } from '../core/markdown';
 import type { Principal } from '../auth/principal';
 import { branchRuleFor } from '../repositories/branch-rules';
@@ -178,7 +177,6 @@ export async function getPull(
     timeline,
     linkedItems,
     checksApproval,
-    stack,
     viewerLastReview
   ] = await Promise.all([
     latestReviews(env, pull.id),
@@ -223,7 +221,6 @@ export async function getPull(
     initialPullTimeline(env, principal, pull.id, pull.sourceCommitId, { owner, repository: name }),
     linkedWorkItems(env, principal, 'pull', pull.id),
     pullChecksApproval(env, pull.id, repositoryCan(repository, principal, 'repository.push')),
-    pullStack(env, { ...pull, repositoryId: repository.id }),
     principal
       ? env.DB.prepare(
           'SELECT commit_id AS commitId,created_at AS createdAt FROM pull_request_reviews WHERE pull_request_id=? AND author_id=? ORDER BY created_at DESC LIMIT 1'
@@ -282,7 +279,6 @@ export async function getPull(
       realtimeVersion: Number(pull.realtimeVersion),
       linkedItems,
       timeline,
-      stack,
       viewerLastReview
     }
   });

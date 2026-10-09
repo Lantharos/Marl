@@ -22,7 +22,7 @@ Stop `bun dev` before resetting. The local D1 database, object storage, Durable 
 
 ## Demo data
 
-With `bun dev` running on a fresh database, `bun run seed` creates a small team, the Lumen organization with a realistic TypeScript repository, issues, pulls in every state (reviewed, failing checks, draft, stacked, closed, merged, and one opened by an agent), check runs, releases, and saved replies. Activity is spread over the past few weeks. Sign in as `demo` with the password in `scripts/seed/accounts.ts`; the other accounts use the same password.
+With `bun dev` running on a fresh database, `bun run seed` creates a small team, the Lumen organization with a realistic TypeScript repository, issues, pulls in every state (reviewed, failing checks, draft, closed, merged, and one opened by an agent), check runs, releases, and saved replies. Activity is spread over the past few weeks. Sign in as `demo` with the password in `scripts/seed/accounts.ts`; the other accounts use the same password.
 
 SQLite triggers enforce immutable audit events, timeline synchronization, current-head review and check approvals, and signing-key invalidation. Drizzle does not model triggers, so those live in the custom `0001_invariants.sql` migration. Change that migration only while resetting an undeployed baseline; once deployed, generate a new custom migration for trigger changes.
 

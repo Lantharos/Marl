@@ -6,7 +6,6 @@ import type { RepositoryAccess } from '../../repositories/access/access';
 import type { MergeMethod } from '../../repositories/branch-rules';
 import { createPullEvent, type PullRow } from '../context';
 import { commitPullUpdate } from '../realtime/updates';
-import { retargetDependents } from '../stacks';
 
 export async function recordMerge(
   env: Env,
@@ -58,6 +57,5 @@ export async function recordMerge(
       })
     ]
   );
-  await retargetDependents(env, principal, { id: repository.id, owner, name }, pull, targetHeadId);
   return update;
 }

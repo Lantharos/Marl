@@ -56,8 +56,6 @@
         return event.details.reason
           ? `queued this pull, but the merge stopped. ${event.details.reason}`
           : 'removed this pull from the merge queue';
-      case 'retargeted':
-        return `retargeted this pull from ${event.details.from} to ${event.details.to} after its base merged`;
       case 'force_pushed':
         return `force-pushed ${event.details.branch} from ${event.details.from} to ${event.details.to}`;
     }

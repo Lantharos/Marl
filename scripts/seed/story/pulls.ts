@@ -185,7 +185,7 @@ export async function seedPulls(team: Team) {
     author: you,
     target: 'demo/parser-module',
     title: 'Parse hsl() and hsla() colors',
-    body: 'Adds `hsl()` and `hsla()` support on top of !6. It retargets to `main` once !6 merges.\n\nFixes #5'
+    body: 'Adds `hsl()` and `hsla()` support on top of the new parser module from !6.\n\nFixes #5'
   });
   await comment(
     mira,
