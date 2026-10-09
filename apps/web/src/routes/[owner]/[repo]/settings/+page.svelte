@@ -29,7 +29,6 @@
   let savedDescription = $state(untrack(() => data.repository.description));
   let iconUrl = $state<string | null>(untrack(() => data.repository.iconUrl));
   let iconState = $state<'idle' | 'saving' | 'saved'>('idle');
-  let iconInput = $state<HTMLInputElement>();
   let visibility = $state(untrack(() => data.repository.visibility));
   let defaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
   let nextDefaultBranch = $state('');
@@ -92,11 +91,7 @@
     savedTimer = setTimeout(() => (descriptionSaved = false), 1800);
   }
 
-  async function uploadIcon(event: Event & { currentTarget: HTMLInputElement }) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file || iconState === 'saving') return;
+  async function uploadIcon(file: File) {
     iconState = 'saving';
     error = '';
     try {
@@ -162,19 +157,12 @@
 <div class="grid gap-8">
   <section class="grid gap-6 surface p-5 sm:p-6">
     <div class="flex items-center gap-4">
-      <ImageUploadButton state={iconState} label="Change repository icon" size={56} onclick={() => iconInput?.click()}
+      <ImageUploadButton state={iconState} label="Change repository icon" size={56} onchoose={uploadIcon}
         ><RepositoryIcon name={repo} src={iconUrl} size={56} /></ImageUploadButton
       >
       <div>
         <strong class="block text-base font-semibold text-ink-strong">Repository icon</strong>
         <p class="mt-1 text-sm text-ink-muted">PNG, JPEG, or WebP up to 2 MB</p>
-        <input
-          bind:this={iconInput}
-          class="hidden"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onchange={uploadIcon}
-        />
       </div>
     </div>
     <form

@@ -17,7 +17,6 @@
   let bio = $state(untrack(() => data.profile.bio ?? ''));
   let website = $state(untrack(() => data.profile.website ?? ''));
   let avatarUrl = $state<string | null>(untrack(() => data.profile.avatarUrl));
-  let avatarInput = $state<HTMLInputElement>();
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let avatarState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
@@ -42,9 +41,7 @@
     }
   }
 
-  async function chooseAvatar(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0];
-    if (!file) return;
+  async function chooseAvatar(file: File) {
     avatarState = 'saving';
     error = '';
     try {
@@ -60,8 +57,6 @@
     } catch (cause) {
       avatarState = 'idle';
       error = cause instanceof MarlApiError ? cause.message : 'Your avatar could not be uploaded.';
-    } finally {
-      if (avatarInput) avatarInput.value = '';
     }
   }
 </script>
@@ -77,24 +72,12 @@
   }}
 >
   <section class="flex items-center gap-4">
-    <ImageUploadButton
-      state={avatarState}
-      label="Change profile picture"
-      size={72}
-      round
-      onclick={() => avatarInput?.click()}
+    <ImageUploadButton state={avatarState} label="Change profile picture" size={72} round onchoose={chooseAvatar}
       ><UserAvatar name={displayName || username} src={avatarUrl} size={72} /></ImageUploadButton
     >
     <div>
       <strong class="block text-base font-semibold text-ink-strong">Profile picture</strong>
       <p class="mt-1 text-sm text-ink-muted">PNG, JPEG, or WebP up to 2 MB</p>
-      <input
-        bind:this={avatarInput}
-        class="hidden"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        onchange={chooseAvatar}
-      />
     </div>
   </section>
   <div class="grid gap-5 sm:grid-cols-2">

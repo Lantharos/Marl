@@ -6,8 +6,7 @@
   import FileDiff from '@lucide/svelte/icons/file-diff';
   import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
   import MessageSquare from '@lucide/svelte/icons/message-square';
-  import X from '@lucide/svelte/icons/x';
-  import Button from '#lib/components/controls/Button.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
   import Chip from '#lib/components/controls/Chip.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import { reporting } from '#lib/reporting/reporting.svelte.js';
@@ -138,32 +137,19 @@
       {/each}
     </nav>
     {#if pageState.error}
-      <div
-        class="mb-4 flex items-center gap-2 rounded-lg bg-danger-soft py-1.5 pr-1.5 pl-3 text-sm text-danger"
-        role="alert"
+      <Notice class="mb-4" dismissLabel="Dismiss error" ondismiss={() => (pageState.error = '')}
+        >{pageState.error}</Notice
       >
-        <span class="flex-1">{pageState.error}</span>
-        <Button icon size="small" variant="ghost" aria-label="Dismiss error" onclick={() => (pageState.error = '')}
-          ><X size={14} /></Button
-        >
-      </div>
     {/if}
     {#if pageState.revisionNotice}
-      <div
-        class="mb-4 flex items-center gap-2 rounded-lg bg-brand-soft py-1.5 pr-1.5 pl-3 text-sm text-brand"
-        role="status"
+      <Notice
+        tone="brand"
+        icon={GitCommitHorizontal}
+        class="mb-4"
+        dismissLabel="Dismiss revision update"
+        ondismiss={() => (pageState.revisionNotice = false)}
+        >A new revision arrived. Review it before submitting.</Notice
       >
-        <GitCommitHorizontal size={15} class="shrink-0" /><span class="flex-1"
-          >A new revision arrived. Review it before submitting.</span
-        >
-        <Button
-          icon
-          size="small"
-          variant="ghost"
-          aria-label="Dismiss revision update"
-          onclick={() => (pageState.revisionNotice = false)}><X size={14} /></Button
-        >
-      </div>
     {/if}
 
     {#if pageState.tab === 'overview'}

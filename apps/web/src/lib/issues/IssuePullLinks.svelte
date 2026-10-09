@@ -3,6 +3,7 @@
   import Link from '@lucide/svelte/icons/link';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '#lib/components/controls/Button.svelte';
+  import Notice from '#lib/components/feedback/Notice.svelte';
   import SearchField from '#lib/components/controls/SearchField.svelte';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
@@ -121,12 +122,10 @@
       label="Search by title or number"
       class="h-10"
     />
-    {#if error}<p
-        class="flex items-center justify-between gap-3 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger"
-        role="alert"
-      >
-        {error}<Button size="small" variant="ghost" onclick={() => search()}>Retry</Button>
-      </p>{/if}
+    {#if error}<Notice
+        >{error}{#snippet action()}<Button size="small" variant="ghost" onclick={() => search()}>Retry</Button
+          >{/snippet}</Notice
+      >{/if}
     <div class="grid max-h-90 gap-0.5 overflow-y-auto" aria-busy={loading}>
       {#each available as pull (pull.id)}
         <button

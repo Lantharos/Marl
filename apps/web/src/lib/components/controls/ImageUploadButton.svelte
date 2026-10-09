@@ -9,18 +9,27 @@
     label,
     size,
     round = false,
-    onclick,
+    onchoose,
     children
   }: {
     state?: 'idle' | 'saving' | 'saved';
     label: string;
     size: number;
     round?: boolean;
-    onclick: () => void;
+    onchoose: (file: File) => void;
     children: Snippet;
   } = $props();
   const iconSize = $derived(Math.round(size * 0.3));
+  let input: HTMLInputElement;
+
+  function choose() {
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) onchoose(file);
+  }
 </script>
+
+<input bind:this={input} class="hidden" type="file" accept="image/png,image/jpeg,image/webp" onchange={choose} />
 
 <button
   class={['group relative shrink-0 cursor-pointer', round ? 'rounded-full' : 'rounded-lg']}
@@ -29,7 +38,7 @@
   type="button"
   aria-label={label}
   disabled={state !== 'idle'}
-  {onclick}
+  onclick={() => input.click()}
 >
   {@render children()}
   <span
