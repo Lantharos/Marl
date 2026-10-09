@@ -1,10 +1,10 @@
 <script lang="ts">
   import IssueDiscussionPage from '#lib/issues/IssueDiscussionPage.svelte';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data, params }: PageProps = $props();
 </script>
 
 {#key `${data.issue.id}:${data.shellUser?.id ?? 'anonymous'}`}
-  <IssueDiscussionPage {data} />
+  <IssueDiscussionPage {data} {params} />
 {/key}

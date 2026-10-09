@@ -30,14 +30,19 @@
   import { isDiscussionEvent, issueDiscussion, observeIssueDiscussion } from './issue-discussion';
   import { IssuePageState } from './issue-page-state.svelte';
 
-  let { data }: { data: { issue: IssueDetail; repository: { visibility: string }; shellUser: { id: string } | null } } =
-    $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
+  let {
+    data,
+    params
+  }: {
+    data: { issue: IssueDetail; repository: { visibility: string }; shellUser: { id: string } | null };
+    params: { owner: string; repo: string; number: string };
+  } = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
   const context = $derived({ owner, repository: repo });
   const pageState = new IssuePageState(() => ({
     issue: data.issue,
-    endpoint: `/repositories/${owner}/${repo}/issues/${page.params.number}`,
+    endpoint: `/repositories/${owner}/${repo}/issues/${params.number}`,
     signedIn: Boolean(data.shellUser)
   }));
   const issue = $derived(pageState.issue);

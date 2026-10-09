@@ -15,18 +15,18 @@
   import { treeHref } from '#lib/repositories/browser/entry-path.js';
   import { timestampGroup } from '#lib/time.js';
   import { CursorList } from '#lib/ui/cursor-list.svelte.js';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
-  const revision = $derived(page.params.revision ?? 'main');
+  let { data, params }: PageProps = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
+  const revision = $derived(params.revision);
   const history = new CursorList(
     () => ({ items: data.history.commits, nextCursor: data.history.nextCursor }),
     async (cursor) => {
-      const params = new URLSearchParams({ revision, limit: '50', cursor });
+      const query = new URLSearchParams({ revision, limit: '50', cursor });
       const result = await api<{ commits: CommitSummary[]; nextCursor: string | null }>(
-        `/repositories/${owner}/${repo}/commits?${params}`
+        `/repositories/${owner}/${repo}/commits?${query}`
       );
       return { items: result.commits, nextCursor: result.nextCursor };
     },

@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { page } from '$app/state';
   import WebhookSettings from '#lib/components/settings/webhooks/WebhookSettings.svelte';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data, params }: PageProps = $props();
+  const { webhooks } = $derived(data);
 </script>
 
-<svelte:head><title>Webhooks · {page.params.owner}/{page.params.repo} · Marl</title></svelte:head>
+<svelte:head><title>Webhooks · {params.owner}/{params.repo} · Marl</title></svelte:head>
 <WebhookSettings
-  initialWebhooks={data.webhooks}
-  endpoint="/repositories/{page.params.owner}/{page.params.repo}/webhooks"
+  initialWebhooks={webhooks}
+  endpoint="/repositories/{params.owner}/{params.repo}/webhooks"
   scope="repository"
 />

@@ -15,7 +15,7 @@
   );
   const viewerOrganization = $derived(
     organization
-      ? data.shellOrganizations?.find((item) => item.slug.toLowerCase() === organization.slug.toLowerCase())
+      ? data.shellOrganizations.find((item) => item.slug.toLowerCase() === organization.slug.toLowerCase())
       : null
   );
   const canManage = $derived(Boolean(viewerOrganization && viewerOrganization.role !== 'member'));

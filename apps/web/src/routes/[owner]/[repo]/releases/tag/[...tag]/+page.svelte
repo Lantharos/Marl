@@ -12,11 +12,11 @@
   import Time from '#lib/components/page/Time.svelte';
   import ReleaseAssets from '#lib/releases/ReleaseAssets.svelte';
   import { seoExcerpt } from '#lib/seo.js';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repository = $derived(page.params.repo ?? '');
+  let { data, params }: PageProps = $props();
+  const owner = $derived(params.owner);
+  const repository = $derived(params.repo);
   const release = $derived(data.release);
   const title = $derived(release.name || release.tagName);
   const archiveBase = $derived(`/api/v1/repositories/${owner}/${repository}/releases/${release.id}/archive`);

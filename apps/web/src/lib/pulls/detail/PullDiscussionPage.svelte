@@ -25,19 +25,25 @@
   import PullOverview from './PullOverview.svelte';
 
   let {
+    route,
     pull: source,
     tab,
     viewerId,
     publicRepository
-  }: { pull: PullRequestDetail; tab: PullTab; viewerId?: string; publicRepository: boolean } = $props();
-  const route = { owner: page.params.owner ?? '', repo: page.params.repo ?? '', number: Number(page.params.number) };
+  }: {
+    route: { owner: string; repo: string; number: number };
+    pull: PullRequestDetail;
+    tab: PullTab;
+    viewerId?: string;
+    publicRepository: boolean;
+  } = $props();
   const pageState = new PullPageState(
-    route,
+    () => route,
     () => source,
     () => tab
   );
   const mergeability = new PullMergeability();
-  const context = { owner: route.owner, repository: route.repo };
+  const context = $derived({ owner: route.owner, repository: route.repo });
   const pull = $derived(pageState.pull);
   let editing = $state(false);
   let changesView = $state<HTMLElement>();

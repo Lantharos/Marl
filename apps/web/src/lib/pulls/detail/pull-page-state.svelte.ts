@@ -23,7 +23,7 @@ type LineDraft = { path: string; side: 'old' | 'new'; startLine: number; line: n
 type UpdateResult = { update?: PullRealtimeUpdate };
 
 export class PullPageState {
-  readonly route: Route;
+  route: Route;
   tab: PullTab;
   pull: PullRequestDetail;
   timeline: PullTimelineState;
@@ -45,8 +45,8 @@ export class PullPageState {
   #catchUp: Promise<void> | null = null;
   #stateRefreshQueued = false;
 
-  constructor(route: Route, source: () => PullRequestDetail, tab: () => PullTab) {
-    this.route = route;
+  constructor(route: () => Route, source: () => PullRequestDetail, tab: () => PullTab) {
+    this.route = $derived(route());
     this.tab = $derived(tab());
     this.pull = $derived(source());
     this.timeline = $derived(new PullTimelineState(source().timeline));

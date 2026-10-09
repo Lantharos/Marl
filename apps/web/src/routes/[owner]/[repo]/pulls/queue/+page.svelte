@@ -7,11 +7,11 @@
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import Time from '#lib/components/page/Time.svelte';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
+  let { data, params }: PageProps = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
   const states = { queued: 'Waiting', testing: 'Testing', merging: 'Merging' };
 </script>
 

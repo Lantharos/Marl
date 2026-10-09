@@ -60,11 +60,11 @@
 <PageHeader
   title="Pulls"
   actionHref={data.shellUser
-    ? data.repository?.upstream
+    ? data.repository.upstream
       ? `/pulls/new?repository=${data.repository.upstream.owner}/${data.repository.upstream.name}&sourceRepository=${owner}/${repo}`
       : `/pulls/new?repository=${owner}/${repo}`
     : undefined}
-  actionLabel={data.shellUser ? (data.repository?.upstream ? 'Contribute upstream' : 'New pull') : undefined}
+  actionLabel={data.shellUser ? (data.repository.upstream ? 'Contribute upstream' : 'New pull') : undefined}
 />
 <FilterBar
   placeholder="Search this repository"

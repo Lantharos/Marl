@@ -18,11 +18,11 @@
   import { encodeRevision } from '#lib/repositories/repository-path.js';
   import { seoExcerpt } from '#lib/seo.js';
   import type { CommitDetail } from './+page';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
+  let { data, params }: PageProps = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
   const base = $derived(`/${owner}/${repo}`);
   const commit = $derived(data.commit);
   const renames = $derived(commit.files.filter((file) => file.oldPath));
