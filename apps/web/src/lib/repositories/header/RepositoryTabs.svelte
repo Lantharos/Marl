@@ -116,7 +116,7 @@
     {@attach track}
     aria-label="Repository"
     onscroll={() => nav && update(nav, false)}
-    class="page-frame relative z-1 flex h-11 gap-1 overflow-x-auto"
+    class="relative z-1 page-frame flex h-11 gap-1 overflow-x-auto"
   >
     <span
       class="pointer-events-none absolute top-0 left-0 z-1 h-10.75 w-px will-change-transform"
