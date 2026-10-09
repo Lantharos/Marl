@@ -28,6 +28,7 @@
     uploading = $bindable(false),
     placeholder = 'Leave a comment',
     minHeight = 120,
+    grow = false,
     compact = false,
     disabled = false,
     context,
@@ -37,7 +38,8 @@
     value?: string;
     uploading?: boolean;
     placeholder?: string;
-    minHeight?: number;
+    minHeight?: number | string;
+    grow?: boolean;
     compact?: boolean;
     disabled?: boolean;
     context?: MarkdownContext;
@@ -45,6 +47,7 @@
     onsubmit?: () => void;
   } = $props();
   let mode = $state<'write' | 'preview'>('write');
+  const height = $derived(typeof minHeight === 'number' ? `${minHeight}px` : minHeight);
   const preview = $derived(mode === 'preview' && value.trim() ? markdownPreview(value, context) : null);
   let textarea = $state<HTMLTextAreaElement>();
   let picker = $state<HTMLInputElement>();
@@ -244,10 +247,13 @@
       aria-label={placeholder}
       onpaste={paste}
       onkeydown={keydown}
-      class="block w-full resize-y bg-surface p-3.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:text-ink-muted"
-      style:min-height={`${minHeight}px`}></textarea>
+      class={[
+        'block w-full resize-y bg-surface p-3.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:text-ink-muted',
+        grow && 'field-sizing-content'
+      ]}
+      style:min-height={height}></textarea>
   {:else}
-    <div class="p-3.5" style:min-height={`${minHeight}px`}>
+    <div class="p-3.5" style:min-height={height}>
       {#if preview}
         {#await preview}<span class="flex items-center gap-2 text-sm text-ink-muted"><Spinner />Rendering preview</span
           >{:then html}<MarkdownBody {html} />{:catch}<p class="text-sm text-danger">
