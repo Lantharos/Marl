@@ -27,7 +27,7 @@
         >
       {/each}
     </nav>
-    <article class="min-w-0">
+    <article class="max-w-180 min-w-0">
       <h1 class="text-3xl font-semibold tracking-tight text-ink-strong">{data.document.title}</h1>
       <p class="mt-2 mb-8 text-sm text-ink-muted">Last updated {formatDate(legalVersion)}</p>
       <MarkdownBody html={data.document.html} variant="document" />

@@ -7,6 +7,7 @@
   import X from '@lucide/svelte/icons/x';
   import { dismissable } from '#lib/actions/dismissable.js';
   import BrandMark from '../identity/BrandMark.svelte';
+  import SkipLink from '../page/SkipLink.svelte';
   import AccountMenu from './AccountMenu.svelte';
   import CommandPalette from './commands/CommandPalette.svelte';
   import type { ShellOrganization, ShellUser } from '#lib/shell-cache.js';
@@ -67,6 +68,7 @@
 <svelte:window onkeydown={keydown} />
 
 <div class="min-h-dvh bg-canvas text-ink">
+  <SkipLink />
   <header
     class="fixed inset-x-0 top-0 z-50 grid h-13 grid-cols-[auto_1fr_auto] items-center gap-2.5 border-b border-line-subtle bg-canvas/90 px-3 backdrop-blur-lg sm:gap-3.5 sm:px-5 lg:grid-cols-[auto_auto_1fr]"
     use:dismissable={() => (mobileOpen = false)}
@@ -98,7 +100,7 @@
       >
     </div>
   </header>
-  <main class="min-h-dvh pt-13">{@render children()}</main>
+  <div class="min-h-dvh pt-13">{@render children()}</div>
 </div>
 
 {#if searchOpen}<CommandPalette {commands} onClose={() => (searchOpen = false)} />{/if}

@@ -1,5 +1,7 @@
 <script lang="ts">
   import GitCommit from '@lucide/svelte/icons/git-commit-horizontal';
+  import List from '../list/List.svelte';
+  import ListRow from '../list/ListRow.svelte';
   import EmptyState from '../feedback/EmptyState.svelte';
   import Time from '../page/Time.svelte';
   import UserProfileLink from '../identity/UserProfileLink.svelte';
@@ -15,11 +17,9 @@
   let { activity, owner = '' }: { activity: Activity[]; owner?: string } = $props();
 </script>
 
-<div class="surface p-1.5">
+<List>
   {#each activity as item (`${item.owner || owner}/${item.repository}:${item.id}`)}
-    <article
-      class="relative grid min-h-17 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg p-3 transition-colors hover:bg-surface-hover"
-    >
+    <ListRow as="article" class="relative grid min-h-17 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 py-3">
       <span class="grid size-7 place-items-center rounded-full bg-surface-muted text-ink-muted"
         ><GitCommit size={14} /></span
       >
@@ -40,8 +40,8 @@
         </span>
       </span>
       <code class="font-mono text-xs text-ink-faint">{item.id.slice(0, 7)}</code>
-    </article>
+    </ListRow>
   {:else}
     <EmptyState compact icon={GitCommit} title="No public activity yet" />
   {/each}
-</div>
+</List>

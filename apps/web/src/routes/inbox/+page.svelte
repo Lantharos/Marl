@@ -3,6 +3,7 @@
   import CheckCheck from '@lucide/svelte/icons/check-check';
   import Button from '#lib/components/controls/Button.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
+  import Page from '#lib/components/page/Page.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import TabLinks from '#lib/components/page/TabLinks.svelte';
   import InboxList from '#lib/inbox/InboxList.svelte';
@@ -24,8 +25,8 @@
   /></svelte:head
 >
 
-<main class="mx-auto w-full max-w-240 px-4 pt-8 pb-20 sm:px-6 sm:pt-10">
-  <PageHeader title="Inbox" description="Mentions, assignments, and updates from work you’re part of.">
+<Page>
+  <PageHeader title="Inbox">
     {#snippet action()}{#if data.counts.unread}<Button onclick={markAllRead}
           ><CheckCheck size={16} />Mark all read</Button
         >{/if}{/snippet}
@@ -56,4 +57,4 @@
         >Older items</LinkButton
       >
     </div>{/if}
-</main>
+</Page>

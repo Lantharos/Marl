@@ -110,33 +110,35 @@
   });
 </script>
 
-<nav
-  {@attach track}
-  aria-label="Repository"
-  onscroll={() => nav && update(nav, false)}
-  class="relative z-1 mx-auto flex h-10 w-[min(1240px,calc(100%-32px))] gap-1 overflow-x-auto sm:w-[min(1240px,calc(100%-48px))]"
->
-  <span
-    class="pointer-events-none absolute top-0 left-0 z-1 h-10.75 w-px will-change-transform"
-    style:transform={`translate3d(${islandX}px,0,0)`}
-    aria-hidden="true"
-    ><svg viewBox="0 0 1 43" preserveAspectRatio="none" class="absolute inset-0 h-10.75 w-px overflow-visible"
-      ><path class="fill-surface" d={fill}></path><path
-        class="fill-none stroke-line-subtle [vector-effect:non-scaling-stroke]"
-        d={boundary}
-        stroke-width={strokeWidth}
-        stroke-linejoin="round"
-      ></path></svg
-    ></span
+<div class="page-frame">
+  <nav
+    {@attach track}
+    aria-label="Repository"
+    onscroll={() => nav && update(nav, false)}
+    class="relative z-1 flex h-10 gap-1 overflow-x-auto"
   >
-  {#each tabs as tab (tab.key)}
-    <a
-      href={tab.href}
-      aria-current={tab.active ? 'page' : undefined}
-      class={[
-        'relative z-2 inline-flex h-10 shrink-0 items-center gap-1.5 px-3 text-sm font-medium transition-colors',
-        tab.active ? 'text-ink-strong' : 'text-ink-muted hover:text-ink-strong'
-      ]}><tab.icon size={15} />{tab.label}</a
+    <span
+      class="pointer-events-none absolute top-0 left-0 z-1 h-10.75 w-px will-change-transform"
+      style:transform={`translate3d(${islandX}px,0,0)`}
+      aria-hidden="true"
+      ><svg viewBox="0 0 1 43" preserveAspectRatio="none" class="absolute inset-0 h-10.75 w-px overflow-visible"
+        ><path class="fill-surface" d={fill}></path><path
+          class="fill-none stroke-line-subtle [vector-effect:non-scaling-stroke]"
+          d={boundary}
+          stroke-width={strokeWidth}
+          stroke-linejoin="round"
+        ></path></svg
+      ></span
     >
-  {/each}
-</nav>
+    {#each tabs as tab (tab.key)}
+      <a
+        href={tab.href}
+        aria-current={tab.active ? 'page' : undefined}
+        class={[
+          'relative z-2 inline-flex h-10 shrink-0 items-center gap-1.5 px-3 text-sm font-medium transition-colors',
+          tab.active ? 'text-ink-strong' : 'text-ink-muted hover:text-ink-strong'
+        ]}><tab.icon size={15} />{tab.label}</a
+      >
+    {/each}
+  </nav>
+</div>

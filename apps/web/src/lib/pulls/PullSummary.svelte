@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { Snippet } from 'svelte';
   import type { PullRequestDetail } from '@marl/contracts';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -49,7 +50,7 @@
 <aside class="grid min-w-0 content-start gap-3 lg:gap-5" aria-label="Pull summary">
   <section class="min-w-0 surface rounded-2xl p-4 sm:p-5">
     <header class="mb-2 flex min-h-7 items-center justify-between">
-      <span class="text-sm text-ink-muted tabular-nums">!{pull.number}</span>
+      <WorkItemReference kind="pull" number={pull.number} class="text-sm text-ink-muted" />
       {#if pull.canManage}<Button
           icon
           size="small"
@@ -66,9 +67,7 @@
           onclick={onReport}><Flag size={15} /></Button
         >{/if}
     </header>
-    <h1
-      class="text-[clamp(23px,2vw,29px)] leading-[1.18] font-semibold tracking-[-0.035em] text-pretty break-words text-ink-strong"
-    >
+    <h1 class="text-2xl leading-tight font-semibold tracking-tight text-pretty break-words text-ink-strong">
       {pull.title}
     </h1>
     <div class="mt-4.5 mb-5.5 flex items-center gap-2 text-sm font-semibold text-ink-strong">

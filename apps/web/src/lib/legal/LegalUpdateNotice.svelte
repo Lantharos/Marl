@@ -24,9 +24,7 @@
 </script>
 
 <div class="border-b border-line-subtle bg-brand-soft" role="region" aria-label="Updated terms">
-  <div
-    class="mx-auto flex w-[min(1240px,calc(100%-32px))] flex-wrap items-center gap-x-5 gap-y-2 py-3 text-sm sm:w-[min(1240px,calc(100%-48px))]"
-  >
+  <div class="page-frame flex flex-wrap items-center gap-x-5 gap-y-2 py-3 text-sm">
     <p class="min-w-0 flex-[1_1_320px] text-ink">
       We updated the <a class="font-semibold text-brand-strong hover:underline" href="/legal/terms">Terms of Service</a>
       and

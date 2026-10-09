@@ -6,6 +6,7 @@
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import Play from '@lucide/svelte/icons/play';
   import Zap from '@lucide/svelte/icons/zap';
+  import List from '#lib/components/list/List.svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '#lib/components/controls/Button.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
@@ -106,7 +107,7 @@
     <h2 class="text-sm font-semibold text-ink-strong">Run history</h2>
     <span class="text-xs text-ink-muted tabular-nums">{workflow.runCount}</span>
   </header>
-  <div class="surface p-1.5">
+  <List>
     {#each workflow.runs as run (run.id)}
       <RunRow {run} inWorkflow />
     {:else}
@@ -119,7 +120,7 @@
           : 'The first matching event will appear here.'}
       />
     {/each}
-  </div>
+  </List>
 </section>
 
 <Modal

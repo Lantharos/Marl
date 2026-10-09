@@ -8,6 +8,7 @@
   import Webhook from '@lucide/svelte/icons/webhook';
   import OrganizationAvatar from '../../identity/OrganizationAvatar.svelte';
   import BackLink from '../../page/BackLink.svelte';
+  import Page from '../../page/Page.svelte';
   import SettingsLayout from '../SettingsLayout.svelte';
   import SettingsNav from '../SettingsNav.svelte';
 
@@ -52,4 +53,4 @@
   </a>
   <SettingsNav label="Organization settings" {items} />
 {/snippet}
-<SettingsLayout {sidebar} content={children} />
+<Page><SettingsLayout {sidebar} content={children} /></Page>

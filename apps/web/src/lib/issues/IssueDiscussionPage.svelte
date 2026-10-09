@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import { page } from '$app/state';
   import { tick } from 'svelte';
   import type { IssueComment, IssueDetail, IssueTimelineItem } from '@marl/contracts';
@@ -144,7 +145,8 @@
 
 <header class="mb-6">
   <h1 class="text-2xl leading-tight font-semibold tracking-tight text-balance text-ink-strong sm:text-3xl">
-    {issue.title} <span class="font-normal text-ink-faint">#{issue.number}</span>
+    {issue.title}
+    <WorkItemReference kind="issue" number={issue.number} class="font-normal text-ink-faint" />
   </h1>
   <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-muted">
     <span
@@ -185,8 +187,10 @@
   </div>
 {/if}
 
-<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-10">
-  <main class="min-w-0" {@attach (node) => observeIssueDiscussion(node, pageState.markRead)}>
+<div
+  class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-10 xl:grid-cols-[minmax(0,920px)_300px] xl:justify-between"
+>
+  <div class="min-w-0" {@attach (node) => observeIssueDiscussion(node, pageState.markRead)}>
     <article class="surface p-4 sm:p-5">
       <header class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <UserProfileLink
@@ -323,7 +327,7 @@
         </section>
       {/if}
     </section>
-  </main>
+  </div>
 
   <aside class="min-w-0 lg:sticky lg:top-20">
     <Button

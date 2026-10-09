@@ -3,6 +3,8 @@
   import { page } from '$app/state';
   import { untrack } from 'svelte';
   import Plus from '@lucide/svelte/icons/plus';
+  import List from '#lib/components/list/List.svelte';
+  import ListRow from '#lib/components/list/ListRow.svelte';
   import Button from '#lib/components/controls/Button.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
@@ -76,19 +78,16 @@
 
 <svelte:head><title>Organizations · Marl</title></svelte:head>
 <Page>
-  <PageHeader
-    title="Organizations"
-    description="Shared homes for repositories, with members, teams, and default access."
-  >
+  <PageHeader title="Organizations">
     {#snippet action()}<Button variant="primary" onclick={() => (open = true)}
         ><Plus size={16} />New organization</Button
       >{/snippet}
   </PageHeader>
-  <div class="surface p-1.5">
+  <List>
     {#each organizations as organization (organization.slug)}
-      <a
+      <ListRow
         href={`/organizations/${organization.slug}/settings/profile`}
-        class="group grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-surface-hover"
+        class="group grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 py-3"
       >
         <OrganizationAvatar name={organization.name} src={organization.avatarUrl} size={36} />
         <div class="min-w-0">
@@ -104,7 +103,7 @@
         <span class="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-muted capitalize"
           >{organization.role}</span
         >
-      </a>
+      </ListRow>
     {:else}
       <EmptyState
         icon={Building}
@@ -112,7 +111,7 @@
         description="Create one when a project needs shared ownership and team access."
       />
     {/each}
-  </div>
+  </List>
 </Page>
 
 {#snippet createActions()}

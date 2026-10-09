@@ -7,7 +7,7 @@
 
 <svelte:head><title>Unsubscribed · Marl</title></svelte:head>
 <Page width="narrow">
-  <div class="mt-10 surface">
+  <div class="mt-10">
     <EmptyState
       icon={BellOff}
       title="You won’t get notification emails"

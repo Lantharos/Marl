@@ -3,6 +3,7 @@
   import { onDestroy, untrack } from 'svelte';
   import type { RunSummary } from '@marl/contracts';
   import CirclePlay from '@lucide/svelte/icons/circle-play';
+  import List from '#lib/components/list/List.svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
@@ -82,7 +83,7 @@
     onActiveChange={() => navigate()}
     onQueryChange={changeQuery}
   />
-  <section class="surface p-1.5" aria-label="Workflow runs">
+  <List as="section" aria-label="Workflow runs">
     {#each runs as run (run.id)}
       <RunRow {run} />
     {:else}
@@ -102,6 +103,6 @@
           >{/if}
       </EmptyState>
     {/each}
-  </section>
+  </List>
   <InfiniteScroll cursor={nextCursor} loading={loadingMore} error={loadError} onload={loadMore} />
 </Page>
