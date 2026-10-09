@@ -3,17 +3,7 @@
   import Tag from '@lucide/svelte/icons/tag';
   import Popover from '#lib/components/overlays/Popover.svelte';
 
-  let {
-    value = $bindable(''),
-    tags,
-    disabled = false,
-    onchoose
-  }: {
-    value: string;
-    tags: RepositoryTag[];
-    disabled?: boolean;
-    onchoose?: (tag: RepositoryTag) => void;
-  } = $props();
+  let { value = $bindable(''), tags }: { value: string; tags: RepositoryTag[] } = $props();
 
   let open = $state(false);
   let field = $state<HTMLElement>();
@@ -24,7 +14,6 @@
   function choose(tag: RepositoryTag) {
     value = tag.name;
     open = false;
-    onchoose?.(tag);
   }
 </script>
 
@@ -33,7 +22,6 @@
     <Tag size={15} class="shrink-0" />
     <input
       bind:value
-      {disabled}
       maxlength="255"
       autocomplete="off"
       data-1p-ignore
@@ -45,7 +33,7 @@
       onfocus={() => (open = true)}
       oninput={() => (open = true)}
       onkeydown={(event) => event.key === 'Escape' && (open = false)}
-      class="h-full min-w-0 flex-1 bg-transparent font-mono text-sm text-ink-strong outline-none placeholder:text-ink-faint disabled:cursor-not-allowed"
+      class="h-full min-w-0 flex-1 bg-transparent font-mono text-sm text-ink-strong outline-none placeholder:text-ink-faint"
     />
   </label>
   <Popover

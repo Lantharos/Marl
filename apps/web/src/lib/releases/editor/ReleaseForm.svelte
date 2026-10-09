@@ -3,45 +3,64 @@
   import { page } from '$app/state';
   import { untrack } from 'svelte';
   import type { ReleaseDetail, RepositoryTag } from '@marl/contracts';
-  import FileArchive from '@lucide/svelte/icons/file-archive';
-  import Trash2 from '@lucide/svelte/icons/trash';
-  import Upload from '@lucide/svelte/icons/upload';
-  import Tag from '@lucide/svelte/icons/tag';
   import BackLink from '#lib/components/page/BackLink.svelte';
   import Button from '#lib/components/controls/Button.svelte';
-  import Field from '#lib/components/controls/Field.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
-  import Checkbox from '#lib/components/controls/Checkbox.svelte';
   import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
-  import Select from '#lib/components/controls/Select.svelte';
+  import SegmentedControl from '#lib/components/controls/SegmentedControl.svelte';
   import { api, MarlApiError } from '#lib/api.js';
-  import ReleaseAssets from './ReleaseAssets.svelte';
-  import TagPicker from './TagPicker.svelte';
-  import { releasePath } from './release-path';
-  import { uploadReleaseAsset } from './release-upload';
+  import { releasePath } from '../release-path';
+  import { releaseState } from '../release-state';
+  import ReleaseFiles from './ReleaseFiles.svelte';
+  import ReleaseTarget from './ReleaseTarget.svelte';
+  import { ReleaseUploads } from './release-uploads.svelte';
 
   type Branch = { name: string; commitId: string };
+  type Kind = 'latest' | 'stable' | 'prerelease';
   let {
     owner,
     repository,
+    defaultBranch,
     branches,
     tags,
     release
-  }: { owner: string; repository: string; branches: Branch[]; tags: RepositoryTag[]; release?: ReleaseDetail } =
-    $props();
+  }: {
+    owner: string;
+    repository: string;
+    defaultBranch: string;
+    branches: Branch[];
+    tags: RepositoryTag[];
+    release?: ReleaseDetail;
+  } = $props();
+
+  const kinds = [
+    { value: 'latest', label: 'Latest' },
+    { value: 'stable', label: 'Release' },
+    { value: 'prerelease', label: 'Prerelease' }
+  ] as const;
+  const kindHints: Record<Kind, string> = {
+    latest: 'Featured as the recommended version to download.',
+    stable: 'Published without replacing the latest release.',
+    prerelease: 'Marked as a preview, beta, or release candidate.'
+  };
+  const initialKind = untrack((): Kind => {
+    if (!release) return 'latest';
+    const state = releaseState(release);
+    return state === 'draft' ? (release.prerelease ? 'prerelease' : 'latest') : state;
+  });
   let tagName = $state(untrack(() => release?.tagName ?? ''));
-  let target = $state(untrack(() => release?.targetBranch ?? release?.targetCommitId ?? branches[0]?.name ?? ''));
+  let target = $state(untrack(() => release?.targetBranch ?? release?.targetCommitId ?? defaultBranch));
   let name = $state(untrack(() => release?.name ?? ''));
   let body = $state(untrack(() => release?.body ?? ''));
-  let draft = $state(untrack(() => release?.draft ?? false));
-  let prerelease = $state(untrack(() => release?.prerelease ?? false));
-  let makeLatest = $state(untrack(() => release?.latest ?? true));
-  let assets = $derived(release?.assets ?? []);
-  let pendingFiles = $state<File[]>([]);
-  let fileInput = $state<HTMLInputElement>();
-  let saving = $state(false);
+  let kind = $state(initialKind);
+  const uploads = new ReleaseUploads(
+    untrack(() => owner),
+    untrack(() => repository),
+    untrack(() => release?.assets ?? [])
+  );
+  let saving = $state<'draft' | 'publish' | null>(null);
   let notesUploading = $state(false);
   let deleting = $state(false);
   let confirmDelete = $state(false);
@@ -53,91 +72,57 @@
         : ''
   );
   const published = $derived(Boolean(release && !release.draft));
-  const targetOptions = $derived.by(() => {
-    const options = branches.map((branch) => ({
-      value: branch.name,
-      label: branch.name,
-      description: branch.commitId.slice(0, 8)
-    }));
-    if (target && !options.some((option) => option.value === target))
-      options.unshift({ value: target, label: `Commit ${target.slice(0, 8)}`, description: 'Tag target' });
-    return options;
-  });
-  const context = $derived({ owner, repository });
+  const existingTag = $derived(published ? undefined : tags.find((tag) => tag.name === tagName.trim()));
+  const resolvedTarget = $derived(existingTag?.targetCommitId ?? target);
+  const blocked = $derived(
+    Boolean(saving) || notesUploading || uploads.uploading || !tagName.trim() || !resolvedTarget
+  );
 
-  function chooseTag(tag: RepositoryTag) {
-    target = tag.targetCommitId;
+  function fields(draft: boolean) {
+    const shared = { name: name.trim(), body, prerelease: kind === 'prerelease', makeLatest: kind === 'latest' };
+    return published ? shared : { ...shared, tagName: tagName.trim(), target: resolvedTarget, draft };
   }
 
-  async function save() {
-    if (saving || notesUploading || !tagName.trim() || !target) return;
-    saving = true;
+  async function addFiles(files: File[]) {
+    uploads.add(files);
+    if (release) await uploads.uploadPending(release.id);
+  }
+
+  async function save(publish: boolean) {
+    if (blocked) return;
+    saving = publish ? 'publish' : 'draft';
     error = '';
     try {
-      const payload = published
-        ? { name: name.trim(), body, prerelease, makeLatest }
-        : {
-            tagName: tagName.trim(),
-            target,
-            name: name.trim(),
-            body,
-            draft: release ? draft : pendingFiles.length ? true : draft,
-            prerelease,
-            makeLatest: release || !pendingFiles.length ? makeLatest : false
-          };
-      const result = release
-        ? await api<{ release: { id: string; tagName: string } }>(
-            `/repositories/${owner}/${repository}/releases/${release.id}`,
-            { method: 'PATCH', body: JSON.stringify(payload) }
-          )
-        : await api<{ release: { id: string; tagName: string } }>(`/repositories/${owner}/${repository}/releases`, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
-      if (!release && pendingFiles.length) {
+      if (release) {
+        await api(`/repositories/${owner}/${repository}/releases/${release.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(fields(!publish))
+        });
+        await goto(releasePath(owner, repository, tagName.trim()));
+        return;
+      }
+      const deferred = uploads.pending.length > 0;
+      const created = await api<{ release: { id: string; tagName: string } }>(
+        `/repositories/${owner}/${repository}/releases`,
+        { method: 'POST', body: JSON.stringify(fields(deferred || !publish)) }
+      );
+      const editPath = `/${owner}/${repository}/releases/edit/${created.release.id}`;
+      if (deferred && !(await uploads.uploadPending(created.release.id))) return goto(`${editPath}?upload=failed`);
+      if (deferred && publish) {
         try {
-          for (const file of pendingFiles) await uploadReleaseAsset(owner, repository, result.release.id, file);
+          await api(`/repositories/${owner}/${repository}/releases/${created.release.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(fields(false))
+          });
         } catch {
-          await goto(`/${owner}/${repository}/releases/edit/${result.release.id}?upload=failed`);
-          return;
-        }
-        if (!draft) {
-          try {
-            await api(`/repositories/${owner}/${repository}/releases/${result.release.id}`, {
-              method: 'PATCH',
-              body: JSON.stringify({
-                tagName: tagName.trim(),
-                target,
-                name: name.trim(),
-                body,
-                draft: false,
-                prerelease,
-                makeLatest
-              })
-            });
-          } catch {
-            await goto(`/${owner}/${repository}/releases/edit/${result.release.id}?publish=failed`);
-            return;
-          }
+          return goto(`${editPath}?publish=failed`);
         }
       }
-      await goto(releasePath(owner, repository, result.release.tagName));
+      await goto(releasePath(owner, repository, created.release.tagName));
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'The release could not be saved.';
-      saving = false;
+      saving = null;
     }
-  }
-
-  function chooseFiles(event: Event) {
-    const chosen = [...((event.currentTarget as HTMLInputElement).files ?? [])];
-    const names = new Set(pendingFiles.map((file) => file.name));
-    pendingFiles = [...pendingFiles, ...chosen.filter((file) => file.size > 0 && !names.has(file.name))].slice(0, 32);
-    if (fileInput) fileInput.value = '';
-  }
-
-  function fileSize(bytes: number) {
-    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
   async function remove() {
@@ -155,141 +140,93 @@
   }
 </script>
 
-<div>
-  <header class="mb-6">
-    <BackLink href="/{owner}/{repository}/releases" label="Releases" />
-    <h1 class="mt-4 flex items-center gap-2.5 text-3xl font-semibold tracking-tight text-ink-strong">
-      <Tag size={22} class="text-brand" />{release ? 'Edit release' : 'New release'}
-    </h1>
-  </header>
-  {#if error}<Notice class="mb-5">{error}</Notice>{/if}
-  <form
-    class="grid items-start gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6"
-    onsubmit={(event) => {
-      event.preventDefault();
-      save();
-    }}
-  >
-    <div class="grid gap-5 surface p-5 lg:col-start-1 lg:row-start-1 lg:p-6">
-      <Field label="Tag">
-        {#if published}<div
-            class="flex h-10 items-center gap-2 rounded-md bg-surface-muted px-3 font-mono text-sm text-ink-muted"
-          >
-            <Tag size={14} />{tagName}
-          </div>{:else}<TagPicker bind:value={tagName} {tags} onchoose={chooseTag} />{/if}
-      </Field>
-      <Field label="Target">
-        {#if published}<div
-            class="flex h-10 items-center rounded-md bg-surface-muted px-3 font-mono text-sm text-ink-muted"
-          >
-            {release?.targetBranch ?? release?.targetCommitId.slice(0, 12)}
-          </div>{:else}<Select bind:value={target} options={targetOptions} ariaLabel="Release target" />{/if}
-      </Field>
-      <Field label="Release title">
-        <input
-          class="field"
-          bind:value={name}
-          maxlength="240"
-          placeholder={tagName || 'Release title'}
-          data-1p-ignore
-        />
-      </Field>
+<BackLink
+  href={release ? releasePath(owner, repository, release.tagName) : `/${owner}/${repository}/releases`}
+  label={release ? release.name || release.tagName : 'Releases'}
+/>
+<h1 class="mt-4 mb-7 text-2xl font-semibold tracking-tight text-ink-strong sm:text-3xl">
+  {release ? (published ? 'Edit release' : 'Edit draft') : 'New release'}
+</h1>
+{#if error}<Notice class="mb-5">{error}</Notice>{/if}
+
+<form
+  class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]"
+  onsubmit={(event) => {
+    event.preventDefault();
+    void save(true);
+  }}
+>
+  <div class="grid min-w-0 gap-6">
+    <label class="grid gap-2">
+      <span class="text-sm font-semibold text-ink-strong">Title</span>
+      <input
+        class="h-12 field text-lg font-semibold"
+        bind:value={name}
+        maxlength="240"
+        placeholder={tagName.trim() || 'Release title'}
+        data-1p-ignore
+      />
+    </label>
+    <div class="grid gap-2">
+      <span class="text-sm font-semibold text-ink-strong">Release notes</span>
+      <MarkdownComposer
+        bind:value={body}
+        bind:uploading={notesUploading}
+        context={{ owner, repository }}
+        disabled={Boolean(saving) || deleting}
+        placeholder="What changed, what to watch out for, and who helped"
+        minHeight={440}
+      />
     </div>
-    <div class="grid gap-6 surface p-5 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:p-6">
+    <ReleaseFiles {uploads} disabled={Boolean(saving)} onadd={addFiles} />
+  </div>
+
+  <aside class="grid min-w-0 gap-6 lg:sticky lg:top-20">
+    <section class="grid gap-5 surface p-4" aria-label="Publishing">
+      <ReleaseTarget bind:tagName bind:target {branches} {tags} {existingTag} {release} />
       <div class="grid gap-2">
-        <span class="text-sm font-semibold text-ink-strong">Release notes</span>
-        <MarkdownComposer
-          bind:value={body}
-          bind:uploading={notesUploading}
-          {context}
-          disabled={saving || deleting}
-          placeholder="What changed in this release?"
-          minHeight={240}
-        />
+        <span class="text-sm font-semibold text-ink-strong">Release type</span>
+        <SegmentedControl bind:value={kind} options={kinds} label="Release type" />
+        <span class="text-xs leading-relaxed text-ink-muted">{kindHints[kind]}</span>
       </div>
-      {#if !release}
-        <section>
-          <header class="mb-2 flex items-center justify-between gap-4">
-            <strong class="text-sm font-semibold text-ink-strong">Downloads</strong>
-            <Button size="small" onclick={() => fileInput?.click()}><Upload size={14} />Add files</Button>
-            <input bind:this={fileInput} class="hidden" type="file" multiple onchange={chooseFiles} />
-          </header>
-          {#each pendingFiles as file (file.name)}
-            <div
-              class="grid min-h-11 grid-cols-[20px_minmax(0,1fr)_auto_32px] items-center gap-2 text-sm text-ink-muted"
-            >
-              <FileArchive size={16} /><span class="truncate text-ink">{file.name}</span><span class="text-xs"
-                >{fileSize(file.size)}</span
-              ><Button
-                icon
-                size="small"
-                variant="ghost"
-                aria-label={`Remove ${file.name}`}
-                onclick={() => (pendingFiles = pendingFiles.filter((item) => item !== file))}
-                ><Trash2 size={14} /></Button
-              >
-            </div>
-          {:else}<p class="py-3 text-sm text-ink-muted">No files attached.</p>{/each}
-        </section>
+    </section>
+    <div class="grid gap-2">
+      {#if published}
+        <Button type="submit" variant="primary" block loading={saving === 'publish'} disabled={blocked}
+          >Save release</Button
+        >
+      {:else}
+        <Button type="submit" variant="primary" block loading={saving === 'publish'} disabled={blocked}
+          >Publish release</Button
+        >
+        <Button block loading={saving === 'draft'} disabled={blocked} onclick={() => save(false)}>Save draft</Button>
       {/if}
-    </div>
-    <div class="grid gap-1 surface p-2 lg:col-start-1 lg:row-start-2">
-      <Checkbox
-        bind:checked={draft}
-        disabled={published}
-        onchange={(checked) => {
-          if (checked) makeLatest = false;
-        }}
-        label="Save as draft"
-        description="Only repository collaborators can see drafts."
-      />
-      <Checkbox
-        bind:checked={prerelease}
-        onchange={(checked) => {
-          if (checked) makeLatest = false;
-        }}
-        label="Mark as prerelease"
-        description="Use this for preview, beta, and release-candidate builds."
-      />
-      <Checkbox
-        bind:checked={makeLatest}
-        disabled={draft || prerelease}
-        label="Set as latest release"
-        description="Feature this release as the recommended version."
-      />
-    </div>
-    <div class="flex justify-end gap-2 lg:col-span-2">
       <LinkButton
         variant="ghost"
+        block
         href={release ? releasePath(owner, repository, release.tagName) : `/${owner}/${repository}/releases`}
         >Cancel</LinkButton
       >
-      <Button type="submit" variant="primary" loading={saving} disabled={notesUploading || !tagName.trim() || !target}
-        >{draft ? 'Save draft' : release ? 'Save release' : 'Publish release'}</Button
-      >
     </div>
-  </form>
-  {#if release}
-    <div class="mt-8"><ReleaseAssets {owner} {repository} releaseId={release.id} bind:assets editable /></div>
-    <section class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-line-subtle pt-6">
-      <div>
-        <strong class="block text-base font-semibold text-ink-strong">Delete this release</strong>
-        <p class="mt-1 text-sm text-ink-muted">
-          The Git tag stays in the repository. Attached assets are permanently removed.
-        </p>
+    {#if release}
+      <div class="flex items-center justify-between gap-4 border-t border-line-subtle pt-5">
+        <p class="text-xs text-ink-muted">The Git tag stays. Uploaded files are removed.</p>
+        <Button size="small" variant="danger-soft" onclick={() => (confirmDelete = true)}>Delete</Button>
       </div>
-      <Button size="small" variant="danger-soft" onclick={() => (confirmDelete = true)}>Delete release</Button>
-    </section>
-    <ConfirmDialog
-      open={confirmDelete}
-      title="Delete release?"
-      confirmLabel="Delete release"
-      busy={deleting}
-      {error}
-      onConfirm={remove}
-      onClose={() => (confirmDelete = false)}
-    >
-      <strong>{release.name || release.tagName}</strong> and its uploaded files will be removed. The Git tag stays.
-    </ConfirmDialog>
-  {/if}
-</div>
+    {/if}
+  </aside>
+</form>
+
+{#if release}
+  <ConfirmDialog
+    open={confirmDelete}
+    title="Delete release?"
+    confirmLabel="Delete release"
+    busy={deleting}
+    {error}
+    onConfirm={remove}
+    onClose={() => (confirmDelete = false)}
+  >
+    <strong>{release.name || release.tagName}</strong> and its uploaded files will be removed. The Git tag stays.
+  </ConfirmDialog>
+{/if}
