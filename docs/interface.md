@@ -59,12 +59,13 @@ visible rows are drawn, so folders with thousands of entries scroll as smoothly 
 The arrow keys move through the tree, Right and Left open and close folders, Enter opens the
 highlighted entry, and typing the start of a name jumps to it. Dragging the tree's edge resizes it,
 and hiding it gives the content the full width; both choices are remembered on that device. On phones
-and narrow windows the tree opens as a sheet from the button beside the path, and the content keeps
-the full width.
+and narrow windows the tree opens as a sheet from the Show files button, and the content keeps the
+full width.
 
-A folder lists its entries with the latest commit for each, followed by its README when it has one.
-A file shows its latest commit and History above the content, with Raw, copy, and download beside the
-file name. Markdown files open rendered, with a switch to the source. Line links such as `#L10-L20`
+The Code tab opens on the repository's README, selected in the tree, since the overview already
+shows it rendered beside the other documents; a repository without one opens on its file list. A
+folder lists its entries with the latest commit for each. A file shows its latest commit and History
+above the content, with its path, Raw, copy, and download on the line below. Markdown files open rendered, with a switch to the source. Line links such as `#L10-L20`
 select lines in any source view. Images preview inline, other binary files offer a download, and very
 large files show their first 1 MiB with the original a click away.
 

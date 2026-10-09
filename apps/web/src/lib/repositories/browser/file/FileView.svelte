@@ -17,7 +17,7 @@
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import { encodeRepositoryPath, encodeRevision } from '../../repository-path';
-  import type { CodeLocation } from '../entry-path';
+  import { treeHref, type CodeLocation } from '../entry-path';
   import type { RenderedDocument, TreeEntry } from '../types';
   import FileCommit from './FileCommit.svelte';
   import { isMarkdown, isPreviewableImage } from './file-kind';
@@ -40,6 +40,7 @@
     `/api/v1/repositories${base}/blob/${encodeRevision(location.revision)}/${encodeRepositoryPath(path)}`
   );
   const fileName = $derived(path.split('/').at(-1) ?? path);
+  const folder = $derived(path.split('/').slice(0, -1).join('/'));
   const lineCount = $derived(preview.binary ? 0 : preview.content.split('\n').length);
   const sizeLabel = $derived(
     preview.binary
@@ -80,7 +81,10 @@
     class="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-line-subtle py-1.5 pr-2 pl-4"
   >
     <span class="flex min-w-0 items-baseline gap-2.5">
-      <strong class="truncate text-sm font-semibold text-ink-strong">{fileName}</strong>
+      <span class="min-w-0 truncate text-sm"
+        >{#if folder}<a class="text-ink-muted hover:text-brand" href={treeHref(location, folder)}>{folder}/</a
+          >{/if}<strong class="font-semibold text-ink-strong">{fileName}</strong></span
+      >
       <span class="text-xs whitespace-nowrap text-ink-muted tabular-nums">{sizeLabel}</span>
     </span>
     <span class="flex items-center gap-1">

@@ -3,7 +3,6 @@ import { SvelteMap } from 'svelte/reactivity';
 import { apiWith } from '#lib/api.js';
 import { encodeRepositoryPath, encodeRevision } from '../repository-path';
 import type { RevisionLocation } from './entry-path';
-import { readmeEntry } from './file/file-kind';
 import type { Folders, RenderedDocument, Tree } from './types';
 
 type Fetcher = typeof fetch;
@@ -82,13 +81,6 @@ export function loadDocument(fetcher: Fetcher, location: RevisionLocation, path:
     documents.set(key, document);
   }
   return document;
-}
-
-export function folderReadme(fetcher: Fetcher, location: RevisionLocation, tree: Tree) {
-  const entry = readmeEntry(tree.entries);
-  if (!entry) return null;
-  const document = loadDocument(fetcher, { ...location, revision: tree.revision }, entry.path).catch(() => null);
-  return { entry, document };
 }
 
 export function forgetContent() {

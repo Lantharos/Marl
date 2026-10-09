@@ -10,7 +10,6 @@
   import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import { forgetContent, parentFolder, rememberFolders } from '#lib/repositories/browser/content-cache.svelte.js';
   import FileFinder from '#lib/repositories/browser/FileFinder.svelte';
-  import PathCrumbs from '#lib/repositories/browser/PathCrumbs.svelte';
   import { FileTree } from '#lib/repositories/browser/tree/file-tree.svelte.js';
   import { PaneLayout } from '#lib/repositories/browser/tree/pane-layout.svelte.js';
   import PaneResizer from '#lib/repositories/browser/tree/PaneResizer.svelte';
@@ -25,8 +24,9 @@
   const repository = $derived(data.repository.name);
   const defaultBranch = $derived(data.repository.defaultBranch);
   const revision = $derived(params.revision ?? defaultBranch);
-  const current = $derived(params.path ?? '');
-  const file = $derived(Boolean(page.route.id?.includes('/blob/')));
+  const selectedFile = $derived(page.data.selectedFile as string | undefined);
+  const current = $derived(params.path ?? selectedFile ?? '');
+  const file = $derived(Boolean(page.route.id?.includes('/blob/')) || selectedFile !== undefined);
   const openFolder = $derived(file ? parentFolder(current) : current);
   const folders = $derived((page.data.folders ?? {}) as Folders);
   const tree = $derived.by(() => {
@@ -87,7 +87,7 @@
       <PaneResizer layout={pane} />
     {/if}
     <div class="min-w-0 flex-1">
-      <div class="mb-4 flex min-h-8 items-center gap-2">
+      <div class={['mb-3 flex items-center gap-2', !pane.collapsed && 'lg:hidden']}>
         {@render paneButton('Show files', FolderTree, () => (drawerOpen = true), 'lg:hidden')}
         {#if pane.collapsed}{@render paneButton(
             'Show files',
@@ -95,7 +95,6 @@
             () => pane.setCollapsed(false),
             'max-lg:hidden'
           )}{/if}
-        <PathCrumbs location={tree.location} path={current} {file} />
       </div>
       {@render children()}
     </div>

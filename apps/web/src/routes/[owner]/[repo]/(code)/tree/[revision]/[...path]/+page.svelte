@@ -23,5 +23,4 @@
   }}
   path={params.path}
   tree={data.folders[params.path]}
-  readme={data.readme}
 />
