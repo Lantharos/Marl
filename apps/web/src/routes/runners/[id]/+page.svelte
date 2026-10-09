@@ -20,7 +20,7 @@
     </div>
     <RunnerStatus state={runner.state} />
   </header>
-  <dl class="divide-y divide-line-subtle surface px-4 sm:px-5">
+  <dl class="divide-y divide-line-subtle border-y border-line-subtle">
     {#snippet row(term: string)}<dt class="text-sm text-ink-muted">{term}</dt>{/snippet}
     <div class="grid gap-1 py-4 sm:grid-cols-[160px_minmax(0,1fr)]">
       {@render row('Capacity')}

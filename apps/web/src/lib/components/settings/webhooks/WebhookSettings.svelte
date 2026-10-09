@@ -13,6 +13,7 @@
   import Modal from '../../overlays/Modal.svelte';
   import Time from '../../page/Time.svelte';
   import SettingsHeader from '../SettingsHeader.svelte';
+  import SettingsGroup from '../SettingsGroup.svelte';
   import WebhookDeliveries from './WebhookDeliveries.svelte';
   import WebhookEditor from './WebhookEditor.svelte';
 
@@ -78,7 +79,7 @@
 </SettingsHeader>
 {#if error && !removing}<Notice class="mb-4">{error}</Notice>{/if}
 
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each webhooks as webhook (webhook.id)}
     <article class="grid min-h-19 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3">
       <button type="button" class="min-w-0 text-left" onclick={() => (inspecting = webhook)}>
@@ -124,7 +125,7 @@
       description="Marl can notify another service whenever something happens here."
     />
   {/each}
-</div>
+</SettingsGroup>
 
 <WebhookEditor
   open={editing !== undefined}

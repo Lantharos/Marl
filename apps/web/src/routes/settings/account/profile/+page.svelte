@@ -67,10 +67,10 @@
 </script>
 
 <svelte:head><title>Profile · Marl</title></svelte:head>
-<SettingsHeader title="Profile" description="How you appear on your public profile, commits, and discussions." />
+<SettingsHeader title="Profile" />
 {#if error}<Notice class="mb-4">{error}</Notice>{/if}
 <form
-  class="grid gap-6 surface p-5 sm:p-6"
+  class="grid max-w-180 gap-6"
   onsubmit={(event) => {
     event.preventDefault();
     void save();

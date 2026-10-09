@@ -15,6 +15,7 @@
   import CheckApprovalSettings from '#lib/components/settings/panels/CheckApprovalSettings.svelte';
   import SigningSettings from '#lib/components/settings/panels/SigningSettings.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import type { AccessPerson, AccessTeam } from './+page';
   import type { PageData } from './$types';
 
@@ -110,104 +111,91 @@
 </script>
 
 <svelte:head><title>Access and security · {page.params.owner}/{page.params.repo} · Marl</title></svelte:head>
-<SettingsHeader
-  title="Access and security"
-  description="Who can work in this repository, and what their pushes and pulls must satisfy."
-/>
+<SettingsHeader title="Access and security" />
 {#if error && !adding && !removing}<Notice class="mb-4">{error}</Notice>{/if}
 
-<div class="grid gap-8">
-  <section>
-    <h2 class="mb-2.5 px-1 text-sm font-semibold text-ink-strong">Security</h2>
-    {#key data.repository.id}<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-        <SigningSettings endpoint={settingsEndpoint} initialMode={data.signingMode} />
-        <CheckApprovalSettings endpoint={settingsEndpoint} initialValue={data.requireCheckApproval} />
-      </div>{/key}
-  </section>
+<div class="grid gap-10">
+  <SettingsGroup title="Security">
+    {#key data.repository.id}
+      <SigningSettings endpoint={settingsEndpoint} initialMode={data.signingMode} />
+      <CheckApprovalSettings endpoint={settingsEndpoint} initialValue={data.requireCheckApproval} />
+    {/key}
+  </SettingsGroup>
 
-  <section>
-    <header class="mb-2.5 flex items-center justify-between gap-3 px-1">
-      <h2 class="text-sm font-semibold text-ink-strong">Collaborators</h2>
-      <Button size="small" onclick={() => openAdd('collaborators')}>Add collaborator</Button>
-    </header>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      {#each collaborators as person (person.id)}
-        <article class="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-3">
-          <UserProfileLink
-            handle={person.handle}
-            displayName={person.displayName}
-            avatarUrl={person.avatarUrl}
-            kind={person.kind}
-            size={30}
-            showHandle
+  <SettingsGroup title="Collaborators">
+    {#snippet action()}<Button size="small" onclick={() => openAdd('collaborators')}>Add collaborator</Button>{/snippet}
+    {#each collaborators as person (person.id)}
+      <article class="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-3">
+        <UserProfileLink
+          handle={person.handle}
+          displayName={person.displayName}
+          avatarUrl={person.avatarUrl}
+          kind={person.kind}
+          size={30}
+          showHandle
+        />
+        <div class="w-32">
+          <Select
+            value={person.role ?? 'read'}
+            options={roles}
+            ariaLabel={`Role for ${person.handle}`}
+            onchange={(value) => updateRole('collaborators', person.id, value)}
           />
-          <div class="w-32">
-            <Select
-              value={person.role ?? 'read'}
-              options={roles}
-              ariaLabel={`Role for ${person.handle}`}
-              onchange={(value) => updateRole('collaborators', person.id, value)}
-            />
-          </div>
-          <Button
-            variant="ghost"
-            size="small"
-            icon
-            aria-label={`Remove ${person.handle}`}
-            onclick={() => {
-              error = '';
-              removing = { kind: 'collaborators', id: person.id, name: person.displayName };
-            }}><Trash2 size={15} /></Button
-          >
-        </article>
-      {:else}
-        <p class="py-6 text-center text-sm text-ink-muted">No direct collaborators.</p>
-      {/each}
-    </div>
-  </section>
+        </div>
+        <Button
+          variant="ghost"
+          size="small"
+          icon
+          aria-label={`Remove ${person.handle}`}
+          onclick={() => {
+            error = '';
+            removing = { kind: 'collaborators', id: person.id, name: person.displayName };
+          }}><Trash2 size={15} /></Button
+        >
+      </article>
+    {:else}
+      <p class="py-6 text-center text-sm text-ink-muted">No direct collaborators.</p>
+    {/each}
+  </SettingsGroup>
 
-  <section>
-    <header class="mb-2.5 flex items-center justify-between gap-3 px-1">
-      <h2 class="text-sm font-semibold text-ink-strong">Teams</h2>
-      <Button size="small" disabled={!teamOptions.length} onclick={() => openAdd('teams')}>Add team</Button>
-    </header>
-    <div class="divide-y divide-line-subtle surface px-4 sm:px-5">
-      {#each teams as team (team.id)}
-        <article class="grid min-h-16 grid-cols-[30px_minmax(0,1fr)_auto_auto] items-center gap-3 py-3">
-          <span
-            class="grid size-7.5 place-items-center rounded-lg bg-surface-muted text-xs font-semibold text-ink-muted"
-            >{team.name.slice(0, 2).toUpperCase()}</span
+  <SettingsGroup title="Teams">
+    {#snippet action()}<Button size="small" disabled={!teamOptions.length} onclick={() => openAdd('teams')}
+        >Add team</Button
+      >{/snippet}
+    {#each teams as team (team.id)}
+      <article class="grid min-h-16 grid-cols-[30px_minmax(0,1fr)_auto_auto] items-center gap-3 py-3">
+        <span class="grid size-7.5 place-items-center rounded-lg bg-surface-muted text-xs font-semibold text-ink-muted"
+          >{team.name.slice(0, 2).toUpperCase()}</span
+        >
+        <span class="min-w-0">
+          <strong class="block truncate text-sm font-semibold text-ink-strong">{team.name}</strong>
+          <span class="block text-xs text-ink-muted"
+            >{team.members ?? 0} {team.members === 1 ? 'member' : 'members'}</span
           >
-          <span class="min-w-0">
-            <strong class="block truncate text-sm font-semibold text-ink-strong">{team.name}</strong>
-            <span class="block text-xs text-ink-muted"
-              >{team.members ?? 0} {team.members === 1 ? 'member' : 'members'}</span
-            >
-          </span>
-          <div class="w-32">
-            <Select
-              value={team.role ?? 'read'}
-              options={roles}
-              ariaLabel={`Role for ${team.name}`}
-              onchange={(value) => updateRole('teams', team.id, value)}
-            />
-          </div>
-          <Button
-            variant="ghost"
-            size="small"
-            icon
-            aria-label={`Remove ${team.name}`}
-            onclick={() => {
-              error = '';
-              removing = { kind: 'teams', id: team.id, name: team.name };
-            }}><Trash2 size={15} /></Button
-          >
-        </article>
-      {:else}
-        <p class="py-6 text-center text-sm text-ink-muted">No teams have explicit access.</p>
-      {/each}
-    </div>
-  </section>
+        </span>
+        <div class="w-32">
+          <Select
+            value={team.role ?? 'read'}
+            options={roles}
+            ariaLabel={`Role for ${team.name}`}
+            onchange={(value) => updateRole('teams', team.id, value)}
+          />
+        </div>
+        <Button
+          variant="ghost"
+          size="small"
+          icon
+          aria-label={`Remove ${team.name}`}
+          onclick={() => {
+            error = '';
+            removing = { kind: 'teams', id: team.id, name: team.name };
+          }}><Trash2 size={15} /></Button
+        >
+      </article>
+    {:else}
+      <p class="py-6 text-center text-sm text-ink-muted">No teams have explicit access.</p>
+    {/each}
+  </SettingsGroup>
 </div>
 
 <Modal

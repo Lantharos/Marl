@@ -11,6 +11,7 @@
   import Modal from '../../overlays/Modal.svelte';
   import Time from '../../page/Time.svelte';
   import SettingsHeader from '../SettingsHeader.svelte';
+  import SettingsGroup from '../SettingsGroup.svelte';
 
   type Secret = { id: string; name: string; createdAt: string; updatedAt: string };
   let {
@@ -89,7 +90,7 @@
   {#snippet action()}<Button size="small" onclick={() => openEditor()}>Add secret</Button>{/snippet}
 </SettingsHeader>
 
-<section class="divide-y divide-line-subtle surface px-4 sm:px-5" aria-label="CI secrets">
+<SettingsGroup label="CI secrets">
   {#each secrets as secret (secret.id)}
     <article
       class="grid min-h-19 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:grid-cols-[24px_minmax(0,1fr)_auto_auto] sm:gap-3"
@@ -123,7 +124,7 @@
       description="Secrets are passed to workflow jobs as environment variables and masked in logs."
     />
   {/each}
-</section>
+</SettingsGroup>
 
 <Modal
   {open}

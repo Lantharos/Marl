@@ -65,9 +65,9 @@
 
 <svelte:head><title>{name} profile · Marl</title></svelte:head>
 <OrganizationSettingsShell {name} {slug} {avatarUrl} active="profile" showSecrets={data.viewerRole !== 'member'}>
-  <SettingsHeader title="Profile" description="The identity shown for this organization across Marl." />
+  <SettingsHeader title="Profile" />
   {#if error}<Notice class="mb-4">{error}</Notice>{/if}
-  <div class="grid gap-6 surface p-5 sm:p-6">
+  <div class="grid max-w-180 gap-6">
     <section class="flex items-center gap-4">
       {#if canEdit}<ImageUploadButton
           state={avatarState}

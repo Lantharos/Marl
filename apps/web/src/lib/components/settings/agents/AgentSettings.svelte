@@ -13,6 +13,7 @@
   import ConfirmDialog from '../../overlays/ConfirmDialog.svelte';
   import Modal from '../../overlays/Modal.svelte';
   import SettingsHeader from '../SettingsHeader.svelte';
+  import SettingsGroup from '../SettingsGroup.svelte';
   import AgentTokens from './AgentTokens.svelte';
 
   let { initialAgents, endpoint }: { initialAgents: Agent[]; endpoint: string } = $props();
@@ -84,7 +85,7 @@
 </SettingsHeader>
 {#if error && editing === undefined && !removing}<Notice class="mb-4">{error}</Notice>{/if}
 
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each agents as agent (agent.id)}
     <article class="grid min-h-19 grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 py-3">
       <UserAvatar name={agent.displayName} src={agent.avatarUrl} size={36} />
@@ -115,7 +116,7 @@
       description="Create one for a CI bot, a review assistant, or any tool that should comment and push under its own name."
     />
   {/each}
-</div>
+</SettingsGroup>
 
 <Modal
   open={editing !== undefined}

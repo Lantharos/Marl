@@ -7,6 +7,7 @@
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
+  import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { formatTimestamp } from '#lib/time.js';
   import type { PageData } from './$types';
 
@@ -59,9 +60,9 @@
 </script>
 
 <svelte:head><title>Sessions · Marl</title></svelte:head>
-<SettingsHeader title="Sessions" description="Browsers and devices currently signed in to your account." />
+<SettingsHeader title="Sessions" />
 {#if error}<Notice class="mb-4">{error}</Notice>{/if}
-<div class="divide-y divide-line-subtle surface px-4 sm:px-5">
+<SettingsGroup>
   {#each sessions as session (session.id)}
     <article class="grid min-h-19 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3">
       <MonitorSmartphone size={18} class="text-ink-muted" />
@@ -82,4 +83,4 @@
   {:else}
     <EmptyState compact icon={MonitorSmartphone} title="No active sessions" />
   {/each}
-</div>
+</SettingsGroup>
