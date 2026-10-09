@@ -12,6 +12,15 @@
       ]
     },
     {
+      title: 'Inbox',
+      shortcuts: [
+        { keys: ['J'], label: 'Next item' },
+        { keys: ['K'], label: 'Previous item' },
+        { keys: ['Enter'], label: 'Open the selected item' },
+        { keys: ['E'], label: 'Mark the selected item as done' }
+      ]
+    },
+    {
       title: 'Code',
       shortcuts: [
         { keys: ['T'], label: 'Go to file' },
