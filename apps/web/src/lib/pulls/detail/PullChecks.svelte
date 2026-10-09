@@ -10,15 +10,25 @@
 
   let { pull, approving, onApprove }: { pull: PullRequestDetail; approving: boolean; onApprove: () => void } = $props();
   const waiting = $derived(pull.checksApproval.waiting);
+  const summary = $derived.by(() => {
+    const { total, passed, failed, running } = pull.checkSummary;
+    if (!total) return 'No checks reported';
+    if (failed) return `${failed} of ${total} checks failed`;
+    if (running) return `${running} of ${total} checks running`;
+    return `${passed} of ${total} checks passed`;
+  });
 </script>
 
-<section class="grid gap-3" aria-label="Checks">
-  <p class="text-sm text-ink-muted">
-    Checks for <code class="font-mono text-xs text-ink">{pull.sourceCommitId.slice(0, 7)}</code>. Required checks must
-    pass on the latest commit.
-  </p>
+<section class="rounded-2xl bg-surface-muted/60 p-2 sm:p-2.5" aria-label="Checks">
+  <header class="flex flex-wrap items-baseline gap-x-2 px-2 pt-1 pb-2.5">
+    <h2 class="text-sm font-semibold text-ink-strong">{summary}</h2>
+    <span class="text-xs text-ink-muted"
+      >on <code class="font-mono text-ink">{pull.sourceCommitId.slice(0, 7)}</code>. Required checks must pass on the
+      latest commit.</span
+    >
+  </header>
   {#if waiting}
-    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning">
+    <div class="mb-2 flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning">
       <ShieldCheck size={16} class="shrink-0" />
       <span class="mr-auto">{waiting} {waiting === 1 ? 'run awaits' : 'runs await'} maintainer approval.</span>
       {#if pull.checksApproval.canApprove}<Button size="small" loading={approving} onclick={onApprove}
@@ -34,7 +44,7 @@
           this={check.run ? 'a' : 'article'}
           href={check.run ? `/${pull.repository.owner}/${pull.repository.name}/runs/${check.run.number}` : undefined}
           class={[
-            'group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3',
+            'group grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 first:rounded-t-xl last:rounded-b-xl',
             check.run && 'transition-colors hover:bg-surface-hover'
           ]}
         >

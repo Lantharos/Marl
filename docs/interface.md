@@ -14,8 +14,8 @@ available on hover and keyboard focus;
 on small screens the menu names the same destinations. Search remains available from
 the header and with Ctrl K. In a repository's code view, T opens Go to file and / focuses code search. While writing, Ctrl . inserts a saved reply. Pressing ? lists every
 keyboard shortcut; pull pages add shortcuts for moving through tabs, changed files, and open
-conversations, and the Inbox adds J and K to move between items, Enter to open one, and E to
-mark it done. Issue lists use the same J, K, and Enter to move through issues and open one.
+conversations, issue and pull lists add J and K to move between rows and Enter to open one, and
+the Inbox adds J and K to move between items, Enter to open one, and E to mark it done.
 
 What someone is looking at lives in the address. A pull's Overview, Changes, Commits, and Checks
 sections, the overview document, and the code browser's branch, path, and Markdown view each have
@@ -150,12 +150,33 @@ Publication, draft visibility, and upload behavior do not depend on the layout.
 See [Writing Markdown](markdown.md) for document images, formatting, footnotes, diagrams,
 and the differences between overview documents and compact discussion media.
 
-A pull uses two columns on desktop: title, brief, one current status, metadata, and lifecycle
-actions on the left; section chips, composer, revisions, and discussion on the right. The two
-columns align at the top. Smaller screens stack them, with assignees and labels behind an
-explicit disclosure. Use the available width for code and conversation instead of repeating
-metadata above the timeline. Merge requirements are a disclosure, not a row of competing statuses.
-Lifecycle actions do not post a comment draft.
+A pull uses two columns on desktop: title, author, branches, brief, merge status, and metadata
+on the left; section chips and revisions on the right. The two columns align at the top. Smaller
+screens stack them, with assignees and labels behind an explicit disclosure. Use the available
+width for code and conversation instead of repeating metadata above the revisions. Branches read
+in merge direction, target first: `main ← feature`.
+
+Merge status is one panel nested in the summary, not a row of competing statuses. Its headline
+names the outcome: Ready to merge, Not ready to merge, Waiting on checks, Draft, Merged, or
+Closed. Below it, a short checklist covers reviews, checks, conversations, and conflicts, each
+stated in words beside an icon; failing checks link to the Checks section and unresolved
+conversations jump to the next open one. Something a branch rule does not require, such as a
+failing optional check, is marked in amber without holding back the headline. Merge, queue, and
+lifecycle actions sit at the bottom of the same panel and never post a comment draft.
+
+Revisions organize the conversation column. Each revision is a container whose header summarizes
+it: number, latest commit title and hash, who pushed it and when, commit count, the check outcome
+on the current revision, conversation and unresolved counts, and each reviewer's avatar marked
+with their latest outcome. The current revision stays open, listing its commits when there is
+more than one, then the composer and its activity. Earlier revisions collapse to their header and
+also name their review outcome. Administrative changes — labels, assignment, title and
+description edits, locks, pushes, queue changes, and mentions — sit between discussions as quiet
+one-line notes rather than contained entries. Consecutive label or assignee changes by the same
+person share a line, and long runs fold behind a count of further updates. Merges, closures,
+reopenings, force pushes, and stopped queue merges keep their color and stay visible.
+
+Changes, Commits, and Checks open with the same nested header. Commits are grouped by the revision
+that introduced them; commits replaced by a force push stay listed as replaced.
 
 The brief previews three lines at the panel's current width, with Read more inline at the
 end of the paragraph. It opens the author's

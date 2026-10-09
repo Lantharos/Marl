@@ -6,7 +6,7 @@
   import InfiniteScroll from '#lib/components/feedback/InfiniteScroll.svelte';
   import Page from '#lib/components/page/Page.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
-  import PullQueue from '#lib/pulls/PullQueue.svelte';
+  import PullQueue from '#lib/pulls/list/PullQueue.svelte';
   import { CursorList } from '#lib/ui/cursor-list.svelte.js';
   import type { PageData } from './$types';
   import { api } from '#lib/api.js';
@@ -40,6 +40,12 @@
     clearTimeout(queryTimer);
     queryTimer = setTimeout(() => navigate(activeFilter, value), 220);
   }
+  function clearFilters() {
+    clearTimeout(queryTimer);
+    query = '';
+    selectedLabels = [];
+    navigate(activeFilter, '', []);
+  }
   onDestroy(() => clearTimeout(queryTimer));
 </script>
 
@@ -61,13 +67,14 @@
     pulls={pulls.items}
     showRepository
     grouped={activeFilter === 'Open'}
-    emptyTitle={query ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
-    emptyDescription={query
+    emptyTitle={data.query || data.labels.length ? 'No matching pulls' : `No ${activeFilter.toLowerCase()} pulls`}
+    emptyDescription={data.query || data.labels.length
       ? 'Try a different title, branch, author, or repository.'
       : activeFilter === 'Open'
         ? 'Open a pull when a change is ready to move through review.'
         : `Pulls will appear here after they are ${activeFilter.toLowerCase()}.`}
-    createHref={!query && activeFilter === 'Open' ? '/pulls/new' : undefined}
+    createHref={activeFilter === 'Open' ? '/pulls/new' : undefined}
+    onClearFilters={data.query || data.labels.length ? clearFilters : undefined}
   />
   <InfiniteScroll list={pulls} />
 </Page>

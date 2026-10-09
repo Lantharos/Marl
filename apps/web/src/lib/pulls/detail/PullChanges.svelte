@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SegmentedControl from '#lib/components/controls/SegmentedControl.svelte';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
   import type { MarkdownContext } from '#lib/markdown/context.js';
   import ReviewChangesPopover from '../review/ReviewChangesPopover.svelte';
@@ -8,40 +9,35 @@
     $props();
   const pull = $derived(pageState.pull);
   const viewer = import('#lib/code/DiffViewer.svelte');
+  const revision = $derived(pageState.timeline.revisions.find((item) => item.current));
+  const scopes = [
+    { value: 'all', label: 'All changes' },
+    { value: 'since', label: 'Since your review' }
+  ] as const;
 </script>
 
 <section class="grid scroll-mt-20 gap-3" aria-label="Changes">
-  {#if pageState.sinceCommit}
-    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-brand-soft px-3.5 py-2.5 text-sm">
-      <div class="flex gap-0.5 rounded-lg bg-surface/70 p-0.5" role="radiogroup" aria-label="Changes to show">
-        {#each [['all', 'All changes'], ['since', 'Since your review']] as const as [scope, label] (scope)}
-          <button
-            type="button"
-            role="radio"
-            aria-checked={pageState.diffScope === scope}
-            class={[
-              'h-7 rounded-md px-2.5 text-xs font-semibold transition-colors',
-              pageState.diffScope === scope
-                ? 'bg-surface-raised text-ink-strong shadow-subtle'
-                : 'text-ink-muted hover:text-ink-strong'
-            ]}
-            onclick={() => pageState.setDiffScope(scope)}>{label}</button
+  <header class="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-surface-muted/60 px-4 py-3">
+    <div class="min-w-0 flex-1">
+      <h2 class="flex items-baseline gap-2 text-sm">
+        <strong class="font-semibold text-ink-strong">{revision ? `Revision ${revision.number}` : 'Changes'}</strong>
+        <code class="font-mono text-xs text-ink-faint">{pull.sourceCommitId.slice(0, 7)}</code>
+      </h2>
+      <p class="mt-0.5 truncate text-xs text-ink-muted">
+        {#if pageState.diffScope === 'since'}Only what changed after you reviewed <code class="font-mono"
+            >{pull.viewerLastReview?.commitId.slice(0, 7)}</code
+          >{:else if pageState.sinceCommit}New commits arrived after your last review{:else}<code class="font-mono"
+            >{pull.targetBranch}</code
           >
-        {/each}
-      </div>
-      <span class="text-ink">
-        {pageState.diffScope === 'since'
-          ? `Showing what changed after you reviewed ${pull.viewerLastReview?.commitId.slice(0, 7)}.`
-          : `New commits arrived after your last review.`}
-      </span>
+          ← <code class="font-mono">{pull.sourceBranch}</code>{/if}
+      </p>
     </div>
-  {/if}
-  <header class="flex flex-wrap items-center justify-between gap-3">
-    <p class="text-sm text-ink-muted">
-      Reviewing <code class="font-mono text-xs text-ink">{pull.sourceCommitId.slice(0, 7)}</code> from
-      <span class="font-medium text-ink">{pull.sourceBranch}</span> into
-      <span class="font-medium text-ink">{pull.targetBranch}</span>
-    </p>
+    {#if pageState.sinceCommit}<SegmentedControl
+        label="Changes to show"
+        options={scopes}
+        value={pageState.diffScope}
+        onchange={pageState.setDiffScope}
+      />{/if}
     {#if pageState.reviewable}<ReviewChangesPopover
         bind:open={pageState.reviewOpen}
         bind:reviewState={pageState.reviewState}

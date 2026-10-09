@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { PullTimelineItem } from '@marl/contracts';
+  import type { PullTimelineItem, WorkItemLabel } from '@marl/contracts';
   import type { MarkdownContext } from '#lib/markdown/context.js';
-  import PullReviewGroup from './PullReviewGroup.svelte';
-  import { groupReviewActivity, type DiscussionItem } from './group-review-activity';
+  import PullReviewGroup from '../review/PullReviewGroup.svelte';
+  import PullActivityNotes from './PullActivityNotes.svelte';
+  import { activityKey, groupRevisionActivity, type DiscussionItem } from './revision-activity';
 
   let {
     items,
+    labels,
+    repository,
     context,
     entry,
     viewerId,
@@ -16,6 +19,8 @@
     emptyMessage = 'No discussion on this revision.'
   }: {
     items: PullTimelineItem[];
+    labels: WorkItemLabel[];
+    repository: { owner: string; name: string };
     viewerId?: string;
     canModerate?: boolean;
     busy?: boolean;
@@ -25,10 +30,10 @@
     emptyMessage?: string;
   } = $props();
 
-  const activity = $derived(groupReviewActivity(items));
+  const activity = $derived(groupRevisionActivity(items));
 </script>
 
-{#each activity as item (`${item.kind}:${item.value.id}`)}
+{#each activity as item (activityKey(item))}
   {#if item.kind === 'review'}
     <PullReviewGroup
       review={item.value}
@@ -40,9 +45,11 @@
       {busy}
       {onDeleteReview}
     />
+  {:else if item.kind === 'notes'}
+    <PullActivityNotes notes={item.notes} {labels} {repository} />
   {:else}
     {@render entry(item, false)}
   {/if}
 {:else}
-  <p class="px-2.5 py-4 text-sm text-ink-muted">{emptyMessage}</p>
+  <p class="px-3 py-3 text-sm text-ink-muted">{emptyMessage}</p>
 {/each}

@@ -169,15 +169,26 @@ Pulls are Marl's flagship surface. The open queue is organized by the next usefu
 of chronology alone: ready to land, needing attention, in review, or still taking shape. A
 developer must be able to understand the proposal, review every file, follow conversations,
 inspect checks, and identify every merge blocker without hunting across unrelated screens.
+Pull lists keep one dense row per pull: title, labels, reference, author, and branches, with the
+review outcome, checks, and last update aligned in columns so a queue can be scanned top to
+bottom. J and K move through the list and Enter opens the selected pull. A search or label filter
+that matches nothing offers to clear the filters.
+
+Opening a pull starts from the comparison: the repository, the branch to merge into, and the
+branch the work comes from, with every changed file and its line counts listed before the title
+and description.
 
 A pull moves from draft to ready and can be closed or reopened without losing its review record.
-Its desktop view keeps the title, brief, current status, assignees, labels, and lifecycle actions
-in a left-hand summary, with revision history and discussion on the right. Small screens stack
-the summary above the discussion and disclose metadata on demand. One status describes the current
-outcome; merge requirements are available when needed. Conflicts are checked against the exact
-source and target commits without delaying the initial page. The
-latest revision and composer appear first. Earlier revisions stay collapsed until opened, with
-their review outcome and discussion count visible in the header. Each revision's top-level
+Its desktop view keeps the title, brief, merge status, assignees, labels, and lifecycle actions
+in a left-hand summary, with revisions and discussion on the right. Small screens stack the
+summary above the discussion and disclose metadata on demand. The merge status names one outcome
+and lists reviews, checks, conversations, and conflicts beneath it, so every blocker is visible
+without opening anything. Conflicts are checked against the exact source and target commits
+without delaying the initial page. The latest revision and composer appear first. Each revision
+header summarizes what was pushed, its checks, its conversations and how many remain unresolved,
+and who reviewed it with what outcome. Earlier revisions stay collapsed until opened. Labels,
+assignment, edits, and other administrative changes appear as compact notes between the
+discussions instead of competing with them. Each revision's top-level
 activity runs newest-first; replies inside a conversation read in order. Code excerpts scroll
 horizontally when needed so a narrow screen does not hide part of a reviewed line.
 Pushes before anyone comments or reviews stay in the same revision, with a compact commit update.

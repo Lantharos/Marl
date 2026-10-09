@@ -1,56 +1,53 @@
 <script lang="ts">
-  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import type { Snippet } from 'svelte';
   import type { PullRequestDetail } from '@marl/contracts';
+  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import Flag from '@lucide/svelte/icons/flag';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Button from '#lib/components/controls/Button.svelte';
-  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
-  import PullBrief from './PullBrief.svelte';
-  import WorkItemMetadata from '#lib/components/discussion/WorkItemMetadata.svelte';
-  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import WorkItemLinks from '#lib/components/discussion/WorkItemLinks.svelte';
+  import WorkItemMetadata from '#lib/components/discussion/WorkItemMetadata.svelte';
+  import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
+  import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
+  import Time from '#lib/components/page/Time.svelte';
   import type { MarkdownContext } from '#lib/markdown/context.js';
-  import { pullDetailSignal } from './pull-signal';
+  import PullBrief from './PullBrief.svelte';
 
   let {
     pull,
-    conflicted = false,
     busy,
     context,
     onEdit,
     onUpdate,
     onCreateLabel,
     onReport,
-    actions
+    status
   }: {
     pull: PullRequestDetail;
-    conflicted?: boolean;
     busy: boolean;
     context: MarkdownContext;
     onEdit: () => void;
     onUpdate: (body: { assigneeIds?: string[]; labelIds?: string[]; locked?: boolean }) => Promise<void>;
     onCreateLabel: (name: string) => Promise<void>;
     onReport?: () => void;
-    actions: Snippet;
+    status: Snippet;
   } = $props();
   let metadataOpen = $state(false);
-  const signal = $derived(pullDetailSignal(pull, conflicted));
-  const tones = {
-    working: 'bg-brand',
-    attention: 'bg-danger',
-    ready: 'bg-success',
-    complete: 'bg-merged',
-    quiet: 'bg-ink-muted'
-  };
+  const sourceLabel = $derived(
+    pull.sourceRepository &&
+      `${pull.sourceRepository.owner}/${pull.sourceRepository.name}` !==
+        `${pull.repository.owner}/${pull.repository.name}`
+      ? `${pull.sourceRepository.owner}:${pull.sourceBranch}`
+      : pull.sourceBranch
+  );
 </script>
 
 {#snippet branch(name: string)}
   <Tooltip text={name}>
     {#snippet children(tooltip)}
-      <code {...tooltip} class="max-w-full truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs"
+      <code {...tooltip} class="min-w-0 truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs text-ink"
         >{name}</code
       >
     {/snippet}
@@ -59,8 +56,12 @@
 
 <aside class="grid min-w-0 content-start gap-3 lg:gap-5" aria-label="Pull summary">
   <section class="min-w-0 surface rounded-2xl p-4 sm:p-5">
-    <header class="mb-2 flex min-h-7 items-center justify-between">
-      <WorkItemReference kind="pull" number={pull.number} class="text-sm text-ink-muted" />
+    <header class="mb-2 flex min-h-7 items-center justify-between gap-3">
+      <p class="flex min-w-0 items-center gap-2 text-sm text-ink-muted">
+        <WorkItemReference kind="pull" number={pull.number} class="font-medium" />
+        <span aria-hidden="true">·</span>
+        <span class="truncate">opened <Time value={pull.createdAt} /></span>
+      </p>
       {#if pull.canManage}<Button
           icon
           size="small"
@@ -77,23 +78,27 @@
     <h1 class="text-2xl leading-tight font-semibold tracking-tight text-pretty break-words text-ink-strong">
       {pull.title}
     </h1>
-    <div class="mt-4.5 mb-5.5 flex items-center gap-2 text-sm font-semibold text-ink-strong">
-      <span class={['size-2 rounded-full', tones[signal.tone]]} aria-hidden="true"></span>{signal.label}
+    <div class="mt-4 grid gap-2.5">
+      <UserProfileLink
+        handle={pull.author}
+        displayName={pull.authorDisplayName}
+        avatarUrl={pull.authorAvatarUrl}
+        kind={pull.authorKind}
+        size={22}
+      />
+      <div
+        class="flex min-w-0 items-center gap-1.5 text-ink-faint"
+        aria-label="Merging {sourceLabel} into {pull.targetBranch}"
+      >
+        {@render branch(pull.targetBranch)}<ArrowLeft size={14} class="shrink-0" aria-hidden="true" />{@render branch(
+          sourceLabel
+        )}
+      </div>
     </div>
-    <UserProfileLink
-      handle={pull.author}
-      displayName={pull.authorDisplayName}
-      avatarUrl={pull.authorAvatarUrl}
-      kind={pull.authorKind}
-      size={22}
-    />
-    <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-ink-muted">
-      {@render branch(pull.sourceBranch)}<ArrowRight size={14} />{@render branch(pull.targetBranch)}
-    </div>
-    {#if pull.bodyText}<div class="my-5.5 break-words">
+    {#if pull.bodyText}<div class="mt-5 break-words">
         <PullBrief html={pull.bodyHtml} text={pull.bodyText} title={pull.title} />
-      </div>{:else}<div class="h-5.5"></div>{/if}
-    {@render actions()}
+      </div>{/if}
+    <div class="mt-5">{@render status()}</div>
   </section>
   <Button
     class="w-full justify-between lg:hidden"

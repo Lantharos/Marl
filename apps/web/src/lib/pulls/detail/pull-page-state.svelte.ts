@@ -11,8 +11,8 @@ import type {
 import { goto } from '$app/navigation';
 import { api, MarlApiError } from '#lib/api.js';
 import { reviewThreadContext, type ThreadCodeLine } from '#lib/code/diff.js';
-import { PullTimelineState } from '../timeline/PullTimelineState.svelte';
-import type { PullLifecycleAction } from '../PullLifecycleActions.svelte';
+import { PullTimelineState } from './PullTimelineState.svelte';
+import type { PullLifecycleAction } from '../summary/PullLifecycleActions.svelte';
 import type { PullComposerAction } from '../review/PullActionComposer.svelte';
 import { applyPullUpdate } from './pull-updates';
 

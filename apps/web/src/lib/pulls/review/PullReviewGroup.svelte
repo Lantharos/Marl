@@ -9,7 +9,7 @@
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
-  import type { ThreadItem } from './group-review-activity';
+  import type { ThreadItem } from '../overview/revision-activity';
 
   let {
     review,

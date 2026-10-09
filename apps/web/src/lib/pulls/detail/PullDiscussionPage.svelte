@@ -14,15 +14,16 @@
   import { seoExcerpt } from '#lib/seo.js';
   import { plainKey, stepThrough } from '#lib/ui/keyboard.js';
   import { connectPullLive } from '../pull-live';
-  import PullLifecycleActions from '../PullLifecycleActions.svelte';
   import { PullMergeability } from '../PullMergeability.svelte';
-  import PullSummary from '../PullSummary.svelte';
+  import PullOverview from '../overview/PullOverview.svelte';
+  import PullLifecycleActions from '../summary/PullLifecycleActions.svelte';
+  import PullStatus from '../summary/PullStatus.svelte';
+  import PullSummary from '../summary/PullSummary.svelte';
   import { PullPageState, type PullTab } from './pull-page-state.svelte';
   import PullChanges from './PullChanges.svelte';
   import PullChecks from './PullChecks.svelte';
   import PullCommits from './PullCommits.svelte';
   import PullDetailsEditor from './PullDetailsEditor.svelte';
-  import PullOverview from './PullOverview.svelte';
 
   let {
     route,
@@ -48,9 +49,14 @@
   let editing = $state(false);
   let changesView = $state<HTMLElement>();
 
+  const mergeableHeads = $derived(
+    ['draft', 'merged', 'closed'].includes(pull.state) ? null : `${pull.targetCommitId}:${pull.sourceCommitId}`
+  );
+
   $effect(() => {
-    if (!['draft', 'merged', 'closed'].includes(pull.state))
-      return mergeability.check(pageState.endpoint, pull.targetCommitId, pull.sourceCommitId);
+    if (!mergeableHeads) return;
+    const [base, head] = mergeableHeads.split(':');
+    return untrack(() => mergeability.check(pageState.endpoint, base, head));
   });
 
   $effect(() =>
@@ -75,6 +81,13 @@
   });
 
   const tabOrder: PullTab[] = ['overview', 'changes', 'commits', 'checks'];
+  const openConversations = '[data-review-thread="open"]';
+
+  async function nextConversation() {
+    if (pageState.tab !== 'overview' && pageState.tab !== 'changes') await pageState.selectTab('overview');
+    await tick();
+    stepThrough(openConversations, 1);
+  }
 
   async function shortcut(event: KeyboardEvent) {
     const key = plainKey(event);
@@ -83,7 +96,7 @@
     if (tabOrder[tabIndex]) void pageState.selectTab(tabOrder[tabIndex]);
     else if ((key === 'j' || key === 'k') && pageState.tab === 'changes')
       stepThrough('[data-review-file]', key === 'j' ? 1 : -1);
-    else if (key === 'n' || key === 'p') stepThrough('[data-review-thread="open"]', key === 'n' ? 1 : -1);
+    else if (key === 'n' || key === 'p') stepThrough(openConversations, key === 'n' ? 1 : -1);
     else if (key === 'r' && pageState.reviewable) {
       if (pageState.tab !== 'changes') await pageState.selectTab('changes');
       pageState.reviewOpen = true;
@@ -115,7 +128,6 @@
   class="grid items-start gap-7 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[420px_minmax(0,1fr)] xl:gap-10"
 >
   <PullSummary
-    conflicted={mergeability.conflicted}
     {pull}
     busy={pageState.busy}
     {context}
@@ -124,15 +136,24 @@
     onCreateLabel={pageState.createLabel}
     onReport={viewerId ? () => reporting.open({ type: 'pull', id: pull.id, label: 'pull' }) : undefined}
   >
-    {#snippet actions()}{#key pull.sourceCommitId}<PullLifecycleActions
-          conflicted={mergeability.conflicted}
-          {pull}
-          busy={pageState.busy}
-          approvingChecks={pageState.approvingChecks}
-          bind:mergeMethod={pageState.mergeMethod}
-          onAction={pageState.act}
-          onApproveChecks={pageState.approveChecks}
-        />{/key}{/snippet}
+    {#snippet status()}
+      <PullStatus
+        {pull}
+        conflicted={mergeability.checked ? mergeability.conflicted : null}
+        checksHref={pageState.tabHref('checks')}
+        onNextConversation={nextConversation}
+      >
+        {#snippet actions()}{#key pull.sourceCommitId}<PullLifecycleActions
+              conflicted={mergeability.conflicted}
+              {pull}
+              busy={pageState.busy}
+              approvingChecks={pageState.approvingChecks}
+              bind:mergeMethod={pageState.mergeMethod}
+              onAction={pageState.act}
+              onApproveChecks={pageState.approveChecks}
+            />{/key}{/snippet}
+      </PullStatus>
+    {/snippet}
   </PullSummary>
 
   <div class="min-w-0" bind:this={changesView}>
@@ -167,6 +188,7 @@
     {:else if pageState.tab === 'commits'}
       <PullCommits
         commits={pull.commits}
+        revisions={pageState.timeline.revisions}
         repository={`${pull.sourceRepository?.owner ?? route.owner}/${pull.sourceRepository?.name ?? route.repo}`}
       />
     {:else}
