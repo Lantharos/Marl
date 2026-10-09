@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
   import { authClient } from '#lib/auth-client.js';
   import Button from '#lib/components/controls/Button.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
+  import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import SettingEntry from '#lib/components/settings/SettingEntry.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { formatTimestamp } from '#lib/time.js';
@@ -14,6 +17,16 @@
   let error = $state('');
   const { sessions: savedSessions } = $derived(data);
   let sessions = $derived(savedSessions);
+  let current = $state<string | null>(null);
+  let confirmOthers = $state(false);
+  const ordered = $derived(
+    sessions.toSorted((left, right) => Number(right.token === current) - Number(left.token === current))
+  );
+  const others = $derived(sessions.filter((session) => session.token !== current).length);
+
+  onMount(async () => {
+    current = (await authClient.getSession()).data?.session.token ?? null;
+  });
 
   function deviceName(userAgent?: string | null) {
     if (!userAgent) return 'Unknown browser';
@@ -42,6 +55,19 @@
     return `${browser} on ${platform}`;
   }
 
+  async function revokeOthers() {
+    busy = 'others';
+    error = '';
+    const result = await authClient.revokeOtherSessions();
+    busy = '';
+    if (result.error) {
+      error = result.error.message || 'Other sessions could not be signed out.';
+      return;
+    }
+    sessions = sessions.filter((session) => session.token === current);
+    confirmOthers = false;
+  }
+
   async function revokeSession(token: string) {
     if (busy) return;
     busy = token;
@@ -59,27 +85,46 @@
 </script>
 
 <svelte:head><title>Sessions · Marl</title></svelte:head>
-<SettingsHeader title="Sessions" />
-{#if error}<Notice class="mb-4">{error}</Notice>{/if}
-<SettingsGroup>
-  {#each sessions as session (session.id)}
-    <article class="grid min-h-19 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3">
-      <MonitorSmartphone size={18} class="text-ink-muted" />
-      <div class="min-w-0">
-        <strong class="block truncate text-base font-semibold text-ink-strong">{deviceName(session.userAgent)}</strong>
-        <span class="mt-0.5 block truncate text-sm text-ink-muted"
-          >{session.ipAddress || 'Unknown address'} · signed in {formatTimestamp(session.createdAt)}</span
-        >
-      </div>
-      <Button
+<SettingsHeader title="Sessions" description="Browsers and devices signed in to your account.">
+  {#snippet action()}{#if current && others}<Button
         size="small"
-        loading={busy === session.token}
+        variant="danger-soft"
         disabled={Boolean(busy)}
-        aria-label={`Sign out ${deviceName(session.userAgent)}`}
-        onclick={() => revokeSession(session.token)}>Sign out</Button
+        onclick={() => {
+          error = '';
+          confirmOthers = true;
+        }}>Sign out other sessions</Button
+      >{/if}{/snippet}
+</SettingsHeader>
+{#if error && !confirmOthers}<Notice class="mb-4">{error}</Notice>{/if}
+<SettingsGroup>
+  {#each ordered as session (session.id)}
+    <SettingEntry icon={MonitorSmartphone} title={deviceName(session.userAgent)}>
+      <span class="truncate"
+        >{#if session.token === current}<span class="font-semibold text-success">This browser</span
+          >{' · '}{/if}{session.ipAddress || 'Unknown address'} · signed in {formatTimestamp(session.createdAt)}</span
       >
-    </article>
+      {#snippet actions()}{#if session.token !== current}<Button
+            size="small"
+            loading={busy === session.token}
+            disabled={Boolean(busy)}
+            aria-label={`Sign out ${deviceName(session.userAgent)}`}
+            onclick={() => revokeSession(session.token)}>Sign out</Button
+          >{/if}{/snippet}
+    </SettingEntry>
   {:else}
     <EmptyState compact icon={MonitorSmartphone} title="No active sessions" />
   {/each}
 </SettingsGroup>
+
+<ConfirmDialog
+  open={confirmOthers}
+  title="Sign out other sessions?"
+  confirmLabel="Sign out {others} {others === 1 ? 'session' : 'sessions'}"
+  busy={busy === 'others'}
+  {error}
+  onConfirm={revokeOthers}
+  onClose={() => (confirmOthers = false)}
+>
+  Every other browser and device signed in to your account is signed out. This browser stays signed in.
+</ConfirmDialog>

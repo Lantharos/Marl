@@ -6,35 +6,28 @@
   import Settings from '@lucide/svelte/icons/settings';
   import Users from '@lucide/svelte/icons/users';
   import Webhook from '@lucide/svelte/icons/webhook';
+  import type { LucideIcon } from '@lucide/svelte';
   import SettingsLayout from '../SettingsLayout.svelte';
   import SettingsNav from '../SettingsNav.svelte';
 
   let { owner, repository, children }: { owner: string; repository: string; children: Snippet } = $props();
   const settings = $derived(`/${owner}/${repository}/settings`);
   const path = $derived(page.url.pathname);
-  const items = $derived([
-    { href: settings, label: 'General', icon: Settings, active: path === settings },
-    {
-      href: `${settings}/branches`,
-      label: 'Branches',
-      icon: GitBranch,
-      active: path.startsWith(`${settings}/branches`)
-    },
-    {
-      href: `${settings}/access`,
-      label: 'Access and security',
-      icon: Users,
-      active: path.startsWith(`${settings}/access`)
-    },
-    {
-      href: `${settings}/secrets`,
-      label: 'CI secrets',
-      icon: KeyRound,
-      active: path.startsWith(`${settings}/secrets`)
-    },
-    { href: `${settings}/webhooks`, label: 'Webhooks', icon: Webhook, active: path.startsWith(`${settings}/webhooks`) }
+  const link = (href: string, label: string, icon: LucideIcon) => ({
+    href,
+    label,
+    icon,
+    active: href === settings ? path === settings : path.startsWith(href)
+  });
+  const groups = $derived([
+    [
+      link(settings, 'General', Settings),
+      link(`${settings}/branches`, 'Branches', GitBranch),
+      link(`${settings}/access`, 'Access and security', Users)
+    ],
+    [link(`${settings}/secrets`, 'CI secrets', KeyRound), link(`${settings}/webhooks`, 'Webhooks', Webhook)]
   ]);
 </script>
 
-{#snippet sidebar()}<SettingsNav label="Repository settings" {items} />{/snippet}
+{#snippet sidebar()}<SettingsNav label="Repository settings" {groups} />{/snippet}
 <SettingsLayout {sidebar} content={children} />

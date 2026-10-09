@@ -10,6 +10,7 @@
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import SettingEntry from '#lib/components/settings/SettingEntry.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { api, MarlApiError } from '#lib/api.js';
@@ -93,28 +94,24 @@
 {#if error && !tokenDialog && !revoking}<Notice class="mb-4">{error}</Notice>{/if}
 <SettingsGroup>
   {#each tokens as token (token.id)}
-    <article class="grid min-h-20 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
-      <KeyRound size={18} class="text-ink-muted" />
-      <div class="min-w-0">
-        <strong class="block truncate text-base font-semibold text-ink-strong">{token.name}</strong>
-        <span class="mt-0.5 block text-sm text-ink-muted">{token.scopes.map(scopeLabel).join(', ')}</span>
-        <span class="mt-0.5 block text-xs text-ink-faint"
-          ><code class="font-mono">{token.tokenPrefix}…</code> · expires {formatDate(token.expiresAt)} · {token.lastUsedAt
-            ? `last used ${formatTimestamp(token.lastUsedAt)}`
-            : 'never used'}</span
-        >
-      </div>
-      <Button
-        variant="ghost"
-        size="small"
-        icon
-        aria-label={`Revoke ${token.name}`}
-        onclick={() => {
-          error = '';
-          revoking = token;
-        }}><Trash2 size={15} /></Button
+    <SettingEntry icon={KeyRound} title={token.name}>
+      <span>{token.scopes.map(scopeLabel).join(', ')}</span>
+      <span class="text-xs text-ink-faint"
+        ><code class="font-mono">{token.tokenPrefix}…</code> · expires {formatDate(token.expiresAt)} · {token.lastUsedAt
+          ? `last used ${formatTimestamp(token.lastUsedAt)}`
+          : 'never used'}</span
       >
-    </article>
+      {#snippet actions()}<Button
+          variant="ghost"
+          size="small"
+          icon
+          aria-label={`Revoke ${token.name}`}
+          onclick={() => {
+            error = '';
+            revoking = token;
+          }}><Trash2 size={15} /></Button
+        >{/snippet}
+    </SettingEntry>
   {:else}
     <EmptyState
       compact

@@ -9,6 +9,7 @@
   import Field from '#lib/components/controls/Field.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import SettingEntry from '#lib/components/settings/SettingEntry.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import type { PageData } from './$types';
@@ -96,17 +97,14 @@
 {#if notice}<Notice tone="success" class="mb-4">{notice}</Notice>{/if}
 <SettingsGroup>
   {#each emails as email (email.id)}
-    <article class="grid min-h-19 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3">
-      <span class={email.verified ? 'text-success' : 'text-warning'}
-        >{#if email.verified}<BadgeCheck size={18} />{:else}<Clock3 size={18} />{/if}</span
+    <SettingEntry
+      icon={email.verified ? BadgeCheck : Clock3}
+      iconClass={email.verified ? 'text-success' : 'text-warning'}
+      title={email.email}
+    >
+      <span>{email.primary ? 'Sign-in email' : email.verified ? 'Verified commit email' : 'Verification required'}</span
       >
-      <div class="min-w-0">
-        <strong class="block truncate text-base font-semibold text-ink-strong">{email.email}</strong>
-        <span class="mt-0.5 block text-sm text-ink-muted"
-          >{email.primary ? 'Sign-in email' : email.verified ? 'Verified commit email' : 'Verification required'}</span
-        >
-      </div>
-      <div class="flex gap-1.5">
+      {#snippet actions()}
         {#if !email.verified}<Button
             size="small"
             loading={busy === email.id}
@@ -124,8 +122,8 @@
               removing = email;
             }}><Trash2 size={15} /></Button
           >{/if}
-      </div>
-    </article>
+      {/snippet}
+    </SettingEntry>
   {/each}
 </SettingsGroup>
 

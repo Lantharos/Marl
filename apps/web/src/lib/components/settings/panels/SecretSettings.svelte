@@ -9,6 +9,7 @@
   import ConfirmDialog from '../../overlays/ConfirmDialog.svelte';
   import Modal from '../../overlays/Modal.svelte';
   import Time from '../../page/Time.svelte';
+  import SettingEntry from '../SettingEntry.svelte';
   import SettingsHeader from '../SettingsHeader.svelte';
   import SettingsGroup from '../SettingsGroup.svelte';
 
@@ -91,30 +92,25 @@
 
 <SettingsGroup label="CI secrets">
   {#each secrets as secret (secret.id)}
-    <article
-      class="grid min-h-19 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:grid-cols-[24px_minmax(0,1fr)_auto_auto] sm:gap-3"
-    >
-      <KeyRound size={17} class="hidden text-ink-muted sm:block" />
-      <span class="min-w-0">
-        <strong class="block font-mono text-sm font-semibold break-all text-ink-strong">{secret.name}</strong>
-        <span class="mt-1 block text-xs text-ink-muted"
-          >Updated <Time value={secret.updatedAt} class="text-ink-muted" /></span
+    <SettingEntry icon={KeyRound} title={secret.name} mono>
+      <span class="text-xs">Updated <Time value={secret.updatedAt} class="text-ink-muted" /></span>
+      {#snippet actions()}<Button
+          size="small"
+          aria-label="Change {secret.name}"
+          aria-haspopup="dialog"
+          onclick={() => openEditor(secret)}>Change</Button
         >
-      </span>
-      <Button size="small" aria-label="Change {secret.name}" aria-haspopup="dialog" onclick={() => openEditor(secret)}
-        >Change</Button
-      >
-      <Button
-        variant="ghost"
-        size="small"
-        icon
-        aria-label="Delete {secret.name}"
-        onclick={() => {
-          error = '';
-          removing = secret;
-        }}><Trash2 size={15} /></Button
-      >
-    </article>
+        <Button
+          variant="ghost"
+          size="small"
+          icon
+          aria-label="Delete {secret.name}"
+          onclick={() => {
+            error = '';
+            removing = secret;
+          }}><Trash2 size={15} /></Button
+        >{/snippet}
+    </SettingEntry>
   {:else}
     <EmptyState
       icon={KeyRound}

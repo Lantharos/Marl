@@ -5,6 +5,8 @@
   import Button from '#lib/components/controls/Button.svelte';
   import Checkbox from '#lib/components/controls/Checkbox.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
+  import SettingEntry from '#lib/components/settings/SettingEntry.svelte';
   import SettingsChoices from '#lib/components/settings/SettingsChoices.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
@@ -113,23 +115,22 @@
 
   <SettingsGroup title="Repositories">
     {#each preferences.repositories as repository (`${repository.owner}/${repository.name}`)}
-      <div class="flex min-h-15 items-center justify-between gap-3 py-2.5">
-        <span class="min-w-0">
-          <a
-            class="block truncate text-sm font-semibold text-ink-strong hover:text-brand"
-            href="/{repository.owner}/{repository.name}">{repository.owner}/{repository.name}</a
-          >
-          <span class="text-xs text-ink-muted">{levelLabels[repository.level]}</span>
-        </span>
-        <Button
-          icon
-          size="small"
-          variant="ghost"
-          aria-label="Notify about all activity in {repository.owner}/{repository.name}"
-          title="Notify about all activity"
-          onclick={() => reset(repository.owner, repository.name)}><X size={15} /></Button
-        >
-      </div>
+      <SettingEntry title="{repository.owner}/{repository.name}" href="/{repository.owner}/{repository.name}">
+        <span>{levelLabels[repository.level]}</span>
+        {#snippet actions()}
+          <Tooltip text="Notify about all activity" as="label">
+            {#snippet children(tooltip)}
+              <Button
+                icon
+                size="small"
+                variant="ghost"
+                {...tooltip}
+                onclick={() => reset(repository.owner, repository.name)}><X size={15} /></Button
+              >
+            {/snippet}
+          </Tooltip>
+        {/snippet}
+      </SettingEntry>
     {:else}
       <p class="py-5 text-sm text-ink-muted">
         Every repository notifies you about activity involving you. Use the bell on a repository to limit it to mentions
