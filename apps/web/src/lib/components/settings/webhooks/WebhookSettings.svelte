@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { Webhook } from '@marl/contracts';
   import Check from '@lucide/svelte/icons/check';
   import Copy from '@lucide/svelte/icons/copy';
@@ -22,7 +21,7 @@
     endpoint,
     scope
   }: { initialWebhooks: Webhook[]; endpoint: string; scope: 'repository' | 'organization' } = $props();
-  let webhooks = $state<Webhook[]>(untrack(() => initialWebhooks));
+  let webhooks = $derived(initialWebhooks);
   let editing = $state<Webhook | null | undefined>(undefined);
   let inspecting = $state<Webhook | null>(null);
   let removing = $state<Webhook | null>(null);

@@ -4,6 +4,7 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+  const { webhooks } = $derived(data);
 </script>
 
 <svelte:head><title>Webhooks · {data.organization.name} · Marl</title></svelte:head>
@@ -14,7 +15,7 @@
   active="webhooks"
 >
   <WebhookSettings
-    initialWebhooks={data.webhooks}
+    initialWebhooks={webhooks}
     endpoint="/organizations/{data.organization.slug}/webhooks"
     scope="organization"
   />

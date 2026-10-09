@@ -1,7 +1,6 @@
 <script lang="ts">
   import { slugPattern } from '@marl/contracts';
   import { refreshAll } from '$app/navigation';
-  import { untrack } from 'svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import ImageUploadButton from '#lib/components/controls/ImageUploadButton.svelte';
   import Field from '#lib/components/controls/Field.svelte';
@@ -12,11 +11,13 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let displayName = $state(untrack(() => data.profile.displayName));
-  let username = $state(untrack(() => data.profile.handle));
-  let bio = $state(untrack(() => data.profile.bio ?? ''));
-  let website = $state(untrack(() => data.profile.website ?? ''));
-  let avatarUrl = $state<string | null>(untrack(() => data.profile.avatarUrl));
+  const { profile } = $derived(data);
+  const { displayName: savedDisplayName, handle, bio: savedBio, website: savedWebsite } = $derived(profile);
+  let displayName = $derived(savedDisplayName);
+  let username = $derived(handle);
+  let bio = $derived(savedBio ?? '');
+  let website = $derived(savedWebsite ?? '');
+  let avatarUrl = $derived(profile.avatarUrl);
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let avatarState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');

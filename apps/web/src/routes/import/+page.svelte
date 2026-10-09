@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { untrack } from 'svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '#lib/components/controls/Button.svelte';
   import Checkbox from '#lib/components/controls/Checkbox.svelte';
@@ -15,12 +14,12 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  const options = $derived(ownerOptions(data.organizations, data.shellUser?.displayName));
+  const { organizations } = $derived(data);
+  const options = $derived(ownerOptions(organizations, data.shellUser?.displayName));
   let source = $state('');
   let token = $state('');
-  let owner = $state(
-    untrack(() => data.organizations.find((organization) => organization.kind === 'personal')?.slug ?? '')
-  );
+  const personalOwner = $derived(organizations.find((organization) => organization.kind === 'personal')?.slug ?? '');
+  let owner = $derived(personalOwner);
   let name = $state('');
   let visibility = $state<'source' | 'private' | 'public'>('source');
   let include = $state({ issues: true, pulls: true, releases: true });

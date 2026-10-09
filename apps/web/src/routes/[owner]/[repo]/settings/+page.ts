@@ -7,7 +7,7 @@ export const load = (async ({ fetch, params }) => {
   const [settings, branches] = await Promise.all([
     routeLoad(
       apiWith<{
-        repository: RepositorySummary & { role: 'owner' | 'member' };
+        repository: RepositorySummary & { defaultBranch: string };
         organizations: Array<{ slug: string; name: string }>;
       }>(fetch, `/repositories/${params.owner}/${params.repo}/settings`)
     ),

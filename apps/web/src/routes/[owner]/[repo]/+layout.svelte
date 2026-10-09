@@ -1,9 +1,7 @@
 <script lang="ts">
   import ActionMenu from '#lib/components/overlays/ActionMenu.svelte';
   import { reporting } from '#lib/reporting/reporting.svelte.js';
-  import type { Snippet } from 'svelte';
   import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import BookOpen from '@lucide/svelte/icons/book-open';
   import CircleDot from '@lucide/svelte/icons/circle-dot';
   import CirclePlay from '@lucide/svelte/icons/circle-play';
@@ -22,20 +20,21 @@
   import RepositoryNotifications from '#lib/repositories/header/RepositoryNotifications.svelte';
   import ForkDialog from '#lib/repositories/header/ForkDialog.svelte';
   import RepositoryTabs from '#lib/repositories/header/RepositoryTabs.svelte';
-  import type { LayoutData } from './$types';
+  import type { LayoutProps } from './$types';
 
-  let { children, data }: { children: Snippet; data: LayoutData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
+  let { children, data, params }: LayoutProps = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
   const base = $derived(`/${owner}/${repo}`);
   const path = $derived(page.url.pathname);
   const repository = $derived(data.repository);
-  let starred = $state(untrack(() => Boolean(data.repository?.starred)));
-  let starCount = $state(untrack(() => data.repository?.starCount ?? 0));
-  let starring = $state(false);
+  let starred = $derived(Boolean(repository.starred));
+  let starCount = $derived(repository.starCount ?? 0);
+  let starringRoute = $state<string | null>(null);
+  const starring = $derived(starringRoute === base);
   let forkOpen = $state(false);
   const forkOptions = $derived(
-    (data.shellOrganizations ?? [])
+    data.shellOrganizations
       .filter((organization) => organization.role !== 'member')
       .toSorted(
         (left, right) =>
@@ -79,7 +78,7 @@
       icon: GitPullRequest,
       active: path.startsWith(`${base}/pulls`)
     },
-    ...(repository?.permissions.member
+    ...(repository.permissions.member
       ? [
           {
             key: 'runs',
@@ -90,7 +89,7 @@
           }
         ]
       : []),
-    ...(repository?.permissions.maintain
+    ...(repository.permissions.maintain
       ? [
           {
             key: 'settings',
@@ -103,20 +102,10 @@
       : [])
   ]);
 
-  $effect(() => {
-    void base;
-    untrack(() => {
-      starred = Boolean(data.repository?.starred);
-      starCount = data.repository?.starCount ?? 0;
-      starring = false;
-      forkOpen = false;
-    });
-  });
-
   async function toggleStar() {
     if (starring) return;
-    starring = true;
     const route = base;
+    starringRoute = route;
     try {
       const result = await api<{ starred: boolean; starCount: number }>(`/repositories/${owner}/${repo}/star`, {
         method: starred ? 'DELETE' : 'PUT'
@@ -126,7 +115,7 @@
         starCount = result.starCount;
       }
     } finally {
-      if (base === route) starring = false;
+      if (starringRoute === route) starringRoute = null;
     }
   }
 </script>
@@ -139,23 +128,23 @@
       class="page-frame flex min-h-16 items-center justify-between gap-x-4 gap-y-3 py-2.5 max-sm:flex-wrap max-sm:pb-3 sm:gap-5"
     >
       <div class="flex min-w-0 items-center gap-3 max-sm:basis-full">
-        <RepositoryIcon name={repo} src={repository?.iconUrl} size={36} />
+        <RepositoryIcon name={repo} src={repository.iconUrl} size={36} />
         <div class="min-w-0">
           <div class="flex min-w-0 items-center gap-1.5 text-base">
             <a class="truncate font-medium text-ink-muted hover:text-brand" href="/{owner}">{owner}</a><span
               class="text-ink-faint">/</span
             ><a class="truncate font-semibold text-ink-strong hover:text-brand" href={base}>{repo}</a>
-            {#if repository?.visibility === 'private'}<span
+            {#if repository.visibility === 'private'}<span
                 class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-2xs font-medium text-ink-muted"
                 ><Lock size={11} />Private</span
               >{/if}
           </div>
-          {#if repository?.upstream}<p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-muted">
+          {#if repository.upstream}<p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-muted">
               <GitFork size={12} />Forked from
               <a class="hover:text-brand" href="/{repository.upstream.owner}/{repository.upstream.name}"
                 >{repository.upstream.owner}/{repository.upstream.name}</a
               >
-            </p>{:else if repository?.description}<p class="mt-0.5 truncate text-sm text-ink-muted">
+            </p>{:else if repository.description}<p class="mt-0.5 truncate text-sm text-ink-muted">
               {repository.description}
             </p>{/if}
         </div>
@@ -178,18 +167,18 @@
             aria-label="Fork repository"
             disabled={!forkOptions.length}
             onclick={() => (forkOpen = true)}
-            ><GitFork size={15} /><span class="max-sm:hidden">Fork</span>{#if repository?.forkCount}<span
+            ><GitFork size={15} /><span class="max-sm:hidden">Fork</span>{#if repository.forkCount}<span
                 class="border-l border-line pl-1.5 text-ink-muted tabular-nums">{repository.forkCount}</span
               >{/if}</Button
           >
         {/if}
         {#if data.shellUser}<RepositoryNotifications {owner} repository={repo} />{/if}
-        {#if repository}<CloneMenu
-            cloneUrl={repository.cloneUrl}
-            sshCloneUrl={repository.sshCloneUrl}
-            signedIn={Boolean(data.shellUser)}
-          />{/if}
-        {#if repository && data.shellUser && !repository.permissions.admin}<ActionMenu
+        <CloneMenu
+          cloneUrl={repository.cloneUrl}
+          sshCloneUrl={repository.sshCloneUrl}
+          signedIn={Boolean(data.shellUser)}
+        />
+        {#if data.shellUser && !repository.permissions.admin}<ActionMenu
             label="More repository options"
             actions={[
               {

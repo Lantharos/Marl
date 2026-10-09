@@ -47,8 +47,10 @@
         }
       );
       await goto(`/${result.repository.owner}/${result.repository.name}`);
+      open = false;
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'Repository could not be forked.';
+    } finally {
       busy = false;
     }
   }

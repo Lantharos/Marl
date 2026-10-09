@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
   import Notice from '../../feedback/Notice.svelte';
@@ -8,7 +7,7 @@
   import SettingsChoices from '../SettingsChoices.svelte';
 
   let { endpoint, initialValue }: { endpoint: string; initialValue: boolean } = $props();
-  let required = $state(untrack(() => initialValue));
+  let required = $derived(initialValue);
   let choice = $state('automatic');
   let open = $state(false);
   let saving = $state(false);

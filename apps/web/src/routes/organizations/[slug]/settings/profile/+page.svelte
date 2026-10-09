@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import { api, MarlApiError } from '#lib/api.js';
   import ImageUploadButton from '#lib/components/controls/ImageUploadButton.svelte';
   import OrganizationAvatar from '#lib/components/identity/OrganizationAvatar.svelte';
@@ -9,15 +7,17 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import SettingsAction from '#lib/components/settings/SettingsAction.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const slug = $derived(page.params.slug ?? '');
+  let { data, params }: PageProps = $props();
+  const slug = $derived(params.slug);
   const canEdit = $derived(data.viewerRole === 'owner');
-  let name = $state(untrack(() => data.organization.name));
-  let description = $state(untrack(() => data.organization.description ?? ''));
-  let website = $state(untrack(() => data.organization.website ?? ''));
-  let avatarUrl = $state<string | null>(untrack(() => data.organization.avatarUrl));
+  const { organization } = $derived(data);
+  const { name: savedName, description: savedDescription, website: savedWebsite } = $derived(organization);
+  let name = $derived(savedName);
+  let description = $derived(savedDescription);
+  let website = $derived(savedWebsite ?? '');
+  let avatarUrl = $derived(organization.avatarUrl);
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let avatarState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { slugPattern } from '@marl/contracts';
-  import { untrack } from 'svelte';
   import type { Agent } from '@marl/contracts';
   import Bot from '@lucide/svelte/icons/bot';
   import { api, MarlApiError } from '#lib/api.js';
@@ -17,7 +16,7 @@
   import AgentTokens from './AgentTokens.svelte';
 
   let { initialAgents, endpoint }: { initialAgents: Agent[]; endpoint: string } = $props();
-  let agents = $state<Agent[]>(untrack(() => initialAgents));
+  let agents = $derived(initialAgents);
   let editing = $state<Agent | null | undefined>(undefined);
   let tokensFor = $state<Agent | null>(null);
   let removing = $state<Agent | null>(null);

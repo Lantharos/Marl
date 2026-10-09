@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import type { AccountSession } from '@marl/contracts';
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone';
   import { authClient } from '#lib/auth-client.js';
   import Button from '#lib/components/controls/Button.svelte';
@@ -14,7 +12,8 @@
   let { data }: { data: PageData } = $props();
   let busy = $state('');
   let error = $state('');
-  let sessions = $state<AccountSession[]>(untrack(() => [...data.sessions]));
+  const { sessions: savedSessions } = $derived(data);
+  let sessions = $derived(savedSessions);
 
   function deviceName(userAgent?: string | null) {
     if (!userAgent) return 'Unknown browser';

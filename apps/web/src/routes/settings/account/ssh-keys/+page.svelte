@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { SshKey } from '@marl/contracts';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Trash2 from '@lucide/svelte/icons/trash';
@@ -16,7 +15,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let sshKeys = $state<SshKey[]>(untrack(() => data.sshKeys));
+  const { sshKeys: savedSshKeys } = $derived(data);
+  let sshKeys = $derived(savedSshKeys);
   let name = $state('');
   let publicKey = $state('');
   let busy = $state(false);

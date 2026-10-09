@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
   import Copy from '@lucide/svelte/icons/copy';
   import FormShell from '#lib/components/page/FormShell.svelte';
@@ -13,9 +12,8 @@
   import { formatAbsoluteTime } from '#lib/time.js';
   import type { PageData } from './$types';
 
-  type Organization = { slug: string; name: string; kind: 'personal' | 'team'; role: 'owner' | 'admin' | 'member' };
   let { data }: { data: PageData } = $props();
-  const organizations = $derived((data.shellOrganizations as Organization[]).filter((item) => item.role !== 'member'));
+  const organizations = $derived(data.shellOrganizations.filter((item) => item.role !== 'member'));
   const organizationOptions = $derived(
     organizations.map((item) => ({
       value: item.slug,
@@ -23,9 +21,8 @@
       description: item.kind === 'personal' ? `@${item.slug} · Personal account` : `@${item.slug} · Organization`
     }))
   );
-  let organization = $state(
-    untrack(() => (data.shellOrganizations as Organization[]).find((item) => item.role !== 'member')?.slug ?? '')
-  );
+  const defaultOrganization = $derived(organizations[0]?.slug ?? '');
+  let organization = $derived(defaultOrganization);
   let token = $state('');
   let expiresAt = $state('');
   let busy = $state(false);

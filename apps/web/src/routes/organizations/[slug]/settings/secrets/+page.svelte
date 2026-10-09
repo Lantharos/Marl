@@ -1,17 +1,20 @@
 <script lang="ts">
-  import { page } from '$app/state';
   import OrganizationSettingsShell from '#lib/components/settings/shells/OrganizationSettingsShell.svelte';
   import SecretSettings from '#lib/components/settings/panels/SecretSettings.svelte';
-  import type { PageData } from './$types';
-  let { data }: { data: PageData } = $props();
-  const slug = $derived(page.params.slug ?? '');
+  import type { PageProps } from './$types';
+  let { data, params }: PageProps = $props();
+  const { secrets } = $derived(data);
 </script>
 
 <svelte:head><title>CI secrets · {data.organizationName} · Marl</title></svelte:head>
-<OrganizationSettingsShell name={data.organizationName} {slug} avatarUrl={data.organizationAvatarUrl} active="secrets"
+<OrganizationSettingsShell
+  name={data.organizationName}
+  slug={params.slug}
+  avatarUrl={data.organizationAvatarUrl}
+  active="secrets"
   ><SecretSettings
-    initialSecrets={data.secrets}
-    endpoint={`/organizations/${slug}/secrets`}
+    initialSecrets={secrets}
+    endpoint={`/organizations/${params.slug}/secrets`}
     scope="organization"
   /></OrganizationSettingsShell
 >

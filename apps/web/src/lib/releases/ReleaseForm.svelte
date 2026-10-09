@@ -38,7 +38,7 @@
   let draft = $state(untrack(() => release?.draft ?? false));
   let prerelease = $state(untrack(() => release?.prerelease ?? false));
   let makeLatest = $state(untrack(() => release?.latest ?? true));
-  let assets = $state(untrack(() => release?.assets ?? []));
+  let assets = $derived(release?.assets ?? []);
   let pendingFiles = $state<File[]>([]);
   let fileInput = $state<HTMLInputElement>();
   let saving = $state(false);
@@ -46,13 +46,11 @@
   let deleting = $state(false);
   let confirmDelete = $state(false);
   let error = $state(
-    untrack(() =>
-      page.url.searchParams.get('upload') === 'failed'
-        ? 'The release was kept as a draft because one or more files could not be uploaded.'
-        : page.url.searchParams.get('publish') === 'failed'
-          ? 'The files were uploaded, but the Git tag could not be published. The release remains a draft.'
-          : ''
-    )
+    page.url.searchParams.get('upload') === 'failed'
+      ? 'The release was kept as a draft because one or more files could not be uploaded.'
+      : page.url.searchParams.get('publish') === 'failed'
+        ? 'The files were uploaded, but the Git tag could not be published. The release remains a draft.'
+        : ''
   );
   const published = $derived(Boolean(release && !release.draft));
   const targetOptions = $derived.by(() => {

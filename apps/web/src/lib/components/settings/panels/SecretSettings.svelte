@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Trash2 from '@lucide/svelte/icons/trash';
   import { api, MarlApiError } from '#lib/api.js';
@@ -19,7 +18,7 @@
     endpoint,
     scope
   }: { initialSecrets: Secret[]; endpoint: string; scope: 'repository' | 'organization' } = $props();
-  let secrets = $state<Secret[]>(untrack(() => initialSecrets));
+  let secrets = $derived(initialSecrets);
   let name = $state('');
   let value = $state('');
   let busy = $state(false);

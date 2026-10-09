@@ -2,7 +2,7 @@
   import { repositoryTemplate } from '#lib/repositories/templates.js';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
-  import type { PullRequestDiff, RepositorySummary } from '@marl/contracts';
+  import type { PullRequestDiff } from '@marl/contracts';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import FileDiff from '@lucide/svelte/icons/file-diff';
@@ -24,7 +24,7 @@
   type Branch = { name: string; commitId: string };
   type PullSource = { owner: string; name: string; defaultBranch: string; branches: Branch[] };
   let { data }: { data: PageData } = $props();
-  let repositories = $state<RepositorySummary[]>(untrack(() => data.repositories));
+  const repositories = $derived(data.repositories);
   let sources = $state<PullSource[]>(untrack(() => data.sources));
   let targetBranches = $state<Branch[]>(untrack(() => data.targetBranches));
   let sourceRepository = $state(untrack(() => data.sourceRepository));

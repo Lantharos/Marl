@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { EmailNotificationMode, InboxReason, NotificationPreferences } from '@marl/contracts';
   import X from '@lucide/svelte/icons/x';
   import { api, MarlApiError } from '#lib/api.js';
@@ -13,8 +12,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let preferences = $state<NotificationPreferences>(untrack(() => data));
-  let mode = $state<EmailNotificationMode>(untrack(() => data.mode));
+  const { preferences: savedPreferences } = $derived(data);
+  let preferences = $derived(savedPreferences);
   let error = $state('');
   const modes: Array<{ value: EmailNotificationMode; label: string; description: string }> = [
     {
@@ -56,7 +55,7 @@
 
   function toggleReason(reason: InboxReason, enabled: boolean) {
     const next = enabled ? [...preferences.reasons, reason] : preferences.reasons.filter((item) => item !== reason);
-    preferences.reasons = next;
+    preferences = { ...preferences, reasons: next };
     void save({ reasons: next });
   }
 
@@ -67,15 +66,20 @@
         method: 'PUT',
         body: JSON.stringify({ level: 'all' })
       });
-      preferences.repositories = preferences.repositories.filter((item) => item.owner !== owner || item.name !== name);
+      preferences = {
+        ...preferences,
+        repositories: preferences.repositories.filter((item) => item.owner !== owner || item.name !== name)
+      };
     } catch (cause) {
       error = cause instanceof MarlApiError ? cause.message : 'The repository setting could not be changed.';
     }
   }
 
-  $effect(() => {
-    if (mode !== untrack(() => preferences.mode)) void save({ mode });
-  });
+  function chooseMode(mode: EmailNotificationMode) {
+    if (mode === preferences.mode) return;
+    preferences = { ...preferences, mode };
+    void save({ mode });
+  }
 </script>
 
 <svelte:head><title>Notifications · Marl</title></svelte:head>
@@ -89,10 +93,10 @@
 
 <div class="grid gap-10">
   <SettingsGroup title="Email" divided={false}>
-    <SettingsChoices bind:value={mode} options={modes} label="Email notifications" />
+    <SettingsChoices bind:value={() => preferences.mode, chooseMode} options={modes} label="Email notifications" />
   </SettingsGroup>
 
-  {#if mode !== 'off'}
+  {#if preferences.mode !== 'off'}
     <SettingsGroup title="What to email about" divided={false}>
       <List class="grid gap-0.5">
         {#each reasons as reason (reason.value)}

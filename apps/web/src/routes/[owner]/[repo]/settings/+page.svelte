@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto, refreshAll } from '$app/navigation';
-  import { page } from '$app/state';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '#lib/components/controls/Button.svelte';
@@ -18,26 +17,27 @@
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { completeRepositoryName, repositoryName } from '#lib/repositories/repository-name.js';
   import { validSlug } from '@marl/contracts';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
   type Dialog = 'branch' | 'visibility' | 'rename' | 'transfer' | 'detach' | 'archive' | 'delete';
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
+  let { data, params }: PageProps = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
   const endpoint = $derived(`/repositories/${owner}/${repo}/settings`);
-  let description = $state(untrack(() => data.repository.description));
-  let savedDescription = $state(untrack(() => data.repository.description));
-  let iconUrl = $state<string | null>(untrack(() => data.repository.iconUrl));
+  const repository = $derived(data.repository);
+  let savedDescription = $derived(repository.description);
+  let description = $derived(savedDescription);
+  let iconUrl = $derived(repository.iconUrl);
   let iconState = $state<'idle' | 'saving' | 'saved'>('idle');
-  let visibility = $state(untrack(() => data.repository.visibility));
-  let defaultBranch = $state(untrack(() => data.repository.defaultBranch ?? 'main'));
+  let visibility = $derived(repository.visibility);
+  let defaultBranch = $derived(repository.defaultBranch);
   let nextDefaultBranch = $state('');
   let newName = $state('');
   let destination = $state('');
   let deleteConfirmation = $state('');
-  let archived = $state(untrack(() => Boolean(data.repository.archivedAt)));
-  let upstream = $state(untrack(() => data.repository.upstream));
+  let archived = $derived(Boolean(repository.archivedAt));
+  let upstream = $derived(repository.upstream);
   let dialog = $state<Dialog | null>(null);
   let busy = $state<Dialog | 'description' | null>(null);
   let descriptionSaved = $state(false);

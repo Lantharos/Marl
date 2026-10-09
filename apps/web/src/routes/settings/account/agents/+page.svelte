@@ -3,7 +3,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+  const { agents } = $derived(data);
 </script>
 
 <svelte:head><title>Agents · Marl</title></svelte:head>
-<AgentSettings initialAgents={data.agents} endpoint={data.endpoint} />
+<AgentSettings initialAgents={agents} endpoint={data.endpoint} />

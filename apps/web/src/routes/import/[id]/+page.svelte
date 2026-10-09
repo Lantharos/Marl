@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import type { RepositoryImport } from '@marl/contracts';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import Check from '@lucide/svelte/icons/check';
@@ -9,10 +7,11 @@
   import Notice from '#lib/components/feedback/Notice.svelte';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
   import FormShell from '#lib/components/page/FormShell.svelte';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  let current = $state<RepositoryImport>(untrack(() => data.import));
+  let { data, params }: PageProps = $props();
+  const { import: savedImport } = $derived(data);
+  let current = $derived(savedImport);
   const steps: Array<{ ids: RepositoryImport['step'][]; label: string; count?: keyof RepositoryImport['stats'] }> = [
     { ids: ['git'], label: 'Git history' },
     { ids: ['labels'], label: 'Labels', count: 'labels' },
@@ -30,7 +29,7 @@
   $effect(() => {
     if (current.status !== 'running') return;
     const timer = setInterval(async () => {
-      current = (await api<{ import: RepositoryImport }>(`/imports/${page.params.id}`)).import;
+      current = (await api<{ import: RepositoryImport }>(`/imports/${params.id}`)).import;
     }, 2500);
     return () => clearInterval(timer);
   });

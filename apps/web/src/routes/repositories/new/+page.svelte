@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { untrack } from 'svelte';
   import Button from '#lib/components/controls/Button.svelte';
   import FormShell from '#lib/components/page/FormShell.svelte';
   import LinkButton from '#lib/components/controls/LinkButton.svelte';
@@ -14,10 +13,10 @@
   import { validSlug } from '@marl/contracts';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
-  const options = $derived(ownerOptions(data.organizations, data.shellUser?.displayName));
-  let owner = $state(
-    untrack(() => data.organizations.find((organization) => organization.kind === 'personal')?.slug ?? '')
-  );
+  const { organizations } = $derived(data);
+  const options = $derived(ownerOptions(organizations, data.shellUser?.displayName));
+  const personalOwner = $derived(organizations.find((organization) => organization.kind === 'personal')?.slug ?? '');
+  let owner = $derived(personalOwner);
   let name = $state('');
   let visibility = $state<'private' | 'public'>('private');
   let description = $state('');

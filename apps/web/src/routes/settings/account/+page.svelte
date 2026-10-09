@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import KeyRound from '@lucide/svelte/icons/key-round';
@@ -17,7 +16,8 @@
 
   let { data }: { data: PageData } = $props();
   let twoFactorDialog = $state(false);
-  let twoFactorEnabled = $state(untrack(() => data.twoFactorEnabled));
+  const { twoFactorEnabled: savedTwoFactorEnabled, signingMode } = $derived(data);
+  let twoFactorEnabled = $derived(savedTwoFactorEnabled);
   let disablingTwoFactor = $state(false);
   let twoFactorConfirmed = $state(false);
   let twoFactorPassword = $state('');
@@ -120,7 +120,7 @@
       }}>{twoFactorEnabled ? 'Disable' : 'Set up'}</Button
     >
   </SettingItem>
-  <SigningSettings endpoint="/signing" initialMode={data.signingMode} personal />
+  <SigningSettings endpoint="/signing" initialMode={signingMode} personal />
 </SettingsGroup>
 
 {#snippet twoFactorActions()}

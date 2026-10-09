@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { SigningMode } from '@marl/contracts';
   import { api, MarlApiError } from '#lib/api.js';
   import Button from '../../controls/Button.svelte';
@@ -26,8 +25,8 @@
       description: 'Only accept commits signed with the author’s registered SSH key.'
     }
   ];
-  let mode = $state(untrack(() => initialMode));
-  let savedMode = $state(untrack(() => initialMode));
+  let savedMode = $derived(initialMode);
+  let mode = $derived(savedMode);
   let saving = $state(false);
   let open = $state(false);
   let error = $state('');

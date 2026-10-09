@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { AccountEmail } from '@marl/contracts';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Clock3 from '@lucide/svelte/icons/clock-3';
@@ -15,7 +14,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let emails = $state<AccountEmail[]>(untrack(() => data.emails));
+  const { emails: savedEmails } = $derived(data);
+  let emails = $derived(savedEmails);
   let value = $state('');
   let open = $state(false);
   let busy = $state('');

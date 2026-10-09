@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import Minus from '@lucide/svelte/icons/minus';
   import Plus from '@lucide/svelte/icons/plus';
   import X from '@lucide/svelte/icons/x';
@@ -16,9 +14,9 @@
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import type { BranchRule as Rule } from './+page';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data, params }: PageProps = $props();
   type Field = 'approvals' | 'checks' | 'conversations' | 'carry' | 'author' | 'queue' | 'methods';
   const defaults: Rule = {
     pattern: '*',
@@ -79,8 +77,9 @@
     { value: 'squash', label: 'Squash' },
     { value: 'rebase', label: 'Rebase' }
   ];
-  let rules = $state<Rule[]>(untrack(() => [...data.rules]));
-  let pattern = $state(untrack(() => data.defaultBranch));
+  const { rules: savedRules, defaultBranch } = $derived(data);
+  let rules = $derived(savedRules);
+  let pattern = $derived(defaultBranch);
   let field = $state<Field | null>(null);
   let draft = $state<Rule>({ ...defaults });
   let decision = $state('no');
@@ -94,7 +93,7 @@
     { value: '*', label: 'All branches' },
     ...[
       ...new Set([
-        data.defaultBranch,
+        defaultBranch,
         ...data.branches.map((branch) => branch.name),
         ...rules.map((rule) => rule.pattern).filter((value) => value !== '*')
       ])
@@ -159,10 +158,10 @@
       allowedMergeMethods: [...draft.allowedMergeMethods]
     };
     try {
-      const result = await api<{ branchRule: Rule }>(
-        `/repositories/${page.params.owner}/${page.params.repo}/branch-rules`,
-        { method: 'PUT', body: JSON.stringify(submitted) }
-      );
+      const result = await api<{ branchRule: Rule }>(`/repositories/${params.owner}/${params.repo}/branch-rules`, {
+        method: 'PUT',
+        body: JSON.stringify(submitted)
+      });
       rules = [...rules.filter((rule) => rule.pattern !== submitted.pattern), result.branchRule];
       field = null;
     } catch (cause) {
@@ -173,7 +172,7 @@
   }
 </script>
 
-<svelte:head><title>Branches · {page.params.owner}/{page.params.repo} · Marl</title></svelte:head>
+<svelte:head><title>Branches · {params.owner}/{params.repo} · Marl</title></svelte:head>
 <SettingsHeader title="Branches" description="Decide what a pull needs before it can merge into each branch.">
   {#snippet action()}<div class="w-56">
       <Select bind:value={pattern} options={branchOptions} ariaLabel="Protected branch" />

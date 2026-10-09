@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import GitPullRequestArrow from '@lucide/svelte/icons/git-pull-request-arrow';
   import Trash2 from '@lucide/svelte/icons/trash';
@@ -15,23 +14,20 @@
   import Seo from '#lib/components/page/Seo.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import { treeHref } from '#lib/repositories/browser/entry-path.js';
-  import type { PageData } from './$types';
+  import type { PageData, PageProps } from './$types';
 
   type Branch = PageData['branches'][number];
 
-  let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
-  let branches = $state(untrack(() => data.branches));
+  let { data, params }: PageProps = $props();
+  const owner = $derived(params.owner);
+  const repo = $derived(params.repo);
+  const { branches: savedBranches } = $derived(data);
+  let branches = $derived(savedBranches);
   let query = $state('');
   let deleting = $state<Branch | null>(null);
   let busy = $state(false);
   let error = $state('');
   const visible = $derived(branches.filter((branch) => branch.name.toLowerCase().includes(query.trim().toLowerCase())));
-
-  $effect(() => {
-    branches = data.branches;
-  });
 
   async function deleteBranch() {
     if (!deleting || busy) return;

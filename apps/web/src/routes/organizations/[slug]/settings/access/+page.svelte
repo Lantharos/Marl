@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import type {
     OrganizationInvitation,
     OrganizationMember,
@@ -21,19 +19,26 @@
   import SettingsAction from '#lib/components/settings/SettingsAction.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import { api, MarlApiError } from '#lib/api.js';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
   type Member = OrganizationMember;
   type Team = OrganizationTeam;
   type TeamMember = OrganizationTeamMember;
   type Invitation = OrganizationInvitation;
-  let { data }: { data: PageData } = $props();
-  let members = $state(untrack(() => data.members));
-  let teams = $state(untrack(() => data.teams));
-  let teamMembers = $state(untrack(() => data.teamMembers));
-  let invitations = $state(untrack(() => data.invitations));
-  const organizationName = $derived(data.organization.name);
-  let baseRole = $state(untrack(() => data.organization.baseRepositoryRole ?? 'read'));
+  let { data, params }: PageProps = $props();
+  const {
+    organization,
+    members: savedMembers,
+    teams: savedTeams,
+    teamMembers: savedTeamMembers,
+    invitations: savedInvitations
+  } = $derived(data);
+  let members = $derived(savedMembers);
+  let teams = $derived(savedTeams);
+  let teamMembers = $derived(savedTeamMembers);
+  let invitations = $derived(savedInvitations);
+  const savedBaseRole = $derived(organization.baseRepositoryRole ?? 'read');
+  let baseRole = $derived(savedBaseRole);
   let removing = $state<Member | null>(null);
   let dialog = $state<'invite' | 'team' | 'team-member' | 'delete-team' | null>(null);
   let inviteEmail = $state('');
@@ -45,7 +50,7 @@
   let busy = $state('');
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
-  const slug = $derived(page.params.slug ?? '');
+  const slug = $derived(params.slug);
   const canAdminister = $derived(data.viewerRole === 'owner' || data.viewerRole === 'admin');
   const isOwner = $derived(data.viewerRole === 'owner');
   const base = $derived(`/organizations/${slug}/access`);
@@ -163,18 +168,18 @@
   }
 </script>
 
-<svelte:head><title>{organizationName} access · Marl</title></svelte:head>
+<svelte:head><title>{organization.name} access · Marl</title></svelte:head>
 <OrganizationSettingsShell
-  name={organizationName}
+  name={organization.name}
   {slug}
-  avatarUrl={data.organization.avatarUrl}
+  avatarUrl={organization.avatarUrl}
   active="access"
   showSecrets={canAdminister}
 >
   <SettingsHeader title="People and teams" />
   {#if error}<Notice class="mb-4">{error}</Notice>{/if}
   <div class="grid gap-10">
-    {#if isOwner && data.organization.kind !== 'personal'}
+    {#if isOwner && organization.kind !== 'personal'}
       <SettingsGroup label="Base repository role">
         <SettingItem
           title="Base repository role"
@@ -189,7 +194,7 @@
     {/if}
 
     <SettingsGroup title="Members" description="Organization roles govern teams, repositories, and invitations.">
-      {#snippet action()}{#if canAdminister && data.organization.kind !== 'personal'}<Button
+      {#snippet action()}{#if canAdminister && organization.kind !== 'personal'}<Button
             size="small"
             onclick={() => {
               memberRole = 'member';
@@ -244,7 +249,7 @@
       </SettingsGroup>
     {/if}
 
-    {#if data.organization.kind !== 'personal'}
+    {#if organization.kind !== 'personal'}
       <SettingsGroup title="Teams" description="Grant repository access once and keep membership centralized.">
         {#snippet action()}{#if canAdminister}<Button size="small" onclick={() => (dialog = 'team')}>New team</Button
             >{/if}{/snippet}

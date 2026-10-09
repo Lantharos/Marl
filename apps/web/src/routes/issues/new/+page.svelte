@@ -1,7 +1,6 @@
 <script lang="ts">
   import { repositoryTemplate } from '#lib/repositories/templates.js';
   import { goto } from '$app/navigation';
-  import { untrack } from 'svelte';
   import type { RepositorySummary } from '@marl/contracts';
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import Button from '#lib/components/controls/Button.svelte';
@@ -16,7 +15,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let repository = $state(untrack(() => data.repository));
+  const { repository: requestedRepository } = $derived(data);
+  let repository = $derived(requestedRepository);
   let title = $state('');
   let body = $state('');
   let creating = $state(false);

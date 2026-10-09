@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { DeveloperToken } from '@marl/contracts';
   import Check from '@lucide/svelte/icons/check';
   import KeyRound from '@lucide/svelte/icons/key-round';
@@ -18,7 +17,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let tokens = $state(untrack(() => [...data.tokens]));
+  const { tokens: savedTokens } = $derived(data);
+  let tokens = $derived(savedTokens);
   let tokenDialog = $state(false);
   let tokenName = $state('');
   let scopeChoices = $state([

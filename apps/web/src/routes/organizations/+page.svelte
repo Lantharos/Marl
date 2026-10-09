@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { untrack } from 'svelte';
   import Plus from '@lucide/svelte/icons/plus';
   import List from '#lib/components/list/List.svelte';
   import ListRow from '#lib/components/list/ListRow.svelte';
@@ -20,7 +19,8 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  let organizations = $state(untrack(() => [...data.organizations]));
+  const { organizations: savedOrganizations } = $derived(data);
+  let organizations = $derived(savedOrganizations);
   let open = $state(false);
   let name = $state('');
   let slug = $state('');
