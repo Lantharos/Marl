@@ -4,8 +4,8 @@
   import Bot from '@lucide/svelte/icons/bot';
   import Search from '@lucide/svelte/icons/search';
   import { api } from '#lib/api.js';
-  import { popoverMotion } from '#lib/ui/popover.js';
   import Spinner from '../feedback/Spinner.svelte';
+  import Popover from '../overlays/Popover.svelte';
   import UserAvatar from './UserAvatar.svelte';
 
   let {
@@ -19,6 +19,7 @@
   let active = $state(0);
   let open = $state(false);
   let loading = $state(false);
+  let field = $state<HTMLElement>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let request = 0;
 
@@ -60,6 +61,7 @@
       event.preventDefault();
       choose(people[active]);
     } else if (event.key === 'Escape') {
+      event.preventDefault();
       open = false;
     }
   }
@@ -67,69 +69,69 @@
   onDestroy(() => clearTimeout(timer));
 </script>
 
-<div class="relative">
-  <div class="flex field min-h-0 items-center gap-2 text-ink-faint">
-    {#if selected}<UserAvatar name={selected.displayName} src={selected.avatarUrl} size={20} />{:else}<Search
-        size={15}
-        class="shrink-0"
-      />{/if}
-    <input
-      bind:value={query}
-      oninput={search}
-      onkeydown={keydown}
-      onfocus={() => query.trim() && !selected && (open = true)}
-      onblur={() => setTimeout(() => (open = false), 120)}
-      role="combobox"
-      aria-label={label}
-      aria-expanded={open}
-      aria-controls="{id}-people"
-      aria-activedescendant={open && people[active] ? `${id}-person-${active}` : undefined}
-      autocomplete="off"
-      spellcheck="false"
-      data-1p-ignore
-      placeholder={label}
-      class="h-10 min-w-0 flex-1 bg-transparent text-sm text-ink-strong outline-none placeholder:text-ink-faint"
-    />
-    {#if loading}<Spinner class="text-ink-faint" />{/if}
-  </div>
-  {#if open && query.trim() && !loading}
-    <div
-      id="{id}-people"
-      role="listbox"
-      aria-label="People"
-      class="absolute top-11 left-0 z-40 grid w-full origin-top-left gap-0.5 popover p-1.5"
-      transition:popoverMotion
-    >
-      {#each people as person, index (person.id)}
-        <button
-          id="{id}-person-{index}"
-          type="button"
-          role="option"
-          aria-selected={index === active}
-          class={[
-            'grid grid-cols-[24px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left',
-            index === active && 'bg-surface-muted'
-          ]}
-          onmouseenter={() => (active = index)}
-          onmousedown={(event) => event.preventDefault()}
-          onclick={() => choose(person)}
-        >
-          <UserAvatar name={person.displayName} src={person.avatarUrl} size={24} />
-          <span class="min-w-0">
-            <strong class="flex items-center gap-1 truncate text-sm font-semibold text-ink-strong"
-              >{person.displayName}{#if person.kind === 'agent'}<Bot
-                  size={13}
-                  class="shrink-0 text-ink-muted"
-                />{/if}</strong
-            >
-            <span class="block truncate text-xs text-ink-muted"
-              >@{person.handle}{person.kind === 'agent' ? ' · agent' : ''}</span
-            >
-          </span>
-        </button>
-      {:else}
-        <p class="px-2.5 py-3 text-sm text-ink-muted">No one matches “{query.trim()}”.</p>
-      {/each}
-    </div>
-  {/if}
+<div bind:this={field} class="flex field min-h-0 items-center gap-2 text-ink-faint">
+  {#if selected}<UserAvatar name={selected.displayName} src={selected.avatarUrl} size={20} />{:else}<Search
+      size={15}
+      class="shrink-0"
+    />{/if}
+  <input
+    bind:value={query}
+    oninput={search}
+    onkeydown={keydown}
+    onfocus={() => query.trim() && !selected && (open = true)}
+    onblur={() => setTimeout(() => (open = false), 120)}
+    role="combobox"
+    aria-label={label}
+    aria-expanded={open}
+    aria-controls="{id}-people"
+    aria-activedescendant={open && people[active] ? `${id}-person-${active}` : undefined}
+    autocomplete="off"
+    spellcheck="false"
+    data-1p-ignore
+    placeholder={label}
+    class="h-10 min-w-0 flex-1 bg-transparent text-sm text-ink-strong outline-none placeholder:text-ink-faint"
+  />
+  {#if loading}<Spinner class="text-ink-faint" />{/if}
 </div>
+<Popover
+  open={open && Boolean(query.trim()) && !loading}
+  anchor={field}
+  dismiss="manual"
+  placement="bottom-start"
+  matchWidth
+  id="{id}-people"
+  role="listbox"
+  aria-label="People"
+  class="grid gap-0.5 p-1.5"
+>
+  {#each people as person, index (person.id)}
+    <button
+      id="{id}-person-{index}"
+      type="button"
+      role="option"
+      aria-selected={index === active}
+      class={[
+        'grid grid-cols-[24px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left',
+        index === active && 'bg-surface-muted'
+      ]}
+      onmouseenter={() => (active = index)}
+      onmousedown={(event) => event.preventDefault()}
+      onclick={() => choose(person)}
+    >
+      <UserAvatar name={person.displayName} src={person.avatarUrl} size={24} />
+      <span class="min-w-0">
+        <strong class="flex items-center gap-1 truncate text-sm font-semibold text-ink-strong"
+          >{person.displayName}{#if person.kind === 'agent'}<Bot
+              size={13}
+              class="shrink-0 text-ink-muted"
+            />{/if}</strong
+        >
+        <span class="block truncate text-xs text-ink-muted"
+          >@{person.handle}{person.kind === 'agent' ? ' · agent' : ''}</span
+        >
+      </span>
+    </button>
+  {:else}
+    <p class="px-2.5 py-3 text-sm text-ink-muted">No one matches “{query.trim()}”.</p>
+  {/each}
+</Popover>

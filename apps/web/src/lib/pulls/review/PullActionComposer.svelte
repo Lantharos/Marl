@@ -1,14 +1,13 @@
 <script lang="ts">
   import type { PullRequestState } from '@marl/contracts';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
-  import Check from '@lucide/svelte/icons/check';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import MessageSquare from '@lucide/svelte/icons/message-square';
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';
-  import { dismissable } from '#lib/actions/dismissable.js';
-  import { popoverMotion } from '#lib/ui/popover.js';
   import Button from '../../components/controls/Button.svelte';
   import MarkdownComposer from '../../components/markdown/MarkdownComposer.svelte';
+  import Menu from '../../components/overlays/menu/Menu.svelte';
+  import MenuItem from '../../components/overlays/menu/MenuItem.svelte';
   import type { MarkdownContext } from '#lib/markdown/context.js';
 
   export type PullComposerAction = 'approve' | 'request_changes';
@@ -40,7 +39,12 @@
   } = $props();
 
   const toneVariant = { commented: 'primary', approved: 'success-soft', changes_requested: 'warning-soft' } as const;
-  let open = $state(false);
+  const iconTones = {
+    commented: 'text-ink-muted',
+    approved: 'text-success',
+    changes_requested: 'text-warning'
+  } as const;
+  const icons = { comment: MessageSquare, approve: BadgeCheck, request_changes: ShieldAlert } as const;
   let uploading = $state(false);
   let selectedKey = $state('comment');
   const active = $derived(['open', 'mergeable', 'blocked'].includes(pullState));
@@ -61,17 +65,11 @@
     busy || uploading || locked || !selected || (selected.action === 'comment' && !value.trim())
   );
 
-  function choose(selection: Selection) {
-    selectedKey = selection.key;
-    open = false;
-  }
-
   async function submit() {
     if (!selected || submitDisabled) return;
     if (selected.action === 'comment') await onComment();
     else await onAction(selected.action);
     selectedKey = 'comment';
-    open = false;
   }
 </script>
 
@@ -88,7 +86,7 @@
   />
   <footer class="mt-2.5 flex items-center gap-3">
     {#if locked}<span class="text-sm text-ink-faint">Unlock the conversation to comment.</span>{/if}
-    <div class="relative ml-auto flex" use:dismissable={() => (open = false)}>
+    <div class="ml-auto flex">
       <Button
         class={selections.length > 1 ? 'rounded-r-none px-3.5' : 'px-3.5'}
         variant={toneVariant[selected?.tone ?? 'commented']}
@@ -96,59 +94,30 @@
         disabled={submitDisabled}
         onclick={submit}
       >
-        {#if selected?.action === 'approve'}<BadgeCheck
-            size={16}
-          />{:else if selected?.action === 'request_changes'}<ShieldAlert size={16} />{:else}<MessageSquare
-            size={16}
-          />{/if}
+        {#if selected}{@const Icon = icons[selected.action]}<Icon size={16} />{/if}
         {selected?.label ?? 'Comment'}
       </Button>
-      {#if selections.length > 1}<Button
-          class="rounded-l-none border-l border-current/20"
-          icon
-          variant={toneVariant[selected?.tone ?? 'commented']}
-          aria-label="Choose pull action"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          disabled={busy}
-          onclick={() => (open = !open)}><ChevronDown size={16} /></Button
-        >{/if}
-      {#if open && selections.length > 1}
-        <div
-          class="absolute right-0 bottom-[calc(100%+8px)] z-45 grid w-[min(240px,calc(100vw-60px))] origin-bottom-right gap-0.5 popover p-1.5"
-          role="menu"
-          transition:popoverMotion={{ upward: true }}
-        >
-          {#each selections as selection (selection.key)}
-            <button
-              type="button"
-              class="grid min-h-10 grid-cols-[20px_minmax(0,1fr)_16px] items-center gap-2.5 rounded-lg px-2.5 text-left text-sm text-ink-strong transition-colors hover:bg-surface-hover"
-              role="menuitemradio"
-              aria-checked={selection.key === selected?.key}
-              onclick={() => choose(selection)}
+      {#if selections.length > 1}
+        <Menu label="Pull action" placement="top-end" class="w-[min(240px,calc(100vw-60px))]">
+          {#snippet trigger(menu)}
+            <Button
+              class="rounded-l-none border-l border-current/20"
+              icon
+              variant={toneVariant[selected?.tone ?? 'commented']}
+              aria-label="Choose pull action"
+              disabled={busy}
+              {...menu}><ChevronDown size={16} /></Button
             >
-              <span
-                class={[
-                  'grid place-items-center',
-                  selection.tone === 'approved'
-                    ? 'text-success'
-                    : selection.tone === 'changes_requested'
-                      ? 'text-warning'
-                      : 'text-ink-muted'
-                ]}
-                >{#if selection.action === 'approve'}<BadgeCheck
-                    size={16}
-                  />{:else if selection.action === 'request_changes'}<ShieldAlert size={16} />{:else}<MessageSquare
-                    size={16}
-                  />{/if}</span
-              >
-              <span>{selection.label}</span>
-              <span class="grid place-items-center text-brand"
-                >{#if selection.key === selected?.key}<Check size={15} />{/if}</span
-              >
-            </button>
+          {/snippet}
+          {#each selections as selection (selection.key)}
+            <MenuItem
+              icon={icons[selection.action]}
+              iconClass={iconTones[selection.tone]}
+              checked={selection.key === selected?.key}
+              onselect={() => (selectedKey = selection.key)}>{selection.label}</MenuItem
+            >
           {/each}
-        </div>
+        </Menu>
       {/if}
     </div>
   </footer>

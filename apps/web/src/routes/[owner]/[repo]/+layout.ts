@@ -9,7 +9,7 @@ export const load = (async ({ fetch, params, url }) => {
     apiWith<{
       repository: RepositorySummary & {
         cloneUrl: string;
-        sshCloneUrl: string | null;
+        sshCloneUrl: string;
         permissions: RepositoryPermissions;
       };
     }>(fetch, `/repositories/${params.owner}/${params.repo}`)

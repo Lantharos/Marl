@@ -212,6 +212,73 @@
   box-shadow: var(--shadow-popover);
 }
 
+@utility floating {
+  position: fixed;
+  inset: auto;
+
+  &[data-placement^='bottom'] {
+    margin-top: 6px;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline,
+      --floating-below,
+      --floating-above,
+      --floating-fit;
+  }
+
+  &[data-placement^='top'] {
+    margin-bottom: 6px;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline,
+      --floating-above,
+      --floating-below,
+      --floating-fit;
+  }
+
+  &[data-placement='top'] {
+    position-area: top;
+  }
+
+  &[data-placement='bottom'] {
+    position-area: bottom;
+  }
+
+  &[data-placement='bottom-start'] {
+    position-area: bottom span-right;
+  }
+
+  &[data-placement='bottom-end'] {
+    position-area: bottom span-left;
+  }
+
+  &[data-placement='top-start'] {
+    position-area: top span-right;
+  }
+
+  &[data-placement='top-end'] {
+    position-area: top span-left;
+  }
+}
+
+@position-try --floating-below {
+  position-area: bottom span-all;
+  justify-self: center;
+  margin: 6px 0 0;
+}
+
+@position-try --floating-above {
+  position-area: top span-all;
+  justify-self: center;
+  margin: 0 0 6px;
+}
+
+@position-try --floating-fit {
+  max-height: calc(100% - 14px);
+}
+
 @utility field {
   width: 100%;
   min-height: 40px;

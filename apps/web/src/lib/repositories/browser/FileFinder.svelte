@@ -5,6 +5,7 @@
   import Search from '@lucide/svelte/icons/search';
   import { api } from '#lib/api.js';
   import { popoverMotion } from '#lib/ui/popover.js';
+  import Kbd from '#lib/components/page/Kbd.svelte';
   import { entryHref } from './entry-path';
   import type { TreeEntry } from './types';
 
@@ -84,7 +85,7 @@
         data-1p-ignore
         class="h-full min-w-0 flex-1 bg-transparent text-base text-ink-strong outline-none placeholder:text-ink-faint"
       />
-      <kbd class="rounded bg-surface-muted px-1.5 py-0.5 font-sans text-2xs text-ink-muted">Esc</kbd>
+      <Kbd>Esc</Kbd>
     </header>
     <div
       id="file-results"

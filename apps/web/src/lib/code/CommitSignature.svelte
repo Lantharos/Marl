@@ -2,21 +2,40 @@
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import ShieldAlert from '@lucide/svelte/icons/shield-alert';
   import ShieldQuestion from '@lucide/svelte/icons/shield-question-mark';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
 
   let { status }: { status?: string | null } = $props();
-  const base = 'inline-flex shrink-0 items-center gap-1 text-xs font-semibold whitespace-nowrap';
+  const signatures = {
+    verified: {
+      label: 'Verified',
+      description: 'SSH signature verified against the author’s registered key',
+      icon: BadgeCheck,
+      tone: 'text-success'
+    },
+    invalid: {
+      label: 'Unverified',
+      description: 'This signature could not be validated against the author’s registered keys',
+      icon: ShieldAlert,
+      tone: 'text-danger'
+    },
+    unverified: {
+      label: 'Unverified',
+      description: 'No verified SSH signature for this author',
+      icon: ShieldQuestion,
+      tone: 'text-ink-muted'
+    }
+  };
+  const signature = $derived(status && status in signatures ? signatures[status as keyof typeof signatures] : null);
 </script>
 
-{#if status === 'verified'}
-  <span class="{base} text-success" title="SSH signature verified against the author’s registered key"
-    ><BadgeCheck size={14} />Verified</span
-  >
-{:else if status === 'invalid'}
-  <span class="{base} text-danger" title="This signature could not be validated against the author’s registered keys"
-    ><ShieldAlert size={14} />Unverified</span
-  >
-{:else if status === 'unverified'}
-  <span class="{base} text-ink-muted" title="No verified SSH signature for this author"
-    ><ShieldQuestion size={14} />Unverified</span
-  >
+{#if signature}
+  <Tooltip text={signature.description}>
+    {#snippet children(tooltip)}
+      <span
+        {...tooltip}
+        class={['inline-flex shrink-0 items-center gap-1 text-xs font-semibold whitespace-nowrap', signature.tone]}
+        ><signature.icon size={14} />{signature.label}</span
+      >
+    {/snippet}
+  </Tooltip>
 {/if}

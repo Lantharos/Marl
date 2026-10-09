@@ -6,6 +6,7 @@
   import Flag from '@lucide/svelte/icons/flag';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Button from '#lib/components/controls/Button.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import PullBrief from './PullBrief.svelte';
   import PullStackLinks from './PullStackLinks.svelte';
   import WorkItemMetadata from '#lib/components/discussion/WorkItemMetadata.svelte';
@@ -46,6 +47,16 @@
   };
 </script>
 
+{#snippet branch(name: string)}
+  <Tooltip text={name}>
+    {#snippet children(tooltip)}
+      <code {...tooltip} class="max-w-full truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs"
+        >{name}</code
+      >
+    {/snippet}
+  </Tooltip>
+{/snippet}
+
 <aside class="grid min-w-0 content-start gap-3 lg:gap-5" aria-label="Pull summary">
   <section class="min-w-0 surface rounded-2xl p-4 sm:p-5">
     <header class="mb-2 flex min-h-7 items-center justify-between">
@@ -57,14 +68,11 @@
           aria-label="Edit pull"
           disabled={busy}
           onclick={onEdit}><Pencil size={15} /></Button
-        >{:else if onReport}<Button
-          icon
-          size="small"
-          variant="ghost"
-          aria-label="Report pull"
-          title="Report pull"
-          onclick={onReport}><Flag size={15} /></Button
-        >{/if}
+        >{:else if onReport}<Tooltip text="Report pull" as="label">
+          {#snippet children(tooltip)}
+            <Button icon size="small" variant="ghost" onclick={onReport} {...tooltip}><Flag size={15} /></Button>
+          {/snippet}
+        </Tooltip>{/if}
     </header>
     <h1
       class="text-[clamp(23px,2vw,29px)] leading-[1.18] font-semibold tracking-[-0.035em] text-pretty break-words text-ink-strong"
@@ -82,13 +90,7 @@
       size={22}
     />
     <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-ink-muted">
-      <code
-        class="max-w-full truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs"
-        title={pull.sourceBranch}>{pull.sourceBranch}</code
-      ><ArrowRight size={14} /><code
-        class="max-w-full truncate rounded-md bg-surface-muted px-2 py-1 font-mono text-xs"
-        title={pull.targetBranch}>{pull.targetBranch}</code
-      >
+      {@render branch(pull.sourceBranch)}<ArrowRight size={14} />{@render branch(pull.targetBranch)}
     </div>
     <PullStackLinks stack={pull.stack} repository="{pull.repository.owner}/{pull.repository.name}" />
     {#if pull.bodyText}<div class="my-5.5 break-words">

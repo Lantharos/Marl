@@ -1,6 +1,5 @@
 <script lang="ts">
   import Plus from '@lucide/svelte/icons/plus';
-  import { dismissable } from '#lib/actions/dismissable.js';
   import Button from '../controls/Button.svelte';
   import Chip from '../controls/Chip.svelte';
   import SearchField from '../controls/SearchField.svelte';
@@ -30,9 +29,7 @@
     onLabelsChange?: (value: string[]) => void;
   } = $props();
 
-  let labelsOpen = $state(false);
   let labelQuery = $state('');
-  let labelAnchor = $state<HTMLElement>();
   const pickerOptions = $derived(
     labelOptions
       .filter((label) =>
@@ -75,31 +72,25 @@
           onclick={() => toggleLabel(name)}>{name}</Chip
         >
       {/each}
-      <div use:dismissable={() => (labelsOpen = false)}>
-        <Button
-          size="small"
-          icon
-          variant="ghost"
-          class="rounded-full bg-surface-raised"
-          aria-label="Filter by label"
-          aria-expanded={labelsOpen}
-          onclick={(event) => {
-            labelAnchor = event.currentTarget;
-            labelsOpen = !labelsOpen;
-            labelQuery = '';
-          }}><Plus size={15} /></Button
-        >
-        {#if labelsOpen}
-          <MetadataPicker
-            anchor={labelAnchor}
-            bind:query={labelQuery}
-            placeholder="Find a label"
-            options={pickerOptions}
-            empty="No matching labels"
-            onToggle={toggleLabel}
-          />
-        {/if}
-      </div>
+      <MetadataPicker
+        bind:query={labelQuery}
+        placeholder="Find a label"
+        options={pickerOptions}
+        empty="No matching labels"
+        onToggle={toggleLabel}
+      >
+        {#snippet trigger(popover)}
+          <Button
+            size="small"
+            icon
+            variant="ghost"
+            class="rounded-full bg-surface-raised"
+            aria-label="Filter by label"
+            onclick={() => (labelQuery = '')}
+            {...popover}><Plus size={15} /></Button
+          >
+        {/snippet}
+      </MetadataPicker>
     {/if}
   </div>
   <SearchField bind:value={query} label={placeholder} class="w-full sm:w-72" oninput={() => onQueryChange?.(query)} />

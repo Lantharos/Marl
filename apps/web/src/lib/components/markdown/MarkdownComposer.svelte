@@ -15,6 +15,7 @@
   import type { IconComponent } from '#lib/ui/icon.js';
   import Button from '../controls/Button.svelte';
   import Spinner from '../feedback/Spinner.svelte';
+  import Tooltip from '../overlays/Tooltip.svelte';
   import MarkdownBody from './MarkdownBody.svelte';
   import SavedReplyPicker from './SavedReplyPicker.svelte';
   import { page } from '$app/state';
@@ -183,8 +184,11 @@
 </script>
 
 {#snippet tool(label: string, Icon: IconComponent, action: () => void)}
-  <Button icon size="small" variant="ghost" aria-label={label} title={label} onclick={action}><Icon size={15} /></Button
-  >
+  <Tooltip text={label} as="label">
+    {#snippet children(tooltip)}
+      <Button icon size="small" variant="ghost" onclick={action} {...tooltip}><Icon size={15} /></Button>
+    {/snippet}
+  </Tooltip>
 {/snippet}
 
 <div

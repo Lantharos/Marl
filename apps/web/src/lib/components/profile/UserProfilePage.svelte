@@ -9,6 +9,7 @@
   import Settings from '@lucide/svelte/icons/settings';
   import LinkButton from '../controls/LinkButton.svelte';
   import OrganizationAvatar from '../identity/OrganizationAvatar.svelte';
+  import Tooltip from '../overlays/Tooltip.svelte';
   import UserAvatar from '../identity/UserAvatar.svelte';
   import ProfileActivity from './ProfileActivity.svelte';
   import ProfileRepositoryList from './ProfileRepositoryList.svelte';
@@ -74,13 +75,13 @@
       <section class="mt-7">
         <h2 class="mb-2.5 text-sm font-semibold text-ink-strong">Organizations</h2>
         <div class="flex flex-wrap gap-2">
-          {#each data.organizations as item (item.slug)}<a
-              href="/{item.slug}"
-              aria-label={item.name}
-              title={item.name}
-              class="rounded-lg transition-opacity hover:opacity-80"
-              ><OrganizationAvatar name={item.name} src={item.avatarUrl} size={34} /></a
-            >{/each}
+          {#each data.organizations as item (item.slug)}<Tooltip text={item.name} as="label">
+              {#snippet children(tooltip)}
+                <a {...tooltip} href="/{item.slug}" class="rounded-lg transition-opacity hover:opacity-80"
+                  ><OrganizationAvatar name={item.name} src={item.avatarUrl} size={34} /></a
+                >
+              {/snippet}
+            </Tooltip>{/each}
         </div>
       </section>
     {/if}

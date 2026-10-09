@@ -11,6 +11,7 @@
   import LabelPill from '#lib/components/discussion/LabelPill.svelte';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Time from '#lib/components/page/Time.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import { pullSignal, type PullQueueGroup } from './pull-signal';
 
   let {
@@ -73,18 +74,26 @@
             <article
               class="relative grid grid-cols-[32px_minmax(0,1fr)] gap-3 rounded-lg px-3 py-3.5 transition-colors hover:bg-surface-hover"
             >
-              <span class={['grid size-8 place-items-center rounded-lg', tones[signal.tone]]} title={signal.label}>
+              <span
+                class={['grid size-8 place-items-center rounded-lg', tones[signal.tone]]}
+                role="img"
+                aria-label={signal.label}
+              >
                 {#if pull.state === 'merged'}<GitMerge size={17} />
                 {:else if pull.state === 'closed'}<GitPullRequestClosed size={17} />
                 {:else}<GitPullRequest size={17} />{/if}
               </span>
               <div class="min-w-0">
                 <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                  <a
-                    class="line-clamp-2 min-w-0 text-base leading-snug font-semibold text-pretty text-ink-strong after:absolute after:inset-0"
-                    href={href(pull)}
-                    title={pull.title}>{pull.title}</a
-                  >
+                  <Tooltip text={pull.title}>
+                    {#snippet children(tooltip)}
+                      <a
+                        {...tooltip}
+                        class="line-clamp-2 min-w-0 text-base leading-snug font-semibold text-pretty text-ink-strong after:absolute after:inset-0"
+                        href={href(pull)}>{pull.title}</a
+                      >
+                    {/snippet}
+                  </Tooltip>
                   {#each pull.labels.slice(0, 3) as label (label.id)}<LabelPill
                       name={label.name}
                       color={label.color}

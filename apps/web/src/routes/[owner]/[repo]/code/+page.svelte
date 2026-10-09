@@ -9,6 +9,7 @@
   import Button from '#lib/components/controls/Button.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
+  import Kbd from '#lib/components/page/Kbd.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import BranchPicker from '#lib/repositories/browser/BranchPicker.svelte';
   import FileFinder from '#lib/repositories/browser/FileFinder.svelte';
@@ -79,9 +80,7 @@
     <div class="flex w-full items-center gap-2 sm:w-auto">
       <CodeSearchForm compact class="flex-1" {owner} repository={repo} revision={selectedBranch} />
       <Button size="small" onclick={() => (finderOpen = true)}
-        ><Search size={14} />Go to file<kbd
-          class="ml-1 rounded bg-surface-muted px-1.5 font-sans text-2xs text-ink-muted max-sm:hidden">T</kbd
-        ></Button
+        ><Search size={14} />Go to file<Kbd class="ml-1 max-sm:hidden">T</Kbd></Button
       >
     </div>
   </div>

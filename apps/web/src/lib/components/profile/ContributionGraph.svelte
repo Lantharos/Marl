@@ -1,9 +1,18 @@
 <script lang="ts">
+  import Tooltip from '../overlays/Tooltip.svelte';
+
   type Day = { date: string; count: number };
   let { contributions }: { contributions: Day[] } = $props();
 
   const cells = $derived(buildCalendar(contributions));
   const total = $derived(contributions.reduce((sum, day) => sum + day.count, 0));
+  let hovered = $state<HTMLElement | null>(null);
+  const hoveredCell = $derived(hovered ? cells[Number(hovered.dataset.index)] : null);
+
+  function track(event: PointerEvent) {
+    const cell = (event.target as Element).closest<HTMLElement>('[data-index]');
+    if (cell !== hovered) hovered = cell;
+  }
 
   function buildCalendar(days: Day[]) {
     const counts = new Map(days.map((day) => [day.date, day.count]));
@@ -40,8 +49,11 @@
       class="grid w-full min-w-172 auto-cols-fr grid-flow-col grid-rows-[repeat(7,10px)] gap-0.75"
       role="img"
       aria-label={`${total} public contributions over the past year`}
+      onpointerover={track}
+      onpointerleave={() => (hovered = null)}
     >
-      {#each cells as cell (cell.date)}<span
+      {#each cells as cell, index (cell.date)}<span
+          data-index={index}
           aria-hidden="true"
           class={[
             'h-2.5 w-full rounded-[2px]',
@@ -52,8 +64,13 @@
             cell.level === 3 && 'bg-brand/75',
             cell.level === 4 && 'bg-brand'
           ]}
-          title={`${cell.label}: ${cell.count} ${cell.count === 1 ? 'contribution' : 'contributions'}`}
         ></span>{/each}
     </div>
+    <Tooltip
+      anchor={hovered}
+      text={hoveredCell
+        ? `${hoveredCell.label}: ${hoveredCell.count} ${hoveredCell.count === 1 ? 'contribution' : 'contributions'}`
+        : ''}
+    />
   </div>
 </section>

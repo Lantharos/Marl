@@ -147,8 +147,14 @@ until approached. Playback always remains explicit. Dialogs occupy the browser's
 above repository navigation, and return focus when dismissed. Popovers and the command palette
 share rounded inset options and short, reversible scale-and-slide transitions. Keep their text
 rendering consistent as the animation settles; reduced-motion preferences skip the animation.
-Nested dropdowns use the top layer so animated modals do not offset or clip their options. Account menu links
-and buttons use the same type size and row spacing.
+Every menu, dropdown, and popover opens in the top layer, stays attached to its control while the page
+scrolls, and flips to the side with room when it would leave the screen, so animated modals never offset or
+clip their options. Clicking outside or pressing Escape closes it and returns focus to the control that
+opened it. Menus move between options with the arrow keys, Home, and End, and jump to an option when its
+first letters are typed. Account menu links and buttons use the same type size and row spacing.
+
+Icon-only controls and shortened text explain themselves with a tooltip after a short pause on hover or
+keyboard focus. Keyboard hints use one key style everywhere.
 
 ## Showing the product
 

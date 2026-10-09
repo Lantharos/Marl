@@ -8,6 +8,7 @@
   import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import { api } from '#lib/api.js';
 
@@ -94,13 +95,16 @@
           >
         </span>
       </a>
-      {#if !compact}<button
-          class="mr-2 grid size-8 shrink-0 place-items-center rounded-md text-ink-muted opacity-100 transition hover:bg-surface-muted hover:text-ink-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-          aria-label={item.done ? 'Move back to inbox' : 'Mark as done'}
-          title={item.done ? 'Move back to inbox' : 'Mark as done'}
-          onclick={() => setDone(item)}
-          >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</button
-        >{/if}
+      {#if !compact}<Tooltip text={item.done ? 'Move back to inbox' : 'Mark as done'} as="label">
+          {#snippet children(tooltip)}
+            <button
+              {...tooltip}
+              class="mr-2 grid size-8 shrink-0 place-items-center rounded-md text-ink-muted opacity-100 transition hover:bg-surface-muted hover:text-ink-strong focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+              onclick={() => setDone(item)}
+              >{#if item.done}<RotateCcw size={15} />{:else}<Check size={16} />{/if}</button
+            >
+          {/snippet}
+        </Tooltip>{/if}
     </article>
   {:else}
     <EmptyState compact icon={Check} title={emptyTitle} description={emptyDescription} />

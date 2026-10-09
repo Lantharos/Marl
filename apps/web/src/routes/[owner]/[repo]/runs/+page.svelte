@@ -8,6 +8,7 @@
   import FilterBar from '#lib/components/page/FilterBar.svelte';
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Time from '#lib/components/page/Time.svelte';
+  import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import { awaitingCheckApproval, runStateLabel } from '#lib/runs/run-state.js';
   import RunStateIcon from '#lib/runs/RunStateIcon.svelte';
   import { workflowTrigger } from '#lib/runs/workflow-triggers.js';
@@ -92,7 +93,11 @@
             <CircleAlert size={17} class="shrink-0 text-danger" />
             <span class="min-w-0">
               <strong class="block text-sm font-semibold text-danger">Needs attention</strong>
-              <span class="block truncate text-xs text-ink-muted" title={workflow.error}>{workflow.error}</span>
+              <Tooltip text={workflow.error ?? ''}>
+                {#snippet children(tooltip)}
+                  <span {...tooltip} class="block truncate text-xs text-ink-muted">{workflow.error}</span>
+                {/snippet}
+              </Tooltip>
             </span>
           {:else}
             <RunStateIcon state="queued" label="Not run yet" size={17} />
