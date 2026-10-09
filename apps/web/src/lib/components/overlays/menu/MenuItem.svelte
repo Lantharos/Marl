@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { ClassValue } from 'svelte/elements';
   import Check from '@lucide/svelte/icons/check';
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
 
   let {
     href,
@@ -16,7 +16,7 @@
     children
   }: {
     href?: string;
-    icon?: IconComponent;
+    icon?: LucideIcon;
     iconClass?: ClassValue;
     tone?: 'default' | 'danger';
     checked?: boolean;

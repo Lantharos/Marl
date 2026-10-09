@@ -1,6 +1,6 @@
 <script lang="ts" generics="T extends string">
   import type { ClassValue } from 'svelte/elements';
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
 
   let {
     value = $bindable(),
@@ -10,7 +10,7 @@
     onchange
   }: {
     value: T;
-    options: readonly { value: T; label: string; icon?: IconComponent }[];
+    options: readonly { value: T; label: string; icon?: LucideIcon }[];
     label: string;
     class?: ClassValue;
     onchange?: (value: T) => void;

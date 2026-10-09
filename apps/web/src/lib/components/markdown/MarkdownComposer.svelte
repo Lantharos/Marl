@@ -12,7 +12,7 @@
   import Film from '@lucide/svelte/icons/film';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
   import X from '@lucide/svelte/icons/x';
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
   import Button from '../controls/Button.svelte';
   import Spinner from '../feedback/Spinner.svelte';
   import Tooltip from '../overlays/Tooltip.svelte';
@@ -183,7 +183,7 @@
   }
 </script>
 
-{#snippet tool(label: string, Icon: IconComponent, action: () => void)}
+{#snippet tool(label: string, Icon: LucideIcon, action: () => void)}
   <Tooltip text={label} as="label">
     {#snippet children(tooltip)}
       <Button icon size="small" variant="ghost" onclick={action} {...tooltip}><Icon size={15} /></Button>

@@ -2,9 +2,9 @@
   import { browser } from '$app/env';
   import { page } from '$app/state';
   import { onDestroy, tick } from 'svelte';
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
 
-  type Tab = { key: string; href: string; label: string; icon: IconComponent; active: boolean };
+  type Tab = { key: string; href: string; label: string; icon: LucideIcon; active: boolean };
   let { tabs }: { tabs: Tab[] } = $props();
   let nav = $state<HTMLElement>();
   let islandX = $state(0);

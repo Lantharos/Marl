@@ -3,7 +3,7 @@
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import X from '@lucide/svelte/icons/x';
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
   import Button from '../controls/Button.svelte';
 
   type Tone = 'danger' | 'success' | 'warning' | 'brand';
@@ -17,7 +17,7 @@
     children
   }: {
     tone?: Tone;
-    icon?: IconComponent;
+    icon?: LucideIcon;
     class?: string;
     action?: Snippet;
     dismissLabel?: string;

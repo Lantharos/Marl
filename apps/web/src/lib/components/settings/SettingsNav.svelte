@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
 
   let {
     label,
     items
   }: {
     label: string;
-    items: Array<{ href: string; label: string; icon: IconComponent; active: boolean }>;
+    items: Array<{ href: string; label: string; icon: LucideIcon; active: boolean }>;
   } = $props();
 </script>
 

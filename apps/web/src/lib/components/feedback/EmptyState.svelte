@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { IconComponent } from '#lib/ui/icon.js';
+  import type { LucideIcon } from '@lucide/svelte';
 
   let {
     icon: Icon,
@@ -10,7 +10,7 @@
     class: className = '',
     children
   }: {
-    icon?: IconComponent;
+    icon?: LucideIcon;
     title: string;
     description?: string;
     compact?: boolean;

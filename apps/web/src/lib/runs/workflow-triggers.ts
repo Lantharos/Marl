@@ -3,9 +3,9 @@ import GitBranch from '@lucide/svelte/icons/git-branch';
 import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 import MousePointerClick from '@lucide/svelte/icons/mouse-pointer-click';
 import Timer from '@lucide/svelte/icons/timer';
-import type { IconComponent } from '#lib/ui/icon.js';
+import type { LucideIcon } from '@lucide/svelte';
 
-const triggers: Record<WorkflowTrigger, { label: string; icon: IconComponent }> = {
+const triggers: Record<WorkflowTrigger, { label: string; icon: LucideIcon }> = {
   push: { label: 'Push', icon: GitBranch },
   pull_request: { label: 'Pull', icon: GitPullRequest },
   workflow_dispatch: { label: 'Manual', icon: MousePointerClick },
