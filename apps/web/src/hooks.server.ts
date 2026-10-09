@@ -1,6 +1,6 @@
 import type { Handle, HandleFetch } from '@sveltejs/kit/hooks';
 import { env } from 'cloudflare:workers';
-import { dev } from '$app/env';
+import { building, dev } from '$app/env';
 import { themeCookie } from '#lib/theme.js';
 
 const localApi = 'http://127.0.0.1:42618';
@@ -40,7 +40,7 @@ export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
   const url = new URL(request.url);
   if (url.origin !== event.url.origin || !url.pathname.startsWith('/api/')) return fetch(request);
   const cookie = event.request.headers.get('cookie');
-  if (viewerRoutes.has(url.pathname) && !sessionCookie.test(cookie ?? '')) return signedOut();
+  if (!building && viewerRoutes.has(url.pathname) && !sessionCookie.test(cookie ?? '')) return signedOut();
   if (dev) return fetch(apiRequest(`${localApi}${url.pathname}${url.search}`, request, cookie));
   return env.MARL_API.fetch(apiRequest(`http://marl-api.internal${url.pathname}${url.search}`, request, cookie));
 };
