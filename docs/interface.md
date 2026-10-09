@@ -161,13 +161,17 @@ An open courtyard accompanies the contribution policy; a close-up
 of branching terracotta in stone anchors the bottom edge. These scenes share raw, porous limestone and rough terracotta materials
 but use different scales and compositions. Keep artwork out of text and control areas.
 Competitor criticism and product sections alternate: GitHub availability, familiar Git
-commands, Codeberg’s AI policy, and revision-based pulls. Keep the criticism specific and
-source-linked. Separate its headings through pacing and wording, not editorial cards.
+commands, Codeberg’s AI policy, revision-based pulls, and GitHub’s fee for self-hosted runners
+beside Marl’s own runs. Keep the criticism specific and source-linked. Separate its headings through pacing and wording, not editorial cards.
 Keep copy on the canvas and reserve surfaces for code and conversations.
 Product previews should show the interaction without a sidebar
 of incidental metadata, repeated status labels, or captions explaining what is visible.
 The pull preview keeps the current revision open and earlier discussions expandable.
 Its reviews group the summary above the line conversations, just as they do in a pull.
+The run preview places a workflow file beside the finished run it produced. Choosing a job
+shows its log and highlights that job in the file; nothing moves until the reader chooses.
+The hero artwork loads first. Other scenes wait until the reader approaches them and download
+only the artwork for the current appearance.
 
 ## Imagery and attention
 
