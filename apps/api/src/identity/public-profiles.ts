@@ -19,6 +19,8 @@ type UserRow = {
 
 const publicRepositories = `repositories.visibility='public' AND repositories.deletion_scheduled_at IS NULL`;
 const activePublicRepositories = `${publicRepositories} AND repositories.archived_at IS NULL`;
+const authoredCommits = `authored(repositoryId,id) AS (SELECT repository_id,id FROM commits WHERE signature_signer_id=?1 AND signature_status='verified' UNION SELECT commits.repository_id,commits.id FROM user_emails JOIN commits ON commits.author_email=user_emails.email COLLATE NOCASE WHERE user_emails.user_id=?1 AND user_emails.verified_at IS NOT NULL)`;
+const authoredBy = `FROM authored JOIN commits ON commits.repository_id=authored.repositoryId AND commits.id=authored.id JOIN repositories ON repositories.id=commits.repository_id`;
 
 export async function getPublicIdentityProfile(env: Env, handle: string) {
   if (!validIdentitySlug(handle)) return problem(404, 'profile_not_found', 'Profile not found.');
@@ -41,7 +43,7 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
       .first<UserRow>());
   if (!user) return notFound('user');
 
-  const identity = `${commitAuthorIdSql()}=?`;
+  const identity = `${commitAuthorIdSql()}=?1`;
   const [repositories, repositoryCount, organizations, contributions, activity, pullRequests] = await Promise.all([
     env.DB.prepare(
       `SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.description,repositories.icon_url AS iconUrl,repositories.visibility,repositories.default_branch AS defaultBranch,repositories.updated_at AS updatedAt FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organization_members.user_id=? AND organizations.kind='personal' AND ${activePublicRepositories} ORDER BY repositories.updated_at DESC,repositories.id DESC LIMIT 7`
@@ -59,12 +61,12 @@ async function getPublicUserProfile(env: Env, handle: string, loadedUser?: UserR
       .bind(user.id)
       .all(),
     env.DB.prepare(
-      `SELECT date(commits.authored_at) AS date,COUNT(*) AS count FROM commits JOIN repositories ON repositories.id=commits.repository_id WHERE ${activePublicRepositories} AND ${identity} AND date(commits.authored_at)>=date('now','-371 days') GROUP BY date(commits.authored_at) ORDER BY date(commits.authored_at)`
+      `WITH ${authoredCommits} SELECT date(commits.authored_at) AS date,COUNT(*) AS count ${authoredBy} WHERE ${activePublicRepositories} AND ${identity} AND date(commits.authored_at)>=date('now','-371 days') GROUP BY date(commits.authored_at) ORDER BY date(commits.authored_at)`
     )
       .bind(user.id)
       .all<ContributionRow>(),
     env.DB.prepare(
-      `SELECT commits.id,commits.title,commits.authored_at AS authoredAt,organizations.slug AS owner,repositories.name AS repository FROM commits JOIN repositories ON repositories.id=commits.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${activePublicRepositories} AND ${identity} ORDER BY commits.authored_at DESC LIMIT 10`
+      `WITH ${authoredCommits} SELECT commits.id,commits.title,commits.authored_at AS authoredAt,organizations.slug AS owner,repositories.name AS repository ${authoredBy} JOIN organizations ON organizations.id=repositories.organization_id WHERE ${activePublicRepositories} AND ${identity} ORDER BY commits.authored_at DESC LIMIT 10`
     )
       .bind(user.id)
       .all(),
@@ -135,12 +137,12 @@ async function getPublicOrganizationProfile(env: Env, slug: string) {
       .bind(organization.id)
       .all(),
     env.DB.prepare(
-      `SELECT commits.id,commits.title,commits.authored_at AS authoredAt,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,repositories.name AS repository FROM commits JOIN repositories ON repositories.id=commits.repository_id LEFT JOIN users ON users.id=${authorId} WHERE repositories.organization_id=? AND ${activePublicRepositories} ORDER BY commits.authored_at DESC LIMIT 10`
+      `SELECT commits.id,commits.title,commits.authored_at AS authoredAt,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,repositories.name AS repository FROM repositories JOIN commits ON commits.repository_id=repositories.id AND commits.id IN (SELECT recent.id FROM commits AS recent WHERE recent.repository_id=repositories.id ORDER BY recent.authored_at DESC LIMIT 10) LEFT JOIN users ON users.id=${authorId} WHERE repositories.organization_id=? AND ${activePublicRepositories} ORDER BY commits.authored_at DESC LIMIT 10`
     )
       .bind(organization.id)
       .all(),
     env.DB.prepare(
-      `SELECT COUNT(*) AS count FROM commits JOIN repositories ON repositories.id=commits.repository_id WHERE repositories.organization_id=? AND ${activePublicRepositories} AND date(commits.authored_at)>=date('now','-365 days')`
+      `SELECT COUNT(*) AS count FROM repositories JOIN commits ON commits.repository_id=repositories.id AND commits.authored_at>=date('now','-366 days') WHERE repositories.organization_id=? AND ${activePublicRepositories} AND date(commits.authored_at)>=date('now','-365 days')`
     )
       .bind(organization.id)
       .first<{ count: number }>(),

@@ -7,6 +7,7 @@ import { json, problem, readJsonValue } from '../../http/http';
 import type { D1Result, Env } from '../../core/platform';
 import { authorizeRepository, authorizeRepositoryId, repositoryCan, repositoryListFilter } from '../access/access';
 import { commitAuthorIdSql } from '../../git/commit-authors';
+import { directoryLastChanges } from './last-changes';
 
 export async function listBranches(
   env: Env,
@@ -94,12 +95,12 @@ export async function listCommits(
   const revision = url.searchParams.get('revision') ?? repo.defaultBranch;
   const resolved = await resolveRevision(env, repo.id, revision);
   if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  const after = cursor ? 'WHERE (authoredAt<? OR (authoredAt=? AND id<?))' : '';
+  const after = cursor ? 'WHERE (authored_at<? OR (authored_at=? AND id<?))' : '';
   const values = cursor
-    ? [resolved.id, repo.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1]
-    : [resolved.id, repo.id, repo.id, limit + 1];
+    ? [repo.id, resolved.id, repo.id, cursor.value, cursor.value, cursor.id, limit + 1, repo.id]
+    : [repo.id, resolved.id, repo.id, limit + 1, repo.id];
   const result = await env.DB.prepare(
-    `WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), commit_rows AS (SELECT commits.*,${commitAuthorIdSql()} AS matched_author_id FROM commits), ordered AS (SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,${commitSignatureStatusSql('commit_rows')} AS signatureStatus,COUNT(*) OVER () AS total FROM commit_rows JOIN history ON history.id=commit_rows.id LEFT JOIN users AS commit_authors ON commit_authors.id=commit_rows.matched_author_id WHERE commit_rows.repository_id=?) SELECT * FROM ordered ${after} ORDER BY authoredAt DESC,id DESC LIMIT ?`
+    `WITH RECURSIVE history(id,parents,authored_at) AS (SELECT id,parent_ids,authored_at FROM commits WHERE repository_id=? AND id=? UNION SELECT commits.id,commits.parent_ids,commits.authored_at FROM history JOIN json_each(history.parents) CROSS JOIN commits ON commits.repository_id=? AND commits.id=json_each.value), page AS (SELECT id,authored_at FROM history ${after} ORDER BY authored_at DESC,id DESC LIMIT ?) SELECT commit_rows.id,substr(commit_rows.id,1,7) AS shortId,commit_rows.title,commit_rows.author_name AS author,commit_authors.handle AS authorHandle,commit_authors.display_name AS authorDisplayName,commit_authors.avatar_url AS authorAvatarUrl,commit_rows.authored_at AS authoredAt,${commitSignatureStatusSql('commit_rows')} AS signatureStatus,(SELECT COUNT(*) FROM history) AS total FROM page CROSS JOIN commits AS commit_rows ON commit_rows.repository_id=? AND commit_rows.id=page.id LEFT JOIN users AS commit_authors ON commit_authors.id=${commitAuthorIdSql('commit_rows')} ORDER BY page.authored_at DESC,page.id DESC`
   )
     .bind(...values)
     .all<{
@@ -228,7 +229,8 @@ export async function listTree(
   principal: Principal | null,
   owner: string,
   name: string,
-  url: URL
+  url: URL,
+  execution: ExecutionContext
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
@@ -256,21 +258,17 @@ export async function listTree(
     if (!historical) return problem(502, 'tree_gateway_failed', 'Git gateway could not read this repository tree.');
     entries = historical;
   }
-  const paths = entries.map((entry) => entry.path).filter((path): path is string => typeof path === 'string');
-  const lastChanges = paths.length
-    ? await env.DB.prepare(
-        `WITH RECURSIVE history(id) AS (SELECT ? UNION SELECT json_each.value FROM history JOIN commits ON commits.repository_id=? AND commits.id=history.id JOIN json_each(commits.parent_ids)), ranked AS (SELECT commit_changes.path,commits.id AS commitId,commits.title AS message,commits.author_name AS author,commits.authored_at AS updatedAt,ROW_NUMBER() OVER (PARTITION BY commit_changes.path ORDER BY commit_changes.position DESC,commits.authored_at DESC,commits.id) AS rank FROM commit_changes JOIN history ON history.id=commit_changes.commit_id JOIN commits ON commits.repository_id=commit_changes.repository_id AND commits.id=commit_changes.commit_id JOIN json_each(?) requested ON requested.value=commit_changes.path WHERE commit_changes.repository_id=?) SELECT path,commitId,message,author,updatedAt FROM ranked WHERE rank=1`
-      )
-        .bind(resolved.id, repo.id, JSON.stringify(paths), repo.id)
-        .all<{
-          path: string;
-          commitId: string;
-          message: string;
-          author: string;
-          updatedAt: string;
-        }>()
-    : { results: [] };
-  const metadata = new Map(lastChanges.results.map((change) => [change.path, change]));
+  const lastChanges = query
+    ? []
+    : await directoryLastChanges(
+        env,
+        execution,
+        repo.id,
+        resolved.id,
+        parentPath,
+        entries.map((entry) => entry.path as string)
+      );
+  const metadata = new Map(lastChanges.map((change) => [change.path, change]));
   return json({
     revision,
     path: parentPath,

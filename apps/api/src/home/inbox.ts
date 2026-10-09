@@ -134,33 +134,14 @@ async function candidateItems(env: Env, principal: Principal) {
   const pullActivity = `(SELECT MAX(t.created_at) FROM pull_timeline t LEFT JOIN pull_request_comments c ON t.kind='comment' AND c.id=t.entity_id LEFT JOIN pull_request_reviews v ON t.kind='review' AND v.id=t.entity_id LEFT JOIN pull_request_events e ON t.kind='event' AND e.id=t.entity_id LEFT JOIN work_item_references w ON t.kind='reference' AND w.id=t.entity_id LEFT JOIN review_comments rc ON t.kind='thread' AND rc.thread_id=t.entity_id AND rc.id=(SELECT id FROM review_comments WHERE thread_id=t.entity_id ORDER BY created_at,id LIMIT 1) WHERE t.pull_request_id=pull_requests.id AND COALESCE(c.author_id,v.author_id,e.actor_id,w.created_by,rc.author_id,'')!=?)`;
   const [issues, pulls, runs, mentions] = await Promise.all([
     env.DB.prepare(
-      `WITH candidates AS (SELECT issues.id,organizations.slug AS owner,repositories.name AS repository,issues.number,issues.title,issues.state,CASE WHEN EXISTS (SELECT 1 FROM issue_assignees WHERE issue_id=issues.id AND user_id=?) THEN 'assignment' WHEN issues.author_id=? THEN 'authored' ELSE 'participating' END AS reason,${issueActivity} AS updatedAt FROM issues JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${readable} AND (issues.author_id=? OR EXISTS (SELECT 1 FROM issue_assignees WHERE issue_id=issues.id AND user_id=?) OR EXISTS (SELECT 1 FROM issue_comments WHERE issue_id=issues.id AND author_id=?) OR EXISTS (SELECT 1 FROM issue_participants WHERE issue_id=issues.id AND user_id=? AND following=1))) SELECT * FROM candidates WHERE updatedAt IS NOT NULL ORDER BY unixepoch(updatedAt) DESC,id DESC LIMIT 150`
+      `WITH involved(id) AS (SELECT id FROM issues WHERE author_id=? UNION SELECT issue_id FROM issue_assignees WHERE user_id=? UNION SELECT issue_id FROM issue_comments WHERE author_id=? UNION SELECT issue_id FROM issue_participants WHERE user_id=? AND following=1), candidates AS (SELECT issues.id,organizations.slug AS owner,repositories.name AS repository,issues.number,issues.title,issues.state,CASE WHEN EXISTS (SELECT 1 FROM issue_assignees WHERE issue_id=issues.id AND user_id=?) THEN 'assignment' WHEN issues.author_id=? THEN 'authored' ELSE 'participating' END AS reason,${issueActivity} AS updatedAt FROM involved JOIN issues ON issues.id=involved.id JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${readable}) SELECT * FROM candidates WHERE updatedAt IS NOT NULL ORDER BY unixepoch(updatedAt) DESC,id DESC LIMIT 150`
     )
-      .bind(
-        principal.id,
-        principal.id,
-        principal.id,
-        ...access.values,
-        principal.id,
-        principal.id,
-        principal.id,
-        principal.id
-      )
+      .bind(...Array<string>(7).fill(principal.id), ...access.values)
       .all<CandidateRow>(),
     env.DB.prepare(
-      `WITH candidates AS (SELECT pull_requests.id,organizations.slug AS owner,repositories.name AS repository,pull_requests.number,pull_requests.title,pull_requests.state,CASE WHEN EXISTS (SELECT 1 FROM pull_request_assignees WHERE pull_request_id=pull_requests.id AND user_id=?) THEN 'assignment' WHEN pull_requests.author_id=? THEN 'authored' ELSE 'participating' END AS reason,${pullActivity} AS updatedAt FROM pull_requests JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${readable} AND (pull_requests.author_id=? OR EXISTS (SELECT 1 FROM pull_request_assignees WHERE pull_request_id=pull_requests.id AND user_id=?) OR EXISTS (SELECT 1 FROM pull_request_comments WHERE pull_request_id=pull_requests.id AND author_id=?) OR EXISTS (SELECT 1 FROM pull_request_reviews WHERE pull_request_id=pull_requests.id AND author_id=?) OR EXISTS (SELECT 1 FROM review_comments JOIN review_threads ON review_threads.id=review_comments.thread_id WHERE review_threads.pull_request_id=pull_requests.id AND review_comments.author_id=?))) SELECT * FROM candidates WHERE updatedAt IS NOT NULL ORDER BY unixepoch(updatedAt) DESC,id DESC LIMIT 150`
+      `WITH involved(id) AS (SELECT id FROM pull_requests WHERE author_id=? UNION SELECT pull_request_id FROM pull_request_assignees WHERE user_id=? UNION SELECT pull_request_id FROM pull_request_comments WHERE author_id=? UNION SELECT pull_request_id FROM pull_request_reviews WHERE author_id=? UNION SELECT review_threads.pull_request_id FROM review_comments JOIN review_threads ON review_threads.id=review_comments.thread_id WHERE review_comments.author_id=?), candidates AS (SELECT pull_requests.id,organizations.slug AS owner,repositories.name AS repository,pull_requests.number,pull_requests.title,pull_requests.state,CASE WHEN EXISTS (SELECT 1 FROM pull_request_assignees WHERE pull_request_id=pull_requests.id AND user_id=?) THEN 'assignment' WHEN pull_requests.author_id=? THEN 'authored' ELSE 'participating' END AS reason,${pullActivity} AS updatedAt FROM involved JOIN pull_requests ON pull_requests.id=involved.id JOIN repositories ON repositories.id=pull_requests.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${readable}) SELECT * FROM candidates WHERE updatedAt IS NOT NULL ORDER BY unixepoch(updatedAt) DESC,id DESC LIMIT 150`
     )
-      .bind(
-        principal.id,
-        principal.id,
-        principal.id,
-        ...access.values,
-        principal.id,
-        principal.id,
-        principal.id,
-        principal.id,
-        principal.id
-      )
+      .bind(...Array<string>(8).fill(principal.id), ...access.values)
       .all<CandidateRow>(),
     env.DB.prepare(
       `SELECT runs.id,organizations.slug AS owner,repositories.name AS repository,runs.number,runs.name AS title,runs.state,'failure' AS reason,COALESCE(runs.completed_at,runs.created_at) AS updatedAt FROM runs JOIN repositories ON repositories.id=runs.repository_id JOIN organizations ON organizations.id=repositories.organization_id WHERE ${memberOnly} AND runs.actor_id=? AND runs.state='failure' ORDER BY unixepoch(updatedAt) DESC,runs.id DESC LIMIT 100`

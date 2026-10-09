@@ -86,7 +86,8 @@ export const issueComments = sqliteTable(
   },
   (table) => [
     index('issue_comments_parent').on(table.parentId, table.createdAt, table.id),
-    index('issue_comments_issue_created').on(table.issueId, table.createdAt, table.id)
+    index('issue_comments_issue_created').on(table.issueId, table.createdAt, table.id),
+    index('issue_comments_by_author').on(table.authorId, table.issueId)
   ]
 );
 

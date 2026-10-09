@@ -9,7 +9,7 @@ import { gitIndexBody } from '../../http/request-schemas';
 import { synchronizePullsForBranchUpdates } from '../../pulls/merge/synchronization';
 import { queuePushWorkflows } from '../../ci/workflows/workflows';
 import { queuePullsForIndexedRepository } from '../../pulls/merge/checks';
-import { authorizeRepository, authorizeRepositoryId, lookupRepository } from '../../repositories/access/access';
+import { authorizeRepositoryId, lookupRepository, repositoryCan } from '../../repositories/access/access';
 import { placeholders, queryInChunks } from '../../repositories/content/source';
 
 const entryDeleteBatch = 1_000;
@@ -25,10 +25,8 @@ export async function authorizeGit(
 ): Promise<Response> {
   const repo = await lookupRepository(env, owner, name, principal);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const read = gatewayTrusted || Boolean(await authorizeRepository(env, principal, owner, name, 'repository.read'));
-  const write =
-    service === 'git-receive-pack' &&
-    (gatewayTrusted || Boolean(await authorizeRepository(env, principal, owner, name, 'repository.push')));
+  const read = gatewayTrusted || repositoryCan(repo, principal, 'repository.read');
+  const write = service === 'git-receive-pack' && (gatewayTrusted || repositoryCan(repo, principal, 'repository.push'));
   if (repo.deletionScheduledAt) return problem(404, 'repository_not_found', 'Repository not found.');
   if (repo.archivedAt && service === 'git-receive-pack')
     return problem(409, 'repository_archived', 'Archived repositories are read-only.');
@@ -363,4 +361,12 @@ async function pruneEntries(env: Env, repositoryId: string) {
         .run();
       if (result.meta.changes < entryDeleteBatch) break;
     }
+  for (;;) {
+    const result = await env.DB.prepare(
+      `DELETE FROM directory_last_changes WHERE rowid IN (SELECT rowid FROM directory_last_changes WHERE repository_id=?1 AND created_at<datetime('now','-7 days') AND commit_id NOT IN (SELECT commit_id FROM branches WHERE repository_id=?1) LIMIT ${entryDeleteBatch})`
+    )
+      .bind(repositoryId)
+      .run();
+    if (result.meta.changes < entryDeleteBatch) break;
+  }
 }

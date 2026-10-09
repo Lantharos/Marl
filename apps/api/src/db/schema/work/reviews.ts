@@ -17,7 +17,6 @@ export const pullRealtimeUpdates = sqliteTable(
     createdAt: text('created_at').notNull()
   },
   (table) => [
-    index('pull_realtime_updates_pull_version_idx').on(table.pullRequestId, table.version),
     uniqueIndex('pull_realtime_updates_pull_request_id_version_unique').on(table.pullRequestId, table.version)
   ]
 );
@@ -32,7 +31,10 @@ export const pullRequestAssignees = sqliteTable(
       .notNull()
       .references((): AnySQLiteColumn => users.id, { onDelete: 'cascade' })
   },
-  (table) => [primaryKey({ columns: [table.pullRequestId, table.userId] })]
+  (table) => [
+    primaryKey({ columns: [table.pullRequestId, table.userId] }),
+    index('pull_request_assignees_by_user').on(table.userId, table.pullRequestId)
+  ]
 );
 
 export const pullRequestComments = sqliteTable(
@@ -54,7 +56,10 @@ export const pullRequestComments = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
     deletedAt: text('deleted_at')
   },
-  (table) => [index('pull_request_comments_pull_created_idx').on(table.pullRequestId, table.createdAt)]
+  (table) => [
+    index('pull_request_comments_pull_created_idx').on(table.pullRequestId, table.createdAt),
+    index('pull_request_comments_by_author').on(table.authorId, table.pullRequestId)
+  ]
 );
 
 export const pullRequestEvents = sqliteTable(
@@ -116,6 +121,7 @@ export const pullRequestReviews = sqliteTable(
       .on(table.carriedFromReviewId, table.commitId)
       .where(sql`carried_from_review_id IS NOT NULL`),
     index('reviews_by_pull').on(table.pullRequestId, table.createdAt),
+    index('reviews_by_author').on(table.authorId, table.pullRequestId),
     check('pull_request_reviews_check_0', sql`state IN ('commented', 'approved', 'changes_requested')`)
   ]
 );
@@ -164,6 +170,7 @@ export const pullRequests = sqliteTable(
   (table) => [
     index('pull_requests_by_state').on(table.repositoryId, table.state, sql`${table.updatedAt} COLLATE BINARY DESC`),
     index('pull_requests_by_source_repository').on(table.sourceRepositoryId, table.state, table.sourceBranch),
+    index('pull_requests_by_author').on(table.authorId),
     uniqueIndex('pull_requests_repository_id_number_unique').on(table.repositoryId, table.number),
     check('pull_requests_check_0', sql`state IN ('draft', 'open', 'merged', 'closed')`),
     check('pull_requests_check_1', sql`merge_method IN ('merge', 'squash', 'rebase')`)
@@ -207,7 +214,10 @@ export const reviewComments = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
     deletedAt: text('deleted_at')
   },
-  (table) => [index('comments_by_thread').on(table.threadId, table.createdAt)]
+  (table) => [
+    index('comments_by_thread').on(table.threadId, table.createdAt),
+    index('review_comments_by_author').on(table.authorId, table.threadId)
+  ]
 );
 
 export const reviewThreads = sqliteTable(

@@ -71,8 +71,8 @@ export const repositoryRoutes = [
   route('GET', `${repository}/commits/:commit`, 'optional', ({ env, principal }, { owner, repo, commit }) =>
     getCommit(env, principal, owner, repo, commit)
   ),
-  route('GET', `${repository}/tree`, 'optional', ({ env, principal, url }, { owner, repo }) =>
-    listTree(env, principal, owner, repo, url)
+  route('GET', `${repository}/tree`, 'optional', ({ env, principal, url, execution }, { owner, repo }) =>
+    listTree(env, principal, owner, repo, url, execution)
   ),
   route('GET', `${repository}/blob/:revision/*path`, 'optional', ({ env, principal, execution }, params) =>
     readBlob(env, principal, params.owner, params.repo, params.revision, params.path, execution)

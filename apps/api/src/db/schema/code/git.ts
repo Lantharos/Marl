@@ -86,9 +86,27 @@ export const commitChanges = sqliteTable(
     foreignKey({
       columns: [table.repositoryId, table.commitId],
       foreignColumns: [commits.repositoryId, commits.id]
-    }).onDelete('cascade'),
-    index('commit_changes_by_position').on(table.repositoryId, table.path, table.position),
-    index('commit_changes_by_path').on(table.repositoryId, table.path, table.commitId)
+    }).onDelete('cascade')
+  ]
+);
+
+export const directoryLastChanges = sqliteTable(
+  'directory_last_changes',
+  {
+    repositoryId: text('repository_id').notNull(),
+    commitId: text('commit_id').notNull(),
+    path: text('path').notNull(),
+    changes: text('changes').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+  },
+  (table) => [
+    primaryKey({ columns: [table.repositoryId, table.commitId, table.path] }),
+    foreignKey({
+      columns: [table.repositoryId, table.commitId],
+      foreignColumns: [commits.repositoryId, commits.id]
+    }).onDelete('cascade')
   ]
 );
 
@@ -117,6 +135,7 @@ export const commits = sqliteTable(
     primaryKey({ columns: [table.repositoryId, table.id] }),
     index('commits_signature_signer').on(table.signatureSignerId, table.signatureKeyFingerprint),
     index('commits_by_time').on(table.repositoryId, sql`${table.authoredAt} COLLATE BINARY DESC`),
+    index('commits_by_author_email').on(sql`${table.authorEmail} COLLATE NOCASE`),
     check('commits_check_0', sql`signature_status IN ('verified', 'unverified', 'invalid')`)
   ]
 );

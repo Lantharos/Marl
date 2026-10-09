@@ -353,8 +353,6 @@ CREATE TABLE `commit_changes` (
 	FOREIGN KEY (`repository_id`,`commit_id`) REFERENCES `commits`(`repository_id`,`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `commit_changes_by_position` ON `commit_changes` (`repository_id`,`path`,`position`);--> statement-breakpoint
-CREATE INDEX `commit_changes_by_path` ON `commit_changes` (`repository_id`,`path`,`commit_id`);--> statement-breakpoint
 CREATE TABLE `commits` (
 	`id` text NOT NULL,
 	`repository_id` text NOT NULL,
@@ -375,6 +373,17 @@ CREATE TABLE `commits` (
 --> statement-breakpoint
 CREATE INDEX `commits_signature_signer` ON `commits` (`signature_signer_id`,`signature_key_fingerprint`);--> statement-breakpoint
 CREATE INDEX `commits_by_time` ON `commits` (`repository_id`,"authored_at" COLLATE BINARY DESC);--> statement-breakpoint
+CREATE INDEX `commits_by_author_email` ON `commits` ("author_email" COLLATE NOCASE);--> statement-breakpoint
+CREATE TABLE `directory_last_changes` (
+	`repository_id` text NOT NULL,
+	`commit_id` text NOT NULL,
+	`path` text NOT NULL,
+	`changes` text NOT NULL,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	PRIMARY KEY(`repository_id`, `commit_id`, `path`),
+	FOREIGN KEY (`repository_id`,`commit_id`) REFERENCES `commits`(`repository_id`,`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `indexed_commit_changes` (
 	`repository_id` text NOT NULL,
 	`commit_id` text NOT NULL,
@@ -550,6 +559,7 @@ CREATE TABLE `issue_comments` (
 --> statement-breakpoint
 CREATE INDEX `issue_comments_parent` ON `issue_comments` (`parent_id`,`created_at`,`id`);--> statement-breakpoint
 CREATE INDEX `issue_comments_issue_created` ON `issue_comments` (`issue_id`,`created_at`,`id`);--> statement-breakpoint
+CREATE INDEX `issue_comments_by_author` ON `issue_comments` (`author_id`,`issue_id`);--> statement-breakpoint
 CREATE TABLE `issue_conclusions` (
 	`issue_id` text PRIMARY KEY NOT NULL,
 	`body` text NOT NULL,
@@ -768,7 +778,6 @@ CREATE TABLE `teams` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `teams_by_organization` ON `teams` (`organization_id`,"slug" COLLATE NOCASE);--> statement-breakpoint
 CREATE UNIQUE INDEX `teams_organization_id_slug_unique` ON `teams` (`organization_id`,"slug" COLLATE NOCASE);--> statement-breakpoint
 CREATE TABLE `release_asset_upload_parts` (
 	`upload_id` text NOT NULL,
@@ -1008,7 +1017,6 @@ CREATE TABLE `pull_realtime_updates` (
 	FOREIGN KEY (`pull_request_id`) REFERENCES `pull_requests`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `pull_realtime_updates_pull_version_idx` ON `pull_realtime_updates` (`pull_request_id`,`version`);--> statement-breakpoint
 CREATE UNIQUE INDEX `pull_realtime_updates_pull_request_id_version_unique` ON `pull_realtime_updates` (`pull_request_id`,`version`);--> statement-breakpoint
 CREATE TABLE `pull_request_assignees` (
 	`pull_request_id` text NOT NULL,
@@ -1018,6 +1026,7 @@ CREATE TABLE `pull_request_assignees` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `pull_request_assignees_by_user` ON `pull_request_assignees` (`user_id`,`pull_request_id`);--> statement-breakpoint
 CREATE TABLE `pull_request_comments` (
 	`id` text PRIMARY KEY NOT NULL,
 	`pull_request_id` text NOT NULL,
@@ -1031,6 +1040,7 @@ CREATE TABLE `pull_request_comments` (
 );
 --> statement-breakpoint
 CREATE INDEX `pull_request_comments_pull_created_idx` ON `pull_request_comments` (`pull_request_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `pull_request_comments_by_author` ON `pull_request_comments` (`author_id`,`pull_request_id`);--> statement-breakpoint
 CREATE TABLE `pull_request_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`pull_request_id` text NOT NULL,
@@ -1068,6 +1078,7 @@ CREATE TABLE `pull_request_reviews` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `carried_review_per_head` ON `pull_request_reviews` (`carried_from_review_id`,`commit_id`) WHERE carried_from_review_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `reviews_by_pull` ON `pull_request_reviews` (`pull_request_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `reviews_by_author` ON `pull_request_reviews` (`author_id`,`pull_request_id`);--> statement-breakpoint
 CREATE TABLE `pull_requests` (
 	`id` text PRIMARY KEY NOT NULL,
 	`repository_id` text NOT NULL,
@@ -1101,6 +1112,7 @@ CREATE TABLE `pull_requests` (
 --> statement-breakpoint
 CREATE INDEX `pull_requests_by_state` ON `pull_requests` (`repository_id`,`state`,"updated_at" COLLATE BINARY DESC);--> statement-breakpoint
 CREATE INDEX `pull_requests_by_source_repository` ON `pull_requests` (`source_repository_id`,`state`,`source_branch`);--> statement-breakpoint
+CREATE INDEX `pull_requests_by_author` ON `pull_requests` (`author_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `pull_requests_repository_id_number_unique` ON `pull_requests` (`repository_id`,`number`);--> statement-breakpoint
 CREATE TABLE `pull_timeline` (
 	`sequence` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -1127,6 +1139,7 @@ CREATE TABLE `review_comments` (
 );
 --> statement-breakpoint
 CREATE INDEX `comments_by_thread` ON `review_comments` (`thread_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `review_comments_by_author` ON `review_comments` (`author_id`,`thread_id`);--> statement-breakpoint
 CREATE TABLE `review_threads` (
 	`id` text PRIMARY KEY NOT NULL,
 	`pull_request_id` text NOT NULL,
