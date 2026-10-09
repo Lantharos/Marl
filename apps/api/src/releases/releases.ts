@@ -32,10 +32,11 @@ type ReleaseRow = {
   updatedAt: string;
   publishedAt: string | null;
   assetCount: number;
+  downloadCount: number;
 };
 
 const releaseSelect = (body = 'releases.body') =>
-  `SELECT releases.id,releases.repository_id AS repositoryId,organizations.slug AS owner,repositories.name AS repository,releases.tag_name AS tagName,releases.target_commit_id AS targetCommitId,releases.target_branch AS targetBranch,releases.name,${body} AS body,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,releases.draft,releases.prerelease,releases.latest,releases.created_at AS createdAt,releases.updated_at AS updatedAt,releases.published_at AS publishedAt,(SELECT COUNT(*) FROM release_assets WHERE release_assets.release_id=releases.id) AS assetCount FROM releases JOIN repositories ON repositories.id=releases.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=releases.author_id`;
+  `SELECT releases.id,releases.repository_id AS repositoryId,organizations.slug AS owner,repositories.name AS repository,releases.tag_name AS tagName,releases.target_commit_id AS targetCommitId,releases.target_branch AS targetBranch,releases.name,${body} AS body,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,releases.draft,releases.prerelease,releases.latest,releases.created_at AS createdAt,releases.updated_at AS updatedAt,releases.published_at AS publishedAt,(SELECT COUNT(*) FROM release_assets WHERE release_assets.release_id=releases.id) AS assetCount,(SELECT COALESCE(SUM(download_count),0) FROM release_assets WHERE release_assets.release_id=releases.id) AS downloadCount FROM releases JOIN repositories ON repositories.id=releases.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=releases.author_id`;
 
 export async function listReleases(
   env: Env,
@@ -430,6 +431,7 @@ function summarize(row: ReleaseRow): ReleaseSummary {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     publishedAt: row.publishedAt,
-    assetCount: Number(row.assetCount)
+    assetCount: Number(row.assetCount),
+    downloadCount: Number(row.downloadCount)
   };
 }

@@ -27,14 +27,18 @@
     children: Snippet;
   } = $props();
   const base = $derived(`/organizations/${slug}/settings`);
-  const items = $derived([
-    { href: `${base}/profile`, label: 'Profile', icon: Building2, active: active === 'profile' },
-    { href: `${base}/access`, label: 'People and teams', icon: Users, active: active === 'access' },
-    { href: `${base}/agents`, label: 'Agents', icon: Bot, active: active === 'agents' },
-    ...(showSecrets
-      ? [{ href: `${base}/secrets`, label: 'CI secrets', icon: KeyRound, active: active === 'secrets' }]
-      : []),
-    { href: `${base}/webhooks`, label: 'Webhooks', icon: Webhook, active: active === 'webhooks' }
+  const groups = $derived([
+    [
+      { href: `${base}/profile`, label: 'Profile', icon: Building2, active: active === 'profile' },
+      { href: `${base}/access`, label: 'People and teams', icon: Users, active: active === 'access' },
+      { href: `${base}/agents`, label: 'Agents', icon: Bot, active: active === 'agents' }
+    ],
+    [
+      ...(showSecrets
+        ? [{ href: `${base}/secrets`, label: 'CI secrets', icon: KeyRound, active: active === 'secrets' }]
+        : []),
+      { href: `${base}/webhooks`, label: 'Webhooks', icon: Webhook, active: active === 'webhooks' }
+    ]
   ]);
 </script>
 
@@ -50,6 +54,6 @@
     </span>
     <ArrowUpRight size={14} class="text-ink-faint group-hover:text-ink-muted" />
   </a>
-  <SettingsNav label="Organization settings" {items} />
+  <SettingsNav label="Organization settings" {groups} />
 {/snippet}
 <Page><SettingsLayout {sidebar} content={children} /></Page>

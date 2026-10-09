@@ -16,8 +16,9 @@ export interface RunSummary {
   approvalRequired: boolean;
   cancellationReason?: RunCancellationReason;
   jobs: number;
-  duration?: string;
   queuedAt: string;
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export type WorkflowTrigger = 'push' | 'workflow_dispatch' | 'pull_request' | 'schedule';
@@ -51,6 +52,8 @@ export interface RunJob {
   name: string;
   state: RunState;
   requiredLabels: string[];
+  needs: string[];
+  steps: string[];
   runner?: Pick<RunnerSummary, 'id' | 'name'>;
   attempt: number;
   exitCode?: number;
@@ -68,8 +71,6 @@ export interface RunJob {
 export interface RunDetail extends RunSummary {
   canApproveChecks?: boolean;
   jobsDetail: RunJob[];
-  startedAt?: string;
-  completedAt?: string;
 }
 
 export interface RunnerSummary {

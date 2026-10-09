@@ -1,9 +1,22 @@
 # Releases
 
-Release lists show a short preview of the notes and a direct link to downloads. More versions
-load as you scroll. A release keeps its notes beside the download panel; on small screens,
-downloads appear first. Uploaded files are separate from generated source archives, and a
-filename search appears when a release has more than six files.
+Release lists read as a timeline: each version shows its tag, date, and a short preview of the
+notes, with a direct link to its files and their total downloads. The marker on the timeline and
+a word beside the date set the latest release, prereleases, and drafts apart. More versions load
+as you scroll.
+
+A release keeps its notes beside the download panel; on small screens, downloads appear first.
+Each file shows its size and download count, and a filename search appears when a release has
+more than six files. Generated source archives sit below the uploaded files with the commit they
+were built from. When a release includes a checksum file, such as `checksums.txt`, `SHA256SUMS`,
+or `app.tar.gz.sha256`, Show checksums reads it and places each SHA-256 or SHA-512 digest under
+its file with a copy button. Reading the checksum file counts as one of its downloads.
+
+The editor gives the notes most of the page. Tag, target, and release type sit together beside
+them: choosing an existing tag uses its commit, and a new tag is created from the chosen branch
+when the release is published. Files can be dropped onto the editor or chosen from disk, and each
+one shows its own progress and errors. Publish release and Save draft are separate actions, and a
+published release can no longer return to a draft.
 
 Repository collaborators with push access can draft and publish releases. Every release selects
 an existing branch or full commit identifier and owns one repository-unique Git tag. Drafts can

@@ -1,28 +1,9 @@
 import type { RunDetail } from '@marl/contracts';
-import { apiTextCursorWith, apiWith } from '#lib/api.js';
+import { apiWith } from '#lib/api.js';
 import { routeLoad } from '#lib/load.js';
 import type { PageLoad } from './$types';
 
-export const load = (async ({ fetch, params }) => {
-  const detail = await routeLoad(
+export const load = (async ({ fetch, params }) =>
+  routeLoad(
     apiWith<{ run: RunDetail }>(fetch, `/repositories/${params.owner}/${params.repo}/runs/${params.number}`)
-  );
-  const firstJob = detail.run.jobsDetail[0];
-  if (!firstJob)
-    return { run: detail.run, selected: '', logs: '', logCursor: -1, logMore: false, logUnavailable: false };
-  if (detail.run.approvalRequired)
-    return { run: detail.run, selected: firstJob.id, logs: '', logCursor: -1, logMore: false, logUnavailable: false };
-  try {
-    const log = await apiTextCursorWith(fetch, `/jobs/${firstJob.id}/logs`);
-    return {
-      run: detail.run,
-      selected: firstJob.id,
-      logs: log.text,
-      logCursor: log.cursor,
-      logMore: log.more,
-      logUnavailable: false
-    };
-  } catch {
-    return { run: detail.run, selected: firstJob.id, logs: '', logCursor: -1, logMore: false, logUnavailable: true };
-  }
-}) satisfies PageLoad;
+  )) satisfies PageLoad;

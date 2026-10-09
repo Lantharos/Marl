@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Download from '@lucide/svelte/icons/download';
+  import GitBranch from '@lucide/svelte/icons/git-branch';
   import GitCommitHorizontal from '@lucide/svelte/icons/git-commit-horizontal';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Tag from '@lucide/svelte/icons/tag';
@@ -9,7 +9,8 @@
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import Time from '#lib/components/page/Time.svelte';
-  import ReleaseAssets from '#lib/releases/ReleaseAssets.svelte';
+  import ReleaseDownloads from '#lib/releases/detail/ReleaseDownloads.svelte';
+  import { releaseState, releaseStateLabels, releaseStateTones } from '#lib/releases/release-state.js';
   import { seoExcerpt } from '#lib/seo.js';
   import type { PageProps } from './$types';
 
@@ -18,7 +19,7 @@
   const repository = $derived(params.repo);
   const release = $derived(data.release);
   const title = $derived(release.name || release.tagName);
-  const archiveBase = $derived(`/api/v1/repositories/${owner}/${repository}/releases/${release.id}/archive`);
+  const state = $derived(releaseState(release));
 </script>
 
 <Seo
@@ -28,72 +29,51 @@
   robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
 />
 
-<header class="mb-8 flex flex-wrap items-start justify-between gap-6">
-  <div class="flex min-w-0 gap-3.5">
-    <span class="grid size-10.5 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><Tag size={19} /></span
-    >
-    <div class="min-w-0">
-      <h1
-        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-semibold tracking-tight wrap-anywhere text-ink-strong sm:text-3xl"
+<header class="mb-8 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+  <div class="min-w-0 flex-[1_1_320px]">
+    <h1 class="text-2xl font-semibold tracking-tight wrap-anywhere text-ink-strong sm:text-3xl">{title}</h1>
+    <p class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-ink-muted">
+      {#if state !== 'stable'}<span class={['font-semibold', releaseStateTones[state]]}
+          >{releaseStateLabels[state]}</span
+        >{/if}
+      <span class="inline-flex items-center gap-1.5 font-mono text-xs text-ink"
+        ><Tag size={14} class="text-ink-muted" />{release.tagName}</span
       >
-        {title}
-        {#if release.latest}<span
-            class="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold tracking-normal text-brand">Latest</span
-          >{/if}
-        {#if release.draft}<span
-            class="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tracking-normal text-ink-muted"
-            >Draft</span
-          >{:else if release.prerelease}<span
-            class="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold tracking-normal text-warning"
-            >Prerelease</span
-          >{/if}
-      </h1>
-      <p class="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
-        <code class="font-mono text-xs text-ink">{release.tagName}</code>
-        <a
-          class="inline-flex items-center gap-1 font-mono text-xs hover:text-brand"
-          href="/{owner}/{repository}/commit/{release.targetCommitId}"
-          ><GitCommitHorizontal size={13} />{release.targetCommitId.slice(0, 8)}</a
-        >
-        <span class="inline-flex items-center gap-1.5"
-          ><UserProfileLink
-            handle={release.author}
-            displayName={release.authorDisplayName}
-            avatarUrl={release.authorAvatarUrl}
-            size={18}
-          />
-          {release.draft ? 'created' : 'published'}
-          <Time value={release.publishedAt ?? release.createdAt} /></span
-        >
-      </p>
-    </div>
+      {#if release.targetBranch}<span class="inline-flex items-center gap-1.5 font-mono text-xs text-ink"
+          ><GitBranch size={14} class="text-ink-muted" />{release.targetBranch}</span
+        >{/if}
+      <a
+        class="inline-flex items-center gap-1.5 font-mono text-xs text-ink hover:text-brand"
+        href="/{owner}/{repository}/commit/{release.targetCommitId}"
+        ><GitCommitHorizontal size={14} class="text-ink-muted" />{release.targetCommitId.slice(0, 7)}</a
+      >
+      <span class="inline-flex items-center gap-1.5"
+        ><UserProfileLink
+          handle={release.author}
+          displayName={release.authorDisplayName}
+          avatarUrl={release.authorAvatarUrl}
+          size={18}
+        />
+        {release.draft ? 'drafted' : 'published'}
+        <Time value={release.publishedAt ?? release.createdAt} class="text-sm text-ink-muted" /></span
+      >
+    </p>
   </div>
   {#if release.canEdit}<LinkButton size="small" href="/{owner}/{repository}/releases/edit/{release.id}"
       ><Pencil size={13} />Edit</LinkButton
     >{/if}
 </header>
 
-<div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-  <section class="min-w-0 surface p-5 sm:p-7" aria-label="Release notes">
-    {#if release.body}<MarkdownBody html={release.bodyHtml} variant="document" />{:else}<p
-        class="text-sm text-ink-muted"
-      >
-        No release notes provided.
-      </p>{/if}
+<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+  <section class="min-w-0 surface px-5 py-6 sm:px-8 sm:py-8" aria-label="Release notes">
+    {#if release.body}<div class="max-w-[76ch]"><MarkdownBody html={release.bodyHtml} variant="document" /></div>
+    {:else}<p class="text-sm text-ink-muted">No release notes were written for this version.</p>{/if}
   </section>
-  <aside class="grid min-w-0 gap-6">
-    {#key release.id}<ReleaseAssets {owner} {repository} releaseId={release.id} assets={release.assets} />{/key}
-    <section>
-      <h2 class="mb-2 text-base font-semibold text-ink-strong">Source code</h2>
-      <div class="grid grid-cols-2 gap-2">
-        {#each [['zip', 'ZIP'], ['tar.gz', 'tar.gz']] as [format, label] (format)}
-          <a
-            class="flex items-center justify-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-surface-hover hover:text-ink-strong"
-            href="{archiveBase}/{format}"
-            aria-label="Download source code as {label}"><Download size={14} />{label}</a
-          >
-        {/each}
-      </div>
-    </section>
+  <aside class="order-first min-w-0 lg:sticky lg:top-20 lg:order-none">
+    {#key release.id}<ReleaseDownloads
+        assets={release.assets}
+        archiveBase="/api/v1/repositories/{owner}/{repository}/releases/{release.id}/archive"
+        commit={release.targetCommitId}
+      />{/key}
   </aside>
 </div>

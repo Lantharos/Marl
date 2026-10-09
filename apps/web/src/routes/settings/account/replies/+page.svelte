@@ -12,6 +12,7 @@
   import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
   import Modal from '#lib/components/overlays/Modal.svelte';
+  import SettingEntry from '#lib/components/settings/SettingEntry.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import { savedReplies } from '#lib/saved-replies/saved-replies.svelte.js';
@@ -71,13 +72,9 @@
 </SettingsHeader>
 <SettingsGroup>
   {#each savedReplies.replies as reply (reply.id)}
-    <article class="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
-      <MessageSquareText size={18} class="text-ink-muted" />
-      <div class="min-w-0">
-        <strong class="block truncate text-base font-semibold text-ink-strong">{reply.title}</strong>
-        <p class="mt-0.5 line-clamp-2 text-sm whitespace-pre-line text-ink-muted">{reply.body}</p>
-      </div>
-      <div class="flex gap-1">
+    <SettingEntry icon={MessageSquareText} title={reply.title}>
+      <p class="line-clamp-2 whitespace-pre-line">{reply.body}</p>
+      {#snippet actions()}
         <Button variant="ghost" size="small" icon aria-label={`Edit ${reply.title}`} onclick={() => edit(reply)}
           ><Pencil size={15} /></Button
         >
@@ -91,8 +88,8 @@
             removing = reply;
           }}><Trash2 size={15} /></Button
         >
-      </div>
-    </article>
+      {/snippet}
+    </SettingEntry>
   {:else}
     <EmptyState
       compact

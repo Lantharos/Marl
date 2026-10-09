@@ -11,78 +11,38 @@
   import TerminalSquare from '@lucide/svelte/icons/square-terminal';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import UserRound from '@lucide/svelte/icons/user-round';
+  import type { LucideIcon } from '@lucide/svelte';
   import Page from '../../page/Page.svelte';
   import SettingsLayout from '../SettingsLayout.svelte';
   import SettingsNav from '../SettingsNav.svelte';
 
   let { children }: { children: Snippet } = $props();
   const path = $derived(page.url.pathname);
-  const items = $derived([
-    {
-      href: '/settings/account/profile',
-      label: 'Profile',
-      icon: UserRound,
-      active: path === '/settings/account/profile'
-    },
-    {
-      href: '/settings/account/emails',
-      label: 'Emails',
-      icon: Mail,
-      active: path.startsWith('/settings/account/emails')
-    },
-    {
-      href: '/settings/account/notifications',
-      label: 'Notifications',
-      icon: Bell,
-      active: path === '/settings/account/notifications'
-    },
-    {
-      href: '/settings/account/replies',
-      label: 'Saved replies',
-      icon: MessageSquareText,
-      active: path === '/settings/account/replies'
-    },
-    {
-      href: '/settings/account',
-      label: 'Sign-in and security',
-      icon: ShieldCheck,
-      active: path === '/settings/account'
-    },
-    {
-      href: '/settings/account/sessions',
-      label: 'Sessions',
-      icon: MonitorSmartphone,
-      active: path === '/settings/account/sessions'
-    },
-    {
-      href: '/settings/account/tokens',
-      label: 'Developer access',
-      icon: KeyRound,
-      active: path === '/settings/account/tokens'
-    },
-    {
-      href: '/settings/account/agents',
-      label: 'Agents',
-      icon: Bot,
-      active: path === '/settings/account/agents'
-    },
-    {
-      href: '/settings/account/ssh-keys',
-      label: 'SSH keys',
-      icon: TerminalSquare,
-      active: path === '/settings/account/ssh-keys'
-    },
-    {
-      href: '/settings/account/data',
-      label: 'Data and deletion',
-      icon: DatabaseBackup,
-      active: path === '/settings/account/data'
-    }
+  const link = (href: string, label: string, icon: LucideIcon, active = path === href) => ({
+    href,
+    label,
+    icon,
+    active
+  });
+  const groups = $derived([
+    [
+      link('/settings/account/profile', 'Profile', UserRound),
+      link('/settings/account/emails', 'Emails', Mail, path.startsWith('/settings/account/emails')),
+      link('/settings/account/notifications', 'Notifications', Bell),
+      link('/settings/account/replies', 'Saved replies', MessageSquareText)
+    ],
+    [
+      link('/settings/account', 'Sign-in and security', ShieldCheck),
+      link('/settings/account/sessions', 'Sessions', MonitorSmartphone),
+      link('/settings/account/ssh-keys', 'SSH keys', TerminalSquare)
+    ],
+    [link('/settings/account/tokens', 'Developer access', KeyRound), link('/settings/account/agents', 'Agents', Bot)],
+    [link('/settings/account/data', 'Data and deletion', DatabaseBackup)]
   ]);
 </script>
 
 {#snippet sidebar()}
   <p class="mb-3 hidden px-3 text-sm font-semibold text-ink-muted md:block">Account settings</p>
-  <SettingsNav label="Account settings" {items} />
+  <SettingsNav label="Account settings" {groups} />
 {/snippet}
 <Page><SettingsLayout {sidebar} content={children} /></Page>

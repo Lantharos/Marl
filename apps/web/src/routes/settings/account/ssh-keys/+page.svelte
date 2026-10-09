@@ -9,6 +9,7 @@
   import EmptyState from '#lib/components/feedback/EmptyState.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import ConfirmDialog from '#lib/components/overlays/ConfirmDialog.svelte';
+  import SettingEntry from '#lib/components/settings/SettingEntry.svelte';
   import SettingsHeader from '#lib/components/settings/SettingsHeader.svelte';
   import SettingsGroup from '#lib/components/settings/SettingsGroup.svelte';
   import Time from '#lib/components/page/Time.svelte';
@@ -73,28 +74,24 @@
 {#if error && !open && !removing}<Notice class="mb-4">{error}</Notice>{/if}
 <SettingsGroup>
   {#each sshKeys as key (key.id)}
-    <article class="grid min-h-20 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 py-3">
-      <KeyRound size={18} class="text-ink-muted" />
-      <div class="min-w-0">
-        <strong class="block truncate text-base font-semibold text-ink-strong">{key.name}</strong>
-        <code class="mt-0.5 block truncate font-mono text-xs text-ink-muted">{key.fingerprint}</code>
-        <span class="mt-0.5 block text-xs text-ink-faint"
-          >Added <Time value={key.createdAt} class="text-ink-faint" />{#if key.lastUsedAt}
-            · last used <Time value={key.lastUsedAt} class="text-ink-faint" />{:else}
-            · never used{/if}</span
-        >
-      </div>
-      <Button
-        variant="ghost"
-        size="small"
-        icon
-        aria-label={`Remove ${key.name}`}
-        onclick={() => {
-          error = '';
-          removing = key;
-        }}><Trash2 size={15} /></Button
+    <SettingEntry icon={KeyRound} title={key.name}>
+      <code class="truncate font-mono text-xs">{key.fingerprint}</code>
+      <span class="text-xs text-ink-faint"
+        >Added <Time value={key.createdAt} class="text-ink-faint" />{#if key.lastUsedAt}
+          · last used <Time value={key.lastUsedAt} class="text-ink-faint" />{:else}
+          · never used{/if}</span
       >
-    </article>
+      {#snippet actions()}<Button
+          variant="ghost"
+          size="small"
+          icon
+          aria-label={`Remove ${key.name}`}
+          onclick={() => {
+            error = '';
+            removing = key;
+          }}><Trash2 size={15} /></Button
+        >{/snippet}
+    </SettingEntry>
   {:else}
     <EmptyState
       compact

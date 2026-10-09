@@ -119,6 +119,12 @@ opens a focused editor; changing one setting preserves the other rules. Branches
 own rule show the all-branches policy they inherit. Secrets use a compact list with separate
 add and change dialogs, and confirmation before deletion.
 
+Settings navigation groups related pages with space rather than headings: on an account, profile
+and communication, then sign-in and devices, then developer access, then data and deletion.
+Credentials, devices, saved replies, and secrets share one row layout: an icon, a name, quiet
+details, and actions on the right. Sessions mark the current browser and offer to sign out every
+other session at once.
+
 Account pages use the same groups and spacing. Email and SSH-key creation open focused
 dialogs; existing credentials and devices remain the primary content. The authenticator QR
 code stays dark on light in both appearances so every camera can read it.
@@ -140,14 +146,24 @@ Search and filters stay in the URL; private and deleted repositories never appea
 
 ## Releases
 
-The release list keeps versions, dates, and draft or prerelease state scannable. Each release
-has a direct route to its downloads. Detail pages separate reading from downloading: notes fill
-the main column, with downloads and source archives alongside. On small screens, downloads
-come before the notes. Long filenames wrap, and releases with many files offer filename search.
-Source archives stay separate from the files uploaded by the maintainer.
+The release list is a timeline. Versions and dates line up in their own column, the marker shows
+which release is latest, a prerelease, or a draft, and the state is written as a word rather than
+a badge. Each release has a direct route to its downloads. Detail pages separate reading from
+downloading: notes fill the main column, with downloads and source archives alongside. On small
+screens, downloads come before the notes. Long filenames wrap, and releases with many files offer
+filename search. Source archives stay separate from the files uploaded by the maintainer.
 
-The release editor groups tag, target, and publishing choices beside the notes and attachments.
-Publication, draft visibility, and upload behavior do not depend on the layout.
+The release editor gives the notes a tall composer and groups tag, target, and release type
+beside them, with Publish release and Save draft as separate actions. Files drop onto the editor
+and show their own progress. Publication, draft visibility, and upload behavior do not depend on
+the layout.
+
+## Runs
+
+Run lists are status first: the outcome icon, name, trigger, branch, duration, and time share one
+dense row. A run's jobs appear as a small graph of their dependencies, and the selected job's log
+groups output by step. Logs use the code font at a fixed line height and scroll sideways instead
+of wrapping, so long output stays aligned and only the visible lines are drawn.
 
 ## Review discussions
 
