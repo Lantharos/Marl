@@ -109,8 +109,12 @@ to the API log and immediately verifies added commit addresses instead of delive
 
 Authorization has one repository capability resolver. It combines organization ownership, the
 organization's base repository role, direct collaborators, team grants, repository visibility,
-and token restrictions into `read`, `triage`, `push`, `maintain`, and `admin` decisions. Feature
-handlers do not recreate membership SQL or infer permissions from the UI. Organization owners and
+and token restrictions into `read`, `triage`, `push`, `maintain`, and `admin` decisions. A
+handler loads the repository with the viewer's role once and derives every capability it checks
+from that row. Lists filter by the repositories reachable from the viewer's memberships,
+collaborator grants, and team grants, so their cost follows the viewer's access rather than the
+size of the platform. Feature handlers do not recreate membership SQL or infer permissions from
+the UI. Organization owners and
 administrators manage invitations and teams, only owners change organization-wide policy, and
 personal organizations cannot gain additional members.
 
@@ -190,6 +194,12 @@ lists the trees of branches that moved since the previous run, and a complete ru
 listings of trees no branch points to anymore. Browsing an older commit or a pull's recorded
 revisions reads the tree from Git instead.
 
+The last change shown beside each entry comes from the indexed changed paths of every commit.
+The first view of a directory at a commit walks that commit's history once and stores a summary
+of its entries' last changes. Later views read the summary, and views at newer commits walk
+only back to the nearest summarized ancestor, so browsing after a push reads just the new
+commits. Summaries of commits that are no longer branch heads expire after a week.
+
 Definitions are indexed for each repository's default branch. After every index run, the gateway
 compares the new head with the commit recorded in `repository_symbol_indexes`, extracts
 definitions from the changed files with per-language patterns, and sends bounded pages that
@@ -236,11 +246,17 @@ commit record and completes accounting instead of deleting possibly published ob
 Native fetch reads refs and a generation manifest from the Worker, then downloads the pack
 and index files for that exact generation. Source blob reads resolve the validated object catalog
 and fetch only the packed byte range required for the object and its bounded delta chain. Missing
-derived locator rows are rebuilt from the canonical R2 object index. Old packs remain available
+derived locator rows are rebuilt from the canonical R2 object index. Repository files, templates,
+and workflow definitions are read this way, never through a Container. Because objects and
+commits are content-addressed, the API caches blob bytes, rendered overview documents, and Git
+responses addressed by commit ids (commit details, comparisons, and file patches) at the edge,
+always after authorizing the request. Old packs remain available
 for a 31-day recovery window so an in-flight fetch can finish after compaction. Standard
 `git clone`, `git fetch`, and `git push` over HTTPS use a compatibility Container. It hydrates an
-exact generation from R2 packs, runs Git Smart HTTP, captures only newly reachable objects, and
-publishes through the same validation and manifest path as a native push. Public SSH runs the same
+exact generation from R2 packs, verifying each pack the first time it is activated, runs Git Smart
+HTTP, captures only newly reachable objects, and publishes through the same validation and
+manifest path as a native push. The ref advertisement that starts a push is served as a read; the
+push lease is taken only when the client sends its pack. Public SSH runs the same
 repository engine on a persistent TCP origin because Workers cannot accept inbound SSH. It
 hydrates the exact canonical generation before each command and submits every captured push
 through the native publication protocol before returning success. The origin's disk is a reusable
@@ -314,13 +330,16 @@ capability resolver rather than duplicating access rules.
 Inbox items are derived from canonical issue, pull-request, review, assignment, and run state rather
 than copied into a second notification stream. Markdown writes maintain a bounded, indexed mention
 projection in the same D1 batch as their source content, so Inbox reads never scan comment bodies.
-Only personal read and done timestamps are stored separately. A newer canonical activity timestamp
+Candidates start from indexed rows about the person (authorship, assignment, comments, reviews,
+following, and mentions), so the cost of an Inbox grows with their own involvement rather than
+with the platform. Only personal read and done timestamps are stored separately. A newer canonical activity timestamp
 makes a previously read or finished item active again.
 
 Repository routes use SvelteKit's Cloudflare adapter and load repository, issue, pull-request, run,
 runner, and settings data through route loaders so the initial response is server-rendered. The
 root loader supplies the repository list to both the shell and child routes without a second
-browser fetch. Client requests are reserved for user-driven changes, cursor pagination, and narrow
+browser fetch. Rendering a page for a visitor without a session cookie skips the viewer requests
+entirely. Client requests are reserved for user-driven changes, cursor pagination, and narrow
 live updates, keeping the current document mounted while mutations run. Route loaders translate
 API failures into their original HTTP status
 so missing, forbidden, and unavailable resources render the correct error boundary. Marl keeps
