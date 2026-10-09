@@ -57,15 +57,17 @@ export const identityRoutes = [
   route('DELETE', '/agents/:id(agent_[a-z0-9]+)/tokens/:token(token_[a-z0-9]+)', 'user', ({ env, principal }, p) =>
     revokeAgentToken(env, principal, p.id, p.token)
   ),
-  route('GET', '/avatars/:user/:file', 'public', ({ env }, { user, file }) => readAvatar(env, user, file)),
-  route('GET', '/organization-avatars/:organization/:file', 'public', ({ env }, { organization, file }) =>
-    readOrganizationAvatar(env, organization, file)
+  route('GET', '/avatars/:user/:file', 'public', ({ env, execution }, { user, file }) =>
+    readAvatar(env, execution, user, file)
+  ),
+  route('GET', '/organization-avatars/:organization/:file', 'public', ({ env, execution }, { organization, file }) =>
+    readOrganizationAvatar(env, execution, organization, file)
   ),
   route('GET', '/profiles/:handle', 'public', ({ env }, { handle }) => getPublicIdentityProfile(env, handle)),
   route('GET', '/profiles/:handle/repositories', 'public', ({ request, env }, { handle }) =>
     listProfileRepositories(request, env, handle)
   ),
-  route('GET', '/public-index', 'public', ({ env }) => getPublicIndex(env)),
+  route('GET', '/public-index', 'public', ({ env, execution }) => getPublicIndex(env, execution)),
   route('GET', '/organizations', 'user', ({ env, principal }) => listOrganizations(env, principal)),
   route('POST', '/organizations', 'user', ({ request, env, principal }) => createOrganization(request, env, principal)),
   route('GET', organization, 'user', ({ env, principal }, { slug }) => getOrganization(env, principal, slug)),

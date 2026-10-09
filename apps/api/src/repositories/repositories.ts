@@ -187,10 +187,15 @@ export async function uploadRepositoryIcon(
   return json({ iconUrl });
 }
 
-export async function readRepositoryIcon(env: Env, repositoryId: string, file: string): Promise<Response> {
+export async function readRepositoryIcon(
+  env: Env,
+  execution: ExecutionContext,
+  repositoryId: string,
+  file: string
+): Promise<Response> {
   if (!/^repo_[a-z0-9]+$/.test(repositoryId) || !/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(file))
     return problem(404, 'repository_icon_not_found', 'Repository icon not found.');
-  return readImageAsset(env, `repository-icons/${repositoryId}/${file}`);
+  return readImageAsset(env, execution, `repository-icons/${repositoryId}/${file}`);
 }
 
 async function repositoryUnavailable(env: Env, principal: Principal | null, owner: string, name: string) {

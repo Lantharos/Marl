@@ -18,17 +18,33 @@ export async function readImageUpload(request: Request) {
   return { bytes, contentType, extension, version: crypto.randomUUID().replaceAll('-', '') };
 }
 
-export async function readImageAsset(env: Env, key: string) {
+export async function readImageAsset(env: Env, execution: ExecutionContext, key: string) {
+  const cacheKey = new Request(`https://image-cache.marl.internal/${key}`);
+  const cached = await caches.default.match(cacheKey);
+  if (cached) return imageResponse(cached.body, cached.headers.get('content-type'), cached.headers.get('etag'));
   const object = await env.OBJECTS.get(key);
   if (!object) return problem(404, 'avatar_not_found', 'Avatar not found.');
-  return new Response(object.body, {
-    headers: {
-      'content-type': object.httpMetadata?.contentType ?? 'application/octet-stream',
-      'cache-control': 'public, max-age=31536000, immutable',
-      etag: object.httpEtag,
-      'x-content-type-options': 'nosniff'
-    }
+  const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream';
+  const [body, copy] = object.body.tee();
+  execution.waitUntil(
+    caches.default.put(
+      cacheKey,
+      new Response(copy, {
+        headers: { 'content-type': contentType, etag: object.httpEtag, 'cache-control': 'public, max-age=86400' }
+      })
+    )
+  );
+  return imageResponse(body, contentType, object.httpEtag);
+}
+
+function imageResponse(body: ReadableStream | null, contentType: string | null, etag: string | null) {
+  const headers = new Headers({
+    'content-type': contentType ?? 'application/octet-stream',
+    'cache-control': 'public, max-age=31536000, immutable',
+    'x-content-type-options': 'nosniff'
   });
+  if (etag) headers.set('etag', etag);
+  return new Response(body, { headers });
 }
 
 export function storedImageKey(value: string, prefix: string, id: string) {

@@ -38,8 +38,8 @@ import {
 const repository = '/repositories/:owner/:repo';
 
 export const repositoryRoutes = [
-  route('GET', '/repository-icons/:repository/:file', 'public', ({ env }, { repository, file }) =>
-    readRepositoryIcon(env, repository, file)
+  route('GET', '/repository-icons/:repository/:file', 'public', ({ env, execution }, { repository, file }) =>
+    readRepositoryIcon(env, execution, repository, file)
   ),
   route(['GET', 'HEAD'], '/media/:id(media_[a-z0-9]+)', 'optional', ({ request, env, principal }, { id }) =>
     readRepositoryMedia(request, env, principal, id)

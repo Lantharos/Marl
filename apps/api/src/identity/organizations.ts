@@ -205,10 +205,15 @@ export async function uploadOrganizationAvatar(request: Request, env: Env, princ
   return json({ avatarUrl });
 }
 
-export async function readOrganizationAvatar(env: Env, organizationId: string, file: string) {
+export async function readOrganizationAvatar(
+  env: Env,
+  execution: ExecutionContext,
+  organizationId: string,
+  file: string
+) {
   if (!/^org_[a-z0-9]+$/.test(organizationId) || !/^[a-f0-9]{32}\.(?:png|jpg|webp)$/.test(file))
     return problem(404, 'avatar_not_found', 'Avatar not found.');
-  return readImageAsset(env, `organization-avatars/${organizationId}/${file}`);
+  return readImageAsset(env, execution, `organization-avatars/${organizationId}/${file}`);
 }
 
 export async function organizationBySlug(env: Env, slug: string) {
