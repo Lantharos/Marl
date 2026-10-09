@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CodeDefinition } from '@marl/contracts';
   import Braces from '@lucide/svelte/icons/braces';
-  import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
+  import { blobHref } from '#lib/repositories/browser/entry-path.js';
 
   let {
     definitions,
@@ -20,9 +20,7 @@
       <li>
         <a
           class="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-hover"
-          href="/{owner}/{repository}/blob/{encodeRevision(revision)}/{encodeRepositoryPath(
-            definition.path
-          )}#L{definition.line}"
+          href="{blobHref({ owner, repository, revision }, definition.path)}#L{definition.line}"
         >
           <Braces size={15} class="shrink-0 text-brand" />
           <span class="font-mono text-sm font-semibold text-ink-strong">{definition.name}</span>

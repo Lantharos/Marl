@@ -8,7 +8,7 @@ export const load = (async ({ fetch, params }) => ({
   preview: await routeLoad(
     apiWith<SourcePreview>(
       fetch,
-      `/repositories/${params.owner}/${params.repo}/source/${encodeRevision(params.revision)}/${encodeRepositoryPath(params.path ?? 'README.md')}`
+      `/repositories/${params.owner}/${params.repo}/source/${encodeRevision(params.revision)}/${encodeRepositoryPath(params.path)}`
     )
   )
 })) satisfies PageLoad;

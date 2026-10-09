@@ -10,7 +10,7 @@
 
   type Branch = { name: string; commitId: string; updatedAt: string };
 
-  let { branches, selected, onSelect }: { branches: Branch[]; selected: string; onSelect: (branch: string) => void } =
+  let { branches, selected, href }: { branches: Branch[]; selected: string; href: (branch: string) => string } =
     $props();
   let open = $state(false);
   let query = $state('');
@@ -32,15 +32,12 @@
       <SearchField label="Find a branch" bind:value={query} data-1p-ignore />
       <div class="grid max-h-80 gap-0.5 overflow-y-auto" role="listbox" aria-label="Branches">
         {#each matches as branch (branch.name)}
-          <button
-            type="button"
+          <a
             role="option"
             aria-selected={branch.name === selected}
             class="grid grid-cols-[minmax(0,1fr)_16px] items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-hover"
-            onclick={() => {
-              open = false;
-              onSelect(branch.name);
-            }}
+            href={href(branch.name)}
+            onclick={() => (open = false)}
           >
             <span class="min-w-0">
               <strong class="block truncate font-mono text-sm font-semibold text-ink-strong">{branch.name}</strong>
@@ -49,7 +46,7 @@
               >
             </span>
             {#if branch.name === selected}<Check size={14} class="text-brand" />{/if}
-          </button>
+          </a>
         {:else}
           <p class="px-2.5 py-4 text-center text-sm text-ink-muted">No matching branches</p>
         {/each}

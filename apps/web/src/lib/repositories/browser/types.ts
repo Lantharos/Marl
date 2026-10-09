@@ -1,3 +1,5 @@
+export type BranchSummary = { name: string; commitId: string; title: string; updatedAt: string };
+
 export type TreeEntry = { path: string; name: string; kind: 'blob' | 'tree'; message?: string; updatedAt?: string };
 
 export type LatestCommit = {
@@ -12,3 +14,5 @@ export type LatestCommit = {
 };
 
 export type CommitSummary = LatestCommit & { authoredAt: string };
+
+export type Tree = { commit: LatestCommit; entries: TreeEntry[] };

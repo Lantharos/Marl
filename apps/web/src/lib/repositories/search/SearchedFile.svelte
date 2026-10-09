@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CodeSearchFile } from '@marl/contracts';
   import FileCode from '@lucide/svelte/icons/file-code-2';
-  import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
+  import { blobHref } from '#lib/repositories/browser/entry-path.js';
   import MatchedLine from './MatchedLine.svelte';
 
   let {
@@ -10,7 +10,7 @@
     repository,
     revision
   }: { file: CodeSearchFile; owner: string; repository: string; revision: string } = $props();
-  const href = $derived(`/${owner}/${repository}/blob/${encodeRevision(revision)}/${encodeRepositoryPath(file.path)}`);
+  const href = $derived(blobHref({ owner, repository, revision }, file.path));
   const hidden = $derived(file.matchCount - file.matches.length);
 </script>
 

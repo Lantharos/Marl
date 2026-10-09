@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { navigating, page } from '$app/state';
   import SearchX from '@lucide/svelte/icons/search-x';
   import TextSearch from '@lucide/svelte/icons/text-search';
@@ -13,15 +12,16 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  const owner = $derived(page.params.owner ?? '');
-  const repo = $derived(page.params.repo ?? '');
+  const owner = $derived(data.repository.owner);
+  const repo = $derived(data.repository.name);
+  const revision = $derived(data.query.ref || data.repository.defaultBranch);
   const loading = $derived(navigating.to?.url.pathname === page.url.pathname);
   const lines = $derived(data.result?.files.reduce((total, file) => total + file.matchCount, 0) ?? 0);
 
-  function chooseRevision(revision: string) {
+  function revisionHref(branch: string) {
     const search = new URLSearchParams(page.url.search);
-    search.set('ref', revision);
-    void goto(`?${search}`, { reset: false });
+    search.set('ref', branch);
+    return `?${search}`;
   }
 </script>
 
@@ -33,12 +33,12 @@
 />
 
 <div class="mb-4 flex flex-wrap items-center gap-2">
-  <BranchPicker branches={data.branches} selected={data.query.ref} onSelect={chooseRevision} />
+  <BranchPicker branches={data.branches} selected={revision} href={revisionHref} />
   <CodeSearchForm
     class="min-w-64 flex-1"
     {owner}
     repository={repo}
-    revision={data.query.ref}
+    {revision}
     query={data.query.q}
     regex={data.query.regex}
     caseSensitive={data.query.caseSensitive}
@@ -76,7 +76,7 @@
       <EmptyState
         icon={SearchX}
         title="No matches"
-        description={`Nothing on ${data.query.ref} matches this search. Check the spelling, or turn off Match case.`}
+        description={`Nothing on ${revision} matches this search. Check the spelling, or turn off Match case.`}
       />
     </div>
   {/if}

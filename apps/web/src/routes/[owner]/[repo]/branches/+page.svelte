@@ -12,7 +12,7 @@
   import PageHeader from '#lib/components/page/PageHeader.svelte';
   import Seo from '#lib/components/page/Seo.svelte';
   import Time from '#lib/components/page/Time.svelte';
-  import { encodeRevision } from '#lib/repositories/repository-path.js';
+  import { treeHref } from '#lib/repositories/browser/entry-path.js';
   import type { PageData } from './$types';
 
   type Branch = PageData['branches'][number];
@@ -86,7 +86,12 @@
         <div class="flex min-w-0 items-center gap-2">
           <a
             class="truncate font-mono text-sm font-semibold text-ink-strong hover:text-brand"
-            href="/{owner}/{repo}/tree/{encodeRevision(branch.name)}">{branch.name}</a
+            href={treeHref({
+              owner,
+              repository: repo,
+              revision: branch.name,
+              defaultBranch: data.defaultBranch
+            })}>{branch.name}</a
           >
           {#if branch.name === data.defaultBranch}<span
               class="rounded-full bg-brand-soft px-2 py-0.5 text-2xs font-semibold text-brand">Default</span

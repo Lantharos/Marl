@@ -5,16 +5,10 @@
   import Search from '@lucide/svelte/icons/search';
   import { api } from '#lib/api.js';
   import { popoverMotion } from '#lib/ui/popover.js';
-  import { entryHref } from './entry-path';
+  import { entryHref, type CodeLocation } from './entry-path';
   import type { TreeEntry } from './types';
 
-  let {
-    owner,
-    repository,
-    revision,
-    initial,
-    onClose
-  }: { owner: string; repository: string; revision: string; initial: TreeEntry[]; onClose: () => void } = $props();
+  let { location, initial, onClose }: { location: CodeLocation; initial: TreeEntry[]; onClose: () => void } = $props();
   let query = $state('');
   let results = $state<TreeEntry[]>([]);
   let selected = $state(0);
@@ -32,10 +26,10 @@
     const current = ++request;
     if (!query.trim()) return;
     timer = setTimeout(async () => {
-      const params = new URLSearchParams({ revision, query: query.trim() });
-      const result = await api<{ entries: TreeEntry[] }>(`/repositories/${owner}/${repository}/tree?${params}`).catch(
-        () => ({ entries: [] })
-      );
+      const params = new URLSearchParams({ revision: location.revision, query: query.trim() });
+      const result = await api<{ entries: TreeEntry[] }>(
+        `/repositories/${location.owner}/${location.repository}/tree?${params}`
+      ).catch(() => ({ entries: [] }));
       if (current === request) results = result.entries;
     }, 120);
   }
@@ -97,7 +91,7 @@
           id="file-result-{index}"
           role="option"
           aria-selected={index === selected}
-          href={entryHref(owner, repository, revision, entry.kind, entry.path)}
+          href={entryHref(location, entry.kind, entry.path)}
           onclick={onClose}
           onmouseenter={() => (selected = index)}
           class={[

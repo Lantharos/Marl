@@ -13,18 +13,17 @@
   import Seo from '#lib/components/page/Seo.svelte';
   import PathCrumbs from '#lib/repositories/browser/PathCrumbs.svelte';
   import { encodeRepositoryPath, encodeRevision } from '#lib/repositories/repository-path.js';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
 
-  let { data }: { data: PageData } = $props();
-  const filePath = $derived(page.params.path ?? 'README.md');
-  const revision = $derived(page.params.revision ?? 'main');
+  let { data, params }: PageProps = $props();
+  const filePath = $derived(params.path);
+  const revision = $derived(params.revision);
+  const name = $derived(`${data.repository.owner}/${data.repository.name}`);
   const revisionPath = $derived(encodeRevision(revision));
   const content = $derived(data.preview.content);
-  const rawUrl = $derived(
-    `/api/v1/repositories/${page.params.owner}/${page.params.repo}/blob/${revisionPath}/${encodeRepositoryPath(filePath)}`
-  );
+  const rawUrl = $derived(`/api/v1/repositories/${name}/blob/${revisionPath}/${encodeRepositoryPath(filePath)}`);
   const lines = $derived(content.split('\n'));
-  const base = $derived(`/${page.params.owner}/${page.params.repo}`);
+  const base = $derived(`/${name}`);
   const sizeLabel = $derived(
     data.preview.binary
       ? formatBytes(data.preview.byteSize ?? 0)
@@ -47,12 +46,21 @@
 </script>
 
 <Seo
-  title={`${filePath} · ${page.params.owner}/${page.params.repo} · Marl`}
-  description={`View ${filePath} at ${revision} in ${page.params.owner}/${page.params.repo} on Marl.`}
+  title={`${filePath} · ${name} · Marl`}
+  description={`View ${filePath} at ${revision} in ${name} on Marl.`}
   path={page.url.pathname}
   robots={data.repository.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}
 />
-<PathCrumbs owner={page.params.owner ?? ''} repository={page.params.repo ?? ''} {revision} path={filePath} file />
+<PathCrumbs
+  location={{
+    owner: data.repository.owner,
+    repository: data.repository.name,
+    revision,
+    defaultBranch: data.repository.defaultBranch
+  }}
+  path={filePath}
+  file
+/>
 <section class="overflow-hidden surface">
   <header
     class="flex min-h-12 items-center justify-between gap-3 border-b border-line-subtle bg-surface-muted/60 py-1.5 pr-2 pl-4"
