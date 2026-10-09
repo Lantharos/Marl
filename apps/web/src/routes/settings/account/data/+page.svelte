@@ -66,8 +66,8 @@
       </SettingItem>
       <p class="py-4 text-sm leading-relaxed text-ink-muted">
         The file links to a Git bundle with the full history of each repository you own. Restore one with
-        <code class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink">git clone name.bundle</code>, or
-        clone the repository with Git as usual.
+        <code class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink">git clone name.bundle</code>,
+        or clone the repository with Git as usual.
       </p>
     </div>
   </section>

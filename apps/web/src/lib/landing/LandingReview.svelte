@@ -117,7 +117,7 @@
       {@attach keyboardScroll}
     >
       {#each discussion.lines as line, index (line)}
-        <code class="block w-max min-w-full px-4 py-0.5 font-mono text-[13px] leading-[1.7] whitespace-pre text-ink"
+        <code class="block w-max min-w-full px-4 py-0.5 font-mono text-sm leading-[1.7] whitespace-pre text-ink"
           ><span class="inline-block w-7.5 text-ink-faint select-none">{discussion.line + index}</span>{line}</code
         >
       {/each}

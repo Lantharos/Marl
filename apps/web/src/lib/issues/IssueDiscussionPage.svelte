@@ -143,7 +143,7 @@
 />
 
 <header class="mb-6">
-  <h1 class="text-2xl leading-tight font-semibold tracking-tight text-balance text-ink-strong sm:text-[28px]">
+  <h1 class="text-2xl leading-tight font-semibold tracking-tight text-balance text-ink-strong sm:text-3xl">
     {issue.title} <span class="font-normal text-ink-faint">#{issue.number}</span>
   </h1>
   <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-muted">

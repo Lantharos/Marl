@@ -103,7 +103,7 @@
                   ><span aria-hidden="true">·</span><Time value={pull.updatedAt} class="text-ink-muted" />
                 </p>
                 <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
-                  <code class="max-w-full truncate rounded bg-surface-muted px-1.5 py-0.5 font-mono"
+                  <code class="max-w-full truncate rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono"
                     >{pull.sourceRepository &&
                     `${pull.sourceRepository.owner}/${pull.sourceRepository.name}` !==
                       `${pull.repository.owner}/${pull.repository.name}`
@@ -111,7 +111,7 @@
                       : ''}{pull.sourceBranch}</code
                   >
                   <ArrowRight size={12} class="text-ink-faint" />
-                  <code class="rounded bg-surface-muted px-1.5 py-0.5 font-mono">{pull.targetBranch}</code>
+                  <code class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono">{pull.targetBranch}</code>
                   {#if pull.checkSummary.total}<span
                       class={[
                         'ml-1 inline-flex items-center gap-1',

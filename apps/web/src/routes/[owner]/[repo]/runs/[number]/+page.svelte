@@ -243,7 +243,8 @@
         <span class="font-semibold text-ink capitalize">{runStateLabel(run)}</span>
         <span aria-hidden="true">·</span>{runOrigin(run)}
         <span aria-hidden="true">·</span><Time value={run.queuedAt} class="text-ink-muted" />
-        <span class="inline-flex items-center gap-1 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink"
+        <span
+          class="inline-flex items-center gap-1 rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink"
           ><GitBranch size={12} />{run.branch}<a
             class="text-ink-muted hover:text-brand"
             href="/{owner}/{repo}/commit/{run.commit}">{run.commit.slice(0, 7)}</a

@@ -34,7 +34,7 @@
       {@render row('Labels')}
       <dd class="flex flex-wrap gap-1">
         {#each runner.labels as label (label)}<code
-            class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink">{label}</code
+            class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink">{label}</code
           >{/each}
       </dd>
     </div>

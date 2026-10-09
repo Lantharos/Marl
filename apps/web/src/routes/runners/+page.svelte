@@ -63,7 +63,7 @@
         </span>
         <span class="hidden min-w-0 flex-wrap gap-1 sm:flex">
           {#each runner.labels as label (label)}<code
-              class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-2xs text-ink-muted">{label}</code
+              class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-2xs text-ink-muted">{label}</code
             >{/each}
         </span>
         <span class="hidden gap-1 sm:grid">

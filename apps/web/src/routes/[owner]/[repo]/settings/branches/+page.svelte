@@ -295,7 +295,7 @@
             class="inline-flex items-center gap-1 rounded-md bg-surface-muted py-1 pr-1 pl-2.5 font-mono text-xs text-ink"
             >{check}<button
               type="button"
-              class="grid size-5 place-items-center rounded text-ink-muted hover:bg-surface-hover hover:text-ink-strong"
+              class="grid size-5 place-items-center rounded-sm text-ink-muted hover:bg-surface-hover hover:text-ink-strong"
               aria-label={`Remove ${check}`}
               disabled={saving}
               onclick={() => (draft.requiredChecks = draft.requiredChecks.filter((value) => value !== check))}

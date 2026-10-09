@@ -149,7 +149,7 @@
         >{/if}</span
     >
     <div
-      class="flex h-8 min-w-6 flex-1 cursor-pointer touch-none items-center rounded px-1 focus-visible:outline-2 focus-visible:outline-brand aria-disabled:cursor-default aria-disabled:opacity-50 pointer-coarse:h-10"
+      class="flex h-8 min-w-6 flex-1 cursor-pointer touch-none items-center rounded-sm px-1 focus-visible:outline-2 focus-visible:outline-brand aria-disabled:cursor-default aria-disabled:opacity-50 pointer-coarse:h-10"
       role="slider"
       tabindex={length ? 0 : -1}
       aria-label="Video position"

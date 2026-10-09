@@ -14,7 +14,7 @@
   <section class="w-full max-w-105 surface rounded-2xl px-5 py-6 sm:p-7">
     <a class="mb-8 inline-flex" href="/" aria-label="Marl"><BrandMark /></a>
     <header class="mb-7">
-      <h1 class="text-[28px] leading-tight font-semibold tracking-tight text-ink-strong">{title}</h1>
+      <h1 class="text-3xl leading-tight font-semibold tracking-tight text-ink-strong">{title}</h1>
       <p class="mt-2.5 text-sm leading-relaxed text-ink-muted">{description}</p>
     </header>
     {@render children()}

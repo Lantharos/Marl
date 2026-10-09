@@ -160,7 +160,7 @@
 <main class="mx-auto w-full max-w-290 px-4 pt-8 pb-20 sm:px-6 sm:pt-10">
   <header class="mb-6">
     <BackLink href="/{owner}/{repository}/releases" label="Releases" />
-    <h1 class="mt-4 flex items-center gap-2.5 text-[28px] font-semibold tracking-tight text-ink-strong">
+    <h1 class="mt-4 flex items-center gap-2.5 text-3xl font-semibold tracking-tight text-ink-strong">
       <Tag size={22} class="text-brand" />{release ? 'Edit release' : 'New release'}
     </h1>
   </header>

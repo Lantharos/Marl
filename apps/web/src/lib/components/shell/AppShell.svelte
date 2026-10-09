@@ -82,7 +82,7 @@
       <Search size={15} class="shrink-0" />
       <span class="flex-1 text-left text-sm max-sm:hidden">Find anything</span>
       <kbd
-        class="rounded border border-line bg-surface-muted px-1.5 py-px font-sans text-2xs text-ink-muted max-sm:hidden"
+        class="rounded-sm border border-line bg-surface-muted px-1.5 py-px font-sans text-2xs text-ink-muted max-sm:hidden"
         >{shortcut}</kbd
       >
     </button>

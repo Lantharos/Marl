@@ -99,7 +99,7 @@
         class="mt-12 ml-auto grid w-[min(780px,76%)] grid-cols-2 gap-12 max-[900px]:mt-8 max-[900px]:w-full max-[900px]:gap-8 max-sm:grid-cols-1 max-sm:gap-5"
       >
         <p
-          class="p-0 text-base leading-[1.75] text-pretty text-ink-muted max-sm:text-[15px] [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
+          class="p-0 text-base leading-[1.75] text-pretty text-ink-muted max-sm:text-md [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
         >
           On August 17, 2026, <a
             href="https://github.blog/news-insights/company-news/the-august-17-outage-and-the-work-ahead/"
@@ -108,7 +108,7 @@
           >, disrupting code, reviews, Actions, and authentication.
         </p>
         <p
-          class="p-0 text-base leading-[1.75] text-pretty text-ink-muted max-sm:text-[15px] [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
+          class="p-0 text-base leading-[1.75] text-pretty text-ink-muted max-sm:text-md [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
         >
           A code host should not be the reason a review stalls, a push fails, or a release waits. Somehow that became a
           lot to ask.
@@ -128,14 +128,14 @@
           You already know how to use Marl.
         </h2>
         <p
-          class="mt-6 p-0 text-base leading-[1.75] text-pretty text-ink-muted max-sm:text-[15px] [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
+          class="mt-6 p-0 text-base leading-[1.75] text-pretty text-ink-muted max-sm:text-md [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
         >
           Clone over HTTPS or SSH. Branch, commit, push. The Git habits and tools you already have come with you.
         </p>
       </div>
       <div class="min-w-0 overflow-hidden rounded-xl bg-surface-muted">
         <div
-          class="overflow-x-auto p-8 font-mono text-[13px] leading-[1.8] focus-visible:rounded-xl focus-visible:outline-offset-[-4px] max-sm:px-4.5 max-sm:py-6 max-sm:text-xs [&_i]:w-5 [&_i]:flex-none [&_i]:text-brand [&_i]:not-italic [&_p]:mb-1 [&_p]:flex [&_p]:w-max [&_p]:min-w-full [&_p]:whitespace-nowrap"
+          class="overflow-x-auto p-8 font-mono text-sm leading-[1.8] focus-visible:rounded-xl focus-visible:outline-offset-[-4px] max-sm:px-4.5 max-sm:py-6 max-sm:text-xs [&_i]:w-5 [&_i]:flex-none [&_i]:text-brand [&_i]:not-italic [&_p]:mb-1 [&_p]:flex [&_p]:w-max [&_p]:min-w-full [&_p]:whitespace-nowrap"
           role="region"
           aria-label="Git clone and push example"
           {@attach keyboardScroll}
@@ -165,14 +165,14 @@
           Write it however you want.
         </h2>
         <p
-          class="max-w-[46ch] p-0 text-base leading-[1.75] text-pretty text-ink-muted max-[900px]:max-w-[58ch] max-sm:text-[15px] [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
+          class="max-w-[46ch] p-0 text-base leading-[1.75] text-pretty text-ink-muted max-[900px]:max-w-[58ch] max-sm:text-md [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
         >
           <a href="https://codeberg.org/Codeberg/org/src/branch/main/TermsOfUse.md" target="_blank" rel="noreferrer"
             >Codeberg’s terms</a
           > reject projects that mostly consist of code written by generative AI. Marl does not.
         </p>
         <p
-          class="mt-5 max-w-[46ch] p-0 text-base leading-[1.75] text-pretty text-ink-muted max-[900px]:max-w-[58ch] max-sm:text-[15px] [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
+          class="mt-5 max-w-[46ch] p-0 text-base leading-[1.75] text-pretty text-ink-muted max-[900px]:max-w-[58ch] max-sm:text-md [&_a]:text-ink [&_a]:underline [&_a]:decoration-line-strong [&_a]:underline-offset-4 [&_a:hover]:text-brand-strong"
         >
           Write every line yourself, use AI where it helps, or let an agent take the first pass. If you’re making
           software, you’re welcome here.

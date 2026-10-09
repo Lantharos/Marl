@@ -30,7 +30,7 @@
         {/if}run #{run.number}{/if} · <Time value={run.queuedAt} class="text-ink-muted" /></span
     >
     <span
-      class="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink-muted"
+      class="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-sm bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-ink-muted"
       ><GitBranch size={12} class="shrink-0" /><span class="truncate">{run.branch}</span><span class="text-ink-faint"
         >{run.commit.slice(0, 7)}</span
       ></span
