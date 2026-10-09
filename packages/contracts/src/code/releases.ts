@@ -31,6 +31,7 @@ export interface ReleaseSummary {
   updatedAt: string;
   publishedAt: string | null;
   assetCount: number;
+  downloadCount: number;
 }
 
 export interface ReleaseDetail extends ReleaseSummary {

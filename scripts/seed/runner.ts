@@ -1,35 +1,26 @@
+import type { RunnerJobLease } from '../../packages/contracts/src/code/ci';
 import type { MarlClient } from '../qualification/client';
 
-type Lease = { id: string; leaseToken: string; branch: string; run: { name: string } };
-
-const passingLog = (branch: string) => `$ bun install --frozen-lockfile
-bun install v1.3.2
+const install = `bun install v1.3.2
  + typescript@6.1.2
  1 package installed [312.00ms]
-$ bun run check
-$ tsc --noEmit
-$ bun test
-bun test v1.3.2
+`;
+
+const passingTests = (branch: string) => `bun test v1.3.2
 
 test/contrast.test.ts:
-✓ contrastRatio > black on white is the maximum ratio [0.21ms]
-✓ contrastRatio > levels follow WCAG thresholds [0.04ms]
-${branch.includes('palette') ? '\ntest/palette.test.ts:\n✓ palette > returns the requested number of steps [0.33ms]\n✓ palette > the ends of the ramp pass AA against each other [0.41ms]\n' : ''}
- ${branch.includes('palette') ? 4 : 2} pass
+\x1b[32m✓\x1b[0m contrastRatio > black on white is the maximum ratio \x1b[2m[0.21ms]\x1b[0m
+\x1b[32m✓\x1b[0m contrastRatio > levels follow WCAG thresholds \x1b[2m[0.04ms]\x1b[0m
+${branch.includes('palette') ? '\ntest/palette.test.ts:\n\x1b[32m✓\x1b[0m palette > returns the requested number of steps \x1b[2m[0.33ms]\x1b[0m\n\x1b[32m✓\x1b[0m palette > the ends of the ramp pass AA against each other \x1b[2m[0.41ms]\x1b[0m\n' : ''}
+ \x1b[32m${branch.includes('palette') ? 4 : 2} pass\x1b[0m
  0 fail
 `;
 
-const failingLog = `$ bun install --frozen-lockfile
-bun install v1.3.2
- 1 package installed [298.00ms]
-$ bun run check
-$ tsc --noEmit
-$ bun test
-bun test v1.3.2
+const failingTests = `bun test v1.3.2
 
 test/contrast.test.ts:
-✓ contrastRatio > black on white is the maximum ratio [0.19ms]
-✗ contrastRatio > levels follow WCAG thresholds [0.51ms]
+\x1b[32m✓\x1b[0m contrastRatio > black on white is the maximum ratio \x1b[2m[0.19ms]\x1b[0m
+\x1b[31m✗\x1b[0m contrastRatio > levels follow WCAG thresholds \x1b[2m[0.51ms]\x1b[0m
 
 error: expect(received).toBe(expected)
 
@@ -39,9 +30,23 @@ Received: "AA large"
       at <anonymous> (test/contrast.test.ts:12:31)
 
  1 pass
- 1 fail
+ \x1b[31m1 fail\x1b[0m
 error: script "test" exited with code 1
 `;
+
+function jobLog(job: RunnerJobLease, failed: boolean) {
+  return [
+    `marl · ${job.run.name} #${job.run.number}\n`,
+    `repository: ${job.repository.owner}/${job.repository.name}\ncommit: ${job.commitId}\n\n`,
+    `container: ${job.runtime.image}\n`,
+    '\n── Install ──\n',
+    install,
+    '\n── Check types ──\n',
+    '$ tsc --noEmit\n',
+    '\n── Test ──\n',
+    failed ? failingTests : passingTests(job.branch)
+  ];
+}
 
 export async function registerRunner(client: MarlClient, organization: string) {
   const { enrollment } = await client.request<{ enrollment: { token: string } }>('/api/v1/runner-enrollments', {
@@ -68,14 +73,16 @@ export async function drainJobs(apiUrl: string, runnerToken: string, failingBran
   for (;;) {
     const claim = await fetch(`${apiUrl}/api/v1/runner/claim`, { method: 'POST', headers: auth });
     if (claim.status === 204) return;
-    const { job } = (await claim.json()) as { job: Lease };
+    const { job } = (await claim.json()) as { job: RunnerJobLease };
     const failed = failingBranches.includes(job.branch);
     const headers = { ...auth, 'x-marl-job-lease': job.leaseToken };
-    await fetch(`${apiUrl}/api/v1/runner/jobs/${job.id}/logs/0`, {
-      method: 'PUT',
-      headers: { ...headers, 'content-type': 'text/plain' },
-      body: failed ? failingLog : passingLog(job.branch)
-    });
+    for (const [sequence, chunk] of jobLog(job, failed).entries()) {
+      await fetch(`${apiUrl}/api/v1/runner/jobs/${job.id}/logs/${sequence}`, {
+        method: 'PUT',
+        headers: { ...headers, 'content-type': 'text/plain' },
+        body: chunk
+      });
+    }
     await fetch(`${apiUrl}/api/v1/runner/jobs/${job.id}/complete`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json' },

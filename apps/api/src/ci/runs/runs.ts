@@ -51,34 +51,48 @@ export function summarizeRun(row: Record<string, unknown>) {
   };
 }
 
-export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
+function runFilters(url: URL): { error: Response } | { sql: string; values: unknown[] } {
   const search = readListQuery(url);
-  if ('error' in search) return search.error;
-  const limit = pageSize(url);
-  const cursor = readCursor(url);
-  const access = repositoryListFilter(principal);
+  if ('error' in search) return search;
   const state = url.searchParams.get('state') ?? 'all';
   if (!['all', 'active', 'success', 'failure', 'canceled'].includes(state))
-    return problem(422, 'invalid_run_state', 'Run state is invalid.');
-  const stateSql =
-    state === 'active' ? "AND runs.state IN ('queued','running')" : state === 'all' ? '' : 'AND runs.state=?';
-  const querySql = search.query
-    ? `AND (runs.name LIKE ? ESCAPE '\\' OR runs.branch LIKE ? ESCAPE '\\' OR runs.commit_id LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')`
-    : '';
+    return { error: problem(422, 'invalid_run_state', 'Run state is invalid.') };
+  const workflow = url.searchParams.get('workflow');
+  const clauses = [
+    state === 'active' ? "runs.state IN ('queued','running')" : state === 'all' ? '' : 'runs.state=?',
+    workflow ? 'runs.workflow_id=?' : '',
+    search.query
+      ? `(runs.name LIKE ? ESCAPE '\\' OR runs.branch LIKE ? ESCAPE '\\' OR runs.commit_id LIKE ? ESCAPE '\\' OR organizations.slug || '/' || repositories.name LIKE ? ESCAPE '\\')`
+      : ''
+  ].filter(Boolean);
+  return {
+    sql: clauses.map((clause) => `AND ${clause}`).join(' '),
+    values: [
+      ...(state !== 'all' && state !== 'active' ? [state] : []),
+      ...(workflow ? [workflow] : []),
+      ...(search.query ? [search.like, search.like, search.like, search.like] : [])
+    ]
+  };
+}
+
+async function pageRuns(env: Env, url: URL, where: string, values: unknown[]): Promise<Response> {
+  const filters = runFilters(url);
+  if ('error' in filters) return filters.error;
+  const limit = pageSize(url);
+  const cursor = readCursor(url);
   const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
-  const filters = [
-    ...access.values,
-    ...(state !== 'all' && state !== 'active' ? [state] : []),
-    ...(search.query ? [search.like, search.like, search.like, search.like] : [])
-  ];
-  const values = cursor ? [...filters, cursor.value, cursor.value, cursor.id, limit + 1] : [...filters, limit + 1];
   const rows = await env.DB.prepare(
-    runSelect(`WHERE ${access.sql} ${stateSql} ${querySql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)
+    runSelect(`WHERE ${where} ${filters.sql} ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)
   )
-    .bind(...values)
+    .bind(...values, ...filters.values, ...(cursor ? [cursor.value, cursor.value, cursor.id] : []), limit + 1)
     .all<Record<string, unknown>>();
   const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
   return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
+}
+
+export async function listRuns(env: Env, principal: Principal, url: URL): Promise<Response> {
+  const access = repositoryListFilter(principal);
+  return pageRuns(env, url, access.sql, access.values);
 }
 
 export async function listRepositoryRuns(
@@ -90,17 +104,7 @@ export async function listRepositoryRuns(
 ): Promise<Response> {
   const repo = await repository(env, principal, owner, name);
   if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  const limit = pageSize(url);
-  const cursor = readCursor(url);
-  const after = cursor ? 'AND (runs.created_at<? OR (runs.created_at=? AND runs.id<?))' : '';
-  const values = cursor ? [repo.id, cursor.value, cursor.value, cursor.id, limit + 1] : [repo.id, limit + 1];
-  const rows = await env.DB.prepare(
-    runSelect(`WHERE runs.repository_id=? ${after} ORDER BY runs.created_at DESC,runs.id DESC LIMIT ?`)
-  )
-    .bind(...values)
-    .all<Record<string, unknown>>();
-  const page = pageResult(rows.results, limit, (row) => ({ value: String(row.queuedAt), id: String(row.id) }));
-  return json({ runs: page.items.map(summarizeRun), nextCursor: page.nextCursor });
+  return pageRuns(env, url, 'runs.repository_id=?', [repo.id]);
 }
 
 export async function getRun(
@@ -118,7 +122,7 @@ export async function getRun(
   if (!run) return problem(404, 'run_not_found', 'Run not found.');
   const [jobs, artifacts] = await Promise.all([
     env.DB.prepare(
-      `SELECT jobs.id,jobs.job_key AS key,jobs.name,jobs.state,jobs.required_labels_json AS labelsJson,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`
+      `SELECT jobs.id,jobs.job_key AS key,jobs.name,jobs.state,jobs.required_labels_json AS labelsJson,jobs.needs_json AS needsJson,jobs.steps_json AS stepsJson,jobs.attempt,jobs.exit_code AS exitCode,jobs.started_at AS startedAt,jobs.completed_at AS completedAt,runners.id AS runnerId,runners.name AS runnerName,COALESCE((SELECT SUM(byte_size) FROM job_log_chunks WHERE job_id=jobs.id),0) AS logBytes FROM jobs LEFT JOIN runners ON runners.id=jobs.runner_id WHERE jobs.run_id=? ORDER BY jobs.created_at`
     )
       .bind(run.id)
       .all<{
@@ -127,6 +131,8 @@ export async function getRun(
         name: string;
         state: string;
         labelsJson: string;
+        needsJson: string;
+        stepsJson: string;
         attempt: number;
         exitCode?: number;
         startedAt?: string;
@@ -145,9 +151,11 @@ export async function getRun(
     run: {
       ...summarizeRun(run),
       canApproveChecks: Boolean(await authorizeRepositoryId(env, principal, repo.id, 'repository.push')),
-      jobsDetail: jobs.results.map(({ labelsJson, runnerId, runnerName, ...job }) => ({
+      jobsDetail: jobs.results.map(({ labelsJson, needsJson, stepsJson, runnerId, runnerName, ...job }) => ({
         ...job,
         requiredLabels: JSON.parse(labelsJson),
+        needs: JSON.parse(needsJson),
+        steps: (JSON.parse(stepsJson) as Array<{ name: string }>).map((step) => step.name),
         ...(runnerId ? { runner: { id: runnerId, name: runnerName } } : {}),
         artifacts: artifacts.results
           .filter((artifact) => artifact.jobId === job.id)
@@ -310,10 +318,10 @@ export async function readJobLogs(env: Env, principal: Principal | null, jobId: 
   const after = Number(url.searchParams.get('after') ?? -1);
   if (!Number.isSafeInteger(after) || after < -1) return problem(422, 'invalid_log_cursor', 'Log cursor is invalid.');
   const chunks = await env.DB.prepare(
-    'SELECT sequence,object_key AS objectKey FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT 5'
+    'SELECT sequence,object_key AS objectKey,created_at AS createdAt FROM job_log_chunks WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT 5'
   )
     .bind(jobId, after)
-    .all<{ sequence: number; objectKey: string }>();
+    .all<{ sequence: number; objectKey: string; createdAt: string }>();
   const visible = chunks.results.slice(0, 4);
   const streams = await Promise.all(
     visible.map(async (chunk) => {
@@ -330,6 +338,9 @@ export async function readJobLogs(env: Env, principal: Principal | null, jobId: 
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
       'x-marl-log-cursor': String(cursor),
+      'x-marl-log-times': visible
+        .map((chunk, index) => `${streams[index]!.length}@${Date.parse(`${chunk.createdAt.replace(' ', 'T')}Z`)}`)
+        .join(','),
       'x-marl-log-more': String(chunks.results.length > visible.length)
     }
   });
