@@ -15,7 +15,7 @@ export const STORAGE_LIMITS = {
   leaseSeconds: 15 * 60
 } as const;
 
-export type GitHash = string;
+type GitHash = string;
 
 export type PackDescriptor = {
   id: string;
@@ -28,7 +28,7 @@ export type PackDescriptor = {
   largestBlobBytes: number;
 };
 
-export type PushLease = {
+type PushLease = {
   id: string;
   reservationId: string;
   expectedGeneration: number;
@@ -70,41 +70,6 @@ export type Publication = {
   manifestHash: string;
   packs: PackDescriptor[];
 };
-
-export function emptyRepositoryState(): RepositoryState {
-  return {
-    generation: 0,
-    refsVersion: 0,
-    refs: {},
-    manifestKey: null,
-    manifestHash: null,
-    packs: [],
-    storedBytes: 0,
-    activePush: null
-  };
-}
-
-export function emptyOrganizationQuota(): OrganizationQuotaState {
-  return { usedBytes: 0, reservations: {}, adjustments: {} };
-}
-
-export function adjustStorage(state: OrganizationQuotaState, id: string, deltaBytes: number): OrganizationQuotaState {
-  if (!id || !Number.isSafeInteger(deltaBytes))
-    throw new StorageError('invalid_adjustment', 'The storage adjustment is invalid.');
-  const existing = state.adjustments[id];
-  if (existing !== undefined) {
-    if (existing !== deltaBytes)
-      throw new StorageError(
-        'adjustment_conflict',
-        'The storage adjustment was already recorded with a different size.'
-      );
-    return state;
-  }
-  const usedBytes = state.usedBytes + deltaBytes;
-  if (usedBytes < 0 || usedBytes > STORAGE_LIMITS.organizationBytes)
-    throw new StorageError('organization_storage_limit', 'The storage adjustment exceeds the organization limit.');
-  return { ...state, usedBytes, adjustments: { ...state.adjustments, [id]: deltaBytes } };
-}
 
 export function beginPush(
   state: RepositoryState,
@@ -181,76 +146,7 @@ export function publish(state: RepositoryState, publication: Publication, now: n
   };
 }
 
-export function reserveStorage(
-  state: OrganizationQuotaState,
-  reservation: StorageReservation,
-  now: number
-): OrganizationQuotaState {
-  const current = expireReservations(state, now);
-  if (
-    !Number.isSafeInteger(reservation.maximumBytes) ||
-    reservation.maximumBytes < 0 ||
-    reservation.maximumBytes > STORAGE_LIMITS.pushBytes
-  )
-    throw new StorageError('invalid_reservation', 'The requested upload reservation is invalid.');
-  const existing = current.reservations[reservation.id];
-  if (existing) {
-    if (existing.repository !== reservation.repository || existing.maximumBytes !== reservation.maximumBytes)
-      throw new StorageError('reservation_conflict', 'The reservation identifier is already in use.');
-    return current;
-  }
-  const active = Object.values(current.reservations).filter((value) => value.state === 'reserved');
-  if (active.length >= STORAGE_LIMITS.activeUploadsPerOrganization)
-    throw new StorageError(
-      'organization_upload_limit',
-      'This organization already has the maximum number of active uploads.'
-    );
-  const reservedBytes = active.reduce((total, value) => total + value.maximumBytes, 0);
-  if (current.usedBytes + reservedBytes + reservation.maximumBytes > STORAGE_LIMITS.organizationBytes)
-    throw new StorageError('organization_storage_limit', 'This upload would exceed the organization storage limit.');
-  return { ...current, reservations: { ...current.reservations, [reservation.id]: reservation } };
-}
-
-export function settleStorage(
-  state: OrganizationQuotaState,
-  reservationId: string,
-  actualBytes: number,
-  now: number
-): OrganizationQuotaState {
-  const current = expireReservations(state, now, reservationId);
-  const reservation = current.reservations[reservationId];
-  if (!reservation) throw new StorageError('reservation_missing', 'The storage reservation does not exist.');
-  if (!Number.isSafeInteger(actualBytes) || actualBytes < 0 || actualBytes > reservation.maximumBytes)
-    throw new StorageError('reservation_exceeded', 'Published bytes exceed the storage reservation.');
-  if (reservation.state === 'committed') {
-    if (reservation.actualBytes !== actualBytes)
-      throw new StorageError(
-        'settlement_conflict',
-        'The storage reservation was already settled with a different size.'
-      );
-    return current;
-  }
-  return {
-    ...current,
-    usedBytes: current.usedBytes + actualBytes,
-    reservations: { ...current.reservations, [reservationId]: { ...reservation, state: 'committed', actualBytes } }
-  };
-}
-
-export function releaseReservation(
-  state: OrganizationQuotaState,
-  reservationId: string,
-  now: number
-): OrganizationQuotaState {
-  const current = expireReservations(state, now);
-  const reservation = current.reservations[reservationId];
-  if (!reservation || reservation.state === 'committed') return current;
-  const reservations = { ...current.reservations };
-  delete reservations[reservationId];
-  return { ...current, reservations };
-}
-
-export function validateRefs(refs: Record<string, GitHash>) {
+function validateRefs(refs: Record<string, GitHash>) {
   const entries = Object.entries(refs);
   if (entries.length > STORAGE_LIMITS.refsPerRepository)
     throw new StorageError('too_many_refs', 'The repository contains too many refs.');
@@ -292,20 +188,6 @@ export class StorageError extends Error {
 
 function expirePush(state: RepositoryState, now: number): RepositoryState {
   return state.activePush && state.activePush.expiresAt <= now ? { ...state, activePush: null } : state;
-}
-
-function expireReservations(state: OrganizationQuotaState, now: number, keepId?: string): OrganizationQuotaState {
-  const reservations = Object.fromEntries(
-    Object.entries(state.reservations).filter(
-      ([id, value]) =>
-        value.expiresAt > now ||
-        (value.state === 'committed' && value.expiresAt + 24 * 60 * 60 * 1000 > now) ||
-        id === keepId
-    )
-  );
-  return Object.keys(reservations).length === Object.keys(state.reservations).length
-    ? state
-    : { ...state, reservations };
 }
 
 function refsEqual(left: Record<string, string>, right: Record<string, string>) {

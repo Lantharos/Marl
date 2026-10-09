@@ -5,7 +5,7 @@ import type { BranchRule } from '../../repositories/branch-rules';
 import { commitChecks } from '../merge/readiness';
 import { requiredCheckStates } from '../merge/requirements';
 
-export type QueueVerdict = 'pending' | 'passed' | 'failed';
+type QueueVerdict = 'pending' | 'passed' | 'failed';
 
 export async function startQueueChecks(
   env: Env,

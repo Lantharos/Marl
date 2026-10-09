@@ -1,6 +1,6 @@
-export type OperationStatus = 'queued' | 'running' | 'retrying' | 'completed';
+type OperationStatus = 'queued' | 'running' | 'retrying' | 'completed';
 
-export type DurableOperation<T> = {
+type DurableOperation<T> = {
   id: string;
   kind: string;
   payload: T;

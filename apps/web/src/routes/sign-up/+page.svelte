@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slugPattern } from '@marl/contracts';
   import { goto, invalidateAll } from '$app/navigation';
   import AuthShell from '$lib/components/auth/AuthShell.svelte';
   import Button from '$lib/components/controls/Button.svelte';
@@ -79,7 +80,7 @@
           autocomplete="username"
           minlength="2"
           maxlength="39"
-          pattern="[a-z0-9](?:(?:[a-z0-9._]|-)*[a-z0-9])?"
+          pattern={slugPattern}
           bind:value={username}
           oninput={() => (username = username.toLowerCase())}
           required

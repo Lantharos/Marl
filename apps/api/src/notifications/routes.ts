@@ -17,10 +17,10 @@ export const notificationRoutes = [
     updateNotificationPreferences(request, env, principal)
   ),
   route('GET', '/notifications/unsubscribe', 'public', ({ env, url }) =>
-    unsubscribe(env, url.searchParams.get('token'), url)
+    unsubscribe(env, url.searchParams.get('token'))
   ),
   route('POST', '/notifications/unsubscribe', 'public', ({ env, url }) =>
-    unsubscribe(env, url.searchParams.get('token'), url)
+    unsubscribe(env, url.searchParams.get('token'))
   ),
   route('GET', `${repository}/notifications`, 'user', ({ env, principal }, { owner, repo }) =>
     getRepositoryNotificationLevel(env, principal, owner, repo)

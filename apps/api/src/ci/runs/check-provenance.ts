@@ -1,4 +1,4 @@
-export type CheckProducer = { workflowId: string; jobKey: string };
+type CheckProducer = { workflowId: string; jobKey: string };
 export type RequiredCheck = CheckProducer & { name: string };
 export type CheckState = CheckProducer & { name: string; state: string };
 

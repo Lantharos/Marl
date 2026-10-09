@@ -73,11 +73,11 @@ export async function setRepositoryNotificationLevel(
   return json({ level: body.level });
 }
 
-export async function unsubscribe(env: Env, token: string | null, url: URL) {
+export async function unsubscribe(env: Env, token: string | null) {
   const userId = await verifyToken(env, 'unsubscribe', token);
   if (!userId) return problem(410, 'unsubscribe_link_expired', 'This unsubscribe link has expired.');
   await env.DB.prepare("UPDATE notification_settings SET email_mode='off',pending_at=NULL WHERE user_id=?")
     .bind(userId)
     .run();
-  return Response.redirect(new URL('/notifications/unsubscribed', env.PUBLIC_URL || url.origin).href, 303);
+  return Response.redirect(new URL('/notifications/unsubscribed', env.PUBLIC_URL).href, 303);
 }

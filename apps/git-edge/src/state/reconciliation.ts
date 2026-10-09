@@ -10,13 +10,10 @@ export type CommittedPush = {
   committedAt: number;
 };
 
-export type PublicationFailureDisposition = 'published' | 'discard' | 'defer';
-export type PublicationResolution<T> = { value: T; recovered: CommittedPush | null };
+type PublicationFailureDisposition = 'published' | 'discard' | 'defer';
+type PublicationResolution<T> = { value: T; recovered: CommittedPush | null };
 
-export function publicationFailureDisposition(
-  error: unknown,
-  committed: CommittedPush | null
-): PublicationFailureDisposition {
+function publicationFailureDisposition(error: unknown, committed: CommittedPush | null): PublicationFailureDisposition {
   if (committed) return 'published';
   return error instanceof StateRequestError ? 'discard' : 'defer';
 }

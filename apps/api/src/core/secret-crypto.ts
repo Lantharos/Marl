@@ -1,19 +1,7 @@
 import type { Env } from './platform';
 
-function bytes(value: string) {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
-}
-
-function encoded(value: ArrayBuffer | Uint8Array) {
-  const data = value instanceof Uint8Array ? value : new Uint8Array(value);
-  let binary = '';
-  for (const byte of data) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
 async function key(env: Env) {
-  if (!env.SECRET_ENCRYPTION_KEY) throw new Error('SECRET_ENCRYPTION_KEY is not configured');
-  const raw = bytes(env.SECRET_ENCRYPTION_KEY);
+  const raw = Uint8Array.fromBase64(env.SECRET_ENCRYPTION_KEY);
   if (raw.byteLength !== 32) throw new Error('SECRET_ENCRYPTION_KEY must decode to 32 bytes');
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
@@ -35,7 +23,7 @@ export async function encryptSecret(
     await key(env),
     new TextEncoder().encode(value)
   );
-  return { ciphertext: encoded(ciphertext), nonce: encoded(nonce) };
+  return { ciphertext: new Uint8Array(ciphertext).toBase64(), nonce: nonce.toBase64() };
 }
 
 export async function decryptSecret(
@@ -45,11 +33,11 @@ export async function decryptSecret(
   const plaintext = await crypto.subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv: bytes(secret.nonce),
+      iv: Uint8Array.fromBase64(secret.nonce),
       additionalData: context(secret.organizationId, secret.repositoryId, secret.name)
     },
     await key(env),
-    bytes(secret.ciphertext)
+    Uint8Array.fromBase64(secret.ciphertext)
   );
   return new TextDecoder().decode(plaintext);
 }

@@ -53,8 +53,6 @@ export async function createQualification() {
         '--var',
         'ENVIRONMENT:development',
         '--var',
-        `GIT_GATEWAY_URL:${urls.git}`,
-        '--var',
         `GIT_PUBLIC_URL:${urls.git}`,
         '--var',
         `GIT_SSH_PUBLIC_URL:${urls.ssh}`,

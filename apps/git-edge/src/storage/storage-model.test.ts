@@ -2,26 +2,24 @@ import { describe, expect, test } from 'bun:test';
 import {
   STORAGE_LIMITS,
   StorageError,
-  adjustStorage,
   beginPush,
   changesMarlManagedRefs,
-  emptyOrganizationQuota,
-  emptyRepositoryState,
   proposePushRefs,
   publish,
-  releaseReservation,
-  reserveStorage,
-  settleStorage
+  type RepositoryState
 } from './storage-model';
 
 const now = 1_000_000;
-const reservation = {
-  id: 'push_1',
-  repository: 'lantharos/marl',
-  maximumBytes: 1024,
-  expiresAt: now + 60_000,
-  state: 'reserved' as const
-};
+const emptyRepositoryState = (): RepositoryState => ({
+  generation: 0,
+  refsVersion: 0,
+  refs: {},
+  manifestKey: null,
+  manifestHash: null,
+  packs: [],
+  storedBytes: 0,
+  activePush: null
+});
 const pack = {
   id: 'a'.repeat(40),
   packKey: 'repositories/lantharos/marl/packs/a.pack',
@@ -116,29 +114,5 @@ describe('repository ref limits', () => {
     expect(changesMarlManagedRefs(current, { ...current, 'refs/heads/main': 'c'.repeat(40) })).toBeFalse();
     expect(changesMarlManagedRefs(current, { ...current, 'refs/marl/pulls/1/head': 'c'.repeat(40) })).toBeTrue();
     expect(changesMarlManagedRefs(current, { 'refs/heads/main': 'a'.repeat(40) })).toBeTrue();
-  });
-});
-
-describe('organization reservations', () => {
-  test('reserves, settles, and makes settlement idempotent', () => {
-    const reserved = reserveStorage(emptyOrganizationQuota(), reservation, now);
-    const settled = settleStorage(reserved, reservation.id, 700, now);
-    expect(settled.usedBytes).toBe(700);
-    expect(settleStorage(settled, reservation.id, 700, now)).toEqual(settled);
-  });
-
-  test('releases unfinished reservations and enforces the push ceiling', () => {
-    const reserved = reserveStorage(emptyOrganizationQuota(), reservation, now);
-    expect(releaseReservation(reserved, reservation.id, now).reservations).toEqual({});
-    expect(() =>
-      reserveStorage(emptyOrganizationQuota(), { ...reservation, maximumBytes: STORAGE_LIMITS.pushBytes + 1 }, now)
-    ).toThrow(StorageError);
-  });
-
-  test('applies idempotent compaction adjustments', () => {
-    const state = { ...emptyOrganizationQuota(), usedBytes: 1_000 };
-    const adjusted = adjustStorage(state, 'compact_1', -200);
-    expect(adjusted.usedBytes).toBe(800);
-    expect(adjustStorage(adjusted, 'compact_1', -200)).toEqual(adjusted);
   });
 });

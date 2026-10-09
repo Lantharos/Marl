@@ -1,6 +1,8 @@
 import type { Principal } from '../../auth/principal';
-import { requireFreshSession, sha256 } from '../../auth/principal';
-import { identifier, validSlug } from '../../core/domain';
+import { requireFreshSession } from '../../auth/principal';
+import { sha256 } from '../../core/encoding';
+import { identifier } from '../../core/domain';
+import { validSlug } from '@marl/contracts';
 import { json, problem, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
 import { runnerEnrollmentBody, runnerRegistrationBody } from '../../http/request-schemas';

@@ -10,7 +10,8 @@
   import SettingsChoices from '$lib/components/settings/SettingsChoices.svelte';
   import { api, MarlApiError } from '$lib/api';
   import { ownerOptions } from '$lib/repositories/owner-options';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
+  import { completeRepositoryName, repositoryName } from '$lib/repositories/repository-name';
+  import { validSlug } from '@marl/contracts';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const options = $derived(ownerOptions(data.organizations, data.shellUser?.displayName));
@@ -23,7 +24,7 @@
   let submitting = $state(false);
   let error = $state('');
   const submittedName = $derived(completeRepositoryName(name));
-  const nameValid = $derived(validRepositoryName(submittedName));
+  const nameValid = $derived(validSlug(submittedName));
   async function createRepository() {
     if (!nameValid || submitting) return;
     submitting = true;

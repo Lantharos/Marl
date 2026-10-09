@@ -2,7 +2,7 @@ import type { BranchRule } from '../../repositories/branch-rules';
 import { checkProducerKey, type CheckState } from '../../ci/runs/check-provenance';
 
 export type CheckCounts = { total: number; passed: number; failed: number; running: number; items?: CheckState[] };
-export type RequirementPull = {
+type RequirementPull = {
   authorId: string;
   sourceCommitId: string;
   state: 'draft' | 'open' | 'merged' | 'closed';

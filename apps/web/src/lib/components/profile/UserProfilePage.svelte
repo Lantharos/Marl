@@ -2,7 +2,7 @@
   import Bot from '@lucide/svelte/icons/bot';
   import Flag from '@lucide/svelte/icons/flag';
   import Button from '$lib/components/controls/Button.svelte';
-  import { reporting } from '$lib/moderation/reporting.svelte';
+  import { reporting } from '$lib/reporting/reporting.svelte';
   import type { PublicUserProfile } from '@marl/contracts';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';

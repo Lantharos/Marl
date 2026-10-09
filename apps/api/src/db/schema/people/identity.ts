@@ -60,7 +60,6 @@ export const users = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
     email: text('email'),
     avatarUrl: text('avatar_url'),
-    authUserId: text('auth_user_id'),
     bio: text('bio')
       .notNull()
       .default(sql`''`),
@@ -74,16 +73,10 @@ export const users = sqliteTable(
       .notNull()
       .default(sql`'person'`),
     operatorOrganizationId: text('operator_organization_id'),
-    staff: integer('staff')
-      .notNull()
-      .default(sql`0`),
     suspendedAt: text('suspended_at'),
     suspensionReason: text('suspension_reason')
   },
   (table) => [
-    uniqueIndex('users_by_auth_user')
-      .on(table.authUserId)
-      .where(sql`auth_user_id IS NOT NULL`),
     uniqueIndex('users_handle_unique').on(sql`${table.handle} COLLATE NOCASE`),
     index('users_by_display_name').on(sql`${table.displayName} COLLATE NOCASE`),
     check('users_check_0', sql`signing_mode IN ('optional','vigilant','firewall')`),

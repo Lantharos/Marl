@@ -55,10 +55,6 @@ async function apiRequest<T>(fetcher: Fetcher, path: string, init: RequestInit, 
   return JSON.parse(body) as T;
 }
 
-export async function apiTextCursorAll(path: string, after = -1): Promise<{ text: string; cursor: number }> {
-  return apiTextCursorAllWith(fetch, path, after);
-}
-
 export async function apiTextCursorWith(
   fetcher: Fetcher,
   path: string,
@@ -74,15 +70,11 @@ export async function apiTextCursorWith(
   };
 }
 
-export async function apiTextCursorAllWith(
-  fetcher: Fetcher,
-  path: string,
-  after = -1
-): Promise<{ text: string; cursor: number }> {
+export async function apiTextCursorAll(path: string, after = -1): Promise<{ text: string; cursor: number }> {
   const parts: string[] = [];
   let cursor = after;
   while (true) {
-    const next = await apiTextCursorWith(fetcher, path, cursor);
+    const next = await apiTextCursorWith(fetch, path, cursor);
     if (!Number.isSafeInteger(next.cursor) || next.cursor < cursor || (next.more && next.cursor === cursor)) {
       throw new MarlApiError(502, 'invalid_log_cursor', 'Marl API returned an invalid log cursor.');
     }

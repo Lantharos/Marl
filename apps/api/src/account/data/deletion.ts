@@ -56,9 +56,6 @@ export async function deleteAccount(request: Request, env: Env, principal: Princ
         organizations: plan.blockers
       }
     );
-  const user = await env.DB.prepare('SELECT auth_user_id AS authUserId FROM users WHERE id=?')
-    .bind(principal.id)
-    .first<{ authUserId: string | null }>();
   const deletionScheduledAt = new Date(Date.now() + 30 * 86400000).toISOString();
   const organizations = plan.organizationIds.map(() => '?').join(',');
   const tombstone = `deleted-${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`;
@@ -104,9 +101,9 @@ export async function deleteAccount(request: Request, env: Env, principal: Princ
       'repository_notification_levels'
     ].map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE user_id=?`).bind(principal.id)),
     env.DB.prepare(
-      `UPDATE users SET handle=?,display_name='Deleted user',email=NULL,avatar_url=NULL,bio='',website=NULL,auth_user_id=NULL,deleted_at=CURRENT_TIMESTAMP WHERE id=?`
+      `UPDATE users SET handle=?,display_name='Deleted user',email=NULL,avatar_url=NULL,bio='',website=NULL,deleted_at=CURRENT_TIMESTAMP WHERE id=?`
     ).bind(tombstone, principal.id),
-    env.DB.prepare('DELETE FROM auth_user WHERE id=?').bind(user?.authUserId ?? principal.id)
+    env.DB.prepare('DELETE FROM auth_user WHERE id=?').bind(principal.id)
   ]);
   return new Response(null, { status: 204 });
 }

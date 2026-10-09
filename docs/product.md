@@ -277,9 +277,9 @@ Signing up requires accepting the Terms of Service and Privacy Policy, and Marl 
 version each person accepted; when the policies change, people accept the new version before
 continuing. Anyone can download a copy of their data or delete their account from settings.
 
-Repositories, issues, pulls, comments, and accounts can be reported. Staff review reports in a
-moderation queue and can remove comments, disable repositories, or suspend accounts. A disabled
-repository shows its reason instead of its content.
+Repositories, issues, pulls, comments, and accounts can be reported. Moderators review reports and
+can remove comments, disable repositories, or suspend accounts. Repeated reports about the same
+content are reviewed together. A disabled repository shows its reason instead of its content.
 
 ## Runs and runners
 

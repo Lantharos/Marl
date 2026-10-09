@@ -77,9 +77,7 @@ async function unpack(
   } else if (header.type === 7) {
     const hashBytes = locator.id.length / 2;
     if (contentOffset + hashBytes > packed.length) throw new Error('Git REF delta base is truncated.');
-    const baseId = [...packed.subarray(contentOffset, contentOffset + hashBytes)]
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('');
+    const baseId = packed.subarray(contentOffset, contentOffset + hashBytes).toHex();
     contentOffset += hashBytes;
     const found = await state.request<{ locator: Locator }>(`/objects/${baseId}`);
     base = await unpack(env, state, found.locator, visiting, depth + 1);

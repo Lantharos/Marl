@@ -15,7 +15,7 @@ self.onmessage = (event: MessageEvent<HighlightRequest>) => {
     const { id, source, language } = event.data;
     try {
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-      const key = `${language}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+      const key = `${language}:${new Uint8Array(digest).toHex()}`;
       const cached = cache.get(key);
       if (cached) {
         cache.delete(key);

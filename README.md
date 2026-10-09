@@ -25,6 +25,8 @@ bun install
 
 Copy `apps/api/.dev.vars.example` to `apps/api/.dev.vars` and replace `AUTH_SECRET` and
 `SECRET_ENCRYPTION_KEY` before creating an account. Marl supports password and passkey sign-in.
+Reports are reviewed in [Pult](https://pult.sh); set `PULT_KEY` to the `dev` environment key of the
+`marl` project to send them there while developing.
 
 Generate the 32-byte encryption key with
 `bun -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"`.

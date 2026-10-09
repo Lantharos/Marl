@@ -1,24 +1,24 @@
-import type { GitAuthorization } from './authorization';
-import { readBoundedBody, readBoundedJson } from './push/bounded-body';
-import { scheduleCompaction } from './storage/compaction';
-import type { GitEdgeEnv } from './env';
-import { expectContainer, hydrateRepository, internalRequest, type ContainerStub } from './storage/hydration';
-import { scheduleRepositoryIndex } from './indexing';
-import { finalizeUploadedPush } from './push/publication';
+import type { GitAuthorization } from '../authorization';
+import { readBoundedBody, readBoundedJson } from './bounded-body';
+import { scheduleCompaction } from '../storage/compaction';
+import type { GitEdgeEnv } from '../env';
+import { expectContainer, hydrateRepository, internalRequest, type ContainerStub } from '../storage/hydration';
+import { scheduleRepositoryIndex } from '../indexing';
+import { finalizeUploadedPush } from './publication';
 import {
   organizationQuota,
   repositoryState,
   uploadSession,
   type RepositorySnapshotResponse,
   type UploadSnapshotResponse
-} from './state/state-client';
-import { STORAGE_LIMITS, changesMarlManagedRefs } from './storage/storage-model';
+} from '../state/state-client';
+import { STORAGE_LIMITS, changesMarlManagedRefs } from '../storage/storage-model';
 
 type Capture = { refs: Record<string, string>; packBytes: number; hasPack: boolean };
 const maximumReceiveRequestBytes = STORAGE_LIMITS.pushBytes + 1024 * 1024;
-const maximumCompatibilityResponseBytes = 16 * 1024 * 1024;
+const maximumReceivePackResponseBytes = 16 * 1024 * 1024;
 
-export async function handleCompatibilityPush(
+export async function handleReceivePack(
   request: Request,
   container: ContainerStub,
   env: GitEdgeEnv,
@@ -63,13 +63,13 @@ export async function handleCompatibilityPush(
     });
     await hydrateRepository(container, env, owner, name, repository);
     const response = await container.fetch(request);
-    const body = await readBoundedBody(response.body, maximumCompatibilityResponseBytes);
+    const body = await readBoundedBody(response.body, maximumReceivePackResponseBytes);
     if (!body) {
-      await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+      await abortReceivePack(env, repository, authorization.organizationId, pushId);
       return new Response('Git receive response exceeded its limit.\n', { status: 502 });
     }
     if (!response.ok) {
-      await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+      await abortReceivePack(env, repository, authorization.organizationId, pushId);
       return new Response(body, response);
     }
     const base = `http://container/_marl/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/captures/${pushId}`;
@@ -82,15 +82,15 @@ export async function handleCompatibilityPush(
         })
       )
     );
-    const captured = await readBoundedJson<Capture>(captureResponse, maximumCompatibilityResponseBytes);
-    if (!captured) throw new Error('Compatibility capture returned invalid metadata.');
+    const captured = await readBoundedJson<Capture>(captureResponse, maximumReceivePackResponseBytes);
+    if (!captured) throw new Error('Receive-pack capture returned invalid metadata.');
     captureCreated = true;
     if (refsEqual(current.state.refs, captured.refs)) {
-      await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+      await abortReceivePack(env, repository, authorization.organizationId, pushId);
       return new Response(body, response);
     }
     if (!gatewayTrusted && changesMarlManagedRefs(current.state.refs, captured.refs)) {
-      await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+      await abortReceivePack(env, repository, authorization.organizationId, pushId);
       return new Response('The refs/marl namespace is managed by Marl.\n', { status: 403 });
     }
     await repo.request('/propose', { pushId, refs: captured.refs });
@@ -105,9 +105,9 @@ export async function handleCompatibilityPush(
       : [];
     await uploads.request('/prepare-server', { refs: captured.refs, packs: plans });
     if (captured.hasPack) {
-      if (captured.packBytes > maximumBytes) throw new Error('Compatibility push exceeded its reserved upload size.');
+      if (captured.packBytes > maximumBytes) throw new Error('Receive-pack push exceeded its reserved upload size.');
       const pack = await expectContainer(container.fetch(internalRequest(`${base}/pack`, env)));
-      if (!pack.body) throw new Error('Compatibility capture returned an empty pack body.');
+      if (!pack.body) throw new Error('Receive-pack capture returned an empty pack body.');
       await env.REPOSITORIES.put(plans[0].key, pack.body, {
         httpMetadata: { contentType: 'application/x-git-packed-objects' }
       });
@@ -137,7 +137,7 @@ export async function handleCompatibilityPush(
       ).catch((error) => console.error('repository compaction scheduling deferred', error));
     return new Response(body, response);
   } catch (error) {
-    if (!publicationStarted) await abortCompatibilityPush(env, repository, authorization.organizationId, pushId);
+    if (!publicationStarted) await abortReceivePack(env, repository, authorization.organizationId, pushId);
     throw error;
   } finally {
     if (captureCreated) {
@@ -152,7 +152,7 @@ function refsEqual(left: Record<string, string>, right: Record<string, string>) 
   return entries.length === Object.keys(right).length && entries.every(([name, objectId]) => right[name] === objectId);
 }
 
-async function abortCompatibilityPush(env: GitEdgeEnv, repository: string, organizationId: string, pushId: string) {
+async function abortReceivePack(env: GitEdgeEnv, repository: string, organizationId: string, pushId: string) {
   const session = await uploadSession(env, pushId)
     .request<UploadSnapshotResponse>('/snapshot')
     .catch(() => null);

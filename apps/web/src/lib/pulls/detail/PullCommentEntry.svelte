@@ -6,7 +6,7 @@
   import MarkdownComposer from '$lib/components/markdown/MarkdownComposer.svelte';
   import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
   import type { MarkdownContext } from '$lib/markdown/context';
-  import { reporting } from '$lib/moderation/reporting.svelte';
+  import { reporting } from '$lib/reporting/reporting.svelte';
 
   let {
     comment,

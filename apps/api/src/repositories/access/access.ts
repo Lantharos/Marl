@@ -3,7 +3,7 @@ import type { Principal } from '../../auth/principal';
 import type { Env } from '../../core/platform';
 
 export type OrganizationRole = 'owner' | 'admin' | 'member';
-export type RepositoryRole = 'read' | 'triage' | 'write' | 'maintain' | 'admin';
+type RepositoryRole = 'read' | 'triage' | 'write' | 'maintain' | 'admin';
 export type RepositoryCapability =
   'repository.read' | 'repository.triage' | 'repository.push' | 'repository.maintain' | 'repository.admin';
 
@@ -92,7 +92,7 @@ export async function lookupRepository(env: Env, owner: string, name: string, pr
   return row ? resolvedAccess(row) : null;
 }
 
-export async function lookupRepositoryById(env: Env, repositoryId: string, principal: Principal | null = null) {
+async function lookupRepositoryById(env: Env, repositoryId: string, principal: Principal | null = null) {
   const userId = principal?.id ?? '';
   const row = await env.DB.prepare(`${repositorySelect} WHERE repositories.id=?`)
     .bind(userId, userId, userId, repositoryId)

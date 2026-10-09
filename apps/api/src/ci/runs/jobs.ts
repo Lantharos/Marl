@@ -1,6 +1,6 @@
 import { validTagName } from '../../core/domain';
 
-export type RunStep = {
+type RunStep = {
   name: string;
   run: string;
   shell?: string;
@@ -10,7 +10,7 @@ export type RunStep = {
   continueOnError?: boolean;
 };
 
-export type RunService = { name: string; image: string; environment: Record<string, string> };
+type RunService = { name: string; image: string; environment: Record<string, string> };
 
 export type RunRelease = {
   tag: string;
@@ -34,8 +34,7 @@ export type RunJob = {
   runtime: { image: string; timeoutMinutes: number; services: RunService[] };
 };
 
-export type JobParseResult =
-  { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
+type JobParseResult = { jobs: RunJob[]; error?: never } | { jobs?: never; error: { code: string; detail: string } };
 
 export function environment(value: unknown): Record<string, string> | null {
   if (value === undefined) return {};

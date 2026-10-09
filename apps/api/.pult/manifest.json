@@ -1,0 +1,560 @@
+{
+  "project": "marl",
+  "environments": [
+    "dev",
+    "prod"
+  ],
+  "sync": "dev",
+  "delivery": {
+    "mode": "webhook",
+    "path": "/api/pult"
+  },
+  "resources": {
+    "comment": {
+      "source": "src/backoffice/comments.pult.ts:31",
+      "label": "Comment",
+      "plural": "Comments",
+      "icon": "message",
+      "searchable": false,
+      "list": null,
+      "related": {},
+      "actions": {
+        "remove": {
+          "source": "src/backoffice/comments.pult.ts:48",
+          "label": "Remove",
+          "danger": "confirm",
+          "input": null,
+          "preview": false,
+          "automatable": true,
+          "approval": false,
+          "contextual": true,
+          "background": false,
+          "pick": {},
+          "choices": [],
+          "schedule": null
+        }
+      }
+    },
+    "organization": {
+      "source": "src/backoffice/organizations.pult.ts:9",
+      "label": "Organization",
+      "plural": "Organizations",
+      "icon": "building",
+      "searchable": true,
+      "list": null,
+      "related": {
+        "members": {
+          "resource": "user",
+          "label": "Members"
+        },
+        "repositories": {
+          "resource": "repository",
+          "label": "Repositories"
+        }
+      },
+      "actions": {}
+    },
+    "repository": {
+      "source": "src/backoffice/repositories.pult.ts:22",
+      "label": "Repository",
+      "plural": "Repositories",
+      "icon": "git-branch",
+      "searchable": true,
+      "list": {
+        "filters": {
+          "type": "object",
+          "properties": {
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ]
+            },
+            "disabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "related": {
+        "owners": {
+          "resource": "user",
+          "label": "Owners"
+        }
+      },
+      "actions": {
+        "disable": {
+          "source": "src/backoffice/repositories.pult.ts:83",
+          "label": "Disable",
+          "danger": "confirm",
+          "input": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "minLength": 10,
+                "maxLength": 1000,
+                "description": "Sent to the owners and shown on the repository."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "preview": true,
+          "automatable": true,
+          "approval": false,
+          "contextual": true,
+          "background": false,
+          "pick": {},
+          "choices": [],
+          "schedule": null
+        },
+        "enable": {
+          "source": "src/backoffice/repositories.pult.ts:100",
+          "label": "Enable",
+          "danger": "confirm",
+          "input": null,
+          "preview": false,
+          "automatable": false,
+          "approval": false,
+          "contextual": true,
+          "background": false,
+          "pick": {},
+          "choices": [],
+          "schedule": null
+        }
+      }
+    },
+    "user": {
+      "source": "src/backoffice/users.pult.ts:32",
+      "label": "User",
+      "plural": "Users",
+      "icon": "user",
+      "searchable": true,
+      "list": {
+        "filters": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "person",
+                "agent",
+                "mannequin"
+              ]
+            },
+            "suspended": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "related": {
+        "repositories": {
+          "resource": "repository",
+          "label": "Repositories"
+        },
+        "organizations": {
+          "resource": "organization",
+          "label": "Organizations"
+        }
+      },
+      "actions": {
+        "suspend": {
+          "source": "src/backoffice/users.pult.ts:109",
+          "label": "Suspend",
+          "danger": "reauth",
+          "input": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "minLength": 10,
+                "maxLength": 1000,
+                "description": "Sent to the person in the suspension email."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "preview": true,
+          "automatable": false,
+          "approval": false,
+          "contextual": true,
+          "background": false,
+          "pick": {},
+          "choices": [],
+          "schedule": null
+        },
+        "restore": {
+          "source": "src/backoffice/users.pult.ts:123",
+          "label": "Restore",
+          "danger": "confirm",
+          "input": null,
+          "preview": false,
+          "automatable": false,
+          "approval": false,
+          "contextual": true,
+          "background": false,
+          "pick": {},
+          "choices": [],
+          "schedule": null
+        },
+        "signOut": {
+          "source": "src/backoffice/users.pult.ts:131",
+          "label": "Sign out everywhere",
+          "danger": "confirm",
+          "input": null,
+          "preview": false,
+          "automatable": false,
+          "approval": false,
+          "contextual": true,
+          "background": false,
+          "pick": {},
+          "choices": [],
+          "schedule": null
+        }
+      }
+    }
+  },
+  "actions": {},
+  "inboxes": {
+    "reports": {
+      "source": "src/backoffice/reports.pult.ts:34",
+      "label": "Reports",
+      "icon": "flag",
+      "resource": null,
+      "layout": "list",
+      "states": [
+        "open",
+        "actioned",
+        "dismissed"
+      ],
+      "closed": [
+        "actioned",
+        "dismissed"
+      ],
+      "reopen": [
+        "actioned",
+        "dismissed"
+      ],
+      "data": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "repository",
+                  "issue",
+                  "pull",
+                  "issue_comment",
+                  "pull_comment",
+                  "review_comment",
+                  "user"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "excerpt": {
+                "type": "string",
+                "maxLength": 5000
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "title",
+              "url",
+              "excerpt"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "spam",
+              "malware",
+              "harassment",
+              "copyright",
+              "private_information",
+              "illegal",
+              "other"
+            ]
+          },
+          "details": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "reporter": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "handle"
+            ]
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "handle": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "handle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "subject",
+          "reason",
+          "details",
+          "reporter",
+          "author",
+          "repository"
+        ]
+      },
+      "columns": [
+        "title",
+        "state",
+        "occurrences",
+        "data.reason",
+        "lastSeen"
+      ],
+      "intake": null,
+      "triage": {
+        "instructions": "People report content on Marl, a code hosting platform, for breaking the Acceptable Use Policy. Judge the reported content in `subject.excerpt`, not the reporter’s description of it. Code, security research and strong technical disagreement are allowed.",
+        "questions": {
+          "violates": {
+            "type": "noul",
+            "prompt": "Does `subject.excerpt` break the Acceptable Use Policy: spam, malware, phishing, harassment, hate, someone’s private information or illegal content?"
+          },
+          "category": {
+            "type": "choice",
+            "prompt": "What, if anything, is wrong with `subject.excerpt`?",
+            "options": {
+              "spam": "Advertising, SEO links, scams or bulk automated content",
+              "malware": "Code or links meant to harm people or systems",
+              "abuse": "Harassment, threats or hate aimed at people",
+              "privacy": "Personal data or credentials that belong to someone else",
+              "fine": "Nothing wrong with it"
+            }
+          }
+        },
+        "rules": [
+          {
+            "name": "Dismiss reports on harmless content",
+            "live": false,
+            "then": [
+              {
+                "type": "state",
+                "state": "dismissed"
+              }
+            ]
+          },
+          {
+            "name": "Tag obvious spam",
+            "live": false,
+            "then": [
+              {
+                "type": "tag",
+                "tag": "spam"
+              }
+            ]
+          }
+        ]
+      },
+      "reply": false,
+      "hooks": {
+        "state": false
+      },
+      "sla": {
+        "open": 86400000
+      }
+    }
+  },
+  "views": {},
+  "pages": {
+    "home": {
+      "source": "src/backoffice/overview.pult.ts:22",
+      "label": "Home",
+      "icon": "layout",
+      "params": null,
+      "blocks": null
+    }
+  },
+  "flags": {},
+  "roles": {
+    "moderator": {
+      "source": "src/backoffice/team.pult.ts:8",
+      "label": "Moderator",
+      "inboxes": [
+        "reports"
+      ],
+      "resources": [
+        "user",
+        "repository",
+        "organization",
+        "comment"
+      ],
+      "actions": [
+        "comment.remove",
+        "repository.disable",
+        "repository.enable",
+        "user.suspend",
+        "user.restore",
+        "user.signOut"
+      ],
+      "pages": [],
+      "flags": [],
+      "reveal": false,
+      "status": false
+    },
+    "operator": {
+      "source": "src/backoffice/team.pult.ts:22",
+      "label": "Operator",
+      "inboxes": [],
+      "resources": [
+        "user",
+        "repository",
+        "organization"
+      ],
+      "actions": [
+        "user.signOut"
+      ],
+      "pages": [],
+      "flags": [],
+      "reveal": true,
+      "status": true
+    }
+  },
+  "notify": {
+    "moderation": {
+      "source": "src/backoffice/team.pult.ts:30",
+      "inboxes": [
+        "reports"
+      ],
+      "on": [
+        "created",
+        "reopened",
+        "overdue"
+      ],
+      "to": [
+        {
+          "role": "moderator"
+        },
+        {
+          "channel": "moderation"
+        }
+      ]
+    }
+  },
+  "status": {
+    "source": "src/backoffice/overview.pult.ts:6",
+    "title": "Marl",
+    "logo": null,
+    "website": "https://marl.sh",
+    "css": null,
+    "components": {
+      "web": {
+        "label": "Website",
+        "description": null,
+        "monitored": false,
+        "check": "https://marl.sh"
+      },
+      "api": {
+        "label": "API",
+        "description": null,
+        "monitored": true,
+        "check": null
+      },
+      "git": {
+        "label": "Git over HTTPS",
+        "description": null,
+        "monitored": false,
+        "check": "https://git.marl.sh/health"
+      },
+      "ssh": {
+        "label": "Git over SSH",
+        "description": null,
+        "monitored": false,
+        "check": null
+      },
+      "runners": {
+        "label": "CI runners",
+        "description": null,
+        "monitored": false,
+        "check": null
+      },
+      "email": {
+        "label": "Email notifications",
+        "description": null,
+        "monitored": false,
+        "check": null
+      }
+    },
+    "alert": [
+      {
+        "role": "operator"
+      },
+      {
+        "channel": "incidents"
+      }
+    ],
+    "after": 120000
+  },
+  "version": "f55c8ecf0cfa"
+}

@@ -120,11 +120,14 @@ issues. Repository access comes from ordinary collaborator grants, and author qu
 author's kind so the interface can mark automated work. Imported authors who are not on Marl are
 stored the same way with `kind = 'mannequin'` and a handle that cannot be routed or signed into.
 
-Staff are ordinary accounts with the `staff` flag set directly in the database. Moderation actions
-are audited without an organization. A disabled repository is excluded by the capability resolver
-everywhere, including Git, and its detail endpoint answers 451 with the recorded reason. Suspending
-an account deletes its sessions, revokes its tokens, disables its personal repositories, and blocks
-further sign-in.
+Reports, moderation and the status page run in [Pult](https://pult.sh). The API declares its
+records and what can be done to them in `apps/api/src/backoffice`, sends each report to Pult as it
+arrives, and answers Pult's signed requests on `/api/pult`. Moderators are Pult accounts with the
+Moderator role, not Marl accounts. Marl keeps only the outcome: actions taken in Pult are audited
+without an organization, a disabled repository is excluded by the capability resolver everywhere,
+including Git, and its detail endpoint answers 451 with the recorded reason. Suspending an account
+deletes its sessions, revokes its tokens, disables its personal repositories, and blocks further
+sign-in.
 
 ## Background work
 

@@ -17,6 +17,7 @@ import {
   type UploadSnapshotResponse
 } from '../state/state-client';
 import { STORAGE_LIMITS, type PackDescriptor } from '../storage/storage-model';
+import { sha256 } from '../storage/digest';
 
 type PackReport = {
   id: string;
@@ -301,12 +302,6 @@ async function expectContainer(promise: Promise<Response>) {
   if (!response.ok)
     throw new Error((await readBoundedText(response.body, 64 * 1024)) || `Validator failed with ${response.status}.`);
   return response;
-}
-
-async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 function refsEqual(left: Record<string, string>, right: Record<string, string>) {

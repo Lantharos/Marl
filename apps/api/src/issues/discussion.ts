@@ -6,6 +6,7 @@ import { renderBody, type MarkdownContext } from '../core/markdown';
 import type { Env } from '../core/platform';
 import { authorizeRepository } from '../repositories/access/access';
 import { issueConclusionBody, issueParticipationBody } from '../http/request-schemas';
+import { findIssueId } from './context';
 
 export async function issueConclusion(
   env: Env,
@@ -40,9 +41,7 @@ export async function updateIssueConclusion(
 ) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.maintain');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const issue = await env.DB.prepare('SELECT id FROM issues WHERE repository_id=? AND number=?')
-    .bind(repository.id, number)
-    .first<{ id: string }>();
+  const issue = await findIssueId(env, repository.id, number);
   if (!issue) return problem(404, 'issue_not_found', 'Issue not found.');
   const input = await readJson(request, issueConclusionBody);
   if (!input) return problem(422, 'invalid_conclusion', 'Write a conclusion of up to 10,000 characters.');
@@ -84,9 +83,7 @@ export async function updateIssueParticipation(
 ) {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const issue = await env.DB.prepare('SELECT id FROM issues WHERE repository_id=? AND number=?')
-    .bind(repository.id, number)
-    .first<{ id: string }>();
+  const issue = await findIssueId(env, repository.id, number);
   if (!issue) return problem(404, 'issue_not_found', 'Issue not found.');
   const input = await readJson(request, issueParticipationBody);
   if (!input || (input.following === undefined && input.lastReadSequence === undefined))

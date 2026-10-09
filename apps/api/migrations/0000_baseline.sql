@@ -34,14 +34,6 @@ CREATE TABLE `auth_passkey` (
 --> statement-breakpoint
 CREATE INDEX `auth_passkeys_by_user` ON `auth_passkey` (`user_id`,"created_at" COLLATE BINARY DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX `auth_passkey_credential_id_unique` ON `auth_passkey` (`credential_id`);--> statement-breakpoint
-CREATE TABLE `auth_rate_limit` (
-	`id` text PRIMARY KEY NOT NULL,
-	`key` text NOT NULL,
-	`count` integer NOT NULL,
-	`last_request` integer NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `auth_rate_limit_key_unique` ON `auth_rate_limit` (`key`);--> statement-breakpoint
 CREATE TABLE `auth_session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -459,7 +451,6 @@ CREATE TABLE `users` (
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`email` text,
 	`avatar_url` text,
-	`auth_user_id` text,
 	`bio` text DEFAULT '' NOT NULL,
 	`website` text,
 	`signing_mode` text DEFAULT 'optional' NOT NULL,
@@ -467,14 +458,12 @@ CREATE TABLE `users` (
 	`deleted_at` text,
 	`kind` text DEFAULT 'person' NOT NULL,
 	`operator_organization_id` text,
-	`staff` integer DEFAULT 0 NOT NULL,
 	`suspended_at` text,
 	`suspension_reason` text,
 	CONSTRAINT "users_check_0" CHECK(signing_mode IN ('optional','vigilant','firewall')),
 	CONSTRAINT "users_kind" CHECK(kind IN ('person','agent','mannequin'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `users_by_auth_user` ON `users` (`auth_user_id`) WHERE auth_user_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `users_handle_unique` ON `users` ("handle" COLLATE NOCASE);--> statement-breakpoint
 CREATE INDEX `users_by_display_name` ON `users` ("display_name" COLLATE NOCASE);--> statement-breakpoint
 CREATE INDEX `users_by_operator` ON `users` (`operator_organization_id`) WHERE operator_organization_id IS NOT NULL;--> statement-breakpoint
@@ -682,29 +671,6 @@ CREATE INDEX `work_item_references_target_pull` ON `work_item_references` (`targ
 CREATE INDEX `work_item_references_target_issue` ON `work_item_references` (`target_issue_id`);--> statement-breakpoint
 CREATE INDEX `work_item_references_source_pull` ON `work_item_references` (`source_pull_id`);--> statement-breakpoint
 CREATE INDEX `work_item_references_source_issue` ON `work_item_references` (`source_issue_id`);--> statement-breakpoint
-CREATE TABLE `abuse_reports` (
-	`id` text PRIMARY KEY NOT NULL,
-	`reporter_id` text NOT NULL,
-	`subject_type` text NOT NULL,
-	`subject_id` text NOT NULL,
-	`repository_id` text,
-	`reason` text NOT NULL,
-	`details` text DEFAULT '' NOT NULL,
-	`state` text DEFAULT 'open' NOT NULL,
-	`resolution` text,
-	`resolved_by` text,
-	`resolved_at` text,
-	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`repository_id`) REFERENCES `repositories`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`resolved_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
-	CONSTRAINT "abuse_reports_subject" CHECK(subject_type IN ('repository','issue','pull','issue_comment','pull_comment','review_comment','user')),
-	CONSTRAINT "abuse_reports_reason" CHECK(reason IN ('spam','malware','harassment','copyright','private_information','illegal','other')),
-	CONSTRAINT "abuse_reports_state" CHECK(state IN ('open','actioned','dismissed'))
-);
---> statement-breakpoint
-CREATE INDEX `abuse_reports_by_state` ON `abuse_reports` (`state`,`created_at`);--> statement-breakpoint
-CREATE UNIQUE INDEX `abuse_reports_open_by_reporter` ON `abuse_reports` (`reporter_id`,`subject_type`,`subject_id`) WHERE state = 'open';--> statement-breakpoint
 CREATE TABLE `notification_settings` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`email_mode` text DEFAULT 'immediate' NOT NULL,

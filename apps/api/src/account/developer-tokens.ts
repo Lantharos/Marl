@@ -1,6 +1,7 @@
 import type { InferOutput } from 'valibot';
 import type { Principal } from '../auth/principal';
-import { requireFreshSession, sha256 } from '../auth/principal';
+import { requireFreshSession } from '../auth/principal';
+import { randomToken, sha256 } from '../core/encoding';
 import { identifier } from '../core/domain';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
@@ -58,7 +59,7 @@ export async function issueToken(
     }
   }
   const id = identifier('token');
-  const secret = randomSecret();
+  const secret = randomToken();
   const token = `marl_pat_${secret}`;
   const expiresAt = new Date(Date.now() + (body.expiresDays ?? 30) * 86_400_000).toISOString();
   await env.DB.prepare(
@@ -92,12 +93,4 @@ export async function revokePersonalAccessToken(request: Request, env: Env, prin
     .bind(tokenId, principal.id)
     .run();
   return json({ revoked: true });
-}
-
-function randomSecret() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '');
 }

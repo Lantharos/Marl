@@ -15,7 +15,8 @@
   import SettingItem from '$lib/components/settings/SettingItem.svelte';
   import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import SettingsHeader from '$lib/components/settings/SettingsHeader.svelte';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '$lib/repositories/repository-name';
+  import { completeRepositoryName, repositoryName } from '$lib/repositories/repository-name';
+  import { validSlug } from '@marl/contracts';
   import type { PageData } from './$types';
 
   type Dialog = 'branch' | 'visibility' | 'rename' | 'transfer' | 'detach' | 'archive' | 'delete';
@@ -315,7 +316,7 @@
       type="submit"
       form="rename-form"
       loading={busy === 'rename'}
-      disabled={submittedNewName === repo || !validRepositoryName(submittedNewName)}>Rename</Button
+      disabled={submittedNewName === repo || !validSlug(submittedNewName)}>Rename</Button
     >
   {/snippet}
 </Modal>

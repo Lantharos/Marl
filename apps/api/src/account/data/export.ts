@@ -124,7 +124,7 @@ export async function downloadExport(env: Env, principal: Principal, url: URL) {
   const subject = await verifyToken(env, 'account-export', url.searchParams.get('token'));
   if (subject !== principal.id) return problem(403, 'export_link_expired', 'This download link has expired.');
   const encoder = new TextEncoder();
-  const chunks = exportDocument(env, env.PUBLIC_URL || url.origin, principal.id);
+  const chunks = exportDocument(env, env.PUBLIC_URL, principal.id);
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
       const next = await chunks.next();

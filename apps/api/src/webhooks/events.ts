@@ -2,7 +2,7 @@ import type { WebhookEvent } from '@marl/contracts';
 import { identifier } from '../core/domain';
 import type { Env } from '../core/platform';
 
-export type EventSubject =
+type EventSubject =
   | { kind: 'push'; ref: string; before: string | null; after: string | null }
   | { kind: 'pull' | 'issue' | 'release' | 'run'; id: string }
   | { kind: 'review'; id: string }

@@ -6,7 +6,8 @@
   import Select from '$lib/components/controls/Select.svelte';
   import Notice from '$lib/components/feedback/Notice.svelte';
   import Modal from '$lib/components/overlays/Modal.svelte';
-  import { completeRepositoryName, repositoryName, validRepositoryName } from '../repository-name';
+  import { completeRepositoryName, repositoryName } from '../repository-name';
+  import { validSlug } from '@marl/contracts';
 
   let {
     open = $bindable(false),
@@ -24,7 +25,7 @@
   let busy = $state(false);
   let error = $state('');
   const submittedName = $derived(completeRepositoryName(name));
-  const valid = $derived(validRepositoryName(submittedName));
+  const valid = $derived(validSlug(submittedName));
 
   $effect(() => {
     if (!open) return;

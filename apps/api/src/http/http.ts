@@ -34,7 +34,7 @@ export async function readJsonValue<T = unknown>(message: BodyMessage, maxBytes:
   const bytes = await readBody(message, maxBytes);
   if (!bytes) return null;
   try {
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as T;
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes)) as T;
   } catch {
     return null;
   }

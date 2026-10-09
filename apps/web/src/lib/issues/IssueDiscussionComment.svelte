@@ -9,7 +9,7 @@
   import Time from '$lib/components/page/Time.svelte';
   import UserProfileLink from '$lib/components/identity/UserProfileLink.svelte';
   import type { MarkdownContext } from '$lib/markdown/context';
-  import { reporting } from '$lib/moderation/reporting.svelte';
+  import { reporting } from '$lib/reporting/reporting.svelte';
 
   let {
     comment,

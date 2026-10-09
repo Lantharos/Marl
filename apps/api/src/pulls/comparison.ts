@@ -3,7 +3,7 @@ import { safeRepositoryPath, validBranchName } from '../core/domain';
 import { requestGitGateway } from '../git/gateway';
 import { json, problem, readJsonValue } from '../http/http';
 import type { Env } from '../core/platform';
-import { pullRepository as repo } from './context';
+import { pullRepository as repo, findPullId } from './context';
 import { allPullThreads } from './timeline';
 import { authorizeRepository } from '../repositories/access/access';
 
@@ -97,9 +97,7 @@ export async function getPullPatch(
       : { head: pull.sourceCommitId, base: pull.targetCommitId };
   if (!revision?.head || !revision.base) return problem(404, 'revision_not_found', 'Revision not found.');
   if (since) {
-    const pullId = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?')
-      .bind(repository.id, number)
-      .first<{ id: string }>();
+    const pullId = await findPullId(env, repository.id, number);
     if (!pullId || !(await knownRevision(env, pullId.id, since)))
       return problem(422, 'unknown_revision', 'That revision is not part of this pull.');
     revision.base = since;

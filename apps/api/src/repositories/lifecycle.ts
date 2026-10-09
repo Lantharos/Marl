@@ -1,7 +1,4 @@
-import { and, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { requireFreshSession, type Principal } from '../auth/principal';
-import { database } from '../db';
-import { organizations, repositories } from '../db/schema';
 import { requestGitGateway } from '../git/gateway';
 import { json, problem } from '../http/http';
 import type { Env } from '../core/platform';
@@ -24,18 +21,13 @@ export async function restoreRepository(request: Request, env: Env, principal: P
     return problem(404, 'repository_not_found', 'Repository not found.');
   if (!(await requireFreshSession(request, env, principal)))
     return problem(403, 'identity_confirmation_required', 'Confirm your identity before restoring this repository.');
-  const restored = await database(env)
-    .update(repositories)
-    .set({ deletionScheduledAt: null, updatedAt: sql`CURRENT_TIMESTAMP` })
-    .where(
-      and(
-        eq(repositories.id, repository.id),
-        isNull(repositories.deletionStartedAt),
-        sql`${repositories.deletionScheduledAt} > ${new Date().toISOString()}`
-      )
-    )
-    .returning({ id: repositories.id });
-  if (!restored.length) return problem(409, 'recovery_expired', 'This repository is no longer available for recovery.');
+  const restored = await env.DB.prepare(
+    'UPDATE repositories SET deletion_scheduled_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND deletion_started_at IS NULL AND deletion_scheduled_at>?'
+  )
+    .bind(repository.id, new Date().toISOString())
+    .run();
+  if (!restored.meta.changes)
+    return problem(409, 'recovery_expired', 'This repository is no longer available for recovery.');
   return new Response(null, { status: 204 });
 }
 
@@ -83,32 +75,20 @@ async function deleteReleaseUploads(env: Env, repositoryId: string) {
 }
 
 export async function purgeDeletedRepositories(env: Env) {
-  const db = database(env);
-  const expired = await db
-    .select({
-      id: repositories.id,
-      organizationId: repositories.organizationId,
-      owner: organizations.slug,
-      name: repositories.name
-    })
-    .from(repositories)
-    .innerJoin(organizations, eq(organizations.id, repositories.organizationId))
-    .where(
-      and(isNotNull(repositories.deletionScheduledAt), lte(repositories.deletionScheduledAt, new Date().toISOString()))
-    )
-    .orderBy(repositories.updatedAt)
-    .limit(10);
-  for (const repository of expired) {
+  const now = new Date().toISOString();
+  const expired = await env.DB.prepare(
+    'SELECT repositories.id,repositories.organization_id AS organizationId,organizations.slug AS owner,repositories.name FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE repositories.deletion_scheduled_at<=? ORDER BY repositories.updated_at LIMIT 10'
+  )
+    .bind(now)
+    .all<{ id: string; organizationId: string; owner: string; name: string }>();
+  for (const repository of expired.results) {
     try {
-      const claimed = await db
-        .update(repositories)
-        .set({
-          deletionStartedAt: sql`COALESCE(${repositories.deletionStartedAt}, ${new Date().toISOString()})`,
-          updatedAt: new Date().toISOString()
-        })
-        .where(and(eq(repositories.id, repository.id), lte(repositories.deletionScheduledAt, new Date().toISOString())))
-        .returning({ id: repositories.id });
-      if (!claimed.length) continue;
+      const claimed = await env.DB.prepare(
+        'UPDATE repositories SET deletion_started_at=COALESCE(deletion_started_at,?1),updated_at=?1 WHERE id=?2 AND deletion_scheduled_at<=?1'
+      )
+        .bind(new Date().toISOString(), repository.id)
+        .run();
+      if (!claimed.meta.changes) continue;
       const gateway = await requestGitGateway(env, '/_marl/repositories/purge', {
         repositoryId: repository.id,
         organizationId: repository.organizationId,
@@ -126,9 +106,9 @@ export async function purgeDeletedRepositories(env: Env) {
       ])
         complete = (await deletePrefix(env, prefix)) && complete;
       if (complete && (await deleteRepositoryMetadata(env, repository.id)))
-        await db
-          .delete(repositories)
-          .where(and(eq(repositories.id, repository.id), isNotNull(repositories.deletionStartedAt)));
+        await env.DB.prepare('DELETE FROM repositories WHERE id=? AND deletion_started_at IS NOT NULL')
+          .bind(repository.id)
+          .run();
     } catch (error) {
       console.error('Repository purge failed', {
         repositoryId: repository.id,

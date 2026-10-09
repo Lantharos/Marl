@@ -4,8 +4,7 @@ import {
   authAccount as account,
   authVerification as verification,
   authPasskey as passkey,
-  authTwoFactor as twoFactor,
-  authRateLimit as rateLimit
+  authTwoFactor as twoFactor
 } from '../db/schema/people/auth';
 
-export const authSchema = { user, session, account, verification, passkey, twoFactor, rateLimit };
+export const authSchema = { user, session, account, verification, passkey, twoFactor };

@@ -4,6 +4,7 @@ import { RepositoryStateStore } from './repository-state-store';
 import { abortPush, beginPush, proposePushRefs, publish, type RepositoryState } from '../storage/storage-model';
 import { parseStateBody, stateFailure, stateResponse, trusted, type StateEnv } from './state-http';
 import { beginPushBody, forkStateBody, proposePushBody, publishBody, pushIdBody } from './state-schemas';
+import { sha256 } from '../storage/digest';
 
 export class RepositoryStateObject extends DurableObject<StateEnv> {
   private store: RepositoryStateStore;
@@ -256,10 +257,4 @@ async function verifyRepositoryIntegrity(bucket: R2Bucket, state: RepositoryStat
     if (!objectIndex || objectIndex.size === 0)
       throw new Error(`Canonical object index ${pack.id} is missing or empty.`);
   }
-}
-
-async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }

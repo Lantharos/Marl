@@ -1,26 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { safeRepositoryPath, validBranchName, validIdentitySlug, validSlug, validVisibility } from './domain';
-
-describe('repository input validation', () => {
-  test('accepts familiar repository slugs', () => {
-    expect(validSlug('marl')).toBe(true);
-    expect(validSlug('marl.sh')).toBe(true);
-    expect(validSlug('marl-social.png')).toBe(true);
-    expect(validSlug('runner-service_v2')).toBe(true);
-  });
-
-  test('rejects reserved identity slugs and malformed slugs', () => {
-    for (const value of ['api', 'inbox', 'issues', 'pulls', 'robots.txt', 'marl-social.png'])
-      expect(validIdentitySlug(value)).toBe(false);
-    for (const value of ['-marl', 'marl-', 'a/b', '', '../marl']) expect(validSlug(value)).toBe(false);
-  });
-
-  test('accepts only supported visibility values', () => {
-    expect(validVisibility('private')).toBe(true);
-    expect(validVisibility('public')).toBe(true);
-    expect(validVisibility('internal')).toBe(false);
-  });
-});
+import { safeRepositoryPath, validBranchName } from './domain';
 
 describe('Git branch validation', () => {
   test('accepts normal nested branch names', () => {

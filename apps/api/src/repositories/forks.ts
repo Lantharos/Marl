@@ -1,6 +1,7 @@
 import { auditStatement } from '../core/audit';
 import { requireFreshSession, type Principal } from '../auth/principal';
-import { identifier, validIdentitySlug, validSlug } from '../core/domain';
+import { identifier } from '../core/domain';
+import { validIdentitySlug, validSlug } from '@marl/contracts';
 import { requestGitGateway } from '../git/gateway';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';

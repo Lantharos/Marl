@@ -53,7 +53,7 @@ export type LinkedWorkItem = {
   direction: 'references' | 'referenced_by';
 };
 
-export type ReferenceEvent = {
+type ReferenceEvent = {
   id: string;
   source?: Omit<LinkedWorkItem, 'closes' | 'direction'>;
   createdAt: string;

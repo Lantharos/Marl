@@ -6,7 +6,7 @@ import script from '$lib/errors/offline-client.js?raw';
 
 async function sourceHash(source: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-  return `sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}`;
+  return `sha256-${new Uint8Array(digest).toBase64()}`;
 }
 
 export async function offlineDocument() {

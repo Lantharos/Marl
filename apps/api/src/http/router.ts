@@ -54,7 +54,7 @@ export function route<TAccess extends Access>(
   };
 }
 
-export type RouteMatch = { route: Route; params: Params } | { allow: Method[] } | null;
+type RouteMatch = { route: Route; params: Params } | { allow: Method[] } | null;
 
 export function matchRoute(routes: Route[], method: string, pathname: string): RouteMatch {
   const allow = new Set<Method>();

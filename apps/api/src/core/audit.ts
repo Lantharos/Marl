@@ -1,11 +1,10 @@
-import type { Principal } from '../auth/principal';
 import { identifier } from './domain';
 import type { D1PreparedStatement, Env } from './platform';
 
-export type AuditEvent = {
+type AuditEvent = {
   organizationId?: string | null;
   repositoryId?: string | null;
-  actor?: Principal | null;
+  actor?: { id: string | null; handle: string } | null;
   action: string;
   subjectType: string;
   subjectId: string;

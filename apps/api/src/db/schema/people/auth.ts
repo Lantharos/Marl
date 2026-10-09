@@ -51,17 +51,6 @@ export const authPasskey = sqliteTable(
   ]
 );
 
-export const authRateLimit = sqliteTable(
-  'auth_rate_limit',
-  {
-    id: text('id').primaryKey(),
-    key: text('key').notNull(),
-    count: integer('count').notNull(),
-    lastRequest: integer('last_request').notNull()
-  },
-  (table) => [uniqueIndex('auth_rate_limit_key_unique').on(table.key)]
-);
-
 export const authSession = sqliteTable(
   'auth_session',
   {

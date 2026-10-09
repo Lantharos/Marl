@@ -143,7 +143,7 @@ export async function queuePushWorkflows(
         continue;
       }
       try {
-        const value = parse(new TextDecoder('utf-8', { fatal: true }).decode(source), {
+        const value = parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(source), {
           maxAliasCount: 10
         }) as ObjectValue | null;
         const triggers = declaredTriggers(value?.on);

@@ -52,7 +52,7 @@ export async function readBlobPreview(response: Response, body: ReadableStream<U
   let content = '';
   if (!binary) {
     try {
-      content = new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: truncated });
+      content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes, { stream: truncated });
     } catch {
       binary = true;
     }

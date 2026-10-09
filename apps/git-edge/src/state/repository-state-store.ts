@@ -14,7 +14,7 @@ type MetaRow = {
 
 type RefRow = { name: string; objectId: string };
 type PackRow = PackDescriptor;
-export type ObjectLocator = {
+type ObjectLocator = {
   id: string;
   packId: string;
   packKey: string;

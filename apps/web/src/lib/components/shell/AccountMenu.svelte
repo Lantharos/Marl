@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Flag from '@lucide/svelte/icons/flag';
   import { goto, invalidateAll } from '$app/navigation';
   import { onMount } from 'svelte';
   import Building2 from '@lucide/svelte/icons/building-complex';
@@ -63,8 +62,6 @@
       <MenuLink href="/{user.handle}" icon={UserRound} onclick={() => (open = false)}>Your profile</MenuLink>
       <MenuLink href="/settings/account/profile" icon={Settings} onclick={() => (open = false)}>Settings</MenuLink>
       <MenuLink href="/organizations" icon={Building2} onclick={() => (open = false)}>Organizations</MenuLink>
-      {#if user.staff}<MenuLink href="/admin/reports" icon={Flag} onclick={() => (open = false)}>Moderation</MenuLink
-        >{/if}
       <div class="my-1.5 px-2.5">
         <span class="text-xs text-ink-muted">Appearance</span>
         <div

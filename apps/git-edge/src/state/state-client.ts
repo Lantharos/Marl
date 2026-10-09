@@ -1,6 +1,6 @@
 import { readBoundedJson } from '../push/bounded-body';
 import type { GitEdgeEnv } from '../env';
-import type { OrganizationQuotaState, RepositoryState } from '../storage/storage-model';
+import type { RepositoryState } from '../storage/storage-model';
 import type { UploadSession } from '../push/upload-model';
 
 export function repositoryState(env: GitEdgeEnv, repository: string) {
@@ -49,5 +49,4 @@ export class StateRequestError extends Error {
 }
 
 export type RepositorySnapshotResponse = { state: RepositoryState };
-export type OrganizationSnapshotResponse = { state: OrganizationQuotaState };
 export type UploadSnapshotResponse = { session: UploadSession };

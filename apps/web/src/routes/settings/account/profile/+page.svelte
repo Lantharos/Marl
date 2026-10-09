@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slugPattern } from '@marl/contracts';
   import { invalidateAll } from '$app/navigation';
   import { untrack } from 'svelte';
   import { api, MarlApiError } from '$lib/api';
@@ -108,7 +109,7 @@
           bind:value={username}
           minlength="2"
           maxlength="39"
-          pattern="[a-z0-9](?:(?:[a-z0-9._]|-)*[a-z0-9])?"
+          pattern={slugPattern}
           oninput={() => (username = username.toLowerCase())}
           autocomplete="username"
           data-1p-ignore

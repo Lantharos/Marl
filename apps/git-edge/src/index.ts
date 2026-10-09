@@ -1,7 +1,7 @@
 import { Container, ContainerProxy, getContainer } from '@cloudflare/containers';
 import { authorizeGit, AuthorizationError } from './authorization';
 import { readBoundedJson } from './push/bounded-body';
-import { handleCompatibilityPush } from './compatibility';
+import { handleReceivePack } from './push/receive-pack';
 import type { GitEdgeEnv } from './env';
 import { hydrateRepository } from './storage/hydration';
 import { handleNativePush, nativePushRoute } from './push/native-push';
@@ -66,6 +66,7 @@ export default {
   async fetch(request: Request, env: GitEdgeEnv): Promise<Response> {
     try {
       const path = new URL(request.url).pathname;
+      if (path === '/health' && request.method === 'GET') return Response.json({ service: 'marl-git', status: 'ok' });
       if (path.startsWith('/_marl/') && request.headers.get('x-marl-gateway-token') !== env.MARL_GIT_GATEWAY_TOKEN)
         return new Response(null, { status: 404 });
       if (path === '/_marl/repositories/relocate' && request.method === 'POST') {
@@ -129,7 +130,7 @@ export default {
           ? route.body.actorId
           : undefined;
       if (route.writes)
-        return handleCompatibilityPush(
+        return handleReceivePack(
           request,
           container,
           env,

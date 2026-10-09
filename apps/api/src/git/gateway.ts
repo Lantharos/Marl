@@ -130,12 +130,6 @@ export interface GitGatewayRequestMap {
 
 export type GitGatewayPath = keyof GitGatewayRequestMap;
 
-function gatewayToken(env: Env) {
-  const token = env.GIT_GATEWAY_TOKEN;
-  if (!token) throw new Error('GIT_GATEWAY_TOKEN is required.');
-  return token;
-}
-
 export async function requestGitGateway<Path extends GitGatewayPath>(
   env: Env,
   path: Path,
@@ -143,14 +137,12 @@ export async function requestGitGateway<Path extends GitGatewayPath>(
   options: GatewayRequestOptions = {}
 ) {
   const attempts = options.attempts ?? 1;
-  const gatewayUrl = env.ENVIRONMENT === 'development' ? env.GIT_GATEWAY_URL : env.GIT_PUBLIC_URL;
-  if (!gatewayUrl) throw new Error('Git gateway URL is required.');
   const request = () =>
-    new Request(`${gatewayUrl}${path}`, {
+    new Request(`${env.GIT_PUBLIC_URL}${path}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-marl-gateway-token': gatewayToken(env)
+        'x-marl-gateway-token': env.GIT_GATEWAY_TOKEN
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(options.timeoutMs ?? 15_000)

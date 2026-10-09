@@ -15,6 +15,7 @@ import {
 import { STORAGE_LIMITS, changesMarlManagedRefs } from '../storage/storage-model';
 import { nativePushBody, repositoryManifest } from '../state/state-schemas';
 import { safeParse } from 'valibot';
+import { sha256 } from '../storage/digest';
 
 type PushRoute = {
   owner: string;
@@ -140,12 +141,6 @@ async function downloadPack(env: GitEdgeEnv, repository: string, route: PushRout
       'cache-control': 'private, max-age=3600, immutable'
     }
   });
-}
-
-async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 async function createPush(request: Request, env: GitEdgeEnv, repository: string, organizationId: string) {

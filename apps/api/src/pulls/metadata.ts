@@ -4,7 +4,7 @@ import { auditStatement } from '../core/audit';
 import { identifier } from '../core/domain';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
-import { canManageRepository as membership, createPullEvent, pullRepository as repo } from './context';
+import { canManageRepository as membership, createPullEvent, pullRepository as repo, findPullId } from './context';
 import { commitPullUpdate } from './realtime/updates';
 import { createPullLabelBody, pullMetadataBody } from '../http/request-schemas';
 
@@ -148,9 +148,7 @@ export async function createPullLabel(
   const repository = await repo(env, owner, name);
   if (!repository || !(await membership(env, principal, repository)))
     return problem(404, 'repository_not_found', 'Repository not found.');
-  const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?')
-    .bind(repository.id, number)
-    .first<{ id: string }>();
+  const pull = await findPullId(env, repository.id, number);
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const body = await readJson(request, createPullLabelBody);
   const labelName = body?.name.trim().replace(/\s+/g, ' ') ?? '';

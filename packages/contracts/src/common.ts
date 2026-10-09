@@ -28,17 +28,6 @@ export type ReportSubjectType =
 export type ReportReason =
   'spam' | 'malware' | 'harassment' | 'copyright' | 'private_information' | 'illegal' | 'other';
 
-export interface AbuseReport {
-  id: Identifier;
-  subjectType: ReportSubjectType;
-  reason: ReportReason;
-  details: string;
-  state: 'open' | 'actioned' | 'dismissed';
-  reporter: string;
-  createdAt: string;
-  subject: { title: string; excerpt: string; href: string; author: string | null; repository: string | null } | null;
-}
-
 export type WebhookEvent = 'push' | 'pull' | 'review' | 'issue' | 'comment' | 'release' | 'run';
 export type WebhookFormat = 'json' | 'slack' | 'discord';
 

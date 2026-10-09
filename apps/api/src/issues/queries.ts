@@ -3,7 +3,7 @@ import type { IssueDetail, WorkItemLabel, WorkItemPerson } from '@marl/contracts
 import type { Principal } from '../auth/principal';
 import { pageResult, pageSize, readCursor } from '../http/cursor';
 import { json, problem } from '../http/http';
-import { issueSelect, summarizeIssueRows, type IssueRow } from './context';
+import { issueSelect, summarizeIssueRows, type IssueRow, findIssueId } from './context';
 import { initialIssueTimeline, olderIssueTimeline } from './timeline';
 import { issueConclusion, issueParticipation } from './discussion';
 import { readListQuery } from '../http/list-query';
@@ -182,9 +182,7 @@ export async function getIssueTimeline(
 ): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const issue = await env.DB.prepare('SELECT id FROM issues WHERE repository_id=? AND number=?')
-    .bind(repository.id, number)
-    .first<{ id: string }>();
+  const issue = await findIssueId(env, repository.id, number);
   if (!issue) return problem(404, 'issue_not_found', 'Issue not found.');
   const before = Number(url.searchParams.get('before'));
   const after = Number(url.searchParams.get('after') ?? 0);

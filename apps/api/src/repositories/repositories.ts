@@ -1,7 +1,8 @@
 import type { RepositorySummary } from '@marl/contracts';
 import { auditStatement } from '../core/audit';
 import type { Principal } from '../auth/principal';
-import { identifier, validIdentitySlug, validSlug, validVisibility } from '../core/domain';
+import { identifier, validVisibility } from '../core/domain';
+import { validIdentitySlug, validSlug } from '@marl/contracts';
 import { pageResult, pageSize, readCursor } from '../http/cursor';
 import { json, problem, readJson } from '../http/http';
 import { readListQuery } from '../http/list-query';
@@ -74,7 +75,7 @@ export async function listShellRepositories(env: Env, principal: Principal): Pro
   return result.results.map(({ organizationId: _, defaultBranch: __, ...repository }) => repository);
 }
 
-export type NewRepository = {
+type NewRepository = {
   owner: string;
   name: string;
   description: string;
@@ -207,8 +208,6 @@ export async function getRepository(
 ): Promise<Response> {
   const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repo) return repositoryUnavailable(env, principal, owner, name);
-  const sshBase =
-    env.GIT_SSH_PUBLIC_URL ?? (env.ENVIRONMENT === 'development' ? 'ssh://git@127.0.0.1:42621' : undefined);
   const forkAccess = repositoryReadFilter(principal, 'forks');
   const [social, upstream] = await Promise.all([
     env.DB.prepare(
@@ -240,8 +239,8 @@ export async function getRepository(
       starCount: Number(social?.starCount ?? 0),
       forkCount: Number(social?.forkCount ?? 0),
       upstream: upstream ? { owner: upstream.owner, name: upstream.name } : null,
-      cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${repo.owner}/${repo.name}.git`,
-      sshCloneUrl: sshBase ? `${sshBase.replace(/\/$/, '')}/${repo.owner}/${repo.name}.git` : null
+      cloneUrl: `${env.GIT_PUBLIC_URL}/${repo.owner}/${repo.name}.git`,
+      sshCloneUrl: `${env.GIT_SSH_PUBLIC_URL}/${repo.owner}/${repo.name}.git`
     }
   });
 }

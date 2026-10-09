@@ -5,8 +5,8 @@ import type { RepositoryAccess } from '../../repositories/access/access';
 import type { MergeMethod } from '../../repositories/branch-rules';
 import type { PullRow } from '../context';
 
-export type MergeCommit = { commitId: string; targetHeadId: string };
-export type MergeFailure = { status: 409 | 502; code: string; message: string };
+type MergeCommit = { commitId: string; targetHeadId: string };
+type MergeFailure = { status: 409 | 502; code: string; message: string };
 
 async function authorEmail(env: Env, principal: Principal) {
   const row = await env.DB.prepare(

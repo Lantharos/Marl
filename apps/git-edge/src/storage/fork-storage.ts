@@ -3,6 +3,7 @@ import type { GitEdgeEnv } from '../env';
 import { scheduleRepositoryIndex } from '../indexing';
 import { organizationQuota, repositoryState, type RepositorySnapshotResponse } from '../state/state-client';
 import type { PackDescriptor } from './storage-model';
+import { sha256 } from './digest';
 
 type ForkRequest = {
   repositoryId: string;
@@ -102,10 +103,4 @@ function valid(body: ForkRequest) {
       /^[a-zA-Z0-9._-]+$/.test(value)
     )
   );
-}
-
-async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }

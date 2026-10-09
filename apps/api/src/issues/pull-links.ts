@@ -5,6 +5,7 @@ import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
 import { authorizeRepository, repositoryCan } from '../repositories/access/access';
 import { linkedWorkItems } from './references/work-items';
+import { findPullId } from '../pulls/context';
 
 const linkBody = strictObject({ pullNumber: pipe(number(), integer(), minValue(1)) });
 
@@ -25,9 +26,7 @@ export async function linkIssuePull(
     return problem(404, 'issue_not_found', 'Editable issue not found.');
   const input = await readJson(request, linkBody);
   if (!input) return problem(422, 'invalid_pull', 'Choose a pull in this repository.');
-  const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?')
-    .bind(repository.id, input.pullNumber)
-    .first<{ id: string }>();
+  const pull = await findPullId(env, repository.id, input.pullNumber);
   if (!pull) return problem(404, 'pull_not_found', 'Pull not found.');
   await env.DB.batch([
     env.DB.prepare(

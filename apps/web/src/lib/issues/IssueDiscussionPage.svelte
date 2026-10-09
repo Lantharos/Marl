@@ -20,7 +20,7 @@
   import Modal from '$lib/components/overlays/Modal.svelte';
   import Seo from '$lib/components/page/Seo.svelte';
   import Time from '$lib/components/page/Time.svelte';
-  import { reporting } from '$lib/moderation/reporting.svelte';
+  import { reporting } from '$lib/reporting/reporting.svelte';
   import { seoExcerpt } from '$lib/seo';
   import IssueConclusion from './IssueConclusion.svelte';
   import IssueDiscussionThread from './IssueDiscussionThread.svelte';

@@ -26,6 +26,12 @@ export type IssueRow = {
 
 export const issueSelect = `SELECT issues.id,issues.repository_id AS repositoryId,issues.number,issues.title,issues.body,issues.author_id AS authorId,users.handle AS author,users.display_name AS authorDisplayName,users.avatar_url AS authorAvatarUrl,users.kind AS authorKind,issues.state,issues.locked_at AS lockedAt,issues.created_at AS createdAt,issues.updated_at AS updatedAt,organizations.slug AS owner,repositories.name AS repository,(SELECT COUNT(*) FROM issue_comments WHERE issue_comments.issue_id=issues.id AND issue_comments.deleted_at IS NULL) AS commentCount FROM issues JOIN repositories ON repositories.id=issues.repository_id JOIN organizations ON organizations.id=repositories.organization_id JOIN users ON users.id=issues.author_id`;
 
+export function findIssueId(env: Env, repositoryId: string, number: number) {
+  return env.DB.prepare('SELECT id FROM issues WHERE repository_id=? AND number=?')
+    .bind(repositoryId, number)
+    .first<{ id: string }>();
+}
+
 export function createIssueEvent(
   env: Env,
   issueId: string,

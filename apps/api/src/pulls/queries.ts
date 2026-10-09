@@ -18,7 +18,8 @@ import {
   pullSummary as summary,
   reviewStatusFor,
   summarizePullRows as summarizeRows,
-  type PullRow
+  type PullRow,
+  findPullId
 } from './context';
 import { mergeRequirements } from './merge/requirements';
 import { pullUpdatesAfter } from './realtime/updates';
@@ -420,9 +421,7 @@ export async function connectPullRealtime(
 ): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const pull = await env.DB.prepare('SELECT id FROM pull_requests WHERE repository_id=? AND number=?')
-    .bind(repository.id, number)
-    .first<{ id: string }>();
+  const pull = await findPullId(env, repository.id, number);
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   if (request.headers.get('upgrade') !== 'websocket')
     return problem(426, 'websocket_required', 'This endpoint requires a WebSocket connection.');

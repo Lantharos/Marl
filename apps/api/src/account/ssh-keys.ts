@@ -8,25 +8,19 @@ import { sshKeyBody } from '../http/request-schemas';
 
 const keyTypes = new Set(['ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521']);
 
-function base64(bytes: ArrayBuffer) {
-  let value = '';
-  for (const byte of new Uint8Array(bytes)) value += String.fromCharCode(byte);
-  return btoa(value).replace(/=+$/, '');
-}
-
 async function normalizeKey(value: string) {
   const [type, encoded] = value.trim().split(/\s+/);
   if (!keyTypes.has(type) || !encoded || encoded.length > 16_000) return null;
   let blob: Uint8Array;
   try {
-    blob = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+    blob = Uint8Array.fromBase64(encoded);
   } catch {
     return null;
   }
   if (blob.byteLength < 32) return null;
   return {
     publicKey: `${type} ${encoded}`,
-    fingerprint: `SHA256:${base64(await crypto.subtle.digest('SHA-256', blob.buffer as ArrayBuffer))}`
+    fingerprint: `SHA256:${new Uint8Array(await crypto.subtle.digest('SHA-256', blob)).toBase64({ omitPadding: true })}`
   };
 }
 
@@ -118,7 +112,6 @@ export async function authorizeSsh(request: Request, env: Env) {
     displayName: user.displayName,
     email: user.email,
     avatarUrl: user.avatarUrl,
-    staff: false,
     kind: 'person',
     authType: 'session'
   };

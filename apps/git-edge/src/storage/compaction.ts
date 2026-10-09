@@ -17,6 +17,7 @@ import { organizationQuota, repositoryState, type RepositorySnapshotResponse } f
 import type { PackDescriptor } from './storage-model';
 import { parseStateBody, stateFailure } from '../state/state-http';
 import { compactionTaskBody } from '../state/state-schemas';
+import { sha256 } from './digest';
 
 const COMPACTION_THRESHOLD = 12;
 type CompactionTask = {
@@ -100,7 +101,7 @@ type Capture = {
   largestBlobBytes: number;
 };
 
-export async function maybeCompactRepository(
+async function maybeCompactRepository(
   env: GitEdgeEnv,
   owner: string,
   name: string,
@@ -282,10 +283,4 @@ export async function maybeCompactRepository(
     await container.fetch(internalRequest(base, env, { method: 'DELETE' })).catch(() => {});
     await container.stop().catch(() => {});
   }
-}
-
-async function sha256(value: string) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }

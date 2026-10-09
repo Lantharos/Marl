@@ -1,6 +1,6 @@
 <script lang="ts">
   import ActionMenu from '$lib/components/overlays/ActionMenu.svelte';
-  import { reporting } from '$lib/moderation/reporting.svelte';
+  import { reporting } from '$lib/reporting/reporting.svelte';
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { untrack } from 'svelte';

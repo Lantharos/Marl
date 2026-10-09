@@ -1,6 +1,6 @@
 import type { Principal } from '../auth/principal';
 import { requireFreshSession } from '../auth/principal';
-import { validIdentitySlug } from '../core/domain';
+import { validIdentitySlug } from '@marl/contracts';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
 import { profileBody } from '../http/request-schemas';
@@ -20,14 +20,10 @@ export async function getProfile(env: Env, principal: Principal) {
 export async function listSessions(env: Env, principal: Principal) {
   if (principal.authType === 'token')
     return problem(403, 'browser_session_required', 'Sessions can only be managed from a browser session.');
-  const user = await env.DB.prepare('SELECT auth_user_id AS authUserId FROM users WHERE id=?')
-    .bind(principal.id)
-    .first<{ authUserId: string | null }>();
-  if (!user?.authUserId) return json({ sessions: [] });
   const sessions = await env.DB.prepare(
     'SELECT id,token,ip_address AS ipAddress,user_agent AS userAgent,created_at AS createdAt,updated_at AS updatedAt,expires_at AS expiresAt FROM auth_session WHERE user_id=? AND expires_at>? ORDER BY updated_at DESC'
   )
-    .bind(user.authUserId, Date.now())
+    .bind(principal.id, Date.now())
     .all();
   return json({ sessions: sessions.results });
 }
@@ -55,9 +51,9 @@ export async function updateProfile(request: Request, env: Env, principal: Princ
   )
     return problem(422, 'invalid_profile', 'Profile details are invalid.');
 
-  const current = await env.DB.prepare('SELECT handle,auth_user_id AS authUserId FROM users WHERE id=?')
+  const current = await env.DB.prepare('SELECT handle FROM users WHERE id=?')
     .bind(principal.id)
-    .first<{ handle: string; authUserId: string | null }>();
+    .first<{ handle: string }>();
   if (!current) return problem(404, 'profile_not_found', 'Profile not found.');
   if (username !== current.handle.toLowerCase() && (await usernameTaken(env, principal.id, username)))
     return problem(409, 'username_unavailable', 'That username is unavailable.');
@@ -69,18 +65,15 @@ export async function updateProfile(request: Request, env: Env, principal: Princ
       bio,
       website || null,
       principal.id
+    ),
+    env.DB.prepare('UPDATE auth_user SET name=?,username=?,display_username=?,updated_at=? WHERE id=?').bind(
+      displayName,
+      username,
+      username,
+      Date.now(),
+      principal.id
     )
   ];
-  if (current.authUserId)
-    statements.push(
-      env.DB.prepare('UPDATE auth_user SET name=?,username=?,display_username=?,updated_at=? WHERE id=?').bind(
-        displayName,
-        username,
-        username,
-        Date.now(),
-        current.authUserId
-      )
-    );
   if (username !== current.handle.toLowerCase())
     statements.push(
       env.DB.prepare(

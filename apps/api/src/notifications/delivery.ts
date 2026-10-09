@@ -67,7 +67,6 @@ async function pendingItems(env: Env, recipient: Recipient & { email: string }) 
     displayName: recipient.displayName,
     email: recipient.email,
     avatarUrl: null,
-    staff: false,
     kind: 'person',
     authType: 'session'
   };

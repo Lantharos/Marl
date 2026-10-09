@@ -22,7 +22,7 @@ export type CommandKind =
   | 'key';
 export type Command = { label: string; detail: string; href: string; keywords: string; kind: CommandKind };
 
-export function uniqueCommands(entries: Command[]) {
+function uniqueCommands(entries: Command[]) {
   const destinations = new Set<string>();
   return entries.filter((command) => {
     if (destinations.has(command.href)) return false;

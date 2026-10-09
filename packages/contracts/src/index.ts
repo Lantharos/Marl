@@ -8,3 +8,4 @@ export type * from './work/pulls';
 export type * from './code/ci';
 export type * from './people/identity';
 export * from './people/legal';
+export * from './names';

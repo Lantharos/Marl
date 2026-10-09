@@ -1,4 +1,4 @@
-export type CodeQuery = {
+type CodeQuery = {
   pattern: string;
   regex: boolean;
   caseSensitive: boolean;

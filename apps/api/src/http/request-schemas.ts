@@ -334,11 +334,6 @@ export const abuseReportBody = strictObject({
   details: pipe(string(), maxLength(5_000))
 });
 
-export const reportResolutionBody = strictObject({
-  action: picklist(['dismiss', 'remove_content', 'disable_repository', 'suspend_user']),
-  note: pipe(string(), maxLength(1_000))
-});
-
 export const notificationPreferencesBody = strictObject({
   mode: optional(picklist(['immediate', 'daily', 'off'])),
   reasons: optional(

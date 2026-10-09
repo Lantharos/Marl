@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slugPattern } from '@marl/contracts';
   import { untrack } from 'svelte';
   import type { Agent } from '@marl/contracts';
   import Bot from '@lucide/svelte/icons/bot';
@@ -148,7 +149,7 @@
           oninput={() => (handle = handle.toLowerCase())}
           minlength="2"
           maxlength="39"
-          pattern="[a-z0-9](?:(?:[a-z0-9._]|-)*[a-z0-9])?"
+          pattern={slugPattern}
           required
           data-1p-ignore
         />

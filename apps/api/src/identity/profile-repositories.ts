@@ -1,6 +1,6 @@
 import type { RepositorySummary } from '@marl/contracts';
 import { pageResult, pageSize, readCursor } from '../http/cursor';
-import { validIdentitySlug } from '../core/domain';
+import { validIdentitySlug } from '@marl/contracts';
 import { json, problem } from '../http/http';
 import { readListQuery } from '../http/list-query';
 import type { Env } from '../core/platform';

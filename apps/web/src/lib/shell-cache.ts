@@ -6,7 +6,6 @@ export type ShellUser = {
   displayName: string;
   email: string | null;
   avatarUrl: string | null;
-  staff?: boolean;
 };
 export type ShellOrganization = {
   slug: string;

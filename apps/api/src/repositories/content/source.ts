@@ -5,7 +5,7 @@ import { pageResult, pageSize, readCursor } from '../../http/cursor';
 import { requestGitGateway } from '../../git/gateway';
 import { json, problem, readJsonValue } from '../../http/http';
 import type { D1Result, Env } from '../../core/platform';
-import { authorizeRepository, authorizeRepositoryId, repositoryCan } from '../access/access';
+import { authorizeRepository, authorizeRepositoryId, repositoryCan, repositoryListFilter } from '../access/access';
 import { commitAuthorIdSql } from '../../git/commit-authors';
 import { rawBlobHeaders } from '../../git/raw-content';
 
@@ -38,38 +38,44 @@ export async function listPullSources(env: Env, principal: Principal, owner: str
   const target = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!target) return problem(404, 'repository_not_found', 'Repository not found.');
   const rootId = target.forkRootRepositoryId ?? target.id;
-  const targetBranches = await env.DB.prepare(
-    'SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? ORDER BY name'
-  )
-    .bind(target.id)
-    .all<{ name: string; commitId: string }>();
+  const accessible = repositoryListFilter(principal);
   const candidates = await env.DB.prepare(
-    `SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.default_branch AS defaultBranch FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE COALESCE(repositories.fork_root_repository_id,repositories.id)=? AND repositories.deletion_scheduled_at IS NULL ORDER BY CASE WHEN repositories.id=? THEN 0 ELSE 1 END,organizations.slug,repositories.name`
+    `SELECT repositories.id,organizations.slug AS owner,repositories.name,repositories.default_branch AS defaultBranch FROM repositories JOIN organizations ON organizations.id=repositories.organization_id WHERE (repositories.id=? OR ((repositories.fork_root_repository_id=? OR repositories.id=?) AND ${accessible.sql})) AND repositories.deletion_scheduled_at IS NULL ORDER BY CASE WHEN repositories.id=? THEN 0 ELSE 1 END,organizations.slug,repositories.name`
   )
-    .bind(rootId, target.id)
+    .bind(target.id, rootId, rootId, ...accessible.values, target.id)
     .all<{ id: string; owner: string; name: string; defaultBranch: string }>();
-  const sources = [];
-  for (const candidate of candidates.results) {
-    const capability = candidate.id === target.id ? 'repository.triage' : 'repository.push';
-    if (!(await authorizeRepositoryId(env, principal, candidate.id, capability))) continue;
-    const branches = await env.DB.prepare(
-      'SELECT name,commit_id AS commitId FROM branches WHERE repository_id=? ORDER BY name'
+  const authorized = await Promise.all(
+    candidates.results.map((candidate) =>
+      authorizeRepositoryId(
+        env,
+        principal,
+        candidate.id,
+        candidate.id === target.id ? 'repository.triage' : 'repository.push'
+      )
     )
-      .bind(candidate.id)
-      .all<{ name: string; commitId: string }>();
-    sources.push({
-      owner: candidate.owner,
-      name: candidate.name,
-      defaultBranch: candidate.defaultBranch,
-      branches: branches.results
-    });
-  }
+  );
+  const pushable = candidates.results.filter((_, index) => authorized[index]);
+  const repositoryIds = [...new Set([target.id, ...pushable.map((candidate) => candidate.id)])];
+  const branches = await env.DB.prepare(
+    `SELECT repository_id AS repositoryId,name,commit_id AS commitId FROM branches WHERE repository_id IN (${repositoryIds.map(() => '?').join(',')}) ORDER BY name`
+  )
+    .bind(...repositoryIds)
+    .all<{ repositoryId: string; name: string; commitId: string }>();
+  const grouped = Map.groupBy(branches.results, (branch) => branch.repositoryId);
+  const branchesOf = (repositoryId: string) =>
+    (grouped.get(repositoryId) ?? []).map(({ name, commitId }) => ({ name, commitId }));
+  const sources = pushable.map((candidate) => ({
+    owner: candidate.owner,
+    name: candidate.name,
+    defaultBranch: candidate.defaultBranch,
+    branches: branchesOf(candidate.id)
+  }));
   return json({
     target: {
       owner,
       name,
       defaultBranch: target.defaultBranch,
-      branches: targetBranches.results
+      branches: branchesOf(target.id)
     },
     sources
   });
@@ -317,7 +323,7 @@ export async function readBlob(
   const cacheKey = new Request(
     `https://blob-cache.marl.internal/v3/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`
   );
-  const publicCache = (caches as unknown as { default: Cache }).default;
+  const publicCache = caches.default;
   if (repo.visibility === 'public') {
     const cached = await publicCache.match(cacheKey);
     if (cached) {

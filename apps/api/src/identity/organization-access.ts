@@ -1,7 +1,9 @@
 import type { Principal } from '../auth/principal';
-import { requireFreshSession, sha256 } from '../auth/principal';
+import { requireFreshSession } from '../auth/principal';
+import { randomToken, sha256 } from '../core/encoding';
 import { auditStatement } from '../core/audit';
-import { identifier, validSlug } from '../core/domain';
+import { identifier } from '../core/domain';
+import { validSlug } from '@marl/contracts';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
 import {
@@ -296,12 +298,4 @@ export async function deleteTeam(request: Request, env: Env, principal: Principa
     })
   ]);
   return json({ deleted: true });
-}
-
-function randomToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '');
 }

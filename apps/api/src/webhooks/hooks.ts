@@ -53,7 +53,7 @@ function validTarget(env: Env, value: string) {
 }
 
 function randomSecret() {
-  return [...crypto.getRandomValues(new Uint8Array(24))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return crypto.getRandomValues(new Uint8Array(24)).toHex();
 }
 
 export async function listWebhooks(env: Env, scope: WebhookScope | null) {

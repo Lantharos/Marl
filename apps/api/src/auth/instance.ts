@@ -6,26 +6,33 @@ import { twoFactor, username } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/d1';
 import { legalVersion } from '@marl/contracts';
 import { recordLegalAcceptance } from '../account/legal';
-import { validIdentitySlug } from '../core/domain';
+import { validIdentitySlug } from '@marl/contracts';
 import { sendTransactionalEmail } from '../core/email';
 import type { Env } from '../core/platform';
 import { authSchema } from './schema';
 import { stepUp } from './step-up';
 
+const instances = new Map<string, ReturnType<typeof buildAuth>>();
+
 export function createAuth(env: Env, request: Request) {
-  const configuredUrl = new URL(env.PUBLIC_URL || new URL(request.url).origin);
+  const configuredUrl = new URL(env.PUBLIC_URL);
   const requestOrigin = request.headers.get('origin');
   const trustedOrigins = developmentOrigins(env, configuredUrl, requestOrigin);
   const publicUrl = requestOrigin && trustedOrigins.includes(requestOrigin) ? new URL(requestOrigin) : configuredUrl;
-  const secret = env.AUTH_SECRET;
-  if (!secret) throw new Error('AUTH_SECRET is required.');
+  const key = `${publicUrl.origin} ${trustedOrigins.join(' ')}`;
+  let auth = instances.get(key);
+  if (!auth) instances.set(key, (auth = buildAuth(env, publicUrl, trustedOrigins)));
+  return auth;
+}
 
+function buildAuth(env: Env, publicUrl: URL, trustedOrigins: string[]) {
+  const secret = env.AUTH_SECRET;
   return betterAuth({
     appName: 'Marl',
     baseURL: publicUrl.origin,
     basePath: '/api/auth',
     secret,
-    database: drizzleAdapter(drizzle(env.DB as unknown as D1Database), { provider: 'sqlite', schema: authSchema }),
+    database: drizzleAdapter(drizzle(env.DB), { provider: 'sqlite', schema: authSchema }),
     trustedOrigins,
     hooks: {
       before: createAuthMiddleware(async (context) => {
@@ -90,24 +97,10 @@ export function createAuth(env: Env, request: Request) {
     session: {
       expiresIn: 60 * 60 * 24 * 14,
       updateAge: 60 * 60 * 24,
-      freshAge: 60 * 15
+      freshAge: 60 * 15,
+      cookieCache: { enabled: true, maxAge: 60 }
     },
-    rateLimit: {
-      enabled: env.ENVIRONMENT !== 'development',
-      storage: 'database',
-      modelName: 'rateLimit',
-      fields: { key: 'key', count: 'count', lastRequest: 'lastRequest' },
-      window: 60,
-      max: 100,
-      customRules: {
-        '/sign-in/email': { window: 60, max: 5 },
-        '/sign-in/username': { window: 60, max: 5 },
-        '/sign-up/email': { window: 60, max: 5 },
-        '/request-password-reset': { window: 300, max: 3 },
-        '/passkey/verify-authentication': { window: 60, max: 10 },
-        '/step-up/verify': { window: 60, max: 5 }
-      }
-    },
+    rateLimit: { enabled: false },
     advanced: {
       cookiePrefix: 'marl',
       useSecureCookies: env.ENVIRONMENT !== 'development',
@@ -151,20 +144,17 @@ function isLoopbackHost(hostname: string) {
 }
 
 async function usernameUnavailable(env: Env, candidate: string) {
-  const [organization, user] = await Promise.all([
-    env.DB.prepare('SELECT 1 AS found FROM organizations WHERE slug=? COLLATE NOCASE LIMIT 1').bind(candidate).first(),
-    env.DB.prepare('SELECT email,auth_user_id AS authUserId FROM users WHERE handle=? COLLATE NOCASE LIMIT 1')
-      .bind(candidate)
-      .first<{ email: string | null; authUserId: string | null }>()
-  ]);
-  if (organization) return true;
-  if (!user) return false;
-  return user.email !== null || user.authUserId !== null;
+  const taken = await env.DB.prepare(
+    'SELECT 1 AS found FROM organizations WHERE slug=?1 COLLATE NOCASE UNION ALL SELECT 1 FROM users WHERE handle=?1 COLLATE NOCASE LIMIT 1'
+  )
+    .bind(candidate)
+    .first();
+  return Boolean(taken);
 }
 
 async function suspendedAccount(env: Env, identity: string) {
   const row = await env.DB.prepare(
-    'SELECT 1 AS suspended FROM users WHERE (handle=?1 COLLATE NOCASE OR email=?1 COLLATE NOCASE) AND suspended_at IS NOT NULL'
+    'SELECT 1 AS suspended FROM users WHERE suspended_at IS NOT NULL AND id IN (SELECT id FROM auth_user WHERE email=?1 COLLATE NOCASE UNION SELECT id FROM auth_user WHERE username=?1 COLLATE NOCASE)'
   )
     .bind(identity)
     .first();

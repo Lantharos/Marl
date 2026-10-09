@@ -1,4 +1,4 @@
-import { validIdentitySlug } from '../core/domain';
+import { validIdentitySlug } from '@marl/contracts';
 import { json, problem } from '../http/http';
 import type { Env } from '../core/platform';
 import { commitAuthorIdSql } from '../git/commit-authors';

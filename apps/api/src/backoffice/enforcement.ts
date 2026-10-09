@@ -1,20 +1,20 @@
-import type { Principal } from '../auth/principal';
+import type { Actor } from 'pult';
 import { auditStatement } from '../core/audit';
 import { sendTransactionalEmail } from '../core/email';
-import type { D1PreparedStatement, Env } from '../core/platform';
+import type { Env } from '../core/platform';
 
-export const suspendedOwnerReason = 'The owner’s account is suspended.';
+const suspendedOwnerReason = 'The owner’s account is suspended.';
 
-const removableTables = {
-  issue_comment: 'issue_comments',
-  pull_comment: 'pull_request_comments',
-  review_comment: 'review_comments'
+export const commentTables = {
+  issue: 'issue_comments',
+  pull: 'pull_request_comments',
+  review: 'review_comments'
 } as const;
 
-export type RemovableSubject = keyof typeof removableTables;
+export type CommentKind = keyof typeof commentTables;
 
-export function isRemovable(type: string): type is RemovableSubject {
-  return type in removableTables;
+function auditActor(actor: Actor) {
+  return { id: null, handle: `pult:${actor.name}` };
 }
 
 function cancelRepositoryWork(env: Env, repositoryIds: string) {
@@ -28,39 +28,40 @@ function cancelRepositoryWork(env: Env, repositoryIds: string) {
   ];
 }
 
-export function removeContent(env: Env, actor: Principal, type: RemovableSubject, id: string): D1PreparedStatement[] {
-  return [
-    env.DB.prepare(`UPDATE ${removableTables[type]} SET deleted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id),
-    auditStatement(env, { actor, action: 'moderation.content_removed', subjectType: type, subjectId: id })
-  ];
+export async function removeComment(env: Env, actor: Actor, kind: CommentKind, id: string) {
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE ${commentTables[kind]} SET deleted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id),
+    auditStatement(env, { actor: auditActor(actor), action: 'comment.removed', subjectType: kind, subjectId: id })
+  ]);
 }
 
-export async function disableRepository(env: Env, actor: Principal, repositoryId: string, reason: string) {
-  const selected = 'SELECT id FROM repositories WHERE id=?';
+export async function disableRepository(env: Env, actor: Actor, repositoryId: string, reason: string) {
   await env.DB.batch([
     env.DB.prepare(
       'UPDATE repositories SET disabled_at=CURRENT_TIMESTAMP,disabled_reason=? WHERE id=? AND disabled_at IS NULL'
     ).bind(reason, repositoryId),
-    ...cancelRepositoryWork(env, selected).map((statement) => statement.bind(repositoryId)),
+    ...cancelRepositoryWork(env, 'SELECT id FROM repositories WHERE id=?').map((statement) =>
+      statement.bind(repositoryId)
+    ),
     auditStatement(env, {
-      actor,
+      actor: auditActor(actor),
       repositoryId,
-      action: 'moderation.repository_disabled',
+      action: 'repository.disabled',
       subjectType: 'repository',
       subjectId: repositoryId,
       details: { reason }
     })
   ]);
-  await notifyRepositoryOwners(env, repositoryId, reason);
+  return notifyRepositoryOwners(env, repositoryId, reason);
 }
 
-export async function enableRepository(env: Env, actor: Principal, repositoryId: string) {
+export async function enableRepository(env: Env, actor: Actor, repositoryId: string) {
   await env.DB.batch([
     env.DB.prepare('UPDATE repositories SET disabled_at=NULL,disabled_reason=NULL WHERE id=?').bind(repositoryId),
     auditStatement(env, {
-      actor,
+      actor: auditActor(actor),
       repositoryId,
-      action: 'moderation.repository_enabled',
+      action: 'repository.enabled',
       subjectType: 'repository',
       subjectId: repositoryId
     })
@@ -69,50 +70,65 @@ export async function enableRepository(env: Env, actor: Principal, repositoryId:
 
 const personalRepositories = `SELECT repositories.id FROM repositories JOIN organizations ON organizations.id=repositories.organization_id JOIN organization_members ON organization_members.organization_id=organizations.id WHERE organizations.kind='personal' AND organization_members.user_id=?`;
 
-export async function suspendUser(env: Env, actor: Principal, userId: string, reason: string) {
-  const user = await env.DB.prepare('SELECT auth_user_id AS authUserId,email FROM users WHERE id=? AND staff=0')
-    .bind(userId)
-    .first<{ authUserId: string | null; email: string | null }>();
-  if (!user) return false;
+export async function suspendUser(env: Env, actor: Actor, user: { id: string; email: string | null }, reason: string) {
   await env.DB.batch([
     env.DB.prepare(
       'UPDATE users SET suspended_at=CURRENT_TIMESTAMP,suspension_reason=? WHERE id=? AND suspended_at IS NULL'
-    ).bind(reason, userId),
-    env.DB.prepare('DELETE FROM auth_session WHERE user_id=?').bind(user.authUserId ?? userId),
+    ).bind(reason, user.id),
+    env.DB.prepare('DELETE FROM auth_session WHERE user_id=?').bind(user.id),
     env.DB.prepare(
       'UPDATE personal_access_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL'
-    ).bind(userId),
+    ).bind(user.id),
     env.DB.prepare(
       `UPDATE repositories SET disabled_at=CURRENT_TIMESTAMP,disabled_reason=? WHERE disabled_at IS NULL AND id IN (${personalRepositories})`
-    ).bind(suspendedOwnerReason, userId),
-    ...cancelRepositoryWork(env, personalRepositories).map((statement) => statement.bind(userId)),
+    ).bind(suspendedOwnerReason, user.id),
+    ...cancelRepositoryWork(env, personalRepositories).map((statement) => statement.bind(user.id)),
     auditStatement(env, {
-      actor,
-      action: 'moderation.user_suspended',
+      actor: auditActor(actor),
+      action: 'account.suspended',
       subjectType: 'user',
-      subjectId: userId,
+      subjectId: user.id,
       details: { reason }
     })
   ]);
-  if (user.email)
-    await sendTransactionalEmail(env, {
-      recipient: user.email,
-      subject: 'Your Marl account has been suspended',
-      heading: 'Your account has been suspended',
-      body: `${reason} You can appeal this decision by replying to legal@marl.sh.`,
-      actionLabel: 'Read the Acceptable Use Policy',
-      actionUrl: `${env.PUBLIC_URL}/legal/acceptable-use`
-    }).catch(() => {});
-  return true;
+  if (!user.email) return false;
+  return sendTransactionalEmail(env, {
+    recipient: user.email,
+    subject: 'Your Marl account has been suspended',
+    heading: 'Your account has been suspended',
+    body: `${reason} You can appeal this decision by replying to legal@marl.sh.`,
+    actionLabel: 'Read the Acceptable Use Policy',
+    actionUrl: `${env.PUBLIC_URL}/legal/acceptable-use`
+  }).then(
+    () => true,
+    () => false
+  );
 }
 
-export async function unsuspendUser(env: Env, actor: Principal, userId: string) {
+export async function restoreUser(env: Env, actor: Actor, userId: string) {
   await env.DB.batch([
     env.DB.prepare('UPDATE users SET suspended_at=NULL,suspension_reason=NULL WHERE id=?').bind(userId),
     env.DB.prepare(
       `UPDATE repositories SET disabled_at=NULL,disabled_reason=NULL WHERE disabled_reason=? AND id IN (${personalRepositories})`
     ).bind(suspendedOwnerReason, userId),
-    auditStatement(env, { actor, action: 'moderation.user_restored', subjectType: 'user', subjectId: userId })
+    auditStatement(env, {
+      actor: auditActor(actor),
+      action: 'account.restored',
+      subjectType: 'user',
+      subjectId: userId
+    })
+  ]);
+}
+
+export async function signOutEverywhere(env: Env, actor: Actor, userId: string) {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM auth_session WHERE user_id=?').bind(userId),
+    auditStatement(env, {
+      actor: auditActor(actor),
+      action: 'account.signed_out',
+      subjectType: 'user',
+      subjectId: userId
+    })
   ]);
 }
 
@@ -122,7 +138,7 @@ async function notifyRepositoryOwners(env: Env, repositoryId: string, reason: st
   )
     .bind(repositoryId)
     .all<{ email: string; repository: string }>();
-  await Promise.all(
+  const sent = await Promise.allSettled(
     owners.results.map((owner) =>
       sendTransactionalEmail(env, {
         recipient: owner.email,
@@ -131,7 +147,8 @@ async function notifyRepositoryOwners(env: Env, repositoryId: string, reason: st
         body: `${reason} You can appeal this decision, or ask for a copy of the repository, by replying to legal@marl.sh.`,
         actionLabel: 'Read the Acceptable Use Policy',
         actionUrl: `${env.PUBLIC_URL}/legal/acceptable-use`
-      }).catch(() => {})
+      })
     )
   );
+  return sent.every((result) => result.status === 'fulfilled');
 }

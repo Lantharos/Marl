@@ -25,8 +25,6 @@ const services: Record<ServiceName, { label: string; command: string[] }> = {
       '--var',
       'ENVIRONMENT:development',
       '--var',
-      `GIT_GATEWAY_URL:http://127.0.0.1:${ports.git}`,
-      '--var',
       `GIT_PUBLIC_URL:http://127.0.0.1:${ports.git}`,
       '--var',
       'GIT_SSH_PUBLIC_URL:ssh://git@127.0.0.1:42621',

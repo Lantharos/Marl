@@ -8,7 +8,7 @@
   import IdentityConfirmationModal from '$lib/components/auth/IdentityConfirmationModal.svelte';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import LegalUpdateNotice from '$lib/legal/LegalUpdateNotice.svelte';
-  import ReportDialog from '$lib/moderation/ReportDialog.svelte';
+  import ReportDialog from '$lib/reporting/ReportDialog.svelte';
   import SiteFooter from '$lib/components/shell/SiteFooter.svelte';
   import NavigationProgress from '$lib/components/shell/NavigationProgress.svelte';
   import { isIndexableRepositoryPath, privateRoots } from '$lib/repositories/repository-route';

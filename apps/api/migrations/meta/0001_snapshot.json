@@ -1,6 +1,6 @@
 {
-  "id": "f33f4f09-5998-4cbe-a31f-995de0efad74",
-  "prevId": "bd4fec8f-1fd7-4a33-9c11-ce9e2063b508",
+  "id": "d717e743-eeb4-4612-9b94-7783829aacdc",
+  "prevId": "83ccfb90-1703-496d-bf19-91bfde2818ad",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -249,52 +249,6 @@
           "onDelete": "cascade"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "auth_rate_limit": {
-      "name": "auth_rate_limit",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "count": {
-          "name": "count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_request": {
-          "name": "last_request",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "auth_rate_limit_key_unique": {
-          "name": "auth_rate_limit_key_unique",
-          "columns": [
-            "key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -3295,13 +3249,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "auth_user_id": {
-          "name": "auth_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "bio": {
           "name": "bio",
           "type": "text",
@@ -3354,14 +3301,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "staff": {
-          "name": "staff",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "0"
-        },
         "suspended_at": {
           "name": "suspended_at",
           "type": "text",
@@ -3378,14 +3317,6 @@
         }
       },
       "indexes": {
-        "users_by_auth_user": {
-          "name": "users_by_auth_user",
-          "columns": [
-            "auth_user_id"
-          ],
-          "where": "auth_user_id IS NOT NULL",
-          "isUnique": true
-        },
         "users_handle_unique": {
           "name": "users_handle_unique",
           "columns": [
@@ -4976,175 +4907,6 @@
         "work_item_references_check_3": {
           "name": "work_item_references_check_3",
           "value": "(target_issue_id IS NOT NULL) != (target_pull_id IS NOT NULL)"
-        }
-      }
-    },
-    "abuse_reports": {
-      "name": "abuse_reports",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "reporter_id": {
-          "name": "reporter_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "subject_type": {
-          "name": "subject_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "subject_id": {
-          "name": "subject_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "repository_id": {
-          "name": "repository_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "details": {
-          "name": "details",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'open'"
-        },
-        "resolution": {
-          "name": "resolution",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolved_by": {
-          "name": "resolved_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolved_at": {
-          "name": "resolved_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "abuse_reports_by_state": {
-          "name": "abuse_reports_by_state",
-          "columns": [
-            "state",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "abuse_reports_open_by_reporter": {
-          "name": "abuse_reports_open_by_reporter",
-          "columns": [
-            "reporter_id",
-            "subject_type",
-            "subject_id"
-          ],
-          "where": "state = 'open'",
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "abuse_reports_reporter_id_users_id_fk": {
-          "name": "abuse_reports_reporter_id_users_id_fk",
-          "tableFrom": "abuse_reports",
-          "columnsFrom": [
-            "reporter_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "abuse_reports_repository_id_repositories_id_fk": {
-          "name": "abuse_reports_repository_id_repositories_id_fk",
-          "tableFrom": "abuse_reports",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "tableTo": "repositories",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        },
-        "abuse_reports_resolved_by_users_id_fk": {
-          "name": "abuse_reports_resolved_by_users_id_fk",
-          "tableFrom": "abuse_reports",
-          "columnsFrom": [
-            "resolved_by"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "abuse_reports_subject": {
-          "name": "abuse_reports_subject",
-          "value": "subject_type IN ('repository','issue','pull','issue_comment','pull_comment','review_comment','user')"
-        },
-        "abuse_reports_reason": {
-          "name": "abuse_reports_reason",
-          "value": "reason IN ('spam','malware','harassment','copyright','private_information','illegal','other')"
-        },
-        "abuse_reports_state": {
-          "name": "abuse_reports_state",
-          "value": "state IN ('open','actioned','dismissed')"
         }
       }
     },

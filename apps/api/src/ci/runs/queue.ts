@@ -5,7 +5,7 @@ import { checksChanged } from './check-updates';
 import { runSelect } from './runs';
 import { type RunJob } from './jobs';
 
-export type QueueRun = {
+type QueueRun = {
   repositoryId: string;
   workflowId: string;
   name: string;

@@ -1,5 +1,6 @@
 import type { Principal } from '../auth/principal';
-import { requireFreshSession, sha256 } from '../auth/principal';
+import { requireFreshSession } from '../auth/principal';
+import { sha256 } from '../core/encoding';
 import { identifier } from '../core/domain';
 import { sendTransactionalEmail } from '../core/email';
 import { json, problem, readJson } from '../http/http';

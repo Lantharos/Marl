@@ -1,6 +1,6 @@
 import { emitRepositoryEvent } from '../../webhooks/events';
 import type { RunnerJobLease } from '@marl/contracts';
-import { sha256 } from '../../auth/principal';
+import { sha256 } from '../../core/encoding';
 import { identifier } from '../../core/domain';
 import { json, problem, readBody, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
@@ -108,7 +108,7 @@ export async function claimJob(env: Env, runner: Runner): Promise<Response> {
       repository: {
         owner: job.owner,
         name: job.repository,
-        cloneUrl: `${env.GIT_PUBLIC_URL ?? env.GIT_GATEWAY_URL}/${job.owner}/${job.repository}.git`
+        cloneUrl: `${env.GIT_PUBLIC_URL}/${job.owner}/${job.repository}.git`
       },
       branch: job.branch,
       commitId: job.commitId,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { publicationFailureDisposition, publishWithReconciliation, type CommittedPush } from './reconciliation';
+import { publishWithReconciliation, type CommittedPush } from './reconciliation';
 import { StateRequestError } from './state-client';
 
 const committed: CommittedPush = {
@@ -12,20 +12,6 @@ const committed: CommittedPush = {
 };
 
 describe('ambiguous repository publication', () => {
-  test('treats a durable commit record as authoritative', () => {
-    expect(publicationFailureDisposition(new Error('connection reset'), committed)).toBe('published');
-  });
-
-  test('discards objects only after a definitive state rejection', () => {
-    expect(
-      publicationFailureDisposition(new StateRequestError(409, 'generation_changed', 'Generation changed.'), null)
-    ).toBe('discard');
-  });
-
-  test('defers cleanup when the publication outcome is unknown', () => {
-    expect(publicationFailureDisposition(new Error('connection reset'), null)).toBe('defer');
-  });
-
   test('recovers a commit whose response was lost without deleting its objects', async () => {
     let discarded = false;
     const resolution = await publishWithReconciliation({

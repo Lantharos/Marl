@@ -46,6 +46,7 @@ Set API secrets without placing their values in source control:
 bunx wrangler secret put AUTH_SECRET --config apps/api/wrangler.jsonc
 bunx wrangler secret put SECRET_ENCRYPTION_KEY --config apps/api/wrangler.jsonc
 bunx wrangler secret put GIT_GATEWAY_TOKEN --config apps/api/wrangler.jsonc
+bunx wrangler secret put PULT_KEY --config apps/api/wrangler.jsonc
 bunx wrangler secret put MARL_GIT_GATEWAY_TOKEN --config apps/git-edge/wrangler.jsonc
 ```
 
@@ -109,16 +110,28 @@ push through both `git.marl.sh` and `ssh.marl.sh`, cross-protocol fetch visibili
 publication, release asset download, repository browsing, and a self-hosted runner job. The local
 qualification command does not exercise live Cloudflare R2, Durable Objects, Containers, DNS,
 email, or retention settings.
-## Moderation
 
-Grant staff access to the people who review reports:
+The Deploy workflow runs the same steps for the three Workers and the Pult definitions from GitHub
+Actions. Start it by hand from the Actions tab once CI has passed. It needs `CLOUDFLARE_API_TOKEN`,
+`CLOUDFLARE_ACCOUNT_ID` and the production `PULT_KEY` as secrets of the `production` environment.
+The SSH origin is still updated on its host.
+
+## Back office
+
+Reports, moderation and the status page run in Pult, in the `marl` project with `dev` and `prod`
+environments. The API's `PULT_KEY` secret is the production environment's key. Point that
+environment at `https://marl.sh` in Pult's Environments settings, so its requests reach `/api/pult`.
+
+The definitions live in `apps/api/src/backoffice`. After changing them, rebuild `.pult/` with
+`bunx pult build` in `apps/api`, commit it, and deploy them to production:
 
 ```sh
-bunx wrangler d1 execute marl --remote --config apps/api/wrangler.jsonc --command "UPDATE users SET staff=1 WHERE handle='name'"
+cd apps/api && PULT_KEY=pult_prod_... bunx pult deploy
 ```
 
-Staff see Moderation in the account menu. Copyright notices and appeals arrive by email and are
-handled from the same queue.
+The `dev` environment follows the code by itself whenever the local API sends a report. Give
+moderators the Moderator role and whoever is on call the Operator role in the project's settings.
+Copyright notices and appeals arrive by email.
 
 ## Schema and repository maintenance
 

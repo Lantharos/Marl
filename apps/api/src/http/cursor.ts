@@ -1,4 +1,5 @@
-export interface PageCursor {
+import { base64Url, fromBase64Url } from '../core/encoding';
+interface PageCursor {
   value: string;
   id: string;
   rank?: number;
@@ -14,11 +15,7 @@ export function readCursor(url: URL): PageCursor | null {
   const encoded = url.searchParams.get('cursor');
   if (!encoded) return null;
   try {
-    const base64 = encoded
-      .replaceAll('-', '+')
-      .replaceAll('_', '/')
-      .padEnd(Math.ceil(encoded.length / 4) * 4, '=');
-    const parsed = JSON.parse(atob(base64)) as Partial<PageCursor>;
+    const parsed = JSON.parse(new TextDecoder().decode(fromBase64Url(encoded))) as Partial<PageCursor>;
     return typeof parsed.value === 'string' &&
       typeof parsed.id === 'string' &&
       (parsed.rank === undefined || Number.isInteger(parsed.rank))
@@ -30,7 +27,7 @@ export function readCursor(url: URL): PageCursor | null {
 }
 
 export function writeCursor(cursor: PageCursor) {
-  return btoa(JSON.stringify(cursor)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  return base64Url(new TextEncoder().encode(JSON.stringify(cursor)));
 }
 
 export function pageResult<T>(rows: T[], limit: number, cursorFor: (row: T) => PageCursor) {

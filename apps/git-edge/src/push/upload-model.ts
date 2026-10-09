@@ -1,6 +1,6 @@
 import { STORAGE_LIMITS, StorageError } from '../storage/storage-model';
 
-export type PlannedPack = {
+type PlannedPack = {
   number: number;
   bytes: number;
   parts: number;
@@ -8,7 +8,7 @@ export type PlannedPack = {
   multipartUploadId: string | null;
 };
 
-export type UploadedPart = {
+type UploadedPart = {
   pack: number;
   part: number;
   bytes: number;

@@ -1,7 +1,8 @@
 import type { Principal } from '../auth/principal';
 import { requireFreshSession } from '../auth/principal';
 import { auditStatement } from '../core/audit';
-import { identifier, validIdentitySlug } from '../core/domain';
+import { identifier } from '../core/domain';
+import { validIdentitySlug } from '@marl/contracts';
 import { json, problem, readJson } from '../http/http';
 import type { Env } from '../core/platform';
 import { createOrganizationBody, organizationSettingsBody } from '../http/request-schemas';

@@ -5,12 +5,4 @@
 **/build/**
 **/dist/**
 **/.dev.vars
-/.dev-web.log
-/.dev-web.err.log
-/.dev-api.log
-/.dev-api.err.log
-/.dev-git.log
-/.dev-git.err.log
-/.codex-*.log
-/.marl-dev.*.log
 .marl-data

@@ -1,7 +1,7 @@
 import type { Env } from '../core/platform';
-import { requestGitGateway, retryGatewayRequest, type GitGatewayPath, type GitGatewayRequestMap } from './gateway';
+import { requestGitGateway, type GitGatewayPath, type GitGatewayRequestMap } from './gateway';
 
-export type PullRefUpdate = {
+type PullRefUpdate = {
   owner: string;
   repository: string;
   number: number;
@@ -22,8 +22,4 @@ export async function requestGatewayWrite<
   Path extends Extract<GitGatewayPath, '/_marl/merge' | '/_marl/pulls/pin' | '/_marl/branches/advance'>
 >(env: Env, path: Path, body: GitGatewayRequestMap[Path]) {
   return requestGitGateway(env, path, body, { attempts: 2, timeoutMs: 30_000 });
-}
-
-export async function retryGatewayWrite(send: () => Promise<Response>) {
-  return retryGatewayRequest(send, 2);
 }

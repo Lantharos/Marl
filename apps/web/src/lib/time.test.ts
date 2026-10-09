@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatAbsoluteTime, formatTimestamp } from './time';
+import { formatTimestamp } from './time';
 
 describe('UTC timestamps', () => {
   test('treats database timestamps without an offset as UTC', () => {
@@ -9,6 +9,5 @@ describe('UTC timestamps', () => {
 
   test('preserves timestamps that already declare an offset', () => {
     expect(formatTimestamp('2026-08-20T14:00:00+02:00', new Date('2026-08-20T12:01:00Z'))).toBe('a minute ago');
-    expect(formatAbsoluteTime('invalid')).toBe('Unknown time');
   });
 });

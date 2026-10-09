@@ -22,7 +22,7 @@ export function mediaFileError(file: File) {
   return '';
 }
 
-export function mediaMarkdown(media: UploadedMedia) {
+function mediaMarkdown(media: UploadedMedia) {
   if (!/^\/api\/v1\/media\/media_[a-zA-Z0-9_-]+$/.test(media.url))
     throw new Error('Marl returned an invalid attachment URL.');
   const name = media.name.replaceAll(/[\r\n]/g, ' ');

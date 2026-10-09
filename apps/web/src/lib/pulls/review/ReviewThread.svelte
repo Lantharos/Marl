@@ -7,7 +7,7 @@
   import Trash2 from '@lucide/svelte/icons/trash';
   import type { ThreadCodeLine } from '$lib/code/diff';
   import type { MarkdownContext } from '$lib/markdown/context';
-  import { reporting } from '$lib/moderation/reporting.svelte';
+  import { reporting } from '$lib/reporting/reporting.svelte';
   import { ReviewThreadState } from '$lib/pulls/review/ReviewThreadState.svelte';
   import Button from '../../components/controls/Button.svelte';
   import DiscussionEntry from '../../components/discussion/DiscussionEntry.svelte';

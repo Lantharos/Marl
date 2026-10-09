@@ -2,9 +2,10 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "marl-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-31",
+  "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
+  "placement": { "mode": "smart" },
   "triggers": { "crons": ["17 * * * *", "*/10 * * * *"] },
   "routes": [
     {
@@ -21,10 +22,11 @@
     "PUBLIC_URL": "https://marl.sh",
     "GIT_PUBLIC_URL": "https://git.marl.sh",
     "GIT_SSH_PUBLIC_URL": "ssh://git@ssh.marl.sh",
-    "EMAIL_FROM": "noreply@marl.sh"
+    "EMAIL_FROM": "noreply@marl.sh",
+    "PULT_URL": "https://app.pult.sh"
   },
   "secrets": {
-    "required": ["AUTH_SECRET", "SECRET_ENCRYPTION_KEY", "GIT_GATEWAY_TOKEN"]
+    "required": ["AUTH_SECRET", "SECRET_ENCRYPTION_KEY", "GIT_GATEWAY_TOKEN", "PULT_KEY"]
   },
   "send_email": [
     {
@@ -63,6 +65,11 @@
       "name": "RATE_LIMITER",
       "namespace_id": "1001",
       "simple": { "limit": 600, "period": 60 }
+    },
+    {
+      "name": "AUTH_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 5, "period": 60 }
     }
   ],
   "observability": {
@@ -84,12 +91,8 @@
   },
   "migrations": [
     {
-      "tag": "pull-rooms-v1",
-      "new_sqlite_classes": ["PullRoom"]
-    },
-    {
-      "tag": "run-rooms-v1",
-      "new_sqlite_classes": ["RunRoom"]
+      "tag": "v1",
+      "new_sqlite_classes": ["PullRoom", "RunRoom"]
     }
   ]
 }

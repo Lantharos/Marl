@@ -8,3 +8,4 @@ Cargo.lock
 apps/api/migrations
 **/worker-configuration.d.ts
 *.md
+**/.pult

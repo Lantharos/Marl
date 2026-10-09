@@ -1,6 +1,6 @@
 # Database changes
 
-The API uses Drizzle's SQLite schema in `apps/api/src/db/schema`. The tables are grouped by domain and exported through `index.ts`. Authentication uses the same table definitions. `database(env)` exposes a typed D1 client; existing parameterized SQL remains useful for specialized queries and atomic conditional writes.
+The API describes its tables with Drizzle's SQLite schema in `apps/api/src/db/schema`, grouped by domain and exported through `index.ts`. The schema generates migrations and backs authentication; queries are parameterized SQL against D1, which keeps conditional writes and batches explicit.
 
 Generate and inspect a migration after editing the schema:
 
