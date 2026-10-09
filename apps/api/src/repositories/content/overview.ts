@@ -4,10 +4,11 @@ import { safeRepositoryPath } from '../../core/domain';
 import { json, problem, readJson } from '../../http/http';
 import type { Env } from '../../core/platform';
 import { repositoryOverviewBody } from '../../http/request-schemas';
-import { authorizeRepository } from '../access/access';
+import { authorizeRepository, type RepositoryAccess } from '../access/access';
 import { renderDocument } from './documents';
 
 type OverviewDocument = { path: string; label: string };
+type OverviewCandidate = OverviewDocument & { objectId: string };
 
 const overviewNames = [
   [/^readme(?:\.(?:md|markdown|txt))?$/i, 'README'],
@@ -28,22 +29,17 @@ export async function getRepositoryOverview(
 ): Promise<Response> {
   const repository = await authorizeRepository(env, principal, owner, name, 'repository.read');
   if (!repository) return problem(404, 'repository_not_found', 'Repository not found.');
-  const available = await overviewCandidates(env, repository.id, repository.defaultBranch);
-  const stored = await env.DB.prepare('SELECT overview_documents_json AS documentsJson FROM repositories WHERE id=?')
-    .bind(repository.id)
-    .first<{ documentsJson: string | null }>();
+  const { candidates, documentsJson } = await overviewCandidates(env, repository.id, repository.defaultBranch);
   const selected =
-    stored?.documentsJson === null || stored?.documentsJson === undefined
-      ? automaticOverviewDocuments(available)
-      : selectedOverviewDocuments(available, stored.documentsJson);
+    documentsJson === null
+      ? automaticOverviewDocuments(candidates)
+      : selectedOverviewDocuments(candidates, documentsJson);
   const requested = url.searchParams.get('document');
   const active = selected.find((document) => document.path === requested) ?? selected[0];
   return json({
-    document: active
-      ? await overviewDocument(env, principal, owner, name, repository.defaultBranch, active, ctx)
-      : null,
-    documents: selected,
-    availableDocuments: available,
+    document: active ? await overviewDocument(env, ctx, repository, active) : null,
+    documents: selected.map(overviewDocumentSummary),
+    availableDocuments: candidates.map(overviewDocumentSummary),
     canManage: repository.role === 'maintain' || repository.role === 'admin'
   });
 }
@@ -62,8 +58,8 @@ export async function updateRepositoryOverview(
   const paths = [...new Set(body.documents)];
   if (paths.length !== body.documents.length || paths.some((path) => !safeRepositoryPath(path)))
     return problem(422, 'invalid_overview_documents', 'Overview documents must be unique repository paths.');
-  const available = await overviewCandidates(env, repository.id, repository.defaultBranch);
-  const availablePaths = new Set(available.map((document) => document.path));
+  const { candidates } = await overviewCandidates(env, repository.id, repository.defaultBranch);
+  const availablePaths = new Set(candidates.map((document) => document.path));
   if (paths.some((path) => !availablePaths.has(path)))
     return problem(
       422,
@@ -86,43 +82,61 @@ export async function updateRepositoryOverview(
     })
   ]);
   return json({
-    documents: paths.map((path) => available.find((document) => document.path === path)!)
+    documents: paths.map((path) => overviewDocumentSummary(candidates.find((document) => document.path === path)!))
   });
 }
 
 async function overviewDocument(
   env: Env,
-  principal: Principal | null,
-  owner: string,
-  name: string,
-  revision: string,
-  document: OverviewDocument,
-  ctx: ExecutionContext
+  execution: ExecutionContext,
+  repository: RepositoryAccess,
+  document: OverviewCandidate
 ) {
-  const rendered = await renderDocument(env, principal, owner, name, revision, document.path, ctx);
-  return { ...document, html: rendered instanceof Response ? null : rendered.html };
+  const rendered = await renderDocument(
+    env,
+    execution,
+    repository,
+    repository.defaultBranch,
+    document.path,
+    document.objectId
+  );
+  return { ...overviewDocumentSummary(document), html: rendered instanceof Response ? null : rendered.html };
 }
 
-async function overviewCandidates(env: Env, repositoryId: string, defaultBranch: string): Promise<OverviewDocument[]> {
-  const rows = await env.DB.prepare(
-    `SELECT repository_entries.path,repository_entries.name FROM branches JOIN commits ON commits.repository_id=branches.repository_id AND commits.id=branches.commit_id JOIN repository_entries ON repository_entries.repository_id=branches.repository_id AND repository_entries.tree_id=commits.tree_id WHERE branches.repository_id=? AND branches.name=? AND repository_entries.kind='blob' AND (lower(repository_entries.name) LIKE '%.md' OR lower(repository_entries.name) LIKE '%.markdown' OR lower(repository_entries.name) LIKE '%.txt' OR instr(repository_entries.name,'.')=0) ORDER BY repository_entries.path COLLATE NOCASE LIMIT 500`
-  )
-    .bind(repositoryId, defaultBranch)
-    .all<{ path: string; name: string }>();
-  return rows.results.map((entry) => ({
-    path: entry.path,
-    label: overviewLabel(entry.name)
-  }));
+function overviewDocumentSummary({ path, label }: OverviewCandidate): OverviewDocument {
+  return { path, label };
 }
 
-function automaticOverviewDocuments(available: OverviewDocument[]) {
+async function overviewCandidates(env: Env, repositoryId: string, defaultBranch: string) {
+  const [documents, candidates] = await env.DB.batch<{
+    documentsJson?: string | null;
+    path: string;
+    name: string;
+    objectId: string;
+  }>([
+    env.DB.prepare('SELECT overview_documents_json AS documentsJson FROM repositories WHERE id=?').bind(repositoryId),
+    env.DB.prepare(
+      `SELECT repository_entries.path,repository_entries.name,repository_entries.object_id AS objectId FROM branches JOIN commits ON commits.repository_id=branches.repository_id AND commits.id=branches.commit_id JOIN repository_entries ON repository_entries.repository_id=branches.repository_id AND repository_entries.tree_id=commits.tree_id WHERE branches.repository_id=? AND branches.name=? AND repository_entries.kind='blob' AND (lower(repository_entries.name) LIKE '%.md' OR lower(repository_entries.name) LIKE '%.markdown' OR lower(repository_entries.name) LIKE '%.txt' OR instr(repository_entries.name,'.')=0) ORDER BY repository_entries.path COLLATE NOCASE LIMIT 500`
+    ).bind(repositoryId, defaultBranch)
+  ]);
+  return {
+    documentsJson: documents.results[0]?.documentsJson ?? null,
+    candidates: candidates.results.map((entry): OverviewCandidate => ({
+      path: entry.path,
+      label: overviewLabel(entry.name),
+      objectId: entry.objectId
+    }))
+  };
+}
+
+function automaticOverviewDocuments(available: OverviewCandidate[]) {
   return overviewNames.flatMap(([pattern, label]) => {
     const document = available.find((candidate) => !candidate.path.includes('/') && pattern.test(candidate.path));
     return document ? [{ ...document, label }] : [];
   });
 }
 
-function selectedOverviewDocuments(available: OverviewDocument[], value: string) {
+function selectedOverviewDocuments(available: OverviewCandidate[], value: string) {
   let paths: unknown;
   try {
     paths = JSON.parse(value);

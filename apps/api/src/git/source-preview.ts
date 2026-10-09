@@ -1,7 +1,7 @@
 import type { Principal } from '../auth/principal';
 import { json } from '../http/http';
 import type { Env } from '../core/platform';
-import { readBlob } from '../repositories/content/source';
+import { readBlob } from '../repositories/content/blobs';
 
 const previewBytes = 1024 * 1024;
 

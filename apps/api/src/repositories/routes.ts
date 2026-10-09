@@ -24,15 +24,8 @@ import {
   uploadRepositoryIcon
 } from './repositories';
 import { detachRepositoryFork, forkRepository } from './forks';
-import {
-  getCommit,
-  listBranches,
-  listCommits,
-  listPullSources,
-  listTree,
-  readBlob,
-  readCommitPatch
-} from './content/source';
+import { getCommit, listBranches, listCommits, listPullSources, listTree, readCommitPatch } from './content/source';
+import { readBlob } from './content/blobs';
 import { getRepositoryOverview, updateRepositoryOverview } from './content/overview';
 import {
   getRepositorySettings,

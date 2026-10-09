@@ -7,7 +7,6 @@ import { json, problem, readJsonValue } from '../../http/http';
 import type { D1Result, Env } from '../../core/platform';
 import { authorizeRepository, authorizeRepositoryId, repositoryCan, repositoryListFilter } from '../access/access';
 import { commitAuthorIdSql } from '../../git/commit-authors';
-import { rawBlobHeaders } from '../../git/raw-content';
 
 export async function listBranches(
   env: Env,
@@ -293,66 +292,6 @@ export async function listTree(
   });
 }
 
-export async function readBlob(
-  env: Env,
-  principal: Principal | null,
-  owner: string,
-  name: string,
-  revision: string,
-  path: string,
-  ctx: ExecutionContext
-): Promise<Response> {
-  const repo = await authorizeRepository(env, principal, owner, name, 'repository.read');
-  if (!repo) return problem(404, 'repository_not_found', 'Repository not found.');
-  if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
-  const resolved = await resolveRevision(env, repo.id, revision);
-  if (!resolved) return problem(404, 'revision_not_found', 'Revision not found.');
-  let entry = await env.DB.prepare(
-    `SELECT object_id AS objectId FROM repository_entries WHERE repository_id=? AND tree_id=? AND path=? AND kind='blob'`
-  )
-    .bind(repo.id, resolved.treeId, path)
-    .first<{ objectId: string }>();
-  if (!entry?.objectId) {
-    const parentPath = path.split('/').slice(0, -1).join('/');
-    const historical = await readGatewayTree(env, owner, name, resolved.id, parentPath);
-    if (!historical) return problem(502, 'tree_gateway_failed', 'Git gateway could not resolve this historical file.');
-    entry = historical.find((candidate) => candidate.path === path && candidate.kind === 'blob') ?? null;
-  }
-  if (!entry?.objectId) return problem(404, 'blob_not_found', 'File not found at this revision.');
-  const immutableRevision = revision.toLowerCase() === resolved.id.toLowerCase();
-  const cacheKey = new Request(
-    `https://blob-cache.marl.internal/v3/${repo.id}/${entry.objectId}/${encodeURIComponent(path)}`
-  );
-  const publicCache = caches.default;
-  if (repo.visibility === 'public') {
-    const cached = await publicCache.match(cacheKey);
-    if (cached) {
-      const headers = new Headers(cached.headers);
-      headers.set(
-        'cache-control',
-        immutableRevision ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate'
-      );
-      return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers });
-    }
-  }
-  const response = await (
-    env.ENVIRONMENT === 'development'
-      ? requestGitGateway(env, '/_marl/blob', { owner, repository: name, objectId: entry.objectId }, { attempts: 3 })
-      : requestGitGateway(env, '/_marl/object', { repositoryId: repo.id, objectId: entry.objectId }, { attempts: 3 })
-  ).catch(() => null);
-  if (!response?.ok || !response.body || response.headers.get('x-marl-git-object-type') !== 'blob')
-    return problem(502, 'blob_gateway_failed', 'Git storage could not read this file.');
-  const result = new Response(response.body, {
-    headers: rawBlobHeaders(path, repo.visibility, response.headers.get('content-length'), immutableRevision)
-  });
-  if (repo.visibility === 'public') {
-    const cached = result.clone();
-    cached.headers.set('cache-control', 'public, max-age=31536000, immutable');
-    ctx.waitUntil(publicCache.put(cacheKey, cached));
-  }
-  return result;
-}
-
 type TreeEntry = {
   path: string;
   name: string;
@@ -361,7 +300,7 @@ type TreeEntry = {
   byteSize?: number;
 };
 
-async function readGatewayTree(
+export async function readGatewayTree(
   env: Env,
   owner: string,
   repository: string,
