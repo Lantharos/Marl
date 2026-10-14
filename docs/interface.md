@@ -46,6 +46,35 @@ monospace face and dimmed, so `!7` cannot be misread as 17 in lists, timelines, 
 Muted text is for supporting metadata and faint text for the quietest hints and placeholders.
 Both meet AA contrast on every surface in both appearances.
 
+## Workspace
+
+`/next` previews Marl as a workspace rather than a page per object. A slim rail on the left holds
+the Inbox with its unread count, Pulls, Issues, Runs, the first few repositories, search, and the
+account menu. The middle canvas shows the object itself, and the details pane on the right keeps its
+state, people, labels, checks, linked work, and actions in the same place for every pull and issue.
+] shows or hides the details pane, and the choice is remembered on that device. A small breadcrumb
+above the canvas is the only location chrome; there are no headers, tabs, or footers.
+
+The Inbox is the home of the workspace. Items are grouped by why they reached you: review requested,
+mentioned, assigned, your pull, your issue, your failed run, and following. J and K open the next or
+previous item next to the list without leaving it, E marks an item done with an undo below the list
+(Z also undoes), U toggles unread, Enter moves into the opened item, and Esc returns to the list.
+Pulls and issues that were opened once stay loaded while you move around, so returning to them is
+instant, and changes made in one place show up everywhere the item appears.
+
+Review is a mode of a pull, at `/next/owner/repo/pulls/7/review`. The canvas splits into the changed
+files as a tree, one file's diff at a time, and the pull's conversation with the review composer.
+The revision bar across the top compares any two revisions: pick the base from its menu and the head
+by clicking a revision, or use All changes and Since your review. Viewed files are remembered per
+revision on that device. N and P move between files, J and K between changes and conversations, the
+arrow keys between lines (Shift extends the selection), C comments on the current line, V marks the
+file viewed, A switches the review to Approve, Ctrl Enter submits, and Esc leaves review.
+
+Reading surfaces, such as descriptions and discussions, keep a measured line length and more space.
+Working surfaces, such as lists, file trees, and diffs, stay dense and lean on the code font. On
+phones the rail becomes a bottom bar, the list and the opened item take turns, and details open as a
+sheet.
+
 ## Code browser
 
 The Code tab reads like an editor. On wide screens a file tree sits beside the content, with the
