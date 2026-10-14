@@ -33,8 +33,7 @@
   data-inbox-row
   class={[
     'grid w-full grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-x-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
-    selected ? 'bg-surface-muted' : 'hover:bg-surface-hover',
-    selected && active && 'shadow-[inset_2px_0_var(--color-brand)]'
+    selected ? (active ? 'bg-surface-muted' : 'bg-surface-hover') : 'hover:bg-surface-hover'
   ]}
   onclick={() => onSelect(item)}
   onpointerenter={() => ref && workspace.prefetch(ref)}

@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, tick, type Snippet } from 'svelte';
   import Bold from '@lucide/svelte/icons/bold';
   import Code from '@lucide/svelte/icons/code';
+  import Eye from '@lucide/svelte/icons/eye';
+  import PencilLine from '@lucide/svelte/icons/pencil-line';
   import Italic from '@lucide/svelte/icons/italic';
   import Link from '@lucide/svelte/icons/link';
   import List from '@lucide/svelte/icons/list';
@@ -30,9 +32,11 @@
     minHeight = 120,
     grow = false,
     compact = false,
+    variant = 'standard',
     disabled = false,
     context,
     draftKey,
+    actions,
     onsubmit
   }: {
     value?: string;
@@ -41,9 +45,11 @@
     minHeight?: number | string;
     grow?: boolean;
     compact?: boolean;
+    variant?: 'standard' | 'inline';
     disabled?: boolean;
     context?: MarkdownContext;
     draftKey?: string;
+    actions?: Snippet;
     onsubmit?: () => void;
   } = $props();
   let mode = $state<'write' | 'preview'>('write');
@@ -161,6 +167,9 @@
     } else if (event.key === '.' && (event.metaKey || event.ctrlKey) && page.data.shellUser) {
       event.preventDefault();
       repliesOpen = true;
+    } else if ((event.key === 'b' || event.key === 'i') && (event.metaKey || event.ctrlKey) && !event.shiftKey) {
+      event.preventDefault();
+      wrap(event.key === 'b' ? '**' : '_');
     }
   }
 
@@ -186,6 +195,20 @@
   }
 </script>
 
+{#snippet filePicker()}
+  <input
+    bind:this={picker}
+    type="file"
+    accept={mediaAccept}
+    multiple
+    hidden
+    onchange={(event) => {
+      void attachFiles([...(event.currentTarget.files ?? [])]);
+      event.currentTarget.value = '';
+    }}
+  />
+{/snippet}
+
 {#snippet tool(label: string, Icon: LucideIcon, action: () => void)}
   <Tooltip text={label} as="label">
     {#snippet children(tooltip)}
@@ -206,38 +229,40 @@
   ondragleave={() => (dragOver = false)}
   ondrop={drop}
 >
-  <header class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 bg-surface-muted px-1.5 py-1">
-    <div class="flex items-center gap-0.5" role="tablist" aria-label="Editor mode">
-      {#each [['write', 'Write'], ['preview', 'Preview']] as const as [option, label] (option)}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === option}
-          class={[
-            'h-8 rounded-md px-3 text-xs font-semibold transition-colors pointer-coarse:h-10',
-            mode === option ? 'bg-surface text-ink-strong shadow-subtle' : 'text-ink-muted hover:text-ink-strong'
-          ]}
-          onclick={() => (mode = option)}>{label}</button
+  {#if variant === 'standard'}<header
+      class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 bg-surface-muted px-1.5 py-1"
+    >
+      <div class="flex items-center gap-0.5" role="tablist" aria-label="Editor mode">
+        {#each [['write', 'Write'], ['preview', 'Preview']] as const as [option, label] (option)}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === option}
+            class={[
+              'h-8 rounded-md px-3 text-xs font-semibold transition-colors pointer-coarse:h-10',
+              mode === option ? 'bg-surface text-ink-strong shadow-subtle' : 'text-ink-muted hover:text-ink-strong'
+            ]}
+            onclick={() => (mode = option)}>{label}</button
+          >
+        {/each}
+      </div>
+      {#if mode === 'write'}
+        <fieldset
+          class="m-0 flex min-w-0 flex-wrap items-center border-0 p-0 disabled:opacity-50"
+          {disabled}
+          aria-label="Text formatting"
         >
-      {/each}
-    </div>
-    {#if mode === 'write'}
-      <fieldset
-        class="m-0 flex min-w-0 flex-wrap items-center border-0 p-0 disabled:opacity-50"
-        {disabled}
-        aria-label="Text formatting"
-      >
-        {@render tool('Bold', Bold, () => wrap('**'))}
-        {@render tool('Italic', Italic, () => wrap('_'))}
-        {@render tool('Quote', Quote, () => line('> '))}
-        {@render tool('Inline code', Code, () => wrap('`'))}
-        {@render tool('Link', Link, () => wrap('[', '](https://)', 'label'))}
-        {@render tool('Bulleted list', List, () => line('- '))}
-        {@render tool('Numbered list', ListOrdered, () => line('1. '))}
-        {#if page.data.shellUser}<SavedReplyPicker bind:open={repliesOpen} text={value} onInsert={insert} />{/if}
-      </fieldset>
-    {/if}
-  </header>
+          {@render tool('Bold', Bold, () => wrap('**'))}
+          {@render tool('Italic', Italic, () => wrap('_'))}
+          {@render tool('Quote', Quote, () => line('> '))}
+          {@render tool('Inline code', Code, () => wrap('`'))}
+          {@render tool('Link', Link, () => wrap('[', '](https://)', 'label'))}
+          {@render tool('Bulleted list', List, () => line('- '))}
+          {@render tool('Numbered list', ListOrdered, () => line('1. '))}
+          {#if page.data.shellUser}<SavedReplyPicker bind:open={repliesOpen} text={value} onInsert={insert} />{/if}
+        </fieldset>
+      {/if}
+    </header>{/if}
   {#if mode === 'write'}
     <textarea
       bind:this={textarea}
@@ -248,8 +273,9 @@
       onpaste={paste}
       onkeydown={keydown}
       class={[
-        'block w-full resize-y bg-surface p-3.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:text-ink-muted',
-        grow && 'field-sizing-content'
+        'block w-full bg-surface p-3.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:text-ink-muted',
+        (grow || variant === 'inline') && 'field-sizing-content',
+        variant === 'inline' ? 'resize-none' : 'resize-y'
       ]}
       style:min-height={height}></textarea>
   {:else}
@@ -302,20 +328,26 @@
     </div>
   {/if}
   {#if attachmentError}<p class="px-3.5 pb-2.5 text-xs text-danger" role="alert">{attachmentError}</p>{/if}
-  {#if !compact || (context && !disabled)}
+  {#if variant === 'inline'}
+    <footer class="flex min-h-11 flex-wrap items-center gap-0.5 gap-y-1 px-1.5 pb-1.5">
+      {@render tool(
+        mode === 'write' ? 'Preview' : 'Edit',
+        mode === 'write' ? Eye : PencilLine,
+        () => void (mode = mode === 'write' ? 'preview' : 'write')
+      )}
+      {#if context?.owner && context.repository && !disabled}{@render tool('Attach images or videos', Paperclip, () =>
+          picker?.click()
+        )}{/if}
+      {#if page.data.shellUser}<SavedReplyPicker bind:open={repliesOpen} text={value} onInsert={insert} />{/if}
+      <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">{@render actions?.()}</div>
+    </footer>
+  {/if}
+  {#if variant === 'inline' && context?.owner && context.repository && !disabled}
+    {@render filePicker()}
+  {:else if !compact || (context && !disabled)}
     <footer class="flex min-h-9 items-center gap-2.5 px-2 text-xs text-ink-faint">
       {#if context?.owner && context.repository && !disabled}
-        <input
-          bind:this={picker}
-          type="file"
-          accept={mediaAccept}
-          multiple
-          hidden
-          onchange={(event) => {
-            void attachFiles([...(event.currentTarget.files ?? [])]);
-            event.currentTarget.value = '';
-          }}
-        />
+        {@render filePicker()}
         <Button size="small" variant="ghost" class="h-7 px-2" onclick={() => picker?.click()}
           ><Paperclip size={14} />Attach</Button
         >

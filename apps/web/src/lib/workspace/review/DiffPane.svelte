@@ -9,19 +9,20 @@
   import Button from '#lib/components/controls/Button.svelte';
   import Notice from '#lib/components/feedback/Notice.svelte';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
-  import CommentComposer from '#lib/components/markdown/CommentComposer.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
   import Kbd from '#lib/components/page/Kbd.svelte';
-  import ReviewThread from '#lib/pulls/review/ReviewThread.svelte';
+  import type { Discussion } from '../discussion/discussion.svelte';
+  import Thread from '../discussion/Thread.svelte';
   import type { DiffCursor } from './diff-cursor.svelte';
   import type { ReviewSession } from './review-session.svelte';
 
-  let { session, cursor, viewerId }: { session: ReviewSession; cursor: DiffCursor; viewerId: string } = $props();
+  let { session, cursor, discussion }: { session: ReviewSession; cursor: DiffCursor; discussion: Discussion } =
+    $props();
   const file = $derived(session.selectedFile);
   const pageState = $derived(session.pageState);
   const pull = $derived(session.pull);
   const patch = $derived(file && session.patch(file));
   const tokens = $derived(file && session.tokens(file));
-  const context = $derived({ owner: pageState.route.owner, repository: pageState.route.repo });
   const hunks = $derived.by(() => {
     const groups: { start: number; lines: PatchLine[] }[] = [];
     for (const [index, line] of cursor.lines.entries()) {
@@ -148,12 +149,15 @@
                     'group grid min-h-6 grid-cols-[3.25rem_3.25rem_minmax(max-content,1fr)]',
                     line.kind === 'added' && 'bg-success-soft',
                     line.kind === 'removed' && 'bg-danger-soft',
-                    selected && 'shadow-[inset_2px_0_var(--color-brand)]',
                     selected && line.kind === 'context' && 'bg-surface-hover',
                     selected && cursor.anchor !== null && 'bg-brand-soft!'
                   ]}
                 >
-                  <span class="relative pr-2 text-right text-ink-faint tabular-nums select-none"
+                  <span
+                    class={[
+                      'relative pr-2 text-right tabular-nums select-none',
+                      selected ? 'bg-brand-soft text-brand-strong' : 'text-ink-faint'
+                    ]}
                     >{line.oldLine ?? ''}{#if commentable(line)}<button
                         type="button"
                         class="absolute inset-y-0 left-1 my-auto grid size-5 place-items-center rounded-sm bg-brand text-on-brand opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
@@ -164,7 +168,12 @@
                         }}><MessageSquarePlus size={12} /></button
                       >{/if}</span
                   >
-                  <span class="pr-3 text-right text-ink-faint tabular-nums select-none">{line.newLine ?? ''}</span>
+                  <span
+                    class={[
+                      'pr-3 text-right tabular-nums select-none',
+                      selected ? 'bg-brand-soft text-brand-strong' : 'text-ink-faint'
+                    ]}>{line.newLine ?? ''}</span
+                  >
                   <pre
                     class={[
                       'm-0 pr-6 font-[inherit] whitespace-pre',
@@ -179,21 +188,7 @@
                     class="sticky left-0 w-(--pane-width) max-w-200 py-1 font-sans text-base leading-normal"
                     data-thread-line={index}
                   >
-                    <ReviewThread
-                      {thread}
-                      state={pageState.timeline.threadState(thread.id)}
-                      busy={pageState.busy}
-                      inline
-                      interactive={pageState.reviewable}
-                      canResolve={pull.canModerate}
-                      canModerate={pull.canModerate}
-                      {viewerId}
-                      {context}
-                      onReply={pageState.reply}
-                      onResolve={pageState.setThreadResolved}
-                      onEdit={pageState.saveReviewComment}
-                      onDelete={pageState.deleteReviewComment}
-                    />
+                    <Thread {discussion} {thread} inline />
                   </div>
                 {/each}
                 {#if draftAt(line) && cursor.draft}
@@ -206,16 +201,26 @@
                         ? `Line ${cursor.draft.line}`
                         : `Lines ${cursor.draft.startLine}–${cursor.draft.line}`}
                     </p>
-                    <CommentComposer
+                    <MarkdownComposer
                       bind:value={cursor.body}
-                      {context}
+                      variant="inline"
+                      minHeight="64px"
                       placeholder="Comment on this line"
-                      submitLabel="Comment"
-                      minHeight={72}
-                      busy={pageState.busy}
-                      onSubmit={submitDraft}
-                      onCancel={() => cursor.close()}
-                    />
+                      context={discussion.context}
+                      disabled={pageState.busy}
+                      onsubmit={submitDraft}
+                    >
+                      {#snippet actions()}
+                        <Button size="small" variant="ghost" onclick={() => cursor.close()}>Cancel</Button>
+                        <Button
+                          size="small"
+                          variant="primary"
+                          loading={pageState.busy}
+                          disabled={!cursor.body.trim()}
+                          onclick={submitDraft}>Comment</Button
+                        >
+                      {/snippet}
+                    </MarkdownComposer>
                   </div>
                 {/if}
               {/if}

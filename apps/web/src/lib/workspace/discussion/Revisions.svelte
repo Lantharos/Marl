@@ -1,31 +1,29 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { PullRevisionSummary } from '@marl/contracts';
-  import type { MarkdownContext } from '#lib/markdown/context.js';
-  import type { PullPageState } from '#lib/pulls/detail/pull-page-state.svelte.js';
+  import type { PullRevisionSummary, ReviewThread } from '@marl/contracts';
   import PullRevision from '#lib/pulls/overview/PullRevision.svelte';
   import { revisionParticipation } from '#lib/pulls/overview/revision-activity.js';
-  import PullActivity from './PullActivity.svelte';
+  import Activity from './Activity.svelte';
+  import type { Discussion } from './discussion.svelte';
 
   let {
-    pageState,
-    viewerId,
-    context,
+    discussion,
     checksHref,
-    chronological = false,
+    latestFirst = false,
+    onShowThread,
     composer
   }: {
-    pageState: PullPageState;
-    viewerId: string;
-    context: MarkdownContext;
+    discussion: Discussion;
     checksHref: string;
-    chronological?: boolean;
+    latestFirst?: boolean;
+    onShowThread?: (thread: ReviewThread) => void;
     composer?: Snippet;
   } = $props();
-  const pull = $derived(pageState.pull);
+  const pageState = $derived(discussion.pageState);
   const timeline = $derived(pageState.timeline);
+  const pull = $derived(pageState.pull);
   const repository = $derived(pull.sourceRepository ?? { owner: pageState.route.owner, name: pageState.route.repo });
-  const ordered = $derived(chronological ? timeline.revisions : timeline.revisions.toReversed());
+  const ordered = $derived(latestFirst ? timeline.revisions.toReversed() : timeline.revisions);
 
   function participation(revision: PullRevisionSummary) {
     if (revision.current) return revisionParticipation(timeline.currentItems);
@@ -48,18 +46,17 @@
       loading={pageState.loadingRevisions.includes(revision.sequence)}
       onToggle={() => pageState.toggleRevision(revision)}
     >
-      {#if revision.current && !chronological}{@render composer?.()}{/if}
-      <PullActivity
-        {pageState}
-        items={revision.current ? timeline.currentItems : timeline.revisionItems(revision.sequence)}
-        {viewerId}
-        {context}
-        {chronological}
-      />
-      {#if revision.current && chronological}{@render composer?.()}{/if}
+      <div class="grid gap-6 px-2 pt-2 pb-3 sm:px-3">
+        <Activity
+          {discussion}
+          items={revision.current ? timeline.currentItems : timeline.revisionItems(revision.sequence)}
+          {onShowThread}
+        />
+        {#if revision.current}{@render composer?.()}{/if}
+      </div>
     </PullRevision>
   {:else}
-    <PullActivity {pageState} items={timeline.currentItems} {viewerId} {context} {chronological} />
+    <Activity {discussion} items={timeline.currentItems} {onShowThread} />
     {@render composer?.()}
   {/each}
 </div>

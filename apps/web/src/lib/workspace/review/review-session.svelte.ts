@@ -32,6 +32,7 @@ export class ReviewSession {
   diff = $state.raw<PullRequestDiff | null>(null);
   error = $state('');
   selectedPath = $state<string | null>(null);
+  focus = $state.raw<{ path: string; side: 'old' | 'new'; line: number } | null>(null);
   outcome = $state<ReviewOutcome>('commented');
   body = $state('');
   submitting = $state(false);
@@ -175,6 +176,11 @@ export class ReviewSession {
 
   select = (path: string) => {
     this.selectedPath = path;
+  };
+
+  showThread = (thread: ReviewThread) => {
+    this.selectedPath = thread.path;
+    this.focus = { path: thread.path, side: thread.side, line: thread.line };
   };
 
   stepFile = (direction: 1 | -1) => {

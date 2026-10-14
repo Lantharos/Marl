@@ -1,15 +1,15 @@
 <script lang="ts">
-  import PullRevisions from '../canvas/PullRevisions.svelte';
+  import type { Discussion } from '../discussion/discussion.svelte';
+  import Revisions from '../discussion/Revisions.svelte';
   import type { ReviewSession } from './review-session.svelte';
   import ReviewComposer from './ReviewComposer.svelte';
 
   let {
     session,
-    viewerId,
+    discussion,
     composer = $bindable()
-  }: { session: ReviewSession; viewerId: string; composer?: HTMLElement } = $props();
+  }: { session: ReviewSession; discussion: Discussion; composer?: HTMLElement } = $props();
   const pull = $derived(session.pull);
-  const context = $derived({ owner: session.pageState.route.owner, repository: session.pageState.route.repo });
 </script>
 
 <div class="flex h-full flex-col">
@@ -19,10 +19,10 @@
     Conversation
   </header>
   <div class="min-h-0 flex-1 overflow-y-auto p-3">
-    <PullRevisions
-      pageState={session.pageState}
-      {viewerId}
-      {context}
+    <Revisions
+      {discussion}
+      latestFirst
+      onShowThread={session.showThread}
       checksHref="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}/checks"
     />
   </div>

@@ -18,6 +18,8 @@
   import { shell } from '../shell/shell-state.svelte';
   import { itemHref, type ItemRef } from '../store/refs';
   import { workspace } from '../store/workspace.svelte';
+  import { Discussion } from '../discussion/discussion.svelte';
+  import RemovalDialog from '../discussion/RemovalDialog.svelte';
   import ConversationPane from './ConversationPane.svelte';
   import { DiffCursor } from './diff-cursor.svelte';
   import DiffPane from './DiffPane.svelte';
@@ -34,6 +36,7 @@
     return patch && 'lines' in patch ? patch.lines : [];
   });
   const cursor = new DiffCursor(() => lines);
+  const discussion = $derived(session ? new Discussion(session.pageState, viewerId) : null);
   let panel = $state<'files' | 'diff' | 'conversation'>('diff');
   let composer = $state<HTMLElement>();
   let returnTo = $state<string | null>(null);
@@ -52,6 +55,17 @@
   $effect(() => {
     void lines;
     untrack(() => cursor.reset());
+  });
+  $effect(() => {
+    const focus = session?.focus;
+    if (!session || !focus || file?.path !== focus.path) return;
+    const index = lines.findIndex((line) => line.side === focus.side && line.line === focus.line);
+    if (index < 0) return;
+    untrack(() => {
+      cursor.place(index);
+      session.focus = null;
+      panel = 'diff';
+    });
   });
   $effect(() => {
     if (!session || !file) return;
@@ -186,15 +200,16 @@
         <FileTree {session} onPick={() => (panel = 'diff')} />
       </aside>
       <section class={['min-h-0 min-w-0', panel !== 'diff' && 'max-lg:hidden']} aria-label="Changes">
-        <DiffPane {session} {cursor} {viewerId} />
+        {#if discussion}<DiffPane {session} {cursor} {discussion} />{/if}
       </section>
       <aside
         class={['min-h-0 border-line-subtle lg:border-l', panel !== 'conversation' && 'max-lg:hidden']}
         aria-label="Conversation"
       >
-        <ConversationPane {session} {viewerId} bind:composer />
+        {#if discussion}<ConversationPane {session} {discussion} bind:composer />{/if}
       </aside>
     </div>
+    {#if discussion}<RemovalDialog {discussion} />{/if}
   {/if}
 </div>
 

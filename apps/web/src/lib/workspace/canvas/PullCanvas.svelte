@@ -7,13 +7,17 @@
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Time from '#lib/components/page/Time.svelte';
   import type { PullPageState } from '#lib/pulls/detail/pull-page-state.svelte.js';
-  import PullActionComposer from '#lib/pulls/review/PullActionComposer.svelte';
-  import PullRevisions from './PullRevisions.svelte';
+  import Button from '#lib/components/controls/Button.svelte';
+  import MarkdownComposer from '#lib/components/markdown/MarkdownComposer.svelte';
+  import { Discussion } from '../discussion/discussion.svelte';
+  import RemovalDialog from '../discussion/RemovalDialog.svelte';
+  import Revisions from '../discussion/Revisions.svelte';
   import { pullStateLabel } from './state-labels';
 
   let { pageState, viewerId }: { pageState: PullPageState; viewerId: string } = $props();
   const pull = $derived(pageState.pull);
-  const context = $derived({ owner: pageState.route.owner, repository: pageState.route.repo });
+  const discussion = $derived(new Discussion(pageState, viewerId));
+  let uploading = $state(false);
   const source = $derived(
     pull.sourceRepository && pull.sourceRepository.owner !== pull.repository.owner
       ? `${pull.sourceRepository.owner}:${pull.sourceBranch}`
@@ -61,27 +65,30 @@
   </div>
 
   <section class="mt-10" aria-label="Revisions">
-    <PullRevisions
-      {pageState}
-      {viewerId}
-      {context}
-      chronological
-      checksHref="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}/checks"
-    >
+    <Revisions {discussion} checksHref="/{pull.repository.owner}/{pull.repository.name}/pulls/{pull.number}/checks">
       {#snippet composer()}
-        <div class="pt-2">
-          <PullActionComposer
+        {#if pull.canManage && !pull.locked}<MarkdownComposer
             bind:value={pageState.commentBody}
-            {context}
-            pullState={pull.state}
-            locked={pull.locked}
-            busy={pageState.busy}
-            canManage={pull.canManage}
-            onComment={pageState.addComment}
-            onAction={pageState.act}
-          />
-        </div>
+            bind:uploading
+            variant="inline"
+            minHeight="64px"
+            draftKey="pull:{pull.id}"
+            context={discussion.context}
+            disabled={pageState.busy}
+            onsubmit={pageState.addComment}
+          >
+            {#snippet actions()}
+              <Button
+                size="small"
+                variant="primary"
+                loading={pageState.busy}
+                disabled={!pageState.commentBody.trim() || uploading}
+                onclick={pageState.addComment}>Comment</Button
+              >
+            {/snippet}
+          </MarkdownComposer>{/if}
       {/snippet}
-    </PullRevisions>
+    </Revisions>
   </section>
+  <RemovalDialog {discussion} />
 </article>
