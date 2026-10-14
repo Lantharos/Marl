@@ -17,7 +17,7 @@
   import MarkdownBody from '#lib/components/markdown/MarkdownBody.svelte';
   import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import { encodeRepositoryPath, encodeRevision } from '../../repository-path';
-  import { treeHref, type CodeLocation } from '../entry-path';
+  import { repositoryLinks, type CodeLinks, type CodeLocation } from '../entry-path';
   import type { RenderedDocument, TreeEntry } from '../types';
   import FileCommit from './FileCommit.svelte';
   import { isMarkdown, isPreviewableImage } from './file-kind';
@@ -27,13 +27,17 @@
     path,
     preview,
     rendered,
-    entry
+    entry,
+    links = repositoryLinks,
+    showCommit = true
   }: {
     location: CodeLocation;
     path: string;
     preview: SourcePreview;
     rendered: RenderedDocument | null;
     entry?: TreeEntry;
+    links?: CodeLinks;
+    showCommit?: boolean;
   } = $props();
   const base = $derived(`/${location.owner}/${location.repository}`);
   const rawUrl = $derived(
@@ -74,15 +78,15 @@
 </script>
 
 <section class="overflow-hidden surface">
-  <header class="border-b border-line-subtle bg-surface-muted/60">
-    <FileCommit {entry} {base} historyHref="{base}/commits/{encodeRevision(location.revision)}" />
-  </header>
+  {#if showCommit}<header class="border-b border-line-subtle bg-surface-muted/60">
+      <FileCommit {entry} {base} historyHref="{base}/commits/{encodeRevision(location.revision)}" />
+    </header>{/if}
   <div
     class="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-line-subtle py-1.5 pr-2 pl-4"
   >
     <span class="flex min-w-0 items-baseline gap-2.5">
       <span class="min-w-0 truncate text-sm"
-        >{#if folder}<a class="text-ink-muted hover:text-brand" href={treeHref(location, folder)}>{folder}/</a
+        >{#if folder}<a class="text-ink-muted hover:text-brand" href={links.tree(location, folder)}>{folder}/</a
           >{/if}<strong class="font-semibold text-ink-strong">{fileName}</strong></span
       >
       <span class="text-xs whitespace-nowrap text-ink-muted tabular-nums">{sizeLabel}</span>

@@ -6,10 +6,15 @@
   import { api } from '#lib/api.js';
   import { popoverMotion } from '#lib/ui/popover.js';
   import Kbd from '#lib/components/page/Kbd.svelte';
-  import { entryHref, type CodeLocation } from './entry-path';
+  import { entryHref, repositoryLinks, type CodeLinks, type CodeLocation } from './entry-path';
   import type { TreeEntry } from './types';
 
-  let { location, initial, onClose }: { location: CodeLocation; initial: TreeEntry[]; onClose: () => void } = $props();
+  let {
+    location,
+    initial,
+    links = repositoryLinks,
+    onClose
+  }: { location: CodeLocation; initial: TreeEntry[]; links?: CodeLinks; onClose: () => void } = $props();
   let query = $state('');
   let results = $state<TreeEntry[]>([]);
   let selected = $state(0);
@@ -92,7 +97,7 @@
           id="file-result-{index}"
           role="option"
           aria-selected={index === selected}
-          href={entryHref(location, entry.kind, entry.path)}
+          href={entryHref(location, entry.kind, entry.path, links)}
           onclick={onClose}
           onmouseenter={() => (selected = index)}
           class={[
