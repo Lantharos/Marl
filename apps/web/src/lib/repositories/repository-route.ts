@@ -5,6 +5,7 @@ export const privateRoots = new Set([
   'inbox',
   'invitations',
   'issues',
+  'next',
   'organizations',
   'pulls',
   'repositories',

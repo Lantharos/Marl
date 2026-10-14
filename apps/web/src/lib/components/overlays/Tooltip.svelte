@@ -25,7 +25,7 @@
     children
   }: {
     text: string;
-    placement?: Placement;
+    placement?: Placement | 'right';
     as?: 'description' | 'label';
     anchor?: HTMLElement | null;
     class?: ClassValue;

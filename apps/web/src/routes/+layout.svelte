@@ -17,6 +17,7 @@
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
   const authRoutes = new Set(['/sign-in', '/sign-up', '/forgot-password', '/reset-password', '/two-factor']);
   const confirmation = new IdentityConfirmation();
+  const workspace = $derived(page.route.id?.startsWith('/next') ?? false);
   const indexable = $derived.by(() => {
     const parts = page.url.pathname.split('/').filter(Boolean);
     const repository = (page.data as { repository?: { visibility?: string } }).repository;
@@ -43,7 +44,7 @@
 >
 
 <NavigationProgress />
-{#if data.shellUser && !page.error}
+{#if data.shellUser && !page.error && !workspace}
   <AppShell repositories={data.shellRepositories} organizations={data.shellOrganizations} user={data.shellUser}>
     {#if !data.shellLegalAccepted}<LegalUpdateNotice />{/if}
     {@render children()}

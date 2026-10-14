@@ -272,6 +272,12 @@
       --floating-fit;
   }
 
+  &[data-placement='right'] {
+    margin-left: 8px;
+    position-area: right;
+    position-try-fallbacks: flip-inline;
+  }
+
   &[data-placement='top'] {
     position-area: top;
   }

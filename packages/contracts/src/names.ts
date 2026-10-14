@@ -19,6 +19,7 @@ const reservedIdentitySlugs = new Set([
   'legal',
   'marl-social.png',
   'new',
+  'next',
   'notifications',
   'offline',
   'organizations',
