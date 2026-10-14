@@ -3,24 +3,27 @@
   import CommitSignature from '#lib/code/CommitSignature.svelte';
   import UserProfileLink from '#lib/components/identity/UserProfileLink.svelte';
   import { encodeRevision } from '../repository-path';
-  import type { CodeLocation } from './entry-path';
+  import { repositoryLinks, type CodeLinks, type CodeLocation } from './entry-path';
   import FileList from './FileList.svelte';
   import type { Tree } from './types';
 
   let {
     location,
     path,
-    tree
+    tree,
+    links = repositoryLinks
   }: {
     location: CodeLocation;
     path: string;
     tree: Tree;
+    links?: CodeLinks;
   } = $props();
   const base = $derived(`/${location.owner}/${location.repository}`);
 </script>
 
 <FileList
   {location}
+  {links}
   entries={tree.entries}
   parentPath={path ? path.split('/').slice(0, -1).join('/') : undefined}
   empty={path ? 'This folder is empty.' : 'This branch is empty.'}

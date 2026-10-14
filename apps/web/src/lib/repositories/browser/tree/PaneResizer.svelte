@@ -1,7 +1,10 @@
 <script lang="ts">
   import { paneWidth, type PaneLayout } from './pane-layout.svelte';
 
-  let { layout }: { layout: PaneLayout } = $props();
+  let {
+    layout,
+    class: className = 'sticky top-17 h-[calc(100dvh-5.25rem)] max-lg:hidden'
+  }: { layout: PaneLayout; class?: string } = $props();
   let dragging = $state(false);
   let origin = 0;
   let initial = 0;
@@ -51,7 +54,7 @@
   aria-valuemin={paneWidth.min}
   aria-valuemax={paneWidth.max}
   tabindex="0"
-  class="group sticky top-17 flex h-[calc(100dvh-5.25rem)] w-4 shrink-0 cursor-col-resize touch-none justify-center outline-none max-lg:hidden"
+  class={['group flex w-4 shrink-0 cursor-col-resize touch-none justify-center outline-none', className]}
   onpointerdown={begin}
   onpointermove={move}
   onpointerup={end}

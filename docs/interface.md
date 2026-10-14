@@ -70,6 +70,18 @@ revision on that device. N and P move between files, J and K between changes and
 arrow keys between lines (Shift extends the selection), C comments on the current line, V marks the
 file viewed, A switches the review to Approve, Ctrl Enter submits, and Esc leaves review.
 
+A repository's home in the workspace is its code, at `/next/owner/repo`; folders and files live at
+`/next/owner/repo/tree/branch/path` and `/next/owner/repo/blob/branch/path`. Clicking a repository
+in the rail opens it there, and Ctrl K offers Code for the repository you are in. The file tree takes
+the list's place and can be resized by dragging its edge, the folder or file fills the canvas, and the
+home opens on the README, selected in the tree. The details pane holds the repository itself: its
+description, stars and forks, the branch picker, the clone address, the latest release, and links to
+the repository's pulls, issues, and runs in the workspace. With a file open it also shows the file's
+latest change and History. The tree stays as it is while you move between files, follows back and
+forward, and starts loading an entry as soon as you point at it. T opens Go to file, and the arrow
+keys move through the tree. On phones the tree and the opened file take turns, like a list and its
+item.
+
 Reading surfaces, such as descriptions and discussions, keep a measured line length and more space.
 Working surfaces, such as lists, file trees, and diffs, stay dense and lean on the code font. On
 phones the rail becomes a bottom bar, the list and the opened item take turns, and details open as a

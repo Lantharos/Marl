@@ -7,11 +7,11 @@
   import FolderOpen from '@lucide/svelte/icons/folder-open';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
   import { parentFolder } from '../content-cache.svelte';
-  import { entryHref } from '../entry-path';
+  import { entryHref, repositoryLinks, type CodeLinks } from '../entry-path';
   import type { TreeEntry } from '../types';
   import type { FileTree, TreeRow } from './file-tree.svelte';
 
-  let { tree, current }: { tree: FileTree; current: string } = $props();
+  let { tree, current, links = repositoryLinks }: { tree: FileTree; current: string; links?: CodeLinks } = $props();
   const id = $props.id();
   const rowHeight = 30;
   const overscan = 10;
@@ -31,7 +31,7 @@
   const end = $derived(Math.min(rows.length, Math.ceil((scrollTop + height) / rowHeight) + overscan));
   const activeIndex = $derived(rows.findIndex((row) => row.key === (activePath ?? current)));
 
-  const href = (entry: TreeEntry) => entryHref(tree.location, entry.kind, entry.path);
+  const href = (entry: TreeEntry) => entryHref(tree.location, entry.kind, entry.path, links);
   const entryAt = (index: number) => {
     const row = rows[index];
     return row?.kind === 'entry' ? row : undefined;
@@ -187,7 +187,7 @@
             style:padding-left={indent}
             class={[
               'flex h-7.5 items-center gap-1.5 rounded-md pr-2 text-sm transition-colors select-none',
-              selected ? 'bg-brand-soft font-medium text-ink-strong' : 'text-ink hover:bg-surface-hover',
+              selected ? 'bg-surface-muted font-medium text-ink-strong' : 'text-ink hover:bg-surface-hover',
               index === activeIndex && focused && keyboard && 'ring-2 ring-brand'
             ]}
           >

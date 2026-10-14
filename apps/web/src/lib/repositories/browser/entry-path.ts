@@ -2,16 +2,27 @@ import { encodeRepositoryPath, encodeRevision } from '../repository-path';
 
 export type RevisionLocation = { owner: string; repository: string; revision: string };
 export type CodeLocation = RevisionLocation & { defaultBranch: string };
+export type CodeLinks = {
+  tree: (location: CodeLocation, path?: string) => string;
+  blob: (location: RevisionLocation, path: string) => string;
+};
 
-export function treeHref({ owner, repository, revision, defaultBranch }: CodeLocation, path = '') {
-  if (!path && revision === defaultBranch) return `/${owner}/${repository}/code`;
-  return `/${owner}/${repository}/tree/${encodeRevision(revision)}${path ? `/${encodeRepositoryPath(path)}` : ''}`;
+export function codeLinks(prefix: string, home: string): CodeLinks {
+  const root = ({ owner, repository }: RevisionLocation) => `${prefix}/${owner}/${repository}`;
+  return {
+    tree: (location, path = '') => {
+      if (!path && location.revision === location.defaultBranch) return `${root(location)}${home}`;
+      return `${root(location)}/tree/${encodeRevision(location.revision)}${path ? `/${encodeRepositoryPath(path)}` : ''}`;
+    },
+    blob: (location, path) =>
+      `${root(location)}/blob/${encodeRevision(location.revision)}/${encodeRepositoryPath(path)}`
+  };
 }
 
-export function blobHref({ owner, repository, revision }: RevisionLocation, path: string) {
-  return `/${owner}/${repository}/blob/${encodeRevision(revision)}/${encodeRepositoryPath(path)}`;
-}
+export const repositoryLinks = codeLinks('', '/code');
+export const treeHref = repositoryLinks.tree;
+export const blobHref = repositoryLinks.blob;
 
-export function entryHref(location: CodeLocation, kind: 'blob' | 'tree', path: string) {
-  return kind === 'tree' ? treeHref(location, path) : blobHref(location, path);
+export function entryHref(location: CodeLocation, kind: 'blob' | 'tree', path: string, links = repositoryLinks) {
+  return kind === 'tree' ? links.tree(location, path) : links.blob(location, path);
 }

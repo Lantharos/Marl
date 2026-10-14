@@ -1,56 +1,30 @@
 <script lang="ts">
-  import { onDestroy, onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import { afterNavigate } from '$app/navigation';
-  import { page } from '$app/state';
   import FolderTree from '@lucide/svelte/icons/folder-tree';
   import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
   import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
   import X from '@lucide/svelte/icons/x';
   import Button from '#lib/components/controls/Button.svelte';
   import Tooltip from '#lib/components/overlays/Tooltip.svelte';
-  import { forgetContent, parentFolder, rememberFolders } from '#lib/repositories/browser/content-cache.svelte.js';
   import FileFinder from '#lib/repositories/browser/FileFinder.svelte';
-  import { FileTree } from '#lib/repositories/browser/tree/file-tree.svelte.js';
+  import { CodeBrowser } from '#lib/repositories/browser/tree/code-browser.svelte.js';
   import { PaneLayout } from '#lib/repositories/browser/tree/pane-layout.svelte.js';
   import PaneResizer from '#lib/repositories/browser/tree/PaneResizer.svelte';
   import TreeDrawer from '#lib/repositories/browser/tree/TreeDrawer.svelte';
   import TreePane from '#lib/repositories/browser/tree/TreePane.svelte';
-  import type { Folders } from '#lib/repositories/browser/types.js';
   import { plainKey } from '#lib/ui/keyboard.js';
   import type { LayoutProps } from './$types';
 
-  let { data, params, children }: LayoutProps = $props();
-  const owner = $derived(data.repository.owner);
-  const repository = $derived(data.repository.name);
-  const defaultBranch = $derived(data.repository.defaultBranch);
-  const revision = $derived(params.revision ?? defaultBranch);
-  const selectedFile = $derived(page.data.selectedFile as string | undefined);
-  const current = $derived(params.path ?? selectedFile ?? '');
-  const file = $derived(Boolean(page.route.id?.includes('/blob/')) || selectedFile !== undefined);
-  const openFolder = $derived(file ? parentFolder(current) : current);
-  const folders = $derived((page.data.folders ?? {}) as Folders);
-  const tree = $derived.by(() => {
-    const location = { owner, repository, revision, defaultBranch };
-    return untrack(() => new FileTree(location, () => folders, openFolder));
-  });
+  let { data, children }: LayoutProps = $props();
+  const code = new CodeBrowser(() => data.repository);
+  const tree = $derived(code.tree);
+  const current = $derived(code.current);
   const pane = new PaneLayout();
   let drawerOpen = $state(false);
   let finderOpen = $state(false);
 
-  $effect.pre(() => {
-    const target = tree;
-    const folder = openFolder;
-    untrack(() => target.reveal(folder));
-  });
-
-  $effect(() => {
-    const location = tree.location;
-    const loaded = folders;
-    untrack(() => rememberFolders(location, loaded));
-  });
-
   onMount(() => pane.restore());
-  onDestroy(forgetContent);
   afterNavigate(() => (drawerOpen = false));
 
   function openFinderShortcut(event: KeyboardEvent) {
@@ -112,6 +86,6 @@
 
 {#if finderOpen}<FileFinder
     location={tree.location}
-    initial={tree.entries(openFolder) ?? []}
+    initial={tree.entries(code.openFolder) ?? []}
     onClose={() => (finderOpen = false)}
   />{/if}
