@@ -6,8 +6,10 @@ import type { PageLoad } from './$types';
 
 export const load = (async ({ fetch, url }) => {
   const filters = readRunQuery(url);
+  const repository = url.searchParams.get('repository');
+  const endpoint = repository ? `/repositories/${repository}/runs` : '/runs';
   const result = await routeLoad(
-    apiWith<{ runs: RunSummary[]; nextCursor: string | null }>(fetch, runListPath('/runs', filters))
+    apiWith<{ runs: RunSummary[]; nextCursor: string | null }>(fetch, runListPath(endpoint, filters))
   );
-  return { ...result, ...filters };
+  return { ...result, ...filters, repository, endpoint };
 }) satisfies PageLoad;

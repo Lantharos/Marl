@@ -24,5 +24,17 @@ export function routeRef(kind: ItemKind, params: { owner: string; repo: string; 
 }
 
 export function workspaceHref(href: string) {
-  return /^\/[^/]+\/[^/]+\/(?:pulls|issues)\/\d+$/.test(href) ? `/next${href}` : href;
+  return /^\/[^/]+\/[^/]+(?:\/(?:pulls|issues)\/\d+|\/(?:tree|blob)\/.+)?$/.test(href) ? `/next${href}` : href;
+}
+
+export function repositoryHref(slug: string) {
+  return `/next/${slug}`;
+}
+
+export function codeRepository(pathname: string) {
+  return pathname.match(/^\/next\/([^/]+\/[^/]+)(?:\/(?:tree|blob)\/.*)?$/)?.[1] ?? null;
+}
+
+export function currentRepository(url: { pathname: string; searchParams: Pick<URLSearchParams, 'get'> }) {
+  return url.searchParams.get('repository') ?? url.pathname.match(/^\/next\/([^/]+\/[^/]+)/)?.[1] ?? null;
 }

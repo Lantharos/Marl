@@ -8,8 +8,24 @@
     list,
     canvas,
     inspector,
-    mobileView = 'canvas'
-  }: { list?: Snippet; canvas: Snippet; inspector?: Snippet; mobileView?: 'list' | 'canvas' } = $props();
+    mobileView = 'canvas',
+    listLabel = 'Queue',
+    listWidth
+  }: {
+    list?: Snippet;
+    canvas: Snippet;
+    inspector?: Snippet;
+    mobileView?: 'list' | 'canvas';
+    listLabel?: string;
+    listWidth?: number;
+  } = $props();
+  const columns = $derived(
+    !list
+      ? 'grid-cols-1'
+      : listWidth
+        ? 'md:grid-cols-[min(var(--list-width),45%)_minmax(0,1fr)]'
+        : 'md:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]'
+  );
 
   function showSheet(dialog: HTMLDialogElement) {
     dialog.showModal();
@@ -23,16 +39,11 @@
   }
 </script>
 
-<div
-  class={[
-    'grid h-full min-h-0',
-    list ? 'md:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]' : 'grid-cols-1'
-  ]}
->
+<div class={['grid h-full min-h-0', columns]} style:--list-width={listWidth && `${listWidth}px`}>
   {#if list}
     <section
-      class={['min-h-0 border-line-subtle md:border-r', mobileView === 'canvas' && 'max-md:hidden']}
-      aria-label="Queue"
+      class={['relative min-h-0 border-line-subtle md:border-r', mobileView === 'canvas' && 'max-md:hidden']}
+      aria-label={listLabel}
     >
       {@render list()}
     </section>

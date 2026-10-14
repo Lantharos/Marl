@@ -5,20 +5,24 @@
   import Button from '#lib/components/controls/Button.svelte';
   import WorkItemReference from '#lib/components/discussion/WorkItemReference.svelte';
   import Tooltip from '#lib/components/overlays/Tooltip.svelte';
-  import type { ItemRef } from '../store/refs';
+  import { repositoryHref, type ItemRef } from '../store/refs';
   import { shell } from '../shell/shell-state.svelte';
 
   let {
     ref,
     element = $bindable(),
     details = true,
+    backLabel = 'Back to the list',
     onBack,
+    crumbs,
     children
   }: {
     ref?: ItemRef | null;
     element?: HTMLElement;
     details?: boolean;
+    backLabel?: string;
     onBack?: () => void;
+    crumbs?: Snippet;
     children: Snippet;
   } = $props();
   const repository = $derived(ref && `${ref.owner}/${ref.repo}`);
@@ -36,18 +40,18 @@
         icon
         size="small"
         variant="ghost"
-        aria-label="Back to the list"
+        aria-label={backLabel}
         onclick={onBack}><ChevronLeft size={18} /></Button
       >{/if}
-    {#if ref && repository}
+    {#if crumbs}
+      {@render crumbs()}
+    {:else if ref && repository}
       <nav class="flex min-w-0 items-center gap-1.5 text-sm text-ink-muted" aria-label="Location">
         <a class="truncate hover:text-ink-strong" href="/next/pulls?repository={encodeURIComponent(repository)}"
           >{ref.owner}</a
         >
         <span class="text-ink-faint" aria-hidden="true">/</span>
-        <a class="truncate hover:text-ink-strong" href="/next/pulls?repository={encodeURIComponent(repository)}"
-          >{ref.repo}</a
-        >
+        <a class="truncate hover:text-ink-strong" href={repositoryHref(repository)}>{ref.repo}</a>
         <span class="text-ink-faint" aria-hidden="true">/</span>
         <WorkItemReference kind={ref.kind} number={ref.number} class="text-ink-strong" />
       </nav>

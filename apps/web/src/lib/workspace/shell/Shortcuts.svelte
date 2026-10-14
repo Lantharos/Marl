@@ -25,6 +25,15 @@
     },
     { title: 'Pulls', keys: [[['R'], 'Start reviewing']] },
     {
+      title: 'Code',
+      keys: [
+        [['T'], 'Go to file'],
+        [['↑', '↓'], 'Move through the files'],
+        [['←', '→'], 'Close or open a folder'],
+        [['Enter'], 'Open the highlighted file']
+      ]
+    },
+    {
       title: 'Review',
       keys: [
         [['N', 'P'], 'Next or previous file'],

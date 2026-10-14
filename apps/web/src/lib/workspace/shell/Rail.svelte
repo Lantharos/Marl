@@ -9,6 +9,7 @@
   import AccountMenu from '#lib/components/shell/AccountMenu.svelte';
   import Tooltip from '#lib/components/overlays/Tooltip.svelte';
   import type { ShellUser } from '#lib/shell-cache.js';
+  import { codeRepository, repositoryHref } from '../store/refs';
   import { workspace } from '../store/workspace.svelte';
   import RailLink from './RailLink.svelte';
   import RepositoryMark from './RepositoryMark.svelte';
@@ -18,6 +19,7 @@
   const path = $derived(page.url.pathname);
   const unread = $derived(workspace.inbox.counts.unread);
   const repositoryFilter = $derived(page.url.searchParams.get('repository'));
+  const activeRepository = $derived(codeRepository(path) ?? repositoryFilter);
   const pinned = $derived(repositories.slice(0, 5));
   const sections = $derived([
     {
@@ -39,15 +41,22 @@
       label: 'Issues',
       icon: CircleDot,
       count: 0,
-      active: path === '/next/issues' || /^\/next\/[^/]+\/[^/]+\/issues\//.test(path)
+      active: (path === '/next/issues' && !repositoryFilter) || /^\/next\/[^/]+\/[^/]+\/issues\//.test(path)
     },
-    { href: '/next/runs', label: 'Runs', icon: CirclePlay, count: 0, active: path === '/next/runs' }
+    {
+      href: '/next/runs',
+      label: 'Runs',
+      icon: CirclePlay,
+      count: 0,
+      active: path === '/next/runs' && !repositoryFilter
+    }
   ]);
 </script>
 
 <nav
   class="flex items-center gap-1 border-line-subtle bg-canvas max-md:h-full max-md:justify-around max-md:border-t max-md:px-2 md:flex-col md:border-r md:py-3"
   aria-label="Workspace"
+  data-sveltekit-preload-data="hover"
 >
   <a class="mb-3 grid size-9 place-items-center max-md:hidden" href="/" aria-label="Marl home"
     ><span class="size-3.5 rounded-[4px] bg-brand"></span></a
@@ -61,12 +70,7 @@
     <div class="my-2 h-px w-6 bg-line-subtle max-md:hidden" role="presentation"></div>
     {#each pinned as repository (repository.id)}
       {@const slug = `${repository.owner}/${repository.name}`}
-      <RailLink
-        href="/next/pulls?repository={encodeURIComponent(slug)}"
-        label={slug}
-        active={path === '/next/pulls' && repositoryFilter === slug}
-        class="max-md:hidden"
-      >
+      <RailLink href={repositoryHref(slug)} label={slug} active={activeRepository === slug} class="max-md:hidden">
         {#snippet icon()}<RepositoryMark {repository} />{/snippet}
       </RailLink>
     {/each}

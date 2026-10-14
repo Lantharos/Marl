@@ -1,11 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { page } from '$app/state';
   import type { RepositorySummary } from '@marl/contracts';
   import Search from '@lucide/svelte/icons/search';
   import { api } from '#lib/api.js';
   import Spinner from '#lib/components/feedback/Spinner.svelte';
   import Kbd from '#lib/components/page/Kbd.svelte';
   import { popoverMotion } from '#lib/ui/popover.js';
+  import { currentRepository } from '../store/refs';
   import { actionEntries, destinationEntries, matchEntries, resultEntries, type PaletteEntry } from './palette-entries';
   import { shell } from './shell-state.svelte';
 
@@ -16,7 +18,10 @@
   let remote = $state.raw<PaletteEntry[]>([]);
   let loading = $state(false);
   let selected = $state(0);
-  const local = $derived([...actionEntries(shell.actions), ...destinationEntries(repositories)]);
+  const local = $derived([
+    ...actionEntries(shell.actions),
+    ...destinationEntries(repositories, currentRepository(page.url))
+  ]);
   const results = $derived([...matchEntries(local, query), ...remote]);
 
   $effect(() => {
