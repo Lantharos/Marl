@@ -3,13 +3,35 @@ import { safeRepositoryPath, validBranchName } from '../core/domain';
 import { requestGitGateway } from '../git/gateway';
 import { json, problem, readJsonValue } from '../http/http';
 import type { Env } from '../core/platform';
-import { pullRepository as repo, findPullId } from './context';
+import { pullRepository as repo } from './context';
 import { allPullThreads } from './timeline';
 import { repositoryCan, type RepositoryAccess } from '../repositories/access/access';
 import { cachedGatewayRead } from '../git/gateway-cache';
 
+const revisionPattern = /^[0-9a-f]{40,64}$/;
+
+type PullRange = { id: string; sourceCommitId: string; targetCommitId: string };
+
+function findPullRange(env: Env, repositoryId: string, number: number) {
+  return env.DB.prepare(
+    'SELECT id,source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?'
+  )
+    .bind(repositoryId, number)
+    .first<PullRange>();
+}
+
+async function revisionRange(env: Env, pull: PullRange, requested: string | null) {
+  if (!requested || requested === pull.sourceCommitId) return { head: pull.sourceCommitId, base: pull.targetCommitId };
+  const revision = await env.DB.prepare(
+    `SELECT json_extract(details,'$.head') AS head,json_extract(details,'$.base') AS base FROM pull_request_events WHERE pull_request_id=? AND kind IN ('commits_added','head_updated') AND json_extract(details,'$.head')=? ORDER BY created_at DESC LIMIT 1`
+  )
+    .bind(pull.id, requested)
+    .first<{ head: string | null; base: string | null }>();
+  return revision?.head && revision.base ? { head: revision.head, base: revision.base } : null;
+}
+
 async function knownRevision(env: Env, pullId: string, commitId: string | null) {
-  if (!commitId || !/^[0-9a-f]{40,64}$/.test(commitId)) return false;
+  if (!commitId || !revisionPattern.test(commitId)) return false;
   const row = await env.DB.prepare(
     `SELECT 1 FROM pull_request_reviews WHERE pull_request_id=?1 AND commit_id=?2 UNION SELECT 1 FROM pull_request_events WHERE pull_request_id=?1 AND kind IN ('commits_added','head_updated') AND json_extract(details,'$.head')=?2 LIMIT 1`
   )
@@ -52,23 +74,21 @@ export async function getPullDiff(
   const repository = await repo(env, principal, owner, name);
   if (!repository || !repositoryCan(repository, principal, 'repository.read'))
     return problem(404, 'repository_not_found', 'Repository not found.');
-  const pull = await env.DB.prepare(
-    'SELECT id,source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?'
-  )
-    .bind(repository.id, number)
-    .first<{ id: string; sourceCommitId: string; targetCommitId: string }>();
+  const pull = await findPullRange(env, repository.id, number);
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
+  const requested = url.searchParams.get('revision');
+  if (requested && !revisionPattern.test(requested)) return problem(422, 'invalid_revision', 'Revision is invalid.');
+  const range = await revisionRange(env, pull, requested);
+  if (!range) return problem(404, 'revision_not_found', 'Revision not found.');
   const since = url.searchParams.get('since');
   if (since && !(await knownRevision(env, pull.id, since)))
     return problem(422, 'unknown_revision', 'That revision is not part of this pull.');
   const [full, incremental, timelineThreads] = await Promise.all([
-    compare(env, execution, repository, pull.targetCommitId, pull.sourceCommitId),
-    since && since !== pull.sourceCommitId
-      ? compare(env, execution, repository, since, pull.sourceCommitId, true)
-      : null,
+    compare(env, execution, repository, range.base, range.head),
+    since && since !== range.head ? compare(env, execution, repository, since, range.head, true) : null,
     allPullThreads(env, principal, pull.id, { owner, repository: name })
   ]);
-  if (!full || (since && since !== pull.sourceCommitId && !incremental))
+  if (!full || (since && since !== range.head && !incremental))
     return problem(502, 'diff_gateway_failed', 'Git gateway could not build this comparison.');
   const pullPaths = new Set(full.files.map((file) => file.path));
   const diff = incremental
@@ -91,28 +111,16 @@ export async function getPullPatch(
     return problem(404, 'repository_not_found', 'Repository not found.');
   const path = url.searchParams.get('path') ?? '';
   if (!safeRepositoryPath(path)) return problem(422, 'invalid_path', 'Repository path is invalid.');
-  const pull = await env.DB.prepare(
-    'SELECT source_commit_id AS sourceCommitId,target_commit_id AS targetCommitId FROM pull_requests WHERE repository_id=? AND number=?'
-  )
-    .bind(repository.id, number)
-    .first<{ sourceCommitId: string; targetCommitId: string }>();
+  const pull = await findPullRange(env, repository.id, number);
   if (!pull) return problem(404, 'pull_request_not_found', 'Pull request not found.');
   const since = url.searchParams.get('since');
   const requestedRevision = url.searchParams.get('revision');
-  if (requestedRevision && !/^[0-9a-f]{40,64}$/.test(requestedRevision))
+  if (requestedRevision && !revisionPattern.test(requestedRevision))
     return problem(422, 'invalid_revision', 'Revision is invalid.');
-  const revision =
-    requestedRevision && requestedRevision !== pull.sourceCommitId
-      ? await env.DB.prepare(
-          `SELECT json_extract(details,'$.head') AS head,json_extract(details,'$.base') AS base FROM pull_request_events WHERE pull_request_id=(SELECT id FROM pull_requests WHERE repository_id=? AND number=?) AND kind IN ('commits_added','head_updated') AND json_extract(details,'$.head')=? ORDER BY created_at DESC LIMIT 1`
-        )
-          .bind(repository.id, number, requestedRevision)
-          .first<{ head: string; base: string }>()
-      : { head: pull.sourceCommitId, base: pull.targetCommitId };
-  if (!revision?.head || !revision.base) return problem(404, 'revision_not_found', 'Revision not found.');
+  const revision = await revisionRange(env, pull, requestedRevision);
+  if (!revision) return problem(404, 'revision_not_found', 'Revision not found.');
   if (since) {
-    const pullId = await findPullId(env, repository.id, number);
-    if (!pullId || !(await knownRevision(env, pullId.id, since)))
+    if (!(await knownRevision(env, pull.id, since)))
       return problem(422, 'unknown_revision', 'That revision is not part of this pull.');
     revision.base = since;
   }
